@@ -1,0 +1,15 @@
+perturbations:
+  price_spike:
+    prob_per_day: 0.3
+    magnitude: [1.2, 1.8]
+    duration_min: 60
+  blackout:
+    prob_per_day: 0.15
+    duration_min: [20, 60]
+  outage:
+    prob_per_day: 0.1
+    duration_min: [20, 60]
+  arranged_meet:
+    prob_per_day: 0.25
+    target: "top_rivals"
+    location: "cafe"

@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "townlet"
+version = "0.1.0"
+description = "Small-town life simulation with RL agents"
+authors = [{ name = "Townlet Contributors" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pydantic>=2.11",
+  "pettingzoo>=1.24",
+  "pyyaml>=6.0",
+  "rich>=13.7",
+  "typer>=0.9",
+]
+optional-dependencies.dev = [
+  "mypy>=1.8",
+  "pytest>=7.4",
+  "ruff>=0.3",
+  "types-pyyaml>=6.0.12",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/townlet/townlet"
+"Documentation" = "https://github.com/townlet/townlet/tree/main/docs"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "TID", "RUF"]
+ignore = ["B905"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_return_any = true
+warn_unused_configs = true
+packages = ["townlet"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+pythonpath = ["src"]
+addopts = "-ra"
+testpaths = ["tests"]

@@ -1,0 +1,37 @@
+name: Bug Report
+description: Help us diagnose issues in Townlet
+title: "Bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please reference the relevant design requirement (e.g., REQUIREMENTS#6) when possible.
+  - type: input
+    id: config
+    attributes:
+      label: Config ID
+      description: config_id used when the bug occurred
+      placeholder: v1.3.0
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe what happened and what you expected instead.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps To Reproduce
+      description: Provide minimal steps to reproduce.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs & Telemetry
+      description: Attach or link to relevant logs, traces, or telemetry snapshots.
+  - type: checkboxes
+    id: regressions
+    attributes:
+      label: Regression checks
+      options:
+        - label: I verified this behaviour on the latest `main`.
+        - label: I confirmed the issue is not caused by custom patches.

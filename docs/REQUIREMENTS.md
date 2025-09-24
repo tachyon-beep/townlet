@@ -49,7 +49,7 @@ Variants:
 
 IDs & embeddings:
 
-- Max agent IDs (e.g., 64). On respawn, assign new ID; avoid immediate reuse of embedding slot (TTL). New embeddings initialise near mean/zero.
+- Max agent IDs (e.g., 64). On respawn, assign new ID; do not return an embedding slot to service until its two-day cooldown (~2,000 ticks) has elapsed. Track `released_at_tick` so the allocator prefers fully cooled slots; if all slots remain in cooldown, reuse the oldest-expired slot and emit a warning. New embeddings initialise near mean/zero.
 
 Spatial index:
 

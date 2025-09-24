@@ -1,4 +1,35 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.dylib
+*.egg-info/
+.eggs/
+*.egg
 
+# Virtual environments
+.env
+.venv
+venv/
+ENV/
 
-#Ignore vscode AI rules
-.github/instructions/codacy.instructions.md
+# Build outputs
+build/
+dist/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# IDEs
+*.swp
+.idea/
+.vscode/
+
+# Local data
+logs/
+outputs/
+
+# OS files
+.DS_Store
+Thumbs.db

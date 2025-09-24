@@ -1,0 +1,32 @@
+name: Feature Request
+description: Suggest an enhancement aligned with the design roadmap
+title: "Feature: "
+labels: [enhancement]
+body:
+  - type: input
+    id: milestone
+    attributes:
+      label: Target Milestone
+      description: Which milestone or phase should this align with (e.g., Phase C2)?
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What problem does this solve?
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements & Design References
+      description: Cite sections from the conceptual/high-level/requirements docs.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Define measurable outcomes or KPIs.
+  - type: checkboxes
+    id: flags
+    attributes:
+      label: Feature Flagging
+      options:
+        - label: This feature will be guarded by an existing feature flag.
+        - label: This feature requires a new feature flag.

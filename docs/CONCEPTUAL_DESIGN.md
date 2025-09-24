@@ -144,7 +144,7 @@ observations:
 IDs & embeddings:
 
 - Fix a max agent ID namespace (e.g., 64 IDs) and size embedding tables accordingly.
-- On respawn, assign a new ID; avoid immediate reuse of the prior embedding slot (TTL) to prevent lingering representation.
+- On respawn, assign a new ID; avoid immediate reuse of the prior embedding slot for at least two in-sim days (~2,000 ticks). Track `released_at_tick` per slot and only return a slot to the free pool once its cooldown expires; if the pool is exhausted, recycle the oldest-expired slot and log the reuse.
 
 ## 7. Action Space
 
