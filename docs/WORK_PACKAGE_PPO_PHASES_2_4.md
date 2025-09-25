@@ -87,8 +87,10 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 - Telemetry schema test (`tests/test_training_replay.py::test_training_harness_ppo_conflict_telemetry`)
   runs in CI to guard rivalry metrics and NDJSON shape.
 - `scripts/validate_ppo_telemetry.py` now reports per-epoch/aggregate drift (with optional relative deltas) and is executed in CI against the canonical sample; version 1.1 rules cover cycle IDs, data modes, entropy/grad maxima, and streaming offsets.
+- CI harness run captures a fresh scenario (`capture_rollout.py`) and validates the generated PPO log so telemetry_version 1.1 stays enforced during pipeline runs.
 - Regression coverage added in `tests/test_telemetry_validator.py` to guard validator behaviour on both valid and missing-conflict scenarios.
 - `scripts/telemetry_watch.py` tails PPO logs with thresholded alerts; `docs/notebooks/telemetry_quicklook.ipynb` offers quick-look visualisation for operators.
+- `scripts/telemetry_summary.py` generates text/markdown/JSON summaries (per-epoch extremes, drift vs baseline) for ops reports.
 - Sample epoch log with conflict metrics is published at
   `docs/samples/ppo_conflict_telemetry.jsonl` and referenced throughout the
   capture guide and ops checklist.

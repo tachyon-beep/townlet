@@ -669,6 +669,56 @@ def test_training_harness_rollout_capture_and_train_cycles(tmp_path: Path) -> No
     assert len(set(transitions_seen)) == 1
 
 
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_streaming_log_offsets(tmp_path: Path) -> None:
+    sample = _make_sample(tmp_path, 0.1, 0.2, "stream")
+    dataset_config = ReplayDatasetConfig(entries=[sample], batch_size=1, shuffle=False)
+    harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
+    log_path = tmp_path / "streaming.jsonl"
+
+    summary_replay = harness.run_ppo(
+        dataset_config=dataset_config,
+        epochs=1,
+        log_path=log_path,
+        log_frequency=1,
+    )
+    _assert_ppo_log_schema(summary_replay, require_baseline=False)
+    assert summary_replay["data_mode"] == "replay"
+    assert summary_replay["log_stream_offset"] == pytest.approx(1.0)
+
+    summary_rollout = harness.run_rollout_ppo(
+        ticks=2,
+        batch_size=1,
+        auto_seed_agents=True,
+        epochs=1,
+        log_path=log_path,
+        log_frequency=1,
+    )
+    _assert_ppo_log_schema(summary_rollout, require_baseline=True)
+    assert summary_rollout["data_mode"] == "rollout"
+    assert summary_rollout["cycle_id"] == pytest.approx(0.0)
+    assert summary_rollout["log_stream_offset"] == pytest.approx(2.0)
+
+    buffer = harness.capture_rollout(ticks=2, auto_seed_agents=True)
+    dataset_mixed = buffer.build_dataset(batch_size=1)
+    summary_mixed = harness.run_ppo(
+        dataset_config=dataset_config,
+        in_memory_dataset=dataset_mixed,
+        epochs=1,
+        log_path=log_path,
+        log_frequency=1,
+    )
+    _assert_ppo_log_schema(summary_mixed, require_baseline=True)
+    assert summary_mixed["data_mode"] == "mixed"
+    assert summary_mixed["cycle_id"] == pytest.approx(1.0)
+    assert summary_mixed["log_stream_offset"] == pytest.approx(3.0)
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 3
+    offsets = [json.loads(line)["log_stream_offset"] for line in lines]
+    assert offsets == [1.0, 2.0, 3.0]
+
+
 def test_policy_runtime_collects_frames(tmp_path: Path) -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)

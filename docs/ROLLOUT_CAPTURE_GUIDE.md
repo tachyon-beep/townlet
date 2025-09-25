@@ -58,7 +58,8 @@ to seed baseline comparisons in the PPO epoch logs.
 - Run `python scripts/ppo_telemetry_plot.py` to plot `loss_total` and
   `kl_divergence` (falls back to textual summaries if matplotlib is absent).
 - Validate new logs with `python scripts/validate_ppo_telemetry.py <log> [--baseline docs/samples/ppo_conflict_telemetry.jsonl] [--relative]` — version 1.1 requires cycle IDs, data modes, entropy/grad maxima, and streaming offsets.
-- Watch long runs with `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0` to surface regressions quickly.
+- Watch long runs with `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5` to surface regressions quickly (use `--json` for machine-readable alerts).
+- Generate operator summaries with `python scripts/telemetry_summary.py <log> [--baseline docs/samples/ppo_conflict_telemetry.jsonl] --format markdown` before filing status reports.
 - For exploratory analysis open `docs/notebooks/telemetry_quicklook.ipynb` in Jupyter or VS Code.
 
 For early Phase 4 work, the training CLI now supports lightweight rollout capture with optional PPO
