@@ -1,0 +1,96 @@
+{
+  "schema_version": "0.3.0",
+  "schema_warning": null,
+  "jobs": {
+    "alice": {
+      "job_id": "grocer",
+      "on_shift": false,
+      "wallet": 2.0,
+      "lateness_counter": 0,
+      "wages_earned": 0,
+      "meals_cooked": 0,
+      "meals_consumed": 0,
+      "basket_cost": 0.62,
+      "shift_state": "pre_shift",
+      "attendance_ratio": 0.0,
+      "late_ticks_today": 0,
+      "absent_shifts_7d": 0,
+      "wages_withheld": 0.0,
+      "exit_pending": false
+    },
+    "bob": {
+      "job_id": "grocer",
+      "on_shift": false,
+      "wallet": 3.0,
+      "lateness_counter": 0,
+      "wages_earned": 0,
+      "meals_cooked": 0,
+      "meals_consumed": 0,
+      "basket_cost": 0.62,
+      "shift_state": "pre_shift",
+      "attendance_ratio": 0.0,
+      "late_ticks_today": 0,
+      "absent_shifts_7d": 0,
+      "wages_withheld": 0.0,
+      "exit_pending": false
+    }
+  },
+  "economy": {
+    "shower_1": {
+      "type": "shower",
+      "stock": {}
+    },
+    "bed_1": {
+      "type": "bed",
+      "stock": {
+        "sleep_slots": 1
+      }
+    },
+    "fridge_1": {
+      "type": "fridge",
+      "stock": {
+        "meals": 5
+      }
+    },
+    "stove_1": {
+      "type": "stove",
+      "stock": {
+        "raw_ingredients": 3
+      }
+    }
+  },
+  "employment": {
+    "pending": [],
+    "pending_count": 0,
+    "exits_today": 0,
+    "daily_exit_cap": 2,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "conflict": {
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 1
+    },
+    "rivalry": {
+      "alice": {
+        "bob": 0.21999999999999997
+      },
+      "bob": {
+        "alice": 0.21999999999999997
+      }
+    }
+  },
+  "events": [
+    {
+      "event": "queue_conflict",
+      "tick": 1,
+      "object_id": "stove_1",
+      "actor": "alice",
+      "rival": "bob",
+      "reason": "ghost_step",
+      "queue_length": 1,
+      "intensity": 1.5
+    }
+  ]
+}

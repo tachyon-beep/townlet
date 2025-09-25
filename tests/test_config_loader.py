@@ -41,6 +41,24 @@ def test_load_config(poc_config: Path) -> None:
     }
     assert "grocer" in config.jobs and "barista" in config.jobs
     assert config.behavior.job_arrival_buffer == 20
+    assert config.employment.grace_ticks == 5
+    assert config.employment.absent_cutoff == 30
+    assert config.employment.max_absent_shifts == 3
+    assert config.employment.daily_exit_cap == 2
+    assert config.employment.enforce_job_loop is True
+    assert config.observations_config.hybrid.local_window == 11
+    assert config.observations_config.hybrid.include_targets is False
+    assert config.ppo is None
+
+    rivalry = config.conflict.rivalry
+    assert rivalry.increment_per_conflict == pytest.approx(0.15)
+    assert rivalry.decay_per_tick == pytest.approx(0.005)
+    assert rivalry.ghost_step_boost == pytest.approx(1.5)
+    assert rivalry.handover_boost == pytest.approx(0.4)
+    assert rivalry.queue_length_boost == pytest.approx(0.25)
+    assert rivalry.avoid_threshold == pytest.approx(0.7)
+    assert rivalry.eviction_threshold == pytest.approx(0.05)
+    assert rivalry.max_edges == 6
 
 
 def test_invalid_queue_cooldown_rejected(tmp_path: Path) -> None:
@@ -85,3 +103,19 @@ def test_invalid_affordance_file_absent(tmp_path: Path) -> None:
 
     config = load_config(target)
     assert config.affordances.affordances_file.endswith("missing.yaml")
+
+
+def test_ppo_config_defaults_roundtrip(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["ppo"] = {}
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    config = load_config(target)
+    assert config.ppo is not None
+    assert config.ppo.learning_rate == pytest.approx(3e-4)
+    assert config.ppo.max_grad_norm == pytest.approx(0.5)
+    assert config.ppo.value_clip == pytest.approx(0.2)
+    assert config.ppo.advantage_normalization is True
+    assert config.ppo.num_mini_batches == 4

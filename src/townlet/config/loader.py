@@ -106,6 +106,53 @@ class QueueFairnessConfig(BaseModel):
     age_priority_weight: float = Field(0.1, ge=0.0, le=1.0)
 
 
+class RivalryConfig(BaseModel):
+    """Conflict/rivalry tuning knobs (see REQUIREMENTS#5)."""
+
+    increment_per_conflict: float = Field(0.15, ge=0.0, le=1.0)
+    decay_per_tick: float = Field(0.005, ge=0.0, le=1.0)
+    min_value: float = Field(0.0, ge=0.0, le=1.0)
+    max_value: float = Field(1.0, ge=0.0, le=1.0)
+    avoid_threshold: float = Field(0.7, ge=0.0, le=1.0)
+    eviction_threshold: float = Field(0.05, ge=0.0, le=1.0)
+    max_edges: int = Field(6, ge=1, le=32)
+    ghost_step_boost: float = Field(1.5, ge=0.0, le=5.0)
+    handover_boost: float = Field(0.4, ge=0.0, le=5.0)
+    queue_length_boost: float = Field(0.25, ge=0.0, le=2.0)
+
+    @model_validator(mode="after")
+    def _validate_ranges(self) -> "RivalryConfig":
+        if self.min_value > self.max_value:
+            raise ValueError("rivalry.min_value must be <= max_value")
+        if self.avoid_threshold < self.min_value or self.avoid_threshold > self.max_value:
+            raise ValueError("rivalry.avoid_threshold must lie within [min_value, max_value]")
+        if self.eviction_threshold < self.min_value or self.eviction_threshold > self.max_value:
+            raise ValueError("rivalry.eviction_threshold must lie within [min_value, max_value]")
+        return self
+
+
+class ConflictConfig(BaseModel):
+    rivalry: RivalryConfig = RivalryConfig()
+
+
+
+
+class PPOConfig(BaseModel):
+    """Config for PPO training hyperparameters."""
+
+    learning_rate: float = Field(3e-4, gt=0.0)
+    clip_param: float = Field(0.2, ge=0.0, le=1.0)
+    value_loss_coef: float = Field(0.5, ge=0.0)
+    entropy_coef: float = Field(0.01, ge=0.0)
+    num_epochs: int = Field(4, ge=1, le=64)
+    mini_batch_size: int = Field(32, ge=1)
+    gae_lambda: float = Field(0.95, ge=0.0, le=1.0)
+    gamma: float = Field(0.99, ge=0.0, le=1.0)
+    max_grad_norm: float = Field(0.5, ge=0.0)
+    value_clip: float = Field(0.2, ge=0.0, le=1.0)
+    advantage_normalization: bool = True
+    num_mini_batches: int = Field(4, ge=1, le=1024)
+
 class EmbeddingAllocatorConfig(BaseModel):
     """Embedding slot reuse guardrails (see REQUIREMENTS#3)."""
 
@@ -115,6 +162,22 @@ class EmbeddingAllocatorConfig(BaseModel):
     max_slots: int = Field(64, ge=1, le=256)
 
 
+class HybridObservationConfig(BaseModel):
+    local_window: int = Field(11, ge=3)
+    include_targets: bool = False
+    time_ticks_per_day: int = Field(1440, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_window(self) -> "HybridObservationConfig":
+        if self.local_window % 2 == 0:
+            raise ValueError("observations.hybrid.local_window must be odd to center on agent")
+        return self
+
+
+class ObservationsConfig(BaseModel):
+    hybrid: HybridObservationConfig = HybridObservationConfig()
+
+
 class StabilityConfig(BaseModel):
     affordance_fail_threshold: int = Field(5, ge=0, le=100)
     lateness_threshold: int = Field(3, ge=0, le=100)
@@ -122,6 +185,20 @@ class StabilityConfig(BaseModel):
 
 class AffordanceConfig(BaseModel):
     affordances_file: str = Field("configs/affordances/core.yaml")
+
+
+class EmploymentConfig(BaseModel):
+    grace_ticks: int = Field(5, ge=0, le=120)
+    absent_cutoff: int = Field(30, ge=0, le=600)
+    absence_slack: int = Field(20, ge=0, le=600)
+    late_tick_penalty: float = Field(0.005, ge=0.0, le=1.0)
+    absence_penalty: float = Field(0.2, ge=0.0, le=5.0)
+    max_absent_shifts: int = Field(3, ge=0, le=20)
+    attendance_window: int = Field(3, ge=1, le=14)
+    daily_exit_cap: int = Field(2, ge=0, le=50)
+    exit_queue_limit: int = Field(8, ge=0, le=100)
+    exit_review_window: int = Field(1440, ge=1, le=100000)
+    enforce_job_loop: bool = False
 
 
 class BehaviorConfig(BaseModel):
@@ -170,10 +247,14 @@ class SimulationConfig(BaseModel):
     shaping: ShapingConfig | None = None
     curiosity: CuriosityConfig | None = None
     queue_fairness: QueueFairnessConfig = QueueFairnessConfig()
+    conflict: ConflictConfig = ConflictConfig()
+    ppo: PPOConfig | None = None
     embedding_allocator: EmbeddingAllocatorConfig = EmbeddingAllocatorConfig()
+    observations_config: ObservationsConfig = ObservationsConfig()
     affordances: AffordanceConfig = AffordanceConfig()
     stability: StabilityConfig = StabilityConfig()
     behavior: BehaviorConfig = BehaviorConfig()
+    employment: EmploymentConfig = EmploymentConfig()
 
     model_config = ConfigDict(extra="allow")
 

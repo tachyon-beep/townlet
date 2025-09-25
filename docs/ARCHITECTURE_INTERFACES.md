@@ -56,6 +56,7 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - need decay is applied post-affordance using `rewards.decay_rates`, keeping needs clamped to [0,1].
 - economy fields (`economy.*`) fund affordance execution (e.g., `eat_meal` consumes wallet + fridge stock, `cook_meal` deducts ingredients) and provide default wage rates.
 - job scheduler assigns agents to configured shifts (`jobs.*`), applies wage income, and emits `job_late` events on missed, location-based punctuality windows.
+- rivalry ledger (`WorldState._rivalry_ledgers`) captures queue-driven tension; queue manager hooks call `_record_queue_conflict` during ghost steps/handovers, emitting `queue_conflict` events with intensity metadata for telemetry and behaviour avoidance heuristics.
 
 ### 2.3 Queue & Reservation Manager (`src/townlet/world/queue_manager.py`)
 - responsibilities: per-object queue nodes, reservation timeouts, queue age priority, ghost-step deadlock breaker.
@@ -63,15 +64,19 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - integration: invoked from world update prior to affordance resolution; surfaces cooldown and ghost-step counters for telemetry.
 
 ### 2.4 Lifecycle Manager (`src/townlet/lifecycle/manager.py`)
-- monitors needs, wages, perturbation states to determine exits (`terminations[agent] = True`) and schedules replacements respecting 120-tick cooldown and max 2 exits/day.
-- config inputs: `features.systems.lifecycle`, reward guardrails (`no_positive_within_death_ticks`).
+- monitors needs, wages, perturbation states to determine exits (`terminations[agent] = True`) and schedules replacements respecting cooldown + daily caps.
+- config inputs: `features.systems.lifecycle`, reward guardrails (`no_positive_within_death_ticks`), `employment.*` (daily exit cap, queue limits, review window).
+- employment loop: consumes per-agent absence counters, manages hybrid exit queue (per-agent threshold + daily cap) and manual approvals, raises telemetry events (`employment_exit_pending`, `employment_exit_processed`).
 - hooks: emits `on_agent_exit`, `on_agent_spawn` for telemetry and narration.
 
 ### 2.5 Observation Builder (`src/townlet/observations/builder.py`)
 - variant-aware encoding (full, hybrid, compact); attaches `ctx_reset_flag` when agent terminated.
-- dependencies: world snapshots, social graph (once implemented), embedding allocator.
-- current output includes placeholder tensors plus `embedding_slot` identifier sourced from allocator.
-- open work: produce real tensors instead of placeholder values; extend social graph wiring.
+- dependencies: world snapshots, embedding allocator; social graph wiring TBD.
+- Hybrid variant now emits structured tensors:
+  - map tensor (4×11×11) with channels for self, other agents, objects/reservations (placeholder zeros for now).
+  - feature vector containing needs, wallet, lateness metrics, employment stats, shift-state one-hot, embedding slot normalised, context flags, rivalry magnitude/avoidance counters, and social placeholder.
+- metadata includes channel names and feature index to aid downstream consumers; see `docs/design/OBSERVATION_TENSOR_SPEC.md`.
+- open work: enrich object/reservation channels once world tracks coordinates; feed social snippet when relationship system arrives.
 
 ### 2.6 Embedding Allocator (`src/townlet/observations/embedding.py`)
 - assigns stable embedding slots; enforces cooldown before reuse; logs forced reuse counts and warning flag when the reuse rate exceeds the configured threshold.
@@ -94,19 +99,19 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - integration: subscribes to telemetry stream and snapshot metadata.
 - configuration: `stability.affordance_fail_threshold` caps per-tick affordance failures before triggering an alert alongside embedding reuse warnings.
 
-### 2.10 Telemetry & Observer Gateway (`src/townlet/telemetry/publisher.py`)
 - publishes initial snapshot + diffs (agents, events, economy, utilities, metrics) over WebSocket (planned) or file sink.
 - enforces privacy mode (hashed IDs) and backpressure (aggregate diffs, drop events when overloaded).
-- captures queue manager and embedding allocator counters for ops dashboards.
-- emits per-tick lifecycle events (`affordance_start`, `affordance_finish`, `affordance_fail`) sourced from the world.
-- exposes per-agent job snapshots (job id, on-shift flag, wages earned, meals cooked/consumed, basket cost) and object stock for ops dashboards and planning.
+- maintains semantic version string (`schema_version`, currently `0.3.0`) surfaced on every console/telemetry snapshot for consumer compatibility.
+- captures queue manager, embedding allocator, and employment queue counters for ops dashboards.
+- emits per-tick lifecycle events (`affordance_start`, `affordance_finish`, `affordance_fail`, `employment_exit_pending`, `employment_exit_processed`) sourced from the world.
+- exposes per-agent job snapshots (job id, on-shift flag, shift state, attendance ratio, late ticks, wages withheld, wages earned, meals cooked/consumed, basket cost) plus global employment metrics (pending exits, exits today, queue limits) for planning.
 
 ### 2.11 Console & Auth (`src/townlet/console/`)
 - Typer CLI / REST service with viewer/admin modes, bearer tokens, and audit logging.
-- commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues.
+- commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues, `employment_status`, `employment_exit <review|approve|defer>`.
 - idempotency: `cmd_id` required for destructive operations; logs `cmd_id`, issuer, result.
 - event stream subscriber surfaces telemetry event batches for operator tooling.
-- `telemetry_snapshot` command returns per-agent job/economy payloads for planning and basket checks.
+- `telemetry_snapshot` command returns per-agent job/economy payloads and employment queue metrics for planning and basket checks.
 
 ### 2.12 Persistence & Config Service (`src/townlet/snapshots/`, `src/townlet/config/`)
 - YAML configs validated via `SimulationConfig` (pydantic). New sections include `queue_fairness` and `embedding_allocator`.
@@ -142,6 +147,7 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 | `features.stages.relationships` | Observation builder, policy runner | Enables social tuple encoding; must sync with reward config.
 | `features.systems.observations` | Observation builder, policy runner, promotion gates | Variant baked into `config_id`/policy hash.
 | `queue_fairness.*` | Queue manager, telemetry, ops debug | Cooldown/ghost-step/priority weights; ensure metrics exposed.
+| `conflict.rivalry.*` | Queue manager, WorldState, telemetry, behaviour | Tunes rivalry increment/decay, avoidance thresholds, and conflict event payloads; keep UI/tests aligned.
 | `embedding_allocator.*` | Observation builder, telemetry | Cooldown ticks and warning threshold for reuse; log forced reuse.
 | `rewards.decay_rates` | WorldState, RewardEngine | Drives per-need decay applied each tick.
 | `rewards.clip.*` | Reward engine | Enforce guardrails for PPO stability.
@@ -151,10 +157,11 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 | `jobs.*` | Job scheduler | Shift windows, wage rates, lateness penalties.
 | `stability.lateness_threshold` | Stability monitor | Alert threshold for lateness spikes.
 | `behavior.*` | Behavior controller | Need thresholds and job arrival buffer guiding scripted policy.
+| `employment.*` | Employment loop, lifecycle, console | Grace windows, absence slack, exit caps, queue limits, enable/disable flag.
 | `perturbations/*.yaml` | Scheduler, lifecycle | Event probabilities, fairness buckets.
 
 ## 5. Extension Points & TBD Work
-- **Queue Manager**: extend telemetry wiring to publish cooldown and ghost-step counters; integrate with affordance execution.
+- **Queue Manager**: telemetry now emits `queue_conflict` events with rivalry intensity; next step is throttling heuristics and pathfinding-aware reservations.
 - **Embedding Allocator**: integrate allocator metrics into release/shadow promotion gating and observer payloads.
 - **Telemetry Transport**: formalise WebSocket schema; consider gRPC fallback.
 - **FFI Pathfinding**: define stable C ABI if Rust/C++ microservice introduced; interface contract TBD.

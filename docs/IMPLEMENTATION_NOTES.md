@@ -33,3 +33,72 @@
 - Behavior controller scaffold (`ScriptedBehavior`) chooses intents with move/request/start primitives; thresholds configurable via `behavior.*`.
 - Added `rest_sleep` affordance and scripted pathing to beds so energy recovery works alongside cooking/eating loops; restocks emit telemetry events.
 - Introduced behavior configuration scaffold (`behavior.*`) and restock hooks as foundation for scripted decision logic.
+
+## 2025-09-24 — Employment Loop Design Artifacts (Draft)
+- Authored `docs/design/EMPLOYMENT_ATTENDANCE_BRIEF.md` outlining shift state machine, wage gating, telemetry fields, and validation plan.
+- Created `docs/design/EMPLOYMENT_EXIT_CAP_MATRIX.md` recommending hybrid per-agent + daily exit caps with console review workflow.
+- Awaiting approvals from architecture, product, and ops leads before implementation; risk register items R1/R4 remain open until sign-off.
+
+## 2025-09-25 — Employment Loop Hardening (Phase 1)
+- Added `employment.*` config node with grace/absence tuning, exit caps, queue limits, and enforcement flag.
+- Implemented world-level shift state machine (on-time/late/absent), wage gating, lateness/absence penalties, and telemetry fields (`shift_state`, `attendance_ratio`, `late_ticks_today`, `wages_withheld`, `exit_pending`).
+- Lifecycle now manages hybrid unemployment exit queue (per-agent absence threshold + daily cap) with manual approvals, review window auto-releases, and telemetry events.
+- Telemetry publisher exposes employment metrics; stability monitor raises `employment_exit_backlog` / `employment_exit_queue_overflow` alerts; console adds `employment_status` + `employment_exit` commands for ops overrides.
+- Design approvals: architecture + product sign-off captured in design briefs (ops N/A).
+- New pytest coverage: `tests/test_employment_loop.py` (attendance) and console command regressions.
+- Risk R2 smoke validation: `python scripts/run_employment_smoke.py configs/examples/poc_hybrid.yaml --ticks 1000` with and without `--enforce-job-loop` recorded zero alerts/pending exits; metrics captured in `employment_smoke_metrics.json`.
+- Telemetry schema bumped to `0.2.0`; console snapshots now include `schema_version`, employment snapshots versioned; updated docs and tests to lock consumer expectations.
+- Added telemetry consumer tooling: `scripts/telemetry_check.py` validator, sample payload `docs/samples/telemetry_snapshot_0.2.0.json`, and schema change log (`docs/TELEMETRY_CHANGELOG.md`).
+- Console router now emits schema compatibility warnings when shards report newer versions; tests cover warning copy.
+- Console dry run executed (`scripts/console_dry_run.py`); validated employment commands and documented procedure in `docs/CONSOLE_DRY_RUN.md`.
+- Added employment docs/tests checklist (`docs/EMPLOYMENT_DOCS_TEST_CHECKLIST.md`) and referenced in Ops handbook to institutionalise doc + test updates (addresses Risk R6).
+- Benchmarked tick duration with and without employment enforcement (`scripts/benchmark_tick.py`); 1,000-tick runs averaged 4–5µs per tick with <25% delta, within guardrail for R7.
+- Implemented hybrid observation tensor encoding (map + feature vector) per `docs/design/OBSERVATION_TENSOR_SPEC.md`; added tests and local view helper.
+- Added telemetry client library & console dashboard (`townlet_ui.telemetry`, `townlet_ui.dashboard`); new CLI `scripts/observer_ui.py` renders employment KPIs, map preview, and supports approve/defer overrides.
+- Drafted observation tensor spec (`docs/design/OBSERVATION_TENSOR_SPEC.md`) outlining hybrid feature layout, pending approvals.
+
+- Observer UI usability dry run recorded (`docs/samples/observer_ui_output.txt`); feedback logged in `docs/OBSERVER_UI_FEEDBACK.md` (requests map legend, highlights).
+- Dashboard performance probe: baseline tick 5µs vs 200-tick run with dashboard 0.63s total (~3.2ms/tick).
+- Added asynchronous console command executor (`townlet_ui.commands.ConsoleCommandExecutor`) to future-proof approve/defer interactions; tests cover error handling.
+- Dashboard UX refinements: employment backlog badge, on-shift highlighting, tick timestamps, optional coordinate labels, and `--focus-agent` flag; concurrency executor now logs failures.
+
+## 2025-09-26 — Conflict Telemetry & Observation Signals
+- Rivalry ledger extended with intensity knobs (`ghost_step_boost`, `handover_boost`, `queue_length_boost`) and slower decay to tune conflict growth.
+- `WorldState._record_queue_conflict` now emits `queue_conflict` events for ghost steps/handovers, updates rivalry ledgers, and clamps intensity.
+- Hybrid observation tensors gained `rivalry_max` / `rivalry_avoid_count` features so training clients can read conflict pressure; sample refreshed in `docs/samples/observation_hybrid_sample.npz`.
+- Added `scripts/run_replay.py` helper to inspect observation/telemetry samples; telemetry snapshot for conflict (`docs/samples/telemetry_conflict_snapshot.json`) captured.
+- Updated telemetry schema log to 0.3.0, architecture guide, and observation spec to document new conflict signals.
+
+
+## 2025-09-26 — Replay Dataset & Training Harness
+- Added conflict-aware replay dataset configuration (`ReplayDatasetConfig`) with manifest parsing, batching, and shape validation.
+- Training harness now supports `run_replay_dataset` and CLI options (`--replay-manifest`, batching knobs) for conflict-aware batch playback.
+- Replay utilities enforce rivalry feature presence and expose per-batch rivalry stats; schema guard tests added.
+- Introduced `docs/samples/replay_manifest.json` and streaming iterator support for replay datasets; CLI `--replay-manifest` path exercises batching/shuffle/drop-last combos.
+- PPO stub integrated with replay dataloader: `TrainingHarness.run_ppo` iterates batches, logs loss/rivalry stats, and CLI exposes `--train-ppo`. Added `ppo` config scaffold and conflict-aware Torch network placeholder (requires torch install).
+
+## 2025-09-26 — PPO Integration Plan
+- Plan drafted for conflict-aware PPO evolution: Torch network, PPO loss pipeline, telemetry hooks.
+- Execution underway (Phase 1).
+
+## 2025-09-26 — PPO Torch Scaffolding
+- Added `PPOConfig` schema, replay manifest batching, torch policy placeholder, and CLI hooks (`--train-ppo`, JSONL logging).
+- Tests cover torch availability guard and forward pass when torch installed.
+- Next: wire real PPO loss/optimizer with telemetry NDJSON and integrate live rollouts.
+
+## 2025-09-27 — Replay Training Schema & PPO Overrides
+- Replay samples now encode training-critical arrays (`actions`, `old_log_probs`, `value_preds`, `rewards`, `dones`) alongside maps/features; loader enforces presence and homogeneous shapes.
+- `ReplayBatch` exposes stacked training arrays so GAE/PPO losses can consume offline data without ad-hoc synthesis; tests cover schema guards and streaming/manifest loading.
+- CLI supports PPO hyperparameter overrides (`scripts/run_training.py --ppo-*` flags) while keeping YAML defaults authoritative—overrides materialise a `PPOConfig` when absent.
+- Added tests for override plumbing to guarantee flags stay in sync with config schema.
+
+## 2025-09-27 — PPO Loss & Optimizer Integration (Phase 2)
+- Implemented torch-based PPO loop: GAE computation, advantage normalisation, clipped policy/value losses, entropy bonus, and gradient clipping now drive optimisation in `TrainingHarness.run_ppo`.
+- Added `townlet.policy.ppo.utils` with reusable helpers (`compute_gae`, `policy_surrogate`, `clipped_value_loss`, etc.) and unit coverage to guard loss math.
+- Training harness builds a policy network from replay metadata, derives action space from samples, and logs per-epoch metrics (loss components, clip fraction, advantage stats, grad norms, conflict telemetry averages).
+- Replay samples/documentation refreshed; canonical NPZ manifests include bootstrap value predictions for GAE, multi-step sequences, and metadata tracks timestep alignment.
+
+## 2025-09-27 — Rollout Trajectory Capture
+- `PolicyRuntime` now buffers per-agent actions/rewards/done flags each tick and exposes `collect_trajectory` for downstream tooling; `SimulationLoop.step` flushes observations into this buffer automatically.
+- Added `frames_to_replay_sample` helper to convert collected frames into replay-ready tensors (map/features stacked per timestep, action IDs + lookup, placeholder log-probs/value baselines) so multi-step rollouts feed the PPO harness without bespoke scripts.
+- Tests cover trajectory capture → sample conversion (`tests/test_training_replay.py::test_policy_runtime_collects_frames`), ensuring schema guardrails hold for generated sequences.

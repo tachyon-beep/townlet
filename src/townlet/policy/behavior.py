@@ -56,7 +56,11 @@ class ScriptedBehavior(BehaviorController):
                 return AgentIntent(kind="wait")
             if active == agent_id:
                 return AgentIntent(kind="start", object_id=object_id, affordance_id=affordance_id)
-            return AgentIntent(kind="request", object_id=object_id)
+            if not self._rivals_in_queue(world, agent_id, object_id):
+                return AgentIntent(kind="request", object_id=object_id)
+            self.pending.pop(agent_id, None)
+
+        # If pending intent was dropped due to rivalry, fall through to new plan.
 
         job_intent = self._maybe_move_to_job(world, agent_id, snapshot)
         if job_intent:
@@ -107,14 +111,28 @@ class ScriptedBehavior(BehaviorController):
         if hygiene < self.thresholds.hygiene_threshold:
             shower_id = self._find_object_of_type(world, "shower")
             if shower_id:
-                self.pending[agent_id] = {"object_id": shower_id, "affordance_id": "use_shower"}
-                return AgentIntent(kind="request", object_id=shower_id)
+                if not self._rivals_in_queue(world, agent_id, shower_id):
+                    self.pending[agent_id] = {"object_id": shower_id, "affordance_id": "use_shower"}
+                    return AgentIntent(kind="request", object_id=shower_id)
         if energy < self.thresholds.energy_threshold:
             bed_id = self._find_object_of_type(world, "bed")
             if bed_id:
-                self.pending[agent_id] = {"object_id": bed_id, "affordance_id": "rest_sleep"}
-                return AgentIntent(kind="request", object_id=bed_id)
+                if not self._rivals_in_queue(world, agent_id, bed_id):
+                    self.pending[agent_id] = {"object_id": bed_id, "affordance_id": "rest_sleep"}
+                    return AgentIntent(kind="request", object_id=bed_id)
         return None
+
+    def _rivals_in_queue(self, world: WorldState, agent_id: str, object_id: str) -> bool:
+        active = world.queue_manager.active_agent(object_id)
+        if active and active != agent_id and world.rivalry_should_avoid(agent_id, active):
+            return True
+        queue = world.queue_manager.queue_snapshot(object_id)
+        for rival_id in queue:
+            if rival_id == agent_id:
+                continue
+            if world.rivalry_should_avoid(agent_id, rival_id):
+                return True
+        return False
 
     def _plan_meal(self, world: WorldState, agent_id: str) -> Optional[AgentIntent]:
         fridge_id = self._find_object_of_type(world, "fridge")
@@ -122,13 +140,15 @@ class ScriptedBehavior(BehaviorController):
         if fridge_id:
             fridge = world.objects.get(fridge_id)
             if fridge and fridge.stock.get("meals", 0) > 0:
-                self.pending[agent_id] = {"object_id": fridge_id, "affordance_id": "eat_meal"}
-                return AgentIntent(kind="request", object_id=fridge_id)
+                if not self._rivals_in_queue(world, agent_id, fridge_id):
+                    self.pending[agent_id] = {"object_id": fridge_id, "affordance_id": "eat_meal"}
+                    return AgentIntent(kind="request", object_id=fridge_id)
         if stove_id:
             stove = world.objects.get(stove_id)
             if stove and stove.stock.get("raw_ingredients", 0) > 0:
-                self.pending[agent_id] = {"object_id": stove_id, "affordance_id": "cook_meal"}
-                return AgentIntent(kind="request", object_id=stove_id)
+                if not self._rivals_in_queue(world, agent_id, stove_id):
+                    self.pending[agent_id] = {"object_id": stove_id, "affordance_id": "cook_meal"}
+                    return AgentIntent(kind="request", object_id=stove_id)
         return None
 
     def _find_object_of_type(self, world: WorldState, object_type: str) -> Optional[str]:

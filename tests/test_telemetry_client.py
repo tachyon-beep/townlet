@@ -1,0 +1,66 @@
+from pathlib import Path
+
+import pytest
+
+from townlet.config import load_config
+from townlet.core.sim_loop import SimulationLoop
+from townlet.console.handlers import create_console_router
+from townlet_ui.telemetry import SchemaMismatchError, TelemetryClient
+
+
+def make_simulation(enforce_job_loop: bool = True) -> SimulationLoop:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.employment.enforce_job_loop = enforce_job_loop
+    loop = SimulationLoop(config)
+    world = loop.world
+    if not world.agents:
+        # Ensure at least one agent exists for snapshots.
+        from townlet.world.grid import AgentSnapshot
+
+        world.agents["alice"] = AgentSnapshot(
+            agent_id="alice",
+            position=(0, 0),
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            wallet=1.0,
+        )
+        world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    return loop
+
+
+def test_telemetry_client_parses_console_snapshot() -> None:
+    loop = make_simulation()
+    router = create_console_router(loop.telemetry, loop.world)
+    for _ in range(5):
+        loop.step()
+
+    client = TelemetryClient()
+    snapshot = client.from_console(router)
+
+    assert snapshot.schema_version.startswith("0.3")
+    assert snapshot.schema_warning is None
+    assert snapshot.employment.pending_count >= 0
+    assert snapshot.conflict.queue_cooldown_events >= 0
+    assert snapshot.conflict.queue_ghost_step_events >= 0
+    assert snapshot.conflict.rivalry_agents >= 0
+    assert snapshot.agents
+    assert snapshot.agents[0].agent_id
+
+
+def test_telemetry_client_warns_on_newer_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    loop = make_simulation()
+    router = create_console_router(loop.telemetry, loop.world)
+    for _ in range(2):
+        loop.step()
+
+    # Monkeypatch schema version to simulate newer shard.
+    loop.telemetry.schema_version = "0.4.0"
+    client = TelemetryClient()
+    snapshot = client.from_console(router)
+    assert snapshot.schema_warning is not None
+
+
+def test_telemetry_client_raises_on_major_mismatch() -> None:
+    client = TelemetryClient(expected_schema_prefix="0.3")
+    payload = {"schema_version": "1.0.0", "employment": {}, "jobs": {}, "conflict": {}}
+    with pytest.raises(SchemaMismatchError):
+        client.parse_snapshot(payload)

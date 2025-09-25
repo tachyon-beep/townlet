@@ -1,0 +1,81 @@
+{
+  "schema_version": "0.2.0",
+  "jobs": {
+    "alice": {
+      "job_id": "grocer",
+      "on_shift": false,
+      "wallet": 0.19999999999999996,
+      "lateness_counter": 0,
+      "wages_earned": 0,
+      "meals_cooked": 0,
+      "meals_consumed": 2,
+      "basket_cost": 0.62,
+      "shift_state": "pre_shift",
+      "attendance_ratio": 0.0,
+      "late_ticks_today": 0,
+      "absent_shifts_7d": 0,
+      "wages_withheld": 0.0,
+      "exit_pending": false
+    },
+    "bob": {
+      "job_id": "barista",
+      "on_shift": false,
+      "wallet": 0.19999999999999996,
+      "lateness_counter": 0,
+      "wages_earned": 0,
+      "meals_cooked": 0,
+      "meals_consumed": 2,
+      "basket_cost": 0.62,
+      "shift_state": "pre_shift",
+      "attendance_ratio": 0.0,
+      "late_ticks_today": 0,
+      "absent_shifts_7d": 0,
+      "wages_withheld": 0.0,
+      "exit_pending": false
+    }
+  },
+  "economy": {
+    "shower_1": {
+      "type": "shower",
+      "stock": {}
+    },
+    "bed_1": {
+      "type": "bed",
+      "stock": {
+        "sleep_slots": 1
+      }
+    },
+    "fridge_1": {
+      "type": "fridge",
+      "stock": {
+        "meals": 1
+      }
+    }
+  },
+  "employment": {
+    "pending": [],
+    "pending_count": 0,
+    "exits_today": 0,
+    "daily_exit_cap": 2,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "events": [
+    {
+      "event": "affordance_fail",
+      "tick": 30,
+      "agent_id": "alice",
+      "object_id": "fridge_1",
+      "affordance_id": "eat_meal",
+      "reason": "insufficient_stock"
+    },
+    {
+      "event": "affordance_start",
+      "tick": 30,
+      "agent_id": "alice",
+      "object_id": "fridge_1",
+      "affordance_id": "eat_meal",
+      "duration": 15
+    }
+  ]
+}

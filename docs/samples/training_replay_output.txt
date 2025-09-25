@@ -1,0 +1,6 @@
+Replay Summary
+================
+Features: 36 values (see metadata; conflict features included)
+Conflict queues: {"cooldown_events": 0, "ghost_step_events": 1}
+Rivalry snapshot: alice↔bob intensity 0.22
+Queue events: ghost_step handover (intensity 1.5)

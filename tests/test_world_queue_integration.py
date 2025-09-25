@@ -7,6 +7,7 @@ from townlet.world.grid import AgentSnapshot, WorldState
 
 def _make_world() -> WorldState:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.employment.enforce_job_loop = False
     world = WorldState.from_config(config)
     world.register_object("shower", "shower")
     world.register_object("fridge_1", "fridge")

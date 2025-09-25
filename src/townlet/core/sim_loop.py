@@ -62,6 +62,7 @@ class SimulationLoop:
         rewards = self.rewards.compute(self.world, terminated)
         self.policy.post_step(rewards, terminated)
         observations = self.observations.build_batch(self.world, terminated)
+        self.policy.flush_transitions(observations)
         events = self.world.drain_events()
         self.telemetry.publish_tick(
             tick=self.tick,
@@ -78,5 +79,6 @@ class SimulationLoop:
             embedding_metrics=self.telemetry.latest_embedding_metrics(),
             job_snapshot=self.telemetry.latest_job_snapshot(),
             events=self.telemetry.latest_events(),
+            employment_metrics=self.telemetry.latest_employment_metrics(),
         )
         return TickArtifacts(observations=observations, rewards=rewards)

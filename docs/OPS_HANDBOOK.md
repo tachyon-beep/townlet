@@ -4,7 +4,14 @@
 - `python scripts/run_simulation.py --config <yaml>` — starts a headless shard; honour `config_id` and observation variant declared in the file. Attach `--tick-limit` during smoke checks to bound runtime.
 - `python scripts/run_training.py --config <yaml>` — spins the PPO training harness; ensure release and shadow checkpoints write to distinct directories (`snapshots/rel`, `snapshots/shadow`).
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
-- Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status and economy stock for quick planning checks.
+- Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
+- The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.
+- Employment commands:
+  - `employment_status` — dumps employment KPIs (pending exits, exit cap usage, queue limit) and latest queue contents.
+  - `employment_exit review` — view backlog; `employment_exit approve <agent_id>` requests immediate exit; `employment_exit defer <agent_id>` clears the queue entry.
+- Validation: run `python scripts/telemetry_check.py <payload.json>` to confirm consumer compatibility; consult `docs/TELEMETRY_CHANGELOG.md` for schema history.
+- Change management: follow `docs/EMPLOYMENT_DOCS_TEST_CHECKLIST.md` when modifying employment logic; reviewers should require the checklist is satisfied before merge.
+- Observer dashboard: `scripts/observer_ui.py` launches a Rich-based console view of employment KPIs; see `docs/OBSERVER_UI_GUIDE.md`.
 
 ## Promotion Playbook
 1. **Pre-flight**
@@ -24,6 +31,7 @@
 - **Reward Explosion**: inspect `reward_clip_events`; if unbounded, pause training, raise guardrails by lowering `clip_per_tick` in config, and re-run smoke tests.
 - **Queue Deadlock**: use console `debug queues` (TBD) to inspect reservations; confirm queue fairness cooldown is active; if not, toggle feature flag and log issue.
 - **Telemetry Backpressure**: check publisher backlog; if exceeds threshold, enable aggregation mode and archive raw stream for analysis.
+- **Employment Backlog**: monitor `employment_status`. If `pending_count` exceeds `queue_limit`, issue `employment_exit review`, approve or defer entries, and document decisions in ops log. Manual approvals emit `employment_exit_manual_request`; ensure lifecycle processes the exit next tick.
 
 ## Tooling & Logs
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/ARCHITECTURE_INTERFACES.md`.
@@ -32,6 +40,7 @@
 
 ## Checklist Before Demos
 - Validate console commands `spawn`, `setneed`, `force_chat`, `arrange_meet` in a dry-run town.
+- Validate employment console flow: queue an agent (`employment_exit review`), approve/defer, and confirm telemetry reflects the change.
 - Confirm narration throttle and privacy mode toggles respond instantly.
 - Review KPIs vs. charter targets (self-sufficiency ≥70%, tenure ≥3 days, relationship coverage ≥60%).
 - Prepare fallback config with perturbations disabled in case of instability.

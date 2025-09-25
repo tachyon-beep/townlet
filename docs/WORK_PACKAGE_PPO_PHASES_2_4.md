@@ -1,0 +1,147 @@
+# PPO Integration Roadmap — Phases 2–4
+
+## Overview
+This document captures the detailed plan for evolving the conflict-aware PPO training stack across the remaining phases. Each phase is broken into concrete tasks and steps to ensure repeatable execution and clear ownership.
+
+## Overall Risks
+| Risk | Description | Mitigation | Severity |
+| --- | --- | --- | --- |
+| Torch dependency | Missing/incorrect torch version blocks training | Provide install guards, document required version | Medium |
+| Replay schema drift | Observation features change, breaking loader | Schema guards/tests, validation CLI | Medium |
+| Resource usage | PPO on CPU may be slow | Document requirements, allow streaming + small batch | Medium |
+| Telemetry volume | NDJSON logs grow quickly | Include sampling/configurable frequency | Low |
+
+
+---
+
+## Phase 2 — PPO Loss & Optimizer Integration
+**Goal:** Implement full PPO training loop leveraging replay batches, including policy/value losses, entropy bonus, advantage estimation, and optimizer state management.
+**Risk Level:** High
+| Risk | Impact | Mitigation | Severity |
+| --- | --- | --- | --- |
+| Loss instability | Incorrect advantage or loss math can destabilise training | Unit tests with synthetic data; validate gradients | High |
+| Gradient explosion | Large gradients during replay batches | Gradient clipping (`max_grad_norm`), learning-rate guard | Medium |
+| Config drift | Missing hyperparameters in config cause runtime errors | Expand tests validating PPOConfig defaults | Medium |
+
+### Tasks & Steps
+1. **Hyperparameter & Config Alignment**
+   - Extend `PPOConfig` with additional knobs: `max_grad_norm`, `value_clip`, `advantage_normalization`, `num_mini_batches`.
+   - Update config loader tests to cover new fields; document defaults.
+
+2. **Advantage & Target Computation**
+   - Implement GAE (Generalized Advantage Estimation) utility handling replay batches (requires metadata for rewards, values, dones when we move to rollout).
+   - Provide helper to normalize advantages when configured.
+
+3. **Loss Functions**
+   - Implement clipped surrogate policy loss, value loss (with optional clipping), entropy bonus.
+   - Structure losses to return scalar totals plus components for logging.
+
+4. **Optimizer State & Training Loop**
+   - Instantiate Adam (or configurable optimizer) using `learning_rate` from `PPOConfig`.
+   - Add gradient clipping (`max_grad_norm`), zeroing, and step scheduling (future hook).
+   - Support multiple epochs and mini-batch shuffling over replay dataset.
+
+5. **Unit & Integration Tests**
+   - Add deterministic test feeding synthetic logits/values to validate loss math.
+   - Smoke test training loop on replay manifest ensuring loss decreases over epochs (or at least stays finite).
+
+6. **CLI/Logging Updates**
+   - Extend PPO CLI to surface new hyperparameters (e.g., `--max-grad-norm`).
+   - Log loss components, advantage stats, gradient norms per epoch.
+
+### Deliverables
+- Updated `TrainingHarness.run_ppo` performing real optimization on replay data.
+- Loss/optimizer utilities with unit coverage.
+- Documentation updates describing PPO hyperparameters and workflow.
+
+---
+
+## Phase 3 — Telemetry & NDJSON Logging Enhancements
+**Risk Level:** Medium
+**Goal:** Provide rich training telemetry for queue conflicts and rivalry signals, enabling dashboards and analytics.
+| Risk | Impact | Mitigation | Severity |
+| --- | --- | --- | --- |
+| Log volume | NDJSON grows quickly, affecting disk | Allow sampling frequency and file rotation | Medium |
+| Schema mismatch | Consumers fail to parse new telemetry fields | Document schema, provide validator tests | Medium |
+| Performance overhead | Logging slows training loop | Buffer writes, allow disabling telemetry | Low |
+
+### Tasks & Steps
+**Risk Level:** High
+1. **Telemetry Schema Definition**
+   - Define NDJSON schema for training telemetry (epoch summary, per-batch stats) including conflict metrics.
+   - Update `TELEMETRY_CHANGELOG.md` and training guide.
+
+2. **Logging Implementation**
+   - Add NDJSON writer that records per-epoch loss components, conflict averages, and KL/clip fractions.
+   - Include queue conflict aggregates from replay batches (collected via `ReplayBatch.conflict_stats`).
+
+3. **Visualization Hooks**
+   - Provide sample JSONL/NDJSON files in `docs/samples/` with instructions on plotting (e.g., via notebooks or CLI).
+
+4. **Validation Tests**
+   - Add pytest ensuring log files contain expected keys and parse cleanly.
+   - Optionally create CLI flag `--ppo-ndjson` to specify NDJSON output path.
+
+5. **Documentation**
+   - Update `IMPLEMENTATION_NOTES`, `ARCHITECTURE_INTERFACES`, and training guide with telemetry instructions.
+
+### Deliverables
+- NDJSON logging path for PPO runs.
+- Samples + validation scripts/tests.
+- Docs referencing telemetry workflow.
+
+---
+
+## Phase 4 — Live Rollout Integration & Documentation Finalisation
+**Risk Level:** High
+**Goal:** Connect PPO training with live simulation rollouts, ensuring conflict telemetry influences on-policy data, and wrap documentation for stakeholders.
+| Risk | Impact | Mitigation | Severity |
+| --- | --- | --- | --- |
+| Simulation drift | Live rollouts diverge from replay assumptions | Start with short rollouts, compare telemetry vs replay | High |
+| Performance | Rollout + training strain CPU | Support configurable rollout length, streaming, optional GPU | High |
+| Operational complexity | More steps to run training pipelines | Provide documentation, scripts, automation | Medium |
+
+### Tasks & Steps
+**Risk Level:** High
+1. **Environment Runner Integration**
+   - Implement rollout buffer capturing transitions from `PolicyRuntime` → environment.
+   - Ensure observations include conflict features; rewards/advantages computed from live data.
+
+2. **Replay vs. Rollout Modes**
+   - Allow `TrainingHarness` to switch between replay-only (offline) and rollout (online) modes.
+   - Provide config/CLI flags to toggle modes and specify rollout length.
+
+3. **Telemetry Bridge**
+   - During rollouts, collect queue conflict events via telemetry subscriber; aggregate for logging.
+   - Ensure training telemetry (Phase 3) captures both replay and rollout runs.
+
+4. **End-to-End Validation**
+   - Smoke test training harness performing short rollouts and PPO updates, verifying no crashes and telemetry output present.
+   - Add documentation on running live rollouts, config prerequisites (torch, hardware considerations).
+
+5. **Documentation & Certificates**
+   - Update `MASTER_PLAN_PROGRESS`, training guide, ops docs.
+   - Issue completion certificate upon acceptance.
+
+### Deliverables
+- PPO training harness capable of live rollouts with conflict-aware telemetry.
+- Updated docs and samples demonstrating full workflow.
+- Final milestone certificate for PPO integration.
+
+---
+
+**Prepared by:** Townlet Engineering Team — PPO Integration Task Force
+## Briefing Snapshot (Pre-Compact Reference)
+- **Torch Environment:** `torch 2.8.0+cpu` installed in `.venv`; guard remains for environments without torch.
+- **Replay Assets:** Manifests/samples live in `docs/samples/` (`observation_hybrid_sample_{base,conflict_high,conflict_low}.npz/json`, `replay_manifest.json`).
+- **Config:** `PPOConfig` currently exposes learning rate, clipping, loss coefficients, epochs, batch size; Phase 2 will extend with GAE/grad knobs.
+- **Harness State:** `TrainingHarness.run_ppo` logs epoch summaries, writes JSONL when `--ppo-log` provided; optimization still placeholder (mean feature loss).
+- **Open Tasks:**
+  - Phase 2: implement real PPO losses/GAE, optimizer, tests.
+  - Phase 3: NDJSON telemetry pipeline, schema docs, validators.
+  - Phase 4: live rollouts (PolicyRuntime integration, buffer), documentation & certificate.
+- **Risks to Monitor:** loss instability, telemetry volume, rollout performance.
+- **Command Cheatsheet:**
+  - Replay validation: `python scripts/run_replay.py <sample> --validate`.
+  - PPO stub smoke: `python scripts/run_training.py configs/examples/poc_hybrid.yaml --replay-manifest docs/samples/replay_manifest.json --train-ppo --epochs 2 --ppo-log docs/samples/ppo_log.jsonl`.
+

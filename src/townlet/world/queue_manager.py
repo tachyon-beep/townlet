@@ -7,6 +7,7 @@ long-lived deadlocks.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -34,6 +35,16 @@ class QueueManager:
             "cooldown_events": 0,
             "ghost_step_events": 0,
         }
+        self._perf_metrics: Dict[str, int] = {
+            "request_ns": 0,
+            "release_ns": 0,
+            "assign_ns": 0,
+            "blocked_ns": 0,
+            "requests": 0,
+            "releases": 0,
+            "assign_calls": 0,
+            "blocked_calls": 0,
+        }
 
     # ---------------------------------------------------------------------
     # Public API
@@ -50,54 +61,69 @@ class QueueManager:
         Returns True if the agent is granted the reservation immediately,
         otherwise the agent is queued and False is returned.
         """
-        cooldown_key = (object_id, agent_id)
-        expiry = self._cooldowns.get(cooldown_key)
-        if expiry is not None and tick < expiry:
-            self._metrics["cooldown_events"] += 1
-            return False
+        start = time.perf_counter_ns()
+        self._perf_metrics["requests"] += 1
+        try:
+            cooldown_key = (object_id, agent_id)
+            expiry = self._cooldowns.get(cooldown_key)
+            if expiry is not None and tick < expiry:
+                self._metrics["cooldown_events"] += 1
+                return False
 
-        current = self._active.get(object_id)
-        if current == agent_id:
-            return True
+            current = self._active.get(object_id)
+            if current == agent_id:
+                return True
 
-        queue = self._queues.setdefault(object_id, [])
-        if any(entry.agent_id == agent_id for entry in queue):
-            return False
+            queue = self._queues.setdefault(object_id, [])
+            if any(entry.agent_id == agent_id for entry in queue):
+                return False
 
-        queue.append(QueueEntry(agent_id=agent_id, joined_tick=tick))
-        granted = self._assign_next(object_id, tick)
-        return granted == agent_id
+            queue.append(QueueEntry(agent_id=agent_id, joined_tick=tick))
+            granted = self._assign_next(object_id, tick)
+            return granted == agent_id
+        finally:
+            self._perf_metrics["request_ns"] += time.perf_counter_ns() - start
 
     def release(self, object_id: str, agent_id: str, tick: int, *, success: bool = True) -> None:
         """Release the reservation and optionally apply cooldown."""
-        if self._active.get(object_id) != agent_id:
-            return
+        start = time.perf_counter_ns()
+        self._perf_metrics["releases"] += 1
+        try:
+            if self._active.get(object_id) != agent_id:
+                return
 
-        del self._active[object_id]
-        if success:
-            self._cooldowns[(object_id, agent_id)] = tick + self._settings.cooldown_ticks
-        else:
-            self._cooldowns.pop((object_id, agent_id), None)
-        self._stall_counts.pop(object_id, None)
-        self._assign_next(object_id, tick)
+            del self._active[object_id]
+            if success:
+                self._cooldowns[(object_id, agent_id)] = tick + self._settings.cooldown_ticks
+            else:
+                self._cooldowns.pop((object_id, agent_id), None)
+            self._stall_counts.pop(object_id, None)
+            self._assign_next(object_id, tick)
+        finally:
+            self._perf_metrics["release_ns"] += time.perf_counter_ns() - start
 
     def record_blocked_attempt(self, object_id: str) -> bool:
         """Register that the current head was blocked.
 
         Returns True if a ghost-step should be triggered for the head agent.
         """
-        limit = self._settings.ghost_step_after
-        if limit == 0:
+        start = time.perf_counter_ns()
+        self._perf_metrics["blocked_calls"] += 1
+        try:
+            limit = self._settings.ghost_step_after
+            if limit == 0:
+                return False
+
+            count = self._stall_counts.get(object_id, 0) + 1
+            if count >= limit:
+                self._stall_counts[object_id] = 0
+                self._metrics["ghost_step_events"] += 1
+                return True
+
+            self._stall_counts[object_id] = count
             return False
-
-        count = self._stall_counts.get(object_id, 0) + 1
-        if count >= limit:
-            self._stall_counts[object_id] = 0
-            self._metrics["ghost_step_events"] += 1
-            return True
-
-        self._stall_counts[object_id] = count
-        return False
+        finally:
+            self._perf_metrics["blocked_ns"] += time.perf_counter_ns() - start
 
     def active_agent(self, object_id: str) -> str | None:
         """Return the agent currently holding the reservation, if any."""
@@ -111,30 +137,44 @@ class QueueManager:
         """Expose counters useful for telemetry."""
         return dict(self._metrics)
 
+    def performance_metrics(self) -> Dict[str, int]:
+        """Expose aggregated nanosecond timings and call counts."""
+        return dict(self._perf_metrics)
+
+    def reset_performance_metrics(self) -> None:
+        for key in self._perf_metrics:
+            self._perf_metrics[key] = 0
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
     def _assign_next(self, object_id: str, tick: int) -> str | None:
-        if self._active.get(object_id) is not None:
-            return None
+        start = time.perf_counter_ns()
+        self._perf_metrics["assign_calls"] += 1
+        try:
+            if self._active.get(object_id) is not None:
+                return None
 
-        queue = self._queues.get(object_id)
-        if not queue:
-            return None
+            queue = self._queues.get(object_id)
+            if not queue:
+                return None
 
-        best_index: int | None = None
-        best_priority: float | None = None
-        for index, entry in enumerate(queue):
-            wait_time = tick - entry.joined_tick
-            priority = float(index) - self._settings.age_priority_weight * float(wait_time)
-            if best_priority is None or priority < best_priority:
-                best_priority = priority
-                best_index = index
+            best_index: int | None = None
+            best_priority: float | None = None
+            for index, entry in enumerate(queue):
+                wait_time = tick - entry.joined_tick
+                priority = float(index) - self._settings.age_priority_weight * float(wait_time)
+                if best_priority is None or priority < best_priority:
+                    best_priority = priority
+                    best_index = index
 
-        if best_index is None:
-            return None
+            if best_index is None:
+                return None
 
-        entry = queue.pop(best_index)
-        self._active[object_id] = entry.agent_id
-        self._stall_counts.pop(object_id, None)
-        return entry.agent_id
+            entry = queue.pop(best_index)
+            self._active[object_id] = entry.agent_id
+            self._stall_counts.pop(object_id, None)
+            return entry.agent_id
+        finally:
+            self._perf_metrics["assign_ns"] += time.perf_counter_ns() - start
+

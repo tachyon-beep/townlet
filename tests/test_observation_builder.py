@@ -1,0 +1,87 @@
+import numpy as np
+from pathlib import Path
+
+from townlet.config import load_config
+from townlet.core.sim_loop import SimulationLoop
+from townlet.observations.builder import ObservationBuilder
+from townlet.world.grid import AgentSnapshot
+
+
+def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.conflict.rivalry.avoid_threshold = 0.1
+    config.employment.enforce_job_loop = enforce_job_loop
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.clear()
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.4, "hygiene": 0.5, "energy": 0.6},
+        wallet=2.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(1, 0),
+        needs={"hunger": 0.7, "hygiene": 0.8, "energy": 0.9},
+        wallet=3.0,
+    )
+    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    return loop
+
+
+def test_observation_builder_hybrid_map_and_features() -> None:
+    loop = make_world(enforce_job_loop=True)
+    builder: ObservationBuilder = loop.observations
+    world = loop.world
+    observations = builder.build_batch(world, terminated={})
+
+    obs = observations["alice"]
+    map_tensor = obs["map"]
+    features = obs["features"]
+    metadata = obs["metadata"]
+
+    assert map_tensor.shape == (4, builder.hybrid_cfg.local_window, builder.hybrid_cfg.local_window)
+    center = builder.hybrid_cfg.local_window // 2
+    assert map_tensor[0, center, center] == 1.0
+    # Bob is at (1,0) relative to Alice
+    assert map_tensor[1, center, center + 1] == 1.0
+
+    feature_names = metadata["feature_names"]
+    hunger_idx = feature_names.index("need_hunger")
+    wallet_idx = feature_names.index("wallet")
+    shift_pre_idx = feature_names.index("shift_pre")
+
+    assert np.isclose(features[hunger_idx], 0.4)
+    assert np.isclose(features[wallet_idx], 2.0)
+    # Default shift state pre-shift should be one-hot
+    assert features[shift_pre_idx] == 1.0
+    assert features[feature_names.index("ctx_reset_flag")] == 0.0
+    assert features[feature_names.index("rivalry_max")] == 0.0
+    assert features[feature_names.index("rivalry_avoid_count")] == 0.0
+
+
+def test_observation_ctx_reset_releases_slot() -> None:
+    loop = make_world()
+    builder: ObservationBuilder = loop.observations
+    world = loop.world
+
+    terminated = {"alice": True}
+    observations = builder.build_batch(world, terminated=terminated)
+    obs = observations["alice"]
+    feature_names = obs["metadata"]["feature_names"]
+    idx = feature_names.index("ctx_reset_flag")
+    assert obs["features"][idx] == 1.0
+    assert not world.embedding_allocator.has_assignment("alice")
+
+
+def test_observation_rivalry_features_reflect_conflict() -> None:
+    loop = make_world()
+    world = loop.world
+    world.register_rivalry_conflict("alice", "bob")
+    builder: ObservationBuilder = loop.observations
+    observations = builder.build_batch(world, terminated={})
+    obs = observations["alice"]
+    feature_names = obs["metadata"]["feature_names"]
+    assert obs["features"][feature_names.index("rivalry_max")] > 0.0
+    assert obs["features"][feature_names.index("rivalry_avoid_count")] >= 1.0

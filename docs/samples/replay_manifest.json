@@ -1,0 +1,5 @@
+[
+  {"sample": "observation_hybrid_sample_base.npz"},
+  {"sample": "observation_hybrid_sample_conflict_high.npz"},
+  {"sample": "observation_hybrid_sample_conflict_low.npz"}
+]

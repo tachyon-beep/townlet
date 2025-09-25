@@ -69,7 +69,9 @@ def test_observation_builder_releases_on_termination() -> None:
     builder = ObservationBuilder(config)
 
     obs = builder.build_batch(world, terminated={})
-    assert obs["alice"]["embedding_slot"] == 0.0
+    alice_obs = obs["alice"]
+    assert alice_obs["metadata"]["embedding_slot"] == 0
+    assert alice_obs["features"].ndim == 1
     assert world.embedding_allocator.has_assignment("alice")
 
     world.tick = 3
