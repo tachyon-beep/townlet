@@ -6,6 +6,7 @@
 - Telemetry Consumer Tooling (schema versioning, validator, dashboard MVP).
 - Replay DataLoader & PPO Phase 1 (conflict-aware batching, torch scaffolding).
 - Rollout Capture Foundations (PolicyRuntime metrics logging, capture CLI, scenario groundwork).
+  - Ops checklist: `docs/ops/ROLLOUT_PPO_CHECKLIST.md`
 
 ## Upcoming Work Packages
 1. **Observer UI Integration** (`docs/WORK_PACKAGE_OBSERVER_UI.md`)
@@ -18,8 +19,8 @@
    - Next: risk reduction activities, telemetry/tests per work package.
 3. **PPO Integration Phase 2** (`docs/WORK_PACKAGE_PPO_INTEGRATION.md`)
    - Owner: RL/Training
-   - Status: In progress (loss/optimizer + rollout capture landed).
-   - Next: integrate scripted scenarios, regress on captured datasets, finalize telemetry export.
+   - Status: In progress (scenario capture ingestion + PPO baseline telemetry shipped).
+   - Next: expand regression suite, harden telemetry exports, tune training stability.
 4. **Renderer/Geometry Enhancements**
    - Dependent on observer UI feedback; adds real object coordinates to `WorldState.local_view`.
 

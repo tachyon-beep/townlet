@@ -30,6 +30,55 @@ Additionally, `<prefix>_metrics.json` summarises per-sample statistics such as
 timesteps, reward totals, average log-probs/value predictions, rivalry stats,
 and action distributions to simplify scenario tuning.
 
+## Running PPO with Captured Scenarios
+
+```bash
+# Capture rollout samples (kitchen breakfast example)
+python scripts/capture_rollout.py configs/scenarios/kitchen_breakfast.yaml --output tmp/kitchen
+
+# Run PPO against captured manifest/metrics
+python scripts/run_training.py configs/scenarios/kitchen_breakfast.yaml \
+  --train-ppo --capture-dir tmp/kitchen --epochs 2 --ppo-log tmp/kitchen/ppo_log.jsonl
+```
+
+`TrainingHarness.run_ppo` consumes the capture directory via `--capture-dir`,
+loading both `rollout_sample_manifest.json` and `rollout_sample_metrics.json`
+to seed baseline comparisons in the PPO epoch logs.
+
+## Refreshing Golden Metrics
+
+The regression suite (`tests/test_rollout_capture.py`,
+`tests/test_training_replay.py::test_training_harness_run_ppo_on_capture`) compares
+captures against the canonical metrics stored in
+`docs/samples/rollout_scenario_stats.json`. Refresh the baselines whenever
+scenario behaviour changes:
+
+1. Capture fresh metrics for each scripted scenario (exclude `_template.yaml`):
+   ```bash
+   source .venv/bin/activate
+   python scripts/capture_rollout_suite.py \
+     configs/scenarios/kitchen_breakfast.yaml \
+     configs/scenarios/queue_conflict.yaml \
+     configs/scenarios/employment_punctuality.yaml \
+     configs/scenarios/rivalry_decay.yaml \
+     configs/scenarios/observation_baseline.yaml \
+     --output-root tmp/rollout_refresh --compress
+   ```
+2. Preview the merge with the helper script (skipping `_template.yaml` by default):
+   ```bash
+   python scripts/merge_rollout_metrics.py tmp/rollout_refresh --dry-run
+   ```
+   When satisfied, rerun without `--dry-run` (or point `--output` at a staging
+   file) to update `docs/samples/rollout_scenario_stats.json` while preserving
+   the `{scenario -> sample -> metrics}` layout.
+3. Re-run the regression tests to confirm the new baselines:
+   ```bash
+   python -m pytest tests/test_rollout_capture.py
+   python -m pytest tests/test_training_replay.py -k capture
+   ```
+4. Remove the temporary capture directory (`rm -rf tmp/rollout_refresh`) once the
+   golden stats are updated.
+
 ## From Frames to Replay Batches
 
 `PolicyRuntime` buffers actions/rewards/done flags after each tick. When

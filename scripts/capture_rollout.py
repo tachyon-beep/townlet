@@ -114,9 +114,11 @@ def main() -> None:
         meta_path = output_dir / f"{stem}.json"
         meta = sample.metadata.copy()
         meta.update({"agent_id": agent_id, "frame_count": len(agent_frames)})
+        sample_metrics = _compute_sample_metrics(sample)
+        metrics_map[sample_path.name] = sample_metrics
+        meta["metrics"] = sample_metrics
         meta_path.write_text(json.dumps(meta, indent=2))
         manifest_entries.append({"sample": str(sample_path.name), "meta": str(meta_path.name)})
-        metrics_map[sample_path.name] = _compute_sample_metrics(sample)
 
     manifest_path = output_dir / f"{args.prefix}_manifest.json"
     manifest_path.write_text(json.dumps(manifest_entries, indent=2))

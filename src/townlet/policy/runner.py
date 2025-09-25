@@ -276,6 +276,7 @@ class TrainingHarness:
         action_dim = int(action_dim_meta) if action_dim_meta is not None else max_action + 1
         if action_dim <= 0:
             raise ValueError("Derived action_dim must be positive")
+        baseline_metrics = getattr(dataset, "baseline_metrics", {})
 
         import torch
         from torch.distributions import Categorical
@@ -444,6 +445,24 @@ class TrainingHarness:
                 "lr": lr,
                 "steps": float(self._ppo_state["step"]),
             }
+            if baseline_metrics:
+                epoch_summary["baseline_sample_count"] = float(
+                    baseline_metrics.get("sample_count", 0.0)
+                )
+                epoch_summary["baseline_reward_mean"] = float(
+                    baseline_metrics.get("reward_mean", 0.0)
+                )
+                epoch_summary["baseline_reward_sum"] = float(
+                    baseline_metrics.get("reward_sum", 0.0)
+                )
+                if "reward_sum_mean" in baseline_metrics:
+                    epoch_summary["baseline_reward_sum_mean"] = float(
+                        baseline_metrics.get("reward_sum_mean", 0.0)
+                    )
+                if "log_prob_mean" in baseline_metrics:
+                    epoch_summary["baseline_log_prob_mean"] = float(
+                        baseline_metrics.get("log_prob_mean", 0.0)
+                    )
             if conflict_acc:
                 for key, value in conflict_acc.items():
                     epoch_summary[f"{key}_avg"] = value / len(batches)

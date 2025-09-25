@@ -22,5 +22,8 @@ jobs:
         run: |
           ruff check src tests
           mypy src
-      - name: Test
-        run: pytest
+      - name: Unit tests
+        run: pytest -k "not rollout_capture"
+
+      - name: Rollout scenario tests
+        run: pytest tests/test_rollout_capture.py

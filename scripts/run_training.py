@@ -36,6 +36,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Manifest (json/yaml) listing replay samples to batch.",
     )
+    parser.add_argument(
+        "--capture-dir",
+        type=Path,
+        default=None,
+        help="Directory produced by capture_rollout.py containing manifest/metrics.",
+    )
     parser.add_argument("--replay-batch-size", type=int, default=1, help="Batch size for replay dataset.")
     parser.add_argument("--replay-shuffle", action="store_true", help="Shuffle replay dataset each epoch.")
     parser.add_argument("--replay-seed", type=int, default=None, help="Seed for replay shuffling.")
@@ -110,9 +116,21 @@ def main() -> None:
     _apply_ppo_overrides(config, _collect_ppo_overrides(args))
     harness = TrainingHarness(config=config)
 
+    if args.capture_dir is not None and args.replay_manifest is not None:
+        raise ValueError("Specify either --capture-dir or --replay-manifest, not both")
+
     if args.train_ppo:
         entries: list[tuple[Path, Optional[Path]]] = []
-        if args.replay_manifest is not None:
+        if args.capture_dir is not None:
+            dataset_config = ReplayDatasetConfig.from_capture_dir(
+                args.capture_dir,
+                batch_size=args.replay_batch_size,
+                shuffle=args.replay_shuffle,
+                seed=args.replay_seed,
+                drop_last=args.replay_drop_last,
+                streaming=args.replay_streaming,
+            )
+        elif args.replay_manifest is not None:
             dataset_config = ReplayDatasetConfig.from_manifest(
                 args.replay_manifest,
                 batch_size=args.replay_batch_size,

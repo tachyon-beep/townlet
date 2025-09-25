@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import math
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from townlet.config import load_config
+from townlet.core.sim_loop import SimulationLoop
+from townlet.observations.builder import ObservationBuilder
 from townlet.policy.models import torch_available
 from townlet.policy.replay import (
     ReplayDataset,
@@ -16,11 +20,60 @@ from townlet.policy.replay import (
 )
 from townlet.policy.runner import TrainingHarness
 from townlet.world.grid import AgentSnapshot, WorldState
-from townlet.observations.builder import ObservationBuilder
-from townlet.core.sim_loop import SimulationLoop
+
+SCENARIO_CONFIGS = [
+    Path("configs/scenarios/kitchen_breakfast.yaml"),
+    Path("configs/scenarios/queue_conflict.yaml"),
+    Path("configs/scenarios/employment_punctuality.yaml"),
+    Path("configs/scenarios/rivalry_decay.yaml"),
+    Path("configs/scenarios/observation_baseline.yaml"),
+]
+
+GOLDEN_STATS_PATH = Path("docs/samples/rollout_scenario_stats.json")
+GOLDEN_STATS = json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
 
 
-def _make_sample(base_dir: Path, rivalry_increment: float, avoid_threshold: float, suffix: str) -> tuple[Path, Path]:
+def _load_expected_stats(config_path: Path) -> dict[str, dict[str, float]]:
+    scenario_key = config_path.stem
+    stats = GOLDEN_STATS.get(scenario_key)
+    if not stats:
+        pytest.skip(f"Golden stats not available for scenario '{scenario_key}'")
+    return stats
+
+
+def _aggregate_expected_metrics(sample_stats: dict[str, dict[str, float]]) -> dict[str, float]:
+    sample_count = float(len(sample_stats))
+    if sample_count == 0:
+        return {"sample_count": 0.0, "reward_sum": 0.0, "reward_sum_mean": 0.0, "reward_mean": 0.0}
+    reward_sums = [float(stats.get("reward_sum", 0.0)) for stats in sample_stats.values()]
+    reward_means = [
+        float(stats.get("reward_mean", 0.0))
+        for stats in sample_stats.values()
+        if "reward_mean" in stats
+    ]
+    log_prob_means = [
+        float(stats.get("log_prob_mean", 0.0))
+        for stats in sample_stats.values()
+        if "log_prob_mean" in stats
+    ]
+
+    aggregated: dict[str, float] = {
+        "sample_count": sample_count,
+        "reward_sum": float(sum(reward_sums)),
+        "reward_sum_mean": float(sum(reward_sums) / sample_count),
+        "reward_mean": float(sum(reward_means) / len(reward_means)) if reward_means else 0.0,
+    }
+    if log_prob_means:
+        aggregated["log_prob_mean"] = float(sum(log_prob_means) / len(log_prob_means))
+    return aggregated
+
+
+def _make_sample(
+    base_dir: Path,
+    rivalry_increment: float,
+    avoid_threshold: float,
+    suffix: str,
+) -> tuple[Path, Path]:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.conflict.rivalry.increment_per_conflict = rivalry_increment
     config.conflict.rivalry.avoid_threshold = avoid_threshold
@@ -102,7 +155,12 @@ def test_replay_dataset_batch_iteration(tmp_path: Path) -> None:
             indent=2,
         )
     )
-    dataset_config = ReplayDatasetConfig.from_manifest(manifest, batch_size=1, shuffle=True, seed=42)
+    dataset_config = ReplayDatasetConfig.from_manifest(
+        manifest,
+        batch_size=1,
+        shuffle=True,
+        seed=42,
+    )
     dataset = ReplayDataset(dataset_config)
     batches = list(dataset)
     assert len(batches) == 2
@@ -184,6 +242,103 @@ def test_replay_loader_value_length_mismatch(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         load_replay_sample(broken_path, meta_path)
 
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+@pytest.mark.parametrize("config_path", SCENARIO_CONFIGS)
+def test_training_harness_run_ppo_on_capture(tmp_path: Path, config_path: Path) -> None:
+    import subprocess
+
+    scenario_stats = _load_expected_stats(config_path)
+    capture_dir = tmp_path / config_path.stem
+    capture_dir.mkdir()
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/capture_rollout.py",
+            str(config_path),
+            "--output",
+            str(capture_dir),
+            "--compress",
+        ],
+        check=True,
+    )
+
+    manifest_path = capture_dir / "rollout_sample_manifest.json"
+    assert manifest_path.exists(), "Capture manifest missing"
+    manifest = json.loads(manifest_path.read_text())
+    assert len(manifest) == len(scenario_stats)
+
+    metrics_path = capture_dir / "rollout_sample_metrics.json"
+    assert metrics_path.exists(), "Capture metrics missing"
+    metrics_data = json.loads(metrics_path.read_text())
+    assert set(metrics_data) == set(scenario_stats), "Captured samples differ from golden stats"
+
+    for sample_name, expected_metrics in scenario_stats.items():
+        observed_metrics = metrics_data.get(sample_name)
+        assert observed_metrics is not None
+        for key in ("timesteps", "reward_sum", "reward_mean", "log_prob_mean"):
+            if key in expected_metrics:
+                assert observed_metrics.get(key) == pytest.approx(
+                    expected_metrics[key], rel=1e-5, abs=1e-6
+                )
+
+    dataset_config = ReplayDatasetConfig.from_capture_dir(
+        capture_dir,
+        batch_size=1,
+        shuffle=True,
+        seed=7,
+    )
+    harness = TrainingHarness(load_config(config_path))
+    log_path = capture_dir / "ppo_log.jsonl"
+    summary = harness.run_ppo(dataset_config, epochs=1, log_path=log_path)
+
+    aggregated_expected = _aggregate_expected_metrics(scenario_stats)
+    assert summary["baseline_sample_count"] == pytest.approx(
+        aggregated_expected["sample_count"], rel=1e-5, abs=1e-6
+    )
+    assert summary["baseline_reward_sum"] == pytest.approx(
+        aggregated_expected["reward_sum"], rel=1e-5, abs=1e-6
+    )
+    assert "baseline_reward_sum_mean" in summary
+    assert summary["baseline_reward_sum_mean"] == pytest.approx(
+        aggregated_expected["reward_sum_mean"], rel=1e-5, abs=1e-6
+    )
+    assert summary["baseline_reward_mean"] == pytest.approx(
+        aggregated_expected["reward_mean"], rel=1e-5, abs=1e-6
+    )
+    if "log_prob_mean" in aggregated_expected and "baseline_log_prob_mean" in summary:
+        assert summary["baseline_log_prob_mean"] == pytest.approx(
+            aggregated_expected["log_prob_mean"], rel=1e-5, abs=1e-6
+        )
+
+    for metric_key in (
+        "loss_policy",
+        "loss_value",
+        "loss_total",
+        "loss_entropy",
+        "clip_fraction",
+        "adv_mean",
+        "adv_std",
+        "grad_norm",
+    ):
+        assert metric_key in summary
+        assert math.isfinite(summary[metric_key])
+    assert summary["transitions"] > 0
+
+    log_contents = log_path.read_text().strip()
+    assert log_contents
+    log_lines = log_contents.splitlines()
+    assert len(log_lines) == 1
+    logged_summary = json.loads(log_lines[0])
+    for key in (
+        "baseline_sample_count",
+        "baseline_reward_sum",
+        "baseline_reward_mean",
+        "loss_policy",
+    ):
+        assert logged_summary[key] == pytest.approx(summary[key], rel=1e-5, abs=1e-6)
 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")

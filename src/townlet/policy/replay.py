@@ -250,6 +250,7 @@ def build_batch(samples: Sequence[ReplaySample]) -> ReplayBatch:
         "training_arrays": samples[0].metadata.get("training_arrays", list(TRAINING_ARRAY_FIELDS)),
         "timesteps": samples[0].metadata.get("timesteps"),
         "value_pred_steps": samples[0].metadata.get("value_pred_steps"),
+        "metrics": [sample.metadata.get("metrics") for sample in samples],
     }
     return ReplayBatch(
         maps=maps,
@@ -273,6 +274,7 @@ class ReplayDatasetConfig:
     seed: Optional[int] = None
     drop_last: bool = False
     streaming: bool = False
+    metrics_map: Optional[Dict[str, Dict[str, float]]] = None
 
     @classmethod
     def from_manifest(
@@ -292,6 +294,34 @@ class ReplayDatasetConfig:
             seed=seed,
             drop_last=drop_last,
             streaming=streaming,
+        )
+
+    @classmethod
+    def from_capture_dir(
+        cls,
+        capture_dir: Path,
+        batch_size: int = 1,
+        shuffle: bool = False,
+        seed: Optional[int] = None,
+        drop_last: bool = False,
+        streaming: bool = False,
+    ) -> "ReplayDatasetConfig":
+        manifest_path = capture_dir / "rollout_sample_manifest.json"
+        if not manifest_path.exists():
+            raise FileNotFoundError(manifest_path)
+        entries = _load_manifest(manifest_path)
+        metrics_path = capture_dir / "rollout_sample_metrics.json"
+        metrics_map = None
+        if metrics_path.exists():
+            metrics_map = json.loads(metrics_path.read_text())
+        return cls(
+            entries=entries,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            seed=seed,
+            drop_last=drop_last,
+            streaming=streaming,
+            metrics_map=metrics_map,
         )
 
 
@@ -337,6 +367,7 @@ class ReplayDataset:
         self._rng = np.random.default_rng(config.seed) if config.shuffle else None
         self._streaming = config.streaming
         self._cached_samples: Optional[List[ReplaySample]] = None
+        self.metrics_map = config.metrics_map or {}
         if self._streaming:
             first_sample = load_replay_sample(*self._entries[0])
             self._map_shape = first_sample.map.shape
@@ -346,9 +377,12 @@ class ReplayDataset:
             }
             self._timesteps = first_sample.metadata.get("timesteps")
             self._value_steps = first_sample.metadata.get("value_pred_steps")
+            self._ensure_sample_metrics(first_sample, self._entries[0])
         else:
             self._cached_samples = [load_replay_sample(sample, meta) for sample, meta in self._entries]
             self._ensure_homogeneous(self._cached_samples)
+            for sample, entry in zip(self._cached_samples, self._entries):
+                self._ensure_sample_metrics(sample, entry)
             self._map_shape = self._cached_samples[0].map.shape
             self._feature_dim = self._cached_samples[0].features.shape[0]
             self._array_shapes = {
@@ -356,6 +390,7 @@ class ReplayDataset:
             }
             self._timesteps = self._cached_samples[0].metadata.get("timesteps")
             self._value_steps = self._cached_samples[0].metadata.get("value_pred_steps")
+        self.baseline_metrics = self._aggregate_metrics()
 
     def _ensure_homogeneous(self, samples: Sequence[ReplaySample]) -> None:
         base_map = samples[0].map.shape
@@ -407,7 +442,54 @@ class ReplayDataset:
             sample_value_steps = sample.metadata.get("value_pred_steps")
             if sample_value_steps is not None and sample_value_steps != self._value_steps:
                 raise ValueError("Replay samples have mismatched value baseline length; cannot batch")
+        self._ensure_sample_metrics(sample, self._entries[index])
         return sample
+
+    def _ensure_sample_metrics(self, sample: ReplaySample, entry: Tuple[Path, Optional[Path]]) -> None:
+        existing = sample.metadata.get("metrics")
+        if isinstance(existing, dict) and existing:
+            return
+        metrics = self.metrics_map.get(entry[0].name)
+        if metrics is not None:
+            sample.metadata["metrics"] = metrics
+
+    def _aggregate_metrics(self) -> Dict[str, float]:
+        metrics_sources: List[Dict[str, float]] = []
+        if self.metrics_map:
+            metrics_sources = [dict(values) for values in self.metrics_map.values()]
+        elif self._cached_samples is not None:
+            for sample in self._cached_samples:
+                sample_metrics = sample.metadata.get("metrics")
+                if isinstance(sample_metrics, dict) and sample_metrics:
+                    metrics_sources.append(dict(sample_metrics))
+
+        if not metrics_sources:
+            return {}
+
+        totals: Dict[str, float] = {}
+        counts: Dict[str, int] = {}
+        for metrics in metrics_sources:
+            for key, value in metrics.items():
+                if not isinstance(value, (int, float)):
+                    continue
+                totals[key] = totals.get(key, 0.0) + float(value)
+                counts[key] = counts.get(key, 0) + 1
+
+        if not totals:
+            return {}
+
+        sample_count = float(len(metrics_sources))
+        aggregate: Dict[str, float] = {"sample_count": sample_count}
+        for key, total in totals.items():
+            occurrences = counts.get(key, 0)
+            if occurrences == 0:
+                continue
+            if key.endswith("_sum") or key.endswith("_total"):
+                aggregate[key] = total
+                aggregate[f"{key}_mean"] = total / sample_count if sample_count else 0.0
+            else:
+                aggregate[key] = total / occurrences
+        return aggregate
 def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
     """Convert collected trajectory frames into a replay sample."""
 
