@@ -86,6 +86,11 @@ def parse_args() -> argparse.Namespace:
         help="Number of ticks to run for rollout capture (0 disables).",
     )
     parser.add_argument(
+        "--rollout-auto-seed-agents",
+        action="store_true",
+        help="Populate a default pair of agents if the config scenario does not define any.",
+    )
+    parser.add_argument(
         "--epochs",
         type=int,
         default=1,
@@ -231,19 +236,33 @@ def main() -> None:
     if args.capture_dir is not None and args.replay_manifest is not None:
         raise ValueError("Specify either --capture-dir or --replay-manifest, not both")
 
+    buffer_dataset = None
     if args.rollout_ticks > 0:
         if args.rollout_save_dir is None:
             raise ValueError("--rollout-save-dir is required when --rollout-ticks > 0")
-        harness.capture_rollout(
-            ticks=args.rollout_ticks,
-            auto_seed_agents=True,
-            output_dir=args.rollout_save_dir,
+        try:
+            buffer = harness.capture_rollout(
+                ticks=args.rollout_ticks,
+                auto_seed_agents=args.rollout_auto_seed_agents,
+                output_dir=args.rollout_save_dir,
+            )
+        except ValueError as exc:
+            if "No agents available" in str(exc):
+                raise ValueError(
+                    "No agents available for rollout capture. Provide a scenario with agents or "
+                    "rerun with --rollout-auto-seed-agents."
+                ) from exc
+            raise
+        buffer_dataset = buffer.build_dataset(
+            batch_size=args.replay_batch_size,
+            drop_last=args.replay_drop_last,
         )
         if not args.train_ppo:
             return
 
     if args.train_ppo:
         entries: list[tuple[Path, Path | None]] = []
+        dataset_config: ReplayDatasetConfig | None = None
         if args.capture_dir is not None:
             dataset_config = ReplayDatasetConfig.from_capture_dir(
                 args.capture_dir,
@@ -273,13 +292,15 @@ def main() -> None:
                 streaming=args.replay_streaming,
             )
         else:
-            raise ValueError("PPO run requires replay sample or manifest")
+            if buffer_dataset is None:
+                raise ValueError("PPO run requires rollout buffer, replay sample, or manifest")
         harness.run_ppo(
             dataset_config,
             epochs=args.epochs,
             log_path=args.ppo_log,
             log_frequency=args.ppo_log_frequency,
             max_log_entries=args.ppo_log_max_entries,
+            in_memory_dataset=buffer_dataset,
         )
     elif args.replay_manifest is not None:
         dataset_config = ReplayDatasetConfig.from_manifest(

@@ -49,7 +49,19 @@ REQUIRED_PPO_KEYS = {
     "telemetry_version",
     "lr",
     "steps",
+    "epoch_duration_sec",
+    "data_mode",
+    "cycle_id",
+    "batch_entropy_mean",
+    "batch_entropy_std",
+    "grad_norm_max",
+    "kl_divergence_max",
+    "reward_advantage_corr",
+    "rollout_ticks",
+    "log_stream_offset",
 }
+
+REQUIRED_PPO_NUMERIC_KEYS = REQUIRED_PPO_KEYS - {"data_mode"}
 
 BASELINE_KEYS_REQUIRED = {
     "baseline_sample_count",
@@ -72,8 +84,10 @@ def _assert_ppo_log_schema(summary: dict[str, object], require_baseline: bool) -
     missing_keys = REQUIRED_PPO_KEYS - summary.keys()
     assert not missing_keys, f"Missing required PPO summary keys: {sorted(missing_keys)}"
 
-    for key in REQUIRED_PPO_KEYS:
+    for key in REQUIRED_PPO_NUMERIC_KEYS:
         _validate_numeric(summary[key])
+
+    assert isinstance(summary["data_mode"], str)
 
     seen_baseline = {key for key in summary if key.startswith("baseline_")}
     if require_baseline:
@@ -424,11 +438,15 @@ def test_training_harness_run_ppo(tmp_path: Path) -> None:
     assert summary['epoch'] == 2.0
     assert 'loss_total' in summary
     assert summary['transitions'] == pytest.approx(4.0)
+    assert summary['data_mode'] == 'replay'
+    assert summary['cycle_id'] == pytest.approx(0.0)
+    assert summary['rollout_ticks'] == pytest.approx(0.0)
     lines = log_path.read_text().strip().splitlines()
     assert len(lines) == 2
     last = json.loads(lines[-1])
     assert last['epoch'] == 2.0
     assert 'loss_policy' in last
+    assert last['data_mode'] == 'replay'
 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
@@ -472,6 +490,183 @@ def test_training_harness_log_sampling_and_rotation(tmp_path: Path) -> None:
     assert rotated_two.exists()
     assert json.loads(rotated_one.read_text().strip().splitlines()[-1])["epoch"] == 2.0
     assert json.loads(rotated_two.read_text().strip().splitlines()[-1])["epoch"] == 3.0
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_run_rollout_ppo(tmp_path: Path) -> None:
+    harness = TrainingHarness(load_config(Path("configs/scenarios/observation_baseline.yaml")))
+    log_path = tmp_path / "rollout_ppo.jsonl"
+    summary = harness.run_rollout_ppo(
+        ticks=3,
+        batch_size=1,
+        epochs=1,
+        log_path=log_path,
+    )
+    _assert_ppo_log_schema(summary, require_baseline=True)
+    assert log_path.exists()
+    logged = json.loads(log_path.read_text().strip().splitlines()[-1])
+    _assert_ppo_log_schema(logged, require_baseline=True)
+    assert summary["data_mode"] == "rollout"
+    assert logged["data_mode"] == "rollout"
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_ppo_conflict_telemetry(tmp_path: Path) -> None:
+    sample = _make_sample(tmp_path, 0.4, 0.2, "telemetry")
+    dataset_config = ReplayDatasetConfig(entries=[sample], batch_size=1, shuffle=False)
+    harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
+    log_path = tmp_path / "ppo_conflict.jsonl"
+
+    summary = harness.run_ppo(
+        dataset_config=dataset_config,
+        epochs=1,
+        log_path=log_path,
+        log_frequency=1,
+    )
+
+    _assert_ppo_log_schema(summary, require_baseline=False)
+    conflict_keys = {
+        "conflict.rivalry_max_mean_avg",
+        "conflict.rivalry_max_max_avg",
+        "conflict.rivalry_avoid_count_mean_avg",
+        "conflict.rivalry_avoid_count_max_avg",
+    }
+    missing = conflict_keys - summary.keys()
+    assert not missing, f"Missing conflict telemetry keys: {sorted(missing)}"
+    for key in conflict_keys:
+        _validate_numeric(summary[key])
+
+    numeric_expectations = (
+        "epoch_duration_sec",
+        "batch_entropy_mean",
+        "batch_entropy_std",
+        "grad_norm_max",
+        "kl_divergence_max",
+        "reward_advantage_corr",
+        "rollout_ticks",
+    )
+    for key in numeric_expectations:
+        _validate_numeric(summary[key])
+
+    assert summary["data_mode"] == "replay"
+    assert summary["cycle_id"] == pytest.approx(0.0)
+    assert summary["log_stream_offset"] == pytest.approx(1.0)
+
+    log_lines = log_path.read_text().strip().splitlines()
+    assert len(log_lines) == 1
+    logged_summary = json.loads(log_lines[0])
+    _assert_ppo_log_schema(logged_summary, require_baseline=False)
+    for key in conflict_keys:
+        assert key in logged_summary
+        _validate_numeric(logged_summary[key])
+    for key in numeric_expectations:
+        _validate_numeric(logged_summary[key])
+    assert logged_summary["data_mode"] == "replay"
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_run_rollout_ppo_multiple_cycles(tmp_path: Path) -> None:
+    harness = TrainingHarness(load_config(Path("configs/scenarios/observation_baseline.yaml")))
+    summaries: list[dict[str, float]] = []
+
+    for cycle in range(3):
+        log_path = tmp_path / f"rollout_ppo_cycle_{cycle}.jsonl"
+        summary = harness.run_rollout_ppo(
+            ticks=4,
+            batch_size=1,
+            epochs=2,
+            log_path=log_path,
+            log_frequency=1,
+            max_log_entries=4,
+        )
+        _assert_ppo_log_schema(summary, require_baseline=True)
+        assert summary["epoch"] == 2.0
+        assert summary["transitions"] > 0.0
+        assert summary["baseline_sample_count"] >= 1.0
+        assert summary["data_mode"] == "rollout"
+        assert summary["rollout_ticks"] == pytest.approx(4.0)
+        assert summary["cycle_id"] == pytest.approx(float(cycle))
+
+        log_lines = log_path.read_text().strip().splitlines()
+        assert len(log_lines) == 2
+        last_entry = json.loads(log_lines[-1])
+        _assert_ppo_log_schema(last_entry, require_baseline=True)
+        assert last_entry["epoch"] == 2.0
+        assert last_entry["baseline_reward_sum"] == pytest.approx(
+            summary["baseline_reward_sum"], rel=1e-5, abs=1e-6
+        )
+        assert last_entry["data_mode"] == "rollout"
+        summaries.append(summary)
+
+    baseline_counts = {summary["baseline_sample_count"] for summary in summaries}
+    transitions_seen = {summary["transitions"] for summary in summaries}
+    assert len(baseline_counts) == 1
+    assert len(transitions_seen) == 1
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_rollout_capture_and_train_cycles(tmp_path: Path) -> None:
+    harness = TrainingHarness(load_config(Path("configs/scenarios/observation_baseline.yaml")))
+
+    baseline_counts: list[float] = []
+    baseline_reward_sums: list[float] = []
+    transitions_seen: list[float] = []
+
+    for cycle in range(3):
+        buffer = harness.capture_rollout(ticks=4)
+        assert not buffer.is_empty()
+
+        dataset = buffer.build_dataset(batch_size=1)
+        baseline_metrics = getattr(dataset, "baseline_metrics", {})
+        assert baseline_metrics.get("sample_count", 0.0) >= 1.0
+
+        log_path = tmp_path / f"continuous_rollout_{cycle}.jsonl"
+        summary = harness.run_ppo(
+            epochs=1,
+            log_path=log_path,
+            log_frequency=1,
+            max_log_entries=1,
+            in_memory_dataset=dataset,
+        )
+
+        _assert_ppo_log_schema(summary, require_baseline=True)
+        assert summary["transitions"] > 0.0
+        assert summary["data_mode"] == "rollout"
+        assert summary["cycle_id"] == pytest.approx(float(cycle))
+
+        baseline_counts.append(summary["baseline_sample_count"])
+        baseline_reward_sums.append(summary["baseline_reward_sum"])
+        transitions_seen.append(summary["transitions"])
+
+        expected_sum = baseline_metrics.get("reward_sum", 0.0)
+        assert summary["baseline_reward_sum"] == pytest.approx(
+            expected_sum,
+            rel=1e-5,
+            abs=1e-6,
+        )
+        expected_sum_mean = baseline_metrics.get("reward_sum_mean")
+        if expected_sum_mean is not None:
+            assert summary["baseline_reward_sum_mean"] == pytest.approx(
+                expected_sum_mean,
+                rel=1e-5,
+                abs=1e-6,
+            )
+
+        log_lines = log_path.read_text().strip().splitlines()
+        assert len(log_lines) == 1
+        logged = json.loads(log_lines[-1])
+        _assert_ppo_log_schema(logged, require_baseline=True)
+        assert logged["epoch"] == 1.0
+        assert logged["baseline_reward_sum"] == pytest.approx(
+            summary["baseline_reward_sum"],
+            rel=1e-5,
+            abs=1e-6,
+        )
+        assert logged["data_mode"] == "rollout"
+
+    assert len(set(baseline_counts)) == 1
+    assert len(set(baseline_reward_sums)) == 1
+    assert len(set(transitions_seen)) == 1
 
 
 def test_policy_runtime_collects_frames(tmp_path: Path) -> None:

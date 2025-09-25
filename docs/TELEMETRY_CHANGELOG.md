@@ -15,6 +15,8 @@ Compatibility Matrix:
 | Observer UI dashboard | ≥0.3.0 | Displays employment widgets, conflict panel, ASCII map; warns on newer schemas. |
 | Smoke Harness (`run_employment_smoke.py`) | ≥0.2.0 | Emits metrics payload compatible with `scripts/telemetry_check.py`. |
 | Telemetry Validator (`scripts/telemetry_check.py`) | ≥0.3.0 | Validates employment and conflict payloads; extend with future schema entries. |
+| PPO Telemetry Validator (`scripts/validate_ppo_telemetry.py`) | telemetry_version == 1 | Checks NDJSON schema, baseline drift, and conflict aggregates. |
+| PPO Telemetry Watch (`scripts/telemetry_watch.py`) | telemetry_version == 1 | Tails NDJSON logs and alerts on KL/loss/gradient thresholds. |
 | Training harness replay | ≥0.3.0 | `scripts/run_training.py --replay-manifest` verifies conflict batches before PPO integration. |
 | Replay tooling | ≥0.3.0 | `scripts/run_replay.py` validates observation conflict features and telemetry samples. |
 

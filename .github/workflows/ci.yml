@@ -25,5 +25,16 @@ jobs:
       - name: Unit tests
         run: pytest -k "not rollout_capture"
 
+      - name: Telemetry schema tests
+        run: pytest tests/test_training_replay.py::test_training_harness_ppo_conflict_telemetry
+
+      - name: PPO telemetry validator
+        run: |
+          python scripts/validate_ppo_telemetry.py docs/samples/ppo_conflict_telemetry.jsonl
+          python scripts/capture_rollout.py configs/scenarios/observation_baseline.yaml --output tmp/ci_capture --compress
+          python scripts/run_training.py configs/scenarios/observation_baseline.yaml --train-ppo --capture-dir tmp/ci_capture --epochs 1 --ppo-log tmp/ci_capture/ppo_log.jsonl
+          python scripts/validate_ppo_telemetry.py tmp/ci_capture/ppo_log.jsonl
+          python scripts/validate_ppo_telemetry.py tmp/ci_capture/ppo_log.jsonl --baseline <(head -n 1 tmp/ci_capture/ppo_log.jsonl)
+
       - name: Rollout scenario tests
         run: pytest tests/test_rollout_capture.py

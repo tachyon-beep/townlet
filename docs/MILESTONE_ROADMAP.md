@@ -1,4 +1,4 @@
-exc# Townlet Milestone Roadmap (v0.1)
+# Townlet Milestone Roadmap (v0.1)
 
 This roadmap tracks sequencing across Phases A–C. Durations are intentionally unspecified; milestones advance when exit criteria are satisfied.
 

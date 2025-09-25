@@ -48,21 +48,31 @@ fifth epoch) and `--ppo-log-max-entries` to rotate large logs (producing suffixe
 `TrainingHarness.run_ppo` consumes the capture directory via `--capture-dir`,
 loading both `rollout_sample_manifest.json` and `rollout_sample_metrics.json`
 to seed baseline comparisons in the PPO epoch logs.
-Sample telemetry output (`telemetry_version` 1) is available at
-`docs/samples/ppo_epoch_log.jsonl` for quick inspection and dashboard prototyping.
-Run `python scripts/ppo_telemetry_plot.py` to plot `loss_total` and `kl_divergence` (falls back to
-textual summary if matplotlib is unavailable).
 
-For early Phase 4 work, the training CLI now supports lightweight rollout capture without PPO
+### Telemetry Schema Quick Reference
+
+- Epoch logs (`telemetry_version` 1.1) surface loss components, baseline metrics,
+  and conflict aggregates (`conflict.rivalry_*`).
+- Inspect `docs/samples/ppo_conflict_telemetry.jsonl` for a canonical
+  NDJSON record containing the required keys.
+- Run `python scripts/ppo_telemetry_plot.py` to plot `loss_total` and
+  `kl_divergence` (falls back to textual summaries if matplotlib is absent).
+- Validate new logs with `python scripts/validate_ppo_telemetry.py <log> [--baseline docs/samples/ppo_conflict_telemetry.jsonl] [--relative]` — version 1.1 requires cycle IDs, data modes, entropy/grad maxima, and streaming offsets.
+- Watch long runs with `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0` to surface regressions quickly.
+- For exploratory analysis open `docs/notebooks/telemetry_quicklook.ipynb` in Jupyter or VS Code.
+
+For early Phase 4 work, the training CLI now supports lightweight rollout capture with optional PPO
 integration:
 
 ```bash
 python scripts/run_training.py configs/examples/poc_hybrid.yaml \
-  --rollout-ticks 50 --rollout-save-dir tmp/rollout_stub
+  --rollout-ticks 50 --rollout-save-dir tmp/rollout_stub \
+  --rollout-auto-seed-agents --train-ppo --epochs 1 \
+  --ppo-log tmp/rollout_stub/ppo.jsonl
 ```
 
-This leverages `TrainingHarness.capture_rollout` and `RolloutBuffer` to persist manifests/metrics,
-mirroring `capture_rollout.py` output while keeping PPO disabled.
+This leverages `TrainingHarness.run_rollout_ppo` and `RolloutBuffer` to capture trajectories,
+persist manifests/metrics, and immediately feed PPO via the in-memory dataset.
 
 ## Refreshing Golden Metrics
 

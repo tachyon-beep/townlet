@@ -4,21 +4,22 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from townlet.config import load_config
 from townlet.policy.rollout import RolloutBuffer
 from townlet.policy.runner import TrainingHarness
 
 
-def _dummy_frame(agent_id: str) -> dict[str, object]:
+def _dummy_frame(agent_id: str, reward: float = 0.0, done: bool = False) -> dict[str, object]:
     return {
         "agent_id": agent_id,
         "map": np.zeros((1, 1, 1), dtype=np.float32),
         "features": np.zeros(1, dtype=np.float32),
         "metadata": {"feature_names": []},
         "action_id": 0,
-        "rewards": [0.0],
-        "dones": [False],
+        "rewards": [reward],
+        "dones": [done],
     }
 
 
@@ -28,6 +29,11 @@ def test_rollout_buffer_grouping_to_samples() -> None:
     samples = buffer.to_samples()
     assert set(samples) == {"alice"}
     assert samples["alice"].map.shape[0] == 2
+    dataset = buffer.build_dataset(batch_size=1)
+    assert len(dataset) == 1
+    baseline = getattr(dataset, "baseline_metrics", {})
+    assert baseline
+    assert "reward_sum" in baseline
 
 
 def test_training_harness_capture_rollout(tmp_path: Path) -> None:
@@ -54,3 +60,24 @@ def test_training_harness_capture_rollout(tmp_path: Path) -> None:
         meta_path = output_dir / entry["meta"]
         assert sample_path.exists()
         assert meta_path.exists()
+
+
+def test_rollout_buffer_empty_build_dataset_raises() -> None:
+    buffer = RolloutBuffer()
+    with pytest.raises(ValueError, match="contains no frames"):
+        buffer.build_dataset()
+
+
+def test_rollout_buffer_single_timestep_metrics() -> None:
+    buffer = RolloutBuffer()
+    buffer.extend([_dummy_frame("alice", reward=1.5, done=True)])
+    dataset = buffer.build_dataset(batch_size=1)
+    baseline = getattr(dataset, "baseline_metrics", {})
+    assert baseline["sample_count"] == pytest.approx(1.0)
+    assert baseline["reward_sum"] == pytest.approx(1.5)
+    assert baseline["reward_sum_mean"] == pytest.approx(1.5)
+    assert baseline["reward_mean"] == pytest.approx(1.5)
+    assert baseline.get("timesteps", 0.0) == pytest.approx(1.0)
+    batches = list(dataset)
+    assert len(batches) == 1
+    assert batches[0].rewards.shape == (1, 1)

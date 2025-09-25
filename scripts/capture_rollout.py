@@ -10,10 +10,9 @@ import numpy as np
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.policy.behavior import AgentIntent, BehaviorController
 from townlet.policy.metrics import compute_sample_metrics
 from townlet.policy.replay import ReplaySample, frames_to_replay_sample
-from townlet.world.grid import AgentSnapshot
+from townlet.policy.scenario_utils import apply_scenario, seed_default_agents
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,21 +61,9 @@ def main() -> None:
     loop = SimulationLoop(config)
     scenario_config: dict[str, Any] | None = getattr(config, "scenario", None)
     if scenario_config:
-        _apply_scenario(loop, scenario_config)
+        apply_scenario(loop, scenario_config)
     elif args.auto_seed_agents and not loop.world.agents:
-        loop.world.register_object("stove_1", "stove")
-        loop.world.agents["alice"] = AgentSnapshot(
-            "alice",
-            (0, 0),
-            {"hunger": 0.3, "hygiene": 0.4, "energy": 0.5},
-            wallet=2.0,
-        )
-        loop.world.agents["bob"] = AgentSnapshot(
-            "bob",
-            (1, 0),
-            {"hunger": 0.6, "hygiene": 0.7, "energy": 0.8},
-            wallet=3.0,
-        )
+        seed_default_agents(loop)
     output_dir = args.output
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -126,68 +113,5 @@ def main() -> None:
     metrics_path = output_dir / f"{args.prefix}_metrics.json"
     metrics_path.write_text(json.dumps(metrics_map, indent=2))
     print(f"Captured {len(manifest_entries)} replay samples to {output_dir}")
-
-
-class ScenarioBehavior(BehaviorController):
-    """Simple behavior controller driven by scenario schedules."""
-
-    def __init__(self, config, schedules: dict[str, list[AgentIntent]]) -> None:
-        self.config = config
-        self._schedules = schedules
-        self._indices: dict[str, int] = dict.fromkeys(schedules, 0)
-
-    def decide(self, world, agent_id):  # type: ignore[override]
-        seq = self._schedules.get(agent_id)
-        if not seq:
-            return AgentIntent(kind="wait")
-        idx = self._indices.setdefault(agent_id, 0)
-        intent = seq[idx % len(seq)]
-        self._indices[agent_id] = idx + 1
-        return intent
-
-
-def _apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
-    objects = scenario.get("objects", [])
-    for obj in objects:
-        loop.world.register_object(obj["id"], obj["type"])
-
-    schedules: dict[str, list[AgentIntent]] = {}
-    for agent in scenario.get("agents", []):
-        agent_id = agent["id"]
-        position = tuple(agent.get("position", (0, 0)))  # type: ignore[arg-type]
-        needs = dict(agent.get("needs", {}))
-        snapshot = AgentSnapshot(
-            agent_id,
-            position,
-            needs,
-            wallet=float(agent.get("wallet", 0.0)),
-        )
-        if agent.get("job"):
-            snapshot.job_id = agent["job"]
-        loop.world.agents[agent_id] = snapshot
-
-        schedule_entries = agent.get("schedule", [])
-        intents: list[AgentIntent] = []
-        for entry in schedule_entries:
-            data = dict(entry)
-            if "object" in data and "object_id" not in data:
-                data["object_id"] = data.pop("object")
-            if "affordance" in data and "affordance_id" not in data:
-                data["affordance_id"] = data.pop("affordance")
-            intent = AgentIntent(
-                kind=data.get("kind", "wait"),
-                object_id=data.get("object_id"),
-                affordance_id=data.get("affordance_id"),
-                blocked=bool(data.get("blocked", False)),
-                position=tuple(data["position"]) if data.get("position") else None,
-            )
-            intents.append(intent)
-        if intents:
-            schedules[agent_id] = intents
-
-    if schedules:
-        loop.policy.behavior = ScenarioBehavior(loop.config, schedules)
-
-
 if __name__ == "__main__":
     main()

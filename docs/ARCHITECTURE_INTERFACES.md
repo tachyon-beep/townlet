@@ -106,6 +106,23 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - emits per-tick lifecycle events (`affordance_start`, `affordance_finish`, `affordance_fail`, `employment_exit_pending`, `employment_exit_processed`) sourced from the world.
 - exposes per-agent job snapshots (job id, on-shift flag, shift state, attendance ratio, late ticks, wages withheld, wages earned, meals cooked/consumed, basket cost) plus global employment metrics (pending exits, exits today, queue limits) for planning.
 
+### 2.10 PPO Telemetry NDJSON Contract (`TrainingHarness.run_ppo`)
+- **Producer:** `TrainingHarness.run_ppo` writes newline-delimited JSON (NDJSON) to `log_path` / `--ppo-log`.
+- **Schema version:** default `telemetry_version == 1.1`. Set `config.training.telemetry_version` (future flag) to `1.0` only when consumers cannot handle the new fields.
+- **Epoch summary fields (v1.1):** `epoch`, `updates`, `transitions`, `steps`, `loss_policy`, `loss_value`, `loss_entropy`, `loss_total`, `clip_fraction`, `adv_mean`, `adv_std`, `grad_norm`, `kl_divergence`, optimiser learning rate `lr`, **plus**:
+  - `epoch_duration_sec`: wall-clock seconds for the epoch.
+  - `data_mode`: `"replay"`, `"rollout"`, or `"mixed"` (alternating cycles).
+  - `cycle_id`: monotonically incrementing rollout/train cycle id.
+  - `batch_entropy_mean` / `batch_entropy_std`: entropy stats across mini-batches.
+  - `grad_norm_max` / `kl_divergence_max`: maxima observed across mini-batches.
+  - `reward_advantage_corr`: Pearson correlation between rewards and advantages (0 if variance is zero).
+  - `rollout_ticks`: tick budget feeding the dataset (0 for pure replay).
+  - `log_stream_offset`: running counter for NDJSON streaming.
+- **Baseline metrics:** when replay/rollout datasets provide aggregates, the log injects `baseline_sample_count`, `baseline_reward_mean`, `baseline_reward_sum`, `baseline_reward_sum_mean`, and optional `baseline_log_prob_mean`. Absence indicates no baseline comparison was available.
+- **Conflict telemetry:** rivalry telemetry collapses into `conflict.rivalry_max_mean_avg`, `conflict.rivalry_max_max_avg`, `conflict.rivalry_avoid_count_mean_avg`, and `conflict.rivalry_avoid_count_max_avg`.
+- **Rotation contract:** `max_log_entries` triggers roll-over into suffixed files (`.1`, `.2`, …). Tooling must glob by prefix to reconstruct sequences; `log_stream_offset` continues incrementing across rotations.
+- **Compatibility notes:** v1.0 payloads exclude the v1.1 fields and must not include them partially. Validator (`scripts/validate_ppo_telemetry.py`) enforces version-specific requirements; sample logs live under `docs/samples/` and are refreshed with each schema change.
+
 ### 2.11 Console & Auth (`src/townlet/console/`)
 - Typer CLI / REST service with viewer/admin modes, bearer tokens, and audit logging.
 - commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues, `employment_status`, `employment_exit <review|approve|defer>`.

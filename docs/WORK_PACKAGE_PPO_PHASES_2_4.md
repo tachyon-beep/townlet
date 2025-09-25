@@ -17,6 +17,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 ## Phase 2 — PPO Loss & Optimizer Integration
 **Goal:** Implement full PPO training loop leveraging replay batches, including policy/value losses, entropy bonus, advantage estimation, and optimizer state management.
 **Risk Level:** High
+**Status:** ✅ Completed (2025-09-27) — PPO loop, rollout ingestion, telemetry schema/tests, drift analytics tooling, and ops documentation delivered. Future tweaks (e.g., richer dashboards) feed into Phase 3.
 | Risk | Impact | Mitigation | Severity |
 | --- | --- | --- | --- |
 | Loss instability | Incorrect advantage or loss math can destabilise training | Unit tests with synthetic data; validate gradients | High |
@@ -79,8 +80,21 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
    - Provide sample JSONL/NDJSON files in `docs/samples/` with instructions on plotting (e.g., via notebooks or CLI).
 
 4. **Validation Tests**
-   - Add pytest ensuring log files contain expected keys and parse cleanly.
-   - Optionally create CLI flag `--ppo-ndjson` to specify NDJSON output path.
+- Add pytest ensuring log files contain expected keys and parse cleanly.
+- Optionally create CLI flag `--ppo-ndjson` to specify NDJSON output path.
+
+**Status Notes:**
+- Telemetry schema test (`tests/test_training_replay.py::test_training_harness_ppo_conflict_telemetry`)
+  runs in CI to guard rivalry metrics and NDJSON shape.
+- `scripts/validate_ppo_telemetry.py` now reports per-epoch/aggregate drift (with optional relative deltas) and is executed in CI against the canonical sample; version 1.1 rules cover cycle IDs, data modes, entropy/grad maxima, and streaming offsets.
+- Regression coverage added in `tests/test_telemetry_validator.py` to guard validator behaviour on both valid and missing-conflict scenarios.
+- `scripts/telemetry_watch.py` tails PPO logs with thresholded alerts; `docs/notebooks/telemetry_quicklook.ipynb` offers quick-look visualisation for operators.
+- Sample epoch log with conflict metrics is published at
+  `docs/samples/ppo_conflict_telemetry.jsonl` and referenced throughout the
+  capture guide and ops checklist.
+- Schema upgrade draft (`docs/design/PPO_TELEMETRY_SCHEMA_PLAN.md`) enumerates
+  v1.1 fields (epoch duration, cycle IDs, entropy/grad maxima, data mode) and
+  compatibility steps.
 
 5. **Documentation**
    - Update `IMPLEMENTATION_NOTES`, `ARCHITECTURE_INTERFACES`, and training guide with telemetry instructions.
@@ -106,7 +120,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 1. **Environment Runner Integration**
    - Implement rollout buffer capturing transitions from `PolicyRuntime` → environment.
    - Ensure observations include conflict features; rewards/advantages computed from live data.
-   - *Pre-work (Complete):* `RolloutBuffer` scaffolding and `TrainingHarness.capture_rollout` added to capture/save trajectories without PPO integration.
+   - *Pre-work (Complete):* `RolloutBuffer` scaffolding and `TrainingHarness.capture_rollout` added to capture/save trajectories without PPO integration. In-memory dataset path (`build_dataset`) allows rollout captures to feed PPO directly (no manifest required).
 
 2. **Replay vs. Rollout Modes**
    - Allow `TrainingHarness` to switch between replay-only (offline) and rollout (online) modes.

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import statistics
+import time
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -31,10 +33,11 @@ from townlet.policy.replay import (
     build_batch,
     load_replay_sample,
 )
+from townlet.policy.replay_buffer import InMemoryReplayDataset
 from townlet.policy.rollout import RolloutBuffer
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import WorldState
 
-PPO_TELEMETRY_VERSION = 1
+PPO_TELEMETRY_VERSION = 1.1
 
 
 class PolicyRuntime:
@@ -270,21 +273,21 @@ class TrainingHarness:
             raise ValueError("ticks must be positive to capture a rollout")
 
         from townlet.core.sim_loop import SimulationLoop  # delayed import to avoid cycles
+        from townlet.policy.scenario_utils import (
+            apply_scenario,
+            has_agents,
+            seed_default_agents,
+        )
 
         loop = SimulationLoop(self.config)
-        if auto_seed_agents and not loop.world.agents:
-            loop.world.register_object("stove_1", "stove")
-            loop.world.agents["alice"] = AgentSnapshot(
-                "alice",
-                (0, 0),
-                {"hunger": 0.3, "hygiene": 0.4, "energy": 0.5},
-                wallet=2.0,
-            )
-            loop.world.agents["bob"] = AgentSnapshot(
-                "bob",
-                (1, 0),
-                {"hunger": 0.6, "hygiene": 0.7, "energy": 0.8},
-                wallet=3.0,
+        scenario_config = getattr(self.config, "scenario", None)
+        if scenario_config:
+            apply_scenario(loop, scenario_config)
+        elif auto_seed_agents and not loop.world.agents:
+            seed_default_agents(loop)
+        if not has_agents(loop):
+            raise ValueError(
+                "No agents available for rollout capture. Provide a scenario or use auto seeding."
             )
 
         buffer = RolloutBuffer()
@@ -293,25 +296,64 @@ class TrainingHarness:
             frames = loop.policy.collect_trajectory(clear=True)
             buffer.extend(frames)
         buffer.extend(loop.policy.collect_trajectory(clear=True))
+        buffer.set_tick_count(ticks)
 
         if output_dir is not None:
             buffer.save(output_dir, prefix=prefix, compress=compress)
         return buffer
 
-    def run_ppo(
+    def run_rollout_ppo(
         self,
-        dataset_config: ReplayDatasetConfig,
+        ticks: int,
+        batch_size: int = 1,
+        auto_seed_agents: bool = False,
+        output_dir: Path | None = None,
+        prefix: str = "rollout_sample",
+        compress: bool = True,
         epochs: int = 1,
         log_path: Path | None = None,
         log_frequency: int = 1,
         max_log_entries: int | None = None,
+    ) -> dict[str, float]:
+        buffer = self.capture_rollout(
+            ticks=ticks,
+            auto_seed_agents=auto_seed_agents,
+            output_dir=output_dir,
+            prefix=prefix,
+            compress=compress,
+        )
+        dataset = buffer.build_dataset(batch_size=batch_size)
+        return self.run_ppo(
+            dataset_config=None,
+            epochs=epochs,
+            log_path=log_path,
+            log_frequency=log_frequency,
+            max_log_entries=max_log_entries,
+            in_memory_dataset=dataset,
+        )
+
+    def run_ppo(
+        self,
+        dataset_config: ReplayDatasetConfig | None = None,
+        epochs: int = 1,
+        log_path: Path | None = None,
+        log_frequency: int = 1,
+        max_log_entries: int | None = None,
+        in_memory_dataset: InMemoryReplayDataset | None = None,
     ) -> dict[str, float]:
         if not torch_available():
             raise TorchNotAvailableError(
                 "PyTorch is required for PPO training. Install torch to proceed."
             )
 
-        dataset = ReplayDataset(dataset_config)
+        if in_memory_dataset is not None:
+            dataset = in_memory_dataset
+        else:
+            if dataset_config is None:
+                raise ValueError(
+                    "dataset_config is required when in_memory_dataset is not provided"
+                )
+            dataset = ReplayDataset(dataset_config)
         if len(dataset) == 0:
             raise ValueError("Replay dataset yielded no batches")
 
@@ -356,6 +398,24 @@ class TrainingHarness:
         log_entries_written = 0
         rotation_index = 0
 
+        cycle_id = int(self._ppo_state.get("cycle_id", -1))
+        if isinstance(dataset, InMemoryReplayDataset):
+            cycle_id += 1
+            self._ppo_state["cycle_id"] = cycle_id
+        else:
+            cycle_id = max(cycle_id, 0)
+
+        data_mode = "replay"
+        rollout_ticks = 0
+        if in_memory_dataset is not None and dataset_config is not None:
+            data_mode = "mixed"
+            rollout_ticks = int(getattr(in_memory_dataset, "rollout_ticks", 0))
+        elif isinstance(dataset, InMemoryReplayDataset):
+            data_mode = "rollout"
+            rollout_ticks = int(getattr(dataset, "rollout_ticks", 0))
+
+        log_stream_offset = int(self._ppo_state.get("log_stream_offset", 0))
+
         def _open_log(target_path: Path) -> None:
             nonlocal log_handle
             target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -365,6 +425,7 @@ class TrainingHarness:
             _open_log(log_path)
         last_summary: dict[str, float] = {}
         for epoch in range(epochs):
+            epoch_start = time.perf_counter()
             conflict_acc: dict[str, float] = {}
             metrics = {
                 "policy_loss": 0.0,
@@ -379,6 +440,12 @@ class TrainingHarness:
             }
             mini_batch_updates = 0
             transitions_processed = 0
+
+            entropy_values: list[float] = []
+            grad_norm_max = 0.0
+            kl_max = 0.0
+            reward_buffer: list[float] = []
+            advantage_buffer: list[float] = []
 
             for batch_index, batch in enumerate(batches, start=1):
                 batch_summary = self._summarise_batch(batch, batch_index=batch_index)
@@ -407,6 +474,13 @@ class TrainingHarness:
                     advantages = normalize_advantages(advantages.view(-1)).view_as(advantages)
 
                 baseline = value_baseline_from_old_preds(value_preds_old, timesteps)
+
+                reward_buffer.extend(
+                    batch.rewards.astype(float).reshape(-1).tolist()
+                )
+                advantage_buffer.extend(
+                    advantages.cpu().numpy().astype(float).reshape(-1).tolist()
+                )
 
                 batch_size, timestep_length = rewards.shape
                 flat_maps = maps.reshape(batch_size * timestep_length, *maps.shape[2:])
@@ -478,15 +552,18 @@ class TrainingHarness:
 
                     metrics["policy_loss"] += float(policy_loss.item())
                     metrics["value_loss"] += float(value_loss.item())
-                    metrics["entropy"] += float(entropy.item())
+                    entropy_value = float(entropy.item())
+                    metrics["entropy"] += entropy_value
+                    entropy_values.append(entropy_value)
                     metrics["total_loss"] += float(total_loss.item())
                     metrics["clip_frac"] += float(clip_frac.item())
                     metrics["adv_mean"] += float(mb_advantages.mean().item())
                     metrics["adv_std"] += float(mb_advantages.std(unbiased=False).item())
                     metrics["grad_norm"] += float(grad_norm)
-                    metrics["kl_divergence"] += float(
-                        torch.mean(mb_old_log_probs - new_log_probs).item()
-                    )
+                    kl_value = float(torch.mean(mb_old_log_probs - new_log_probs).item())
+                    metrics["kl_divergence"] += kl_value
+                    grad_norm_max = max(grad_norm_max, float(grad_norm))
+                    kl_max = max(kl_max, abs(kl_value))
                     mini_batch_updates += 1
                     transitions_processed += int(idx.shape[0])
 
@@ -496,6 +573,24 @@ class TrainingHarness:
             averaged_metrics = {
                 key: value / mini_batch_updates for key, value in metrics.items()
             }
+
+            if entropy_values:
+                epoch_entropy_mean = statistics.fmean(entropy_values)
+                epoch_entropy_std = (
+                    statistics.pstdev(entropy_values) if len(entropy_values) > 1 else 0.0
+                )
+            else:
+                epoch_entropy_mean = 0.0
+                epoch_entropy_std = 0.0
+
+            reward_adv_corr = 0.0
+            if reward_buffer and advantage_buffer:
+                reward_arr = np.asarray(reward_buffer, dtype=np.float64)
+                adv_arr = np.asarray(advantage_buffer, dtype=np.float64)
+                reward_std = reward_arr.std(ddof=0)
+                adv_std = adv_arr.std(ddof=0)
+                if reward_std > 0 and adv_std > 0:
+                    reward_adv_corr = float(np.corrcoef(reward_arr, adv_arr)[0, 1])
 
             lr = float(optimizer.param_groups[0]["lr"])
             self._ppo_state["learning_rate"] = lr
@@ -518,6 +613,23 @@ class TrainingHarness:
                 "lr": lr,
                 "steps": float(self._ppo_state["step"]),
             }
+
+            if PPO_TELEMETRY_VERSION >= 1.1:
+                epoch_summary.update(
+                    {
+                        "epoch_duration_sec": float(time.perf_counter() - epoch_start),
+                        "data_mode": data_mode,
+                        "cycle_id": float(cycle_id),
+                        "batch_entropy_mean": float(epoch_entropy_mean),
+                        "batch_entropy_std": float(epoch_entropy_std),
+                        "grad_norm_max": float(grad_norm_max),
+                        "kl_divergence_max": float(kl_max),
+                        "reward_advantage_corr": float(reward_adv_corr),
+                        "rollout_ticks": float(rollout_ticks),
+                        "log_stream_offset": float(log_stream_offset + 1),
+                    }
+                )
+                log_stream_offset += 1
             if baseline_metrics:
                 epoch_summary["baseline_sample_count"] = float(
                     baseline_metrics.get("sample_count", 0.0)
@@ -557,6 +669,8 @@ class TrainingHarness:
             last_summary = epoch_summary
         if log_handle is not None:
             log_handle.close()
+        if PPO_TELEMETRY_VERSION >= 1.1:
+            self._ppo_state["log_stream_offset"] = log_stream_offset
         return last_summary
 
     def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> dict[str, float]:

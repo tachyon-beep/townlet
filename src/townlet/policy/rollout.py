@@ -10,6 +10,7 @@ import numpy as np
 
 from townlet.policy.metrics import compute_sample_metrics
 from townlet.policy.replay import ReplaySample, frames_to_replay_sample
+from townlet.policy.replay_buffer import InMemoryReplayDataset, InMemoryReplayDatasetConfig
 
 
 @dataclass
@@ -25,10 +26,11 @@ class AgentRollout:
 
 
 class RolloutBuffer:
-    """Collects trajectory frames and exposes helpers to save them."""
+    """Collects trajectory frames and exposes helpers to save or replay them."""
 
     def __init__(self) -> None:
         self._frames: list[dict[str, object]] = []
+        self._tick_count = 0
 
     def extend(self, frames: Iterable[dict[str, object]]) -> None:
         for frame in frames:
@@ -84,5 +86,66 @@ class RolloutBuffer:
         metrics_path = output_dir / f"{prefix}_metrics.json"
         metrics_path.write_text(json.dumps(metrics_map, indent=2))
 
+    def build_dataset(
+        self,
+        batch_size: int = 1,
+        drop_last: bool = False,
+    ) -> InMemoryReplayDataset:
+        if not self._frames:
+            raise ValueError("Rollout buffer contains no frames; cannot build dataset")
+        samples = []
+        for sample in self.to_samples().values():
+            metrics = sample.metadata.get("metrics")
+            if not isinstance(metrics, dict) or not metrics:
+                sample.metadata["metrics"] = compute_sample_metrics(sample)
+            samples.append(sample)
+        config = InMemoryReplayDatasetConfig(
+            entries=samples,
+            batch_size=batch_size,
+            drop_last=drop_last,
+            rollout_ticks=self._tick_count,
+        )
+        dataset = InMemoryReplayDataset(config)
+        dataset.baseline_metrics = self._aggregate_metrics(samples)
+        return dataset
+
     def is_empty(self) -> bool:
         return not self._frames
+
+    def set_tick_count(self, ticks: int) -> None:
+        self._tick_count = max(0, int(ticks))
+
+    def _aggregate_metrics(self, samples: list[ReplaySample]) -> dict[str, float]:
+        metrics_sources: list[dict[str, float]] = []
+        for sample in samples:
+            metrics = sample.metadata.get("metrics")
+            if isinstance(metrics, dict) and metrics:
+                metrics_sources.append(dict(metrics))
+
+        if not metrics_sources:
+            return {}
+
+        totals: dict[str, float] = {}
+        counts: dict[str, int] = {}
+        for metrics in metrics_sources:
+            for key, value in metrics.items():
+                if not isinstance(value, (int, float)):
+                    continue
+                totals[key] = totals.get(key, 0.0) + float(value)
+                counts[key] = counts.get(key, 0) + 1
+
+        if not totals:
+            return {}
+
+        sample_count = float(len(metrics_sources))
+        aggregate: dict[str, float] = {"sample_count": sample_count}
+        for key, total in totals.items():
+            occurrences = counts.get(key, 0)
+            if occurrences == 0:
+                continue
+            if key.endswith("_sum") or key.endswith("_total"):
+                aggregate[key] = total
+                aggregate[f"{key}_mean"] = total / sample_count if sample_count else 0.0
+            else:
+                aggregate[key] = total / occurrences
+        return aggregate
