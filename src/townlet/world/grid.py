@@ -34,6 +34,7 @@ class InteractiveObject:
     object_id: str
     object_type: str
     occupied_by: str | None = None
+    stock: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -98,9 +99,15 @@ class WorldState:
 
     def register_object(self, object_id: str, object_type: str) -> None:
         """Register an interactive object in the world."""
-        self.objects[object_id] = InteractiveObject(object_id=object_id, object_type=object_type)
+        obj = InteractiveObject(object_id=object_id, object_type=object_type)
         if object_type == "fridge":
-            self.store_stock.setdefault(object_id, {"meals": 5})
+            obj.stock["meals"] = 5
+        if object_type == "stove":
+            obj.stock["raw_ingredients"] = 3
+        if object_type == "bed":
+            obj.stock["sleep_slots"] = 1
+        self.objects[object_id] = obj
+        self.store_stock[object_id] = obj.stock
 
     def register_affordance(
         self,
@@ -136,6 +143,9 @@ class WorldState:
                 self._sync_reservation(object_id)
                 if not granted and action.get("blocked"):
                     self._handle_blocked(object_id, current_tick)
+            elif kind == "move" and action.get("position"):
+                target_pos = tuple(action["position"])
+                snapshot.position = target_pos
             elif kind == "start" and object_id:
                 affordance_id = action.get("affordance")
                 if affordance_id:
@@ -324,6 +334,7 @@ class WorldState:
                 if need in snapshot.needs:
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - decay)
         self._apply_job_state()
+        self._update_basket_metrics()
 
     def _assign_jobs_to_agents(self) -> None:
         if not self._job_keys:
@@ -331,6 +342,9 @@ class WorldState:
         for index, snapshot in enumerate(self.agents.values()):
             if snapshot.job_id is None or snapshot.job_id not in self.config.jobs:
                 snapshot.job_id = self._job_keys[index % len(self._job_keys)]
+            snapshot.inventory.setdefault("meals_cooked", 0)
+            snapshot.inventory.setdefault("meals_consumed", 0)
+            snapshot.inventory.setdefault("wages_earned", 0)
 
     def _apply_job_state(self) -> None:
         jobs = self.config.jobs
@@ -358,37 +372,70 @@ class WorldState:
                     if snapshot.last_late_tick != self.tick:
                         snapshot.wallet = max(0.0, snapshot.wallet - lateness_penalty)
                         snapshot.last_late_tick = self.tick
-                    self._emit_event(
-                        "job_late",
-                        {
-                            "agent_id": snapshot.agent_id,
-                            "job_id": job_id,
-                            "tick": self.tick,
-                        },
-                    )
+                        self._emit_event(
+                            "job_late",
+                            {
+                                "agent_id": snapshot.agent_id,
+                                "job_id": job_id,
+                                "tick": self.tick,
+                            },
+                        )
                 if location and tuple(location) != snapshot.position:
                     snapshot.on_shift = False
                 else:
                     snapshot.wallet += wage_rate
+                    snapshot.inventory["wages_earned"] = (
+                        snapshot.inventory.get("wages_earned", 0)
+                        + 1
+                    )
             else:
                 snapshot.on_shift = False
+
+    def _update_basket_metrics(self) -> None:
+        basket_cost = (
+            self.config.economy.get("meal_cost", 0.0)
+            + self.config.economy.get("cook_energy_cost", 0.0)
+            + self.config.economy.get("cook_hygiene_cost", 0.0)
+            + self.config.economy.get("ingredients_cost", 0.0)
+        )
+        for snapshot in self.agents.values():
+            snapshot.inventory["basket_cost"] = basket_cost
+        self._restock_economy()
+
+    def _restock_economy(self) -> None:
+        restock_amount = int(self.config.economy.get("stove_stock_replenish", 0))
+        if restock_amount <= 0:
+            return
+        if self.tick % 200 != 0:
+            return
+        for obj in self.objects.values():
+            if obj.object_type == "stove":
+                before = obj.stock.get("raw_ingredients", 0)
+                obj.stock["raw_ingredients"] = before + restock_amount
+                self._emit_event(
+                    "stock_replenish",
+                    {
+                        "object_id": obj.object_id,
+                        "type": "stove",
+                        "amount": restock_amount,
+                    },
+                )
 
     def _handle_affordance_economy_start(
         self, agent_id: str, object_id: str, spec: AffordanceSpec
     ) -> None:
         if spec.affordance_id == "eat_meal":
             self._handle_eat_meal_start(agent_id, object_id)
+        elif spec.affordance_id == "cook_meal":
+            self._handle_cook_meal_start(agent_id, object_id)
 
     def _handle_eat_meal_start(self, agent_id: str, object_id: str) -> None:
         snapshot = self.agents.get(agent_id)
-        if snapshot is None:
+        obj = self.objects.get(object_id)
+        if snapshot is None or obj is None:
             return
         meal_cost = self.config.economy.get("meal_cost", 0.4)
-        stock = self.store_stock.get(object_id)
-        if stock is None:
-            self.store_stock[object_id] = {"meals": 0}
-            stock = self.store_stock[object_id]
-        if stock.get("meals", 0) <= 0 or snapshot.wallet < meal_cost:
+        if obj.stock.get("meals", 0) <= 0 or snapshot.wallet < meal_cost:
             self._emit_event(
                 "affordance_fail",
                 {
@@ -403,6 +450,47 @@ class WorldState:
             self._running_affordances.pop(object_id, None)
             return
 
-        stock["meals"] -= 1
+        obj.stock["meals"] = max(0, obj.stock.get("meals", 0) - 1)
         snapshot.wallet -= meal_cost
         snapshot.inventory["meals_consumed"] = snapshot.inventory.get("meals_consumed", 0) + 1
+
+    def _handle_cook_meal_start(self, agent_id: str, object_id: str) -> None:
+        snapshot = self.agents.get(agent_id)
+        obj = self.objects.get(object_id)
+        if snapshot is None or obj is None:
+            return
+        cost = self.config.economy.get("ingredients_cost", 0.15)
+        if snapshot.wallet < cost:
+            self._emit_event(
+                "affordance_fail",
+                {
+                    "agent_id": agent_id,
+                    "object_id": object_id,
+                    "affordance_id": "cook_meal",
+                    "reason": "insufficient_funds",
+                },
+            )
+            self.queue_manager.release(object_id, agent_id, self.tick, success=False)
+            self._sync_reservation(object_id)
+            self._running_affordances.pop(object_id, None)
+            return
+
+        snapshot.wallet -= cost
+        obj.stock["raw_ingredients"] = obj.stock.get("raw_ingredients", 0) - 1
+        if obj.stock["raw_ingredients"] < 0:
+            obj.stock["raw_ingredients"] = 0
+            self._emit_event(
+                "affordance_fail",
+                {
+                    "agent_id": agent_id,
+                    "object_id": object_id,
+                    "affordance_id": "cook_meal",
+                    "reason": "no_ingredients",
+                },
+            )
+            self.queue_manager.release(object_id, agent_id, self.tick, success=False)
+            self._sync_reservation(object_id)
+            self._running_affordances.pop(object_id, None)
+            return
+        snapshot.inventory["meals_cooked"] = snapshot.inventory.get("meals_cooked", 0) + 1
+        obj.stock["meals"] = obj.stock.get("meals", 0) + 1

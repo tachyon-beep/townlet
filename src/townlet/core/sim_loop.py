@@ -76,6 +76,7 @@ class SimulationLoop:
             terminated=terminated,
             queue_metrics=self.telemetry.latest_queue_metrics(),
             embedding_metrics=self.telemetry.latest_embedding_metrics(),
+            job_snapshot=self.telemetry.latest_job_snapshot(),
             events=self.telemetry.latest_events(),
         )
         return TickArtifacts(observations=observations, rewards=rewards)

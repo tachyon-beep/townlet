@@ -1,6 +1,9 @@
 - type: object
   id: shower_1
   object_type: shower
+- type: object
+  id: bed_1
+  object_type: bed
 
 - id: use_shower
   object_type: shower
@@ -32,3 +35,21 @@
   hooks:
     before: ["on_attempt_eat"]
     after: ["on_finish_eat"]
+- id: cook_meal
+  object_type: stove
+  duration: 40
+  effects:
+    hunger: 0.1
+    energy: -0.05
+  hooks:
+    before: ["on_attempt_cook"]
+    after: ["on_finish_cook"]
+    fail: ["on_cook_fail"]
+- id: rest_sleep
+  object_type: bed
+  duration: 60
+  effects:
+    energy: 0.8
+  hooks:
+    before: ["on_attempt_sleep"]
+    after: ["on_finish_sleep"]

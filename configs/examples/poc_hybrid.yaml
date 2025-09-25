@@ -38,6 +38,8 @@ economy:
   cook_energy_cost: 0.05
   cook_hygiene_cost: 0.02
   wage_income: 0.02
+  ingredients_cost: 0.15
+  stove_stock_replenish: 2
 jobs:
   grocer:
     start_tick: 180
@@ -51,6 +53,11 @@ jobs:
     wage_rate: 0.025
     lateness_penalty: 0.12
     location: [1, 0]
+behavior:
+  hunger_threshold: 0.4
+  hygiene_threshold: 0.4
+  energy_threshold: 0.4
+  job_arrival_buffer: 20
 shaping:
   use_potential: true
 curiosity:
@@ -73,3 +80,4 @@ affordances:
   affordances_file: "configs/affordances/core.yaml"
 stability:
   affordance_fail_threshold: 5
+  lateness_threshold: 3

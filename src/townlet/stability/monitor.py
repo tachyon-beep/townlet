@@ -15,6 +15,7 @@ class StabilityMonitor:
         self.last_queue_metrics: Optional[Dict[str, int]] = None
         self.last_embedding_metrics: Optional[Dict[str, float]] = None
         self.fail_threshold = config.stability.affordance_fail_threshold
+        self.lateness_threshold = config.stability.lateness_threshold
 
     def track(
         self,
@@ -24,6 +25,7 @@ class StabilityMonitor:
         terminated: Dict[str, bool],
         queue_metrics: Dict[str, int] | None = None,
         embedding_metrics: Dict[str, float] | None = None,
+        job_snapshot: Dict[str, Dict[str, object]] | None = None,
         events: Iterable[Dict[str, object]] | None = None,
     ) -> None:
         # TODO(@townlet): Implement canary thresholds (lateness, starvation, option thrash).
@@ -38,6 +40,13 @@ class StabilityMonitor:
             fail_count = sum(1 for e in events if e.get("event") == "affordance_fail")
         if self.fail_threshold >= 0 and fail_count > self.fail_threshold:
             alert = "affordance_failures_exceeded"
+
+        if job_snapshot is not None and self.lateness_threshold >= 0:
+            lateness_total = sum(
+                int(agent_info.get("lateness_counter", 0)) for agent_info in job_snapshot.values()
+            )
+            if lateness_total > self.lateness_threshold:
+                alert = "lateness_spike"
 
         self.latest_alert = alert
         _ = tick, rewards, terminated

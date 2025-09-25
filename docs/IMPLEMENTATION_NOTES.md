@@ -26,3 +26,10 @@
 - Tests cover decay, reward maths, and stability alerts for affordance failures.
 - Introduced basic economy parameters (`economy.*`), deducting meal costs and fridge stock on `eat_meal` affordances.
 - Job scheduler assigns agents round-robin across `jobs.*`, tracks shift windows, applies wage income, and enforces location-based punctuality with lateness penalties/events.
+- Telemetry now emits job snapshots and stability raises `lateness_spike` when lateness exceeds `stability.lateness_threshold`.
+- Expanded economy loop: fridge/stove stock management, meal purchasing/cooking costs, and wage counters in job snapshots.
+- Observer payload now carries job/economy snapshots for planning; tests ensure schema stability (including basket costs).
+- Console router exposes `telemetry_snapshot` so ops agents can fetch job/economy payloads.
+- Behavior controller scaffold (`ScriptedBehavior`) chooses intents with move/request/start primitives; thresholds configurable via `behavior.*`.
+- Added `rest_sleep` affordance and scripted pathing to beds so energy recovery works alongside cooking/eating loops; restocks emit telemetry events.
+- Introduced behavior configuration scaffold (`behavior.*`) and restock hooks as foundation for scripted decision logic.

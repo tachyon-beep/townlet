@@ -117,10 +117,18 @@ class EmbeddingAllocatorConfig(BaseModel):
 
 class StabilityConfig(BaseModel):
     affordance_fail_threshold: int = Field(5, ge=0, le=100)
+    lateness_threshold: int = Field(3, ge=0, le=100)
 
 
 class AffordanceConfig(BaseModel):
     affordances_file: str = Field("configs/affordances/core.yaml")
+
+
+class BehaviorConfig(BaseModel):
+    hunger_threshold: float = Field(0.4, ge=0.0, le=1.0)
+    hygiene_threshold: float = Field(0.4, ge=0.0, le=1.0)
+    energy_threshold: float = Field(0.4, ge=0.0, le=1.0)
+    job_arrival_buffer: int = Field(20, ge=0)
 
 
 class JobSpec(BaseModel):
@@ -140,6 +148,8 @@ class SimulationConfig(BaseModel):
         "cook_energy_cost": 0.05,
         "cook_hygiene_cost": 0.02,
         "wage_income": 0.02,
+        "ingredients_cost": 0.15,
+        "stove_stock_replenish": 2,
     })
     jobs: Dict[str, JobSpec] = Field(default_factory=lambda: {
         "grocer": JobSpec(
@@ -163,6 +173,7 @@ class SimulationConfig(BaseModel):
     embedding_allocator: EmbeddingAllocatorConfig = EmbeddingAllocatorConfig()
     affordances: AffordanceConfig = AffordanceConfig()
     stability: StabilityConfig = StabilityConfig()
+    behavior: BehaviorConfig = BehaviorConfig()
 
     model_config = ConfigDict(extra="allow")
 

@@ -25,6 +25,7 @@ def test_load_config(poc_config: Path) -> None:
     assert config.embedding_allocator.max_slots == 64
     assert config.affordances.affordances_file.endswith("core.yaml")
     assert config.stability.affordance_fail_threshold == 5
+    assert config.stability.lateness_threshold == 3
     assert config.rewards.decay_rates == {
         "hunger": 0.01,
         "hygiene": 0.005,
@@ -35,8 +36,11 @@ def test_load_config(poc_config: Path) -> None:
         "cook_energy_cost": 0.05,
         "cook_hygiene_cost": 0.02,
         "wage_income": 0.02,
+        "ingredients_cost": 0.15,
+        "stove_stock_replenish": 2,
     }
     assert "grocer" in config.jobs and "barista" in config.jobs
+    assert config.behavior.job_arrival_buffer == 20
 
 
 def test_invalid_queue_cooldown_rejected(tmp_path: Path) -> None:

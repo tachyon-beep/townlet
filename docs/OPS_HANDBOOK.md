@@ -4,6 +4,7 @@
 - `python scripts/run_simulation.py --config <yaml>` — starts a headless shard; honour `config_id` and observation variant declared in the file. Attach `--tick-limit` during smoke checks to bound runtime.
 - `python scripts/run_training.py --config <yaml>` — spins the PPO training harness; ensure release and shadow checkpoints write to distinct directories (`snapshots/rel`, `snapshots/shadow`).
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
+- Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status and economy stock for quick planning checks.
 
 ## Promotion Playbook
 1. **Pre-flight**

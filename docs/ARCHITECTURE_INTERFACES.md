@@ -54,7 +54,7 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - affordance specs load automatically from `config.affordances.affordances_file`, including `type: object` entries that pre-register interactive objects; the runtime still allows programmatic overrides via `register_object`/`register_affordance` for tests.
 - extension hooks: add YAML schema + hook dispatch to bridge console/telemetry events (planned).
 - need decay is applied post-affordance using `rewards.decay_rates`, keeping needs clamped to [0,1].
-- economy fields (`economy.*`) fund affordance execution (e.g., `eat_meal` consumes wallet + fridge stock) and provide default wage rates.
+- economy fields (`economy.*`) fund affordance execution (e.g., `eat_meal` consumes wallet + fridge stock, `cook_meal` deducts ingredients) and provide default wage rates.
 - job scheduler assigns agents to configured shifts (`jobs.*`), applies wage income, and emits `job_late` events on missed, location-based punctuality windows.
 
 ### 2.3 Queue & Reservation Manager (`src/townlet/world/queue_manager.py`)
@@ -82,6 +82,7 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - wraps PettingZoo `ParallelEnv`, manages option commitment windows, scripted primitive controllers, action masking, and behaviour-clone anneal scheduler.
 - outputs `actions` + metadata (masks, diagnostics) consumed by core loop.
 - config inputs: `features.stages`, `features.training`, anneal ratios from config or runtime flags.
+- Scripted controller plug-in (`BehaviorController`) currently returns idle intents; foundation laid for richer logic.
 
 ### 2.8 Reward Engine (`src/townlet/rewards/engine.py`)
 - computes per-agent reward: needs loss, shaping, wage, survival, social taps, curiosity; enforces clip bounds.
@@ -98,12 +99,14 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - enforces privacy mode (hashed IDs) and backpressure (aggregate diffs, drop events when overloaded).
 - captures queue manager and embedding allocator counters for ops dashboards.
 - emits per-tick lifecycle events (`affordance_start`, `affordance_finish`, `affordance_fail`) sourced from the world.
+- exposes per-agent job snapshots (job id, on-shift flag, wages earned, meals cooked/consumed, basket cost) and object stock for ops dashboards and planning.
 
 ### 2.11 Console & Auth (`src/townlet/console/`)
 - Typer CLI / REST service with viewer/admin modes, bearer tokens, and audit logging.
 - commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues.
 - idempotency: `cmd_id` required for destructive operations; logs `cmd_id`, issuer, result.
 - event stream subscriber surfaces telemetry event batches for operator tooling.
+- `telemetry_snapshot` command returns per-agent job/economy payloads for planning and basket checks.
 
 ### 2.12 Persistence & Config Service (`src/townlet/snapshots/`, `src/townlet/config/`)
 - YAML configs validated via `SimulationConfig` (pydantic). New sections include `queue_fairness` and `embedding_allocator`.
@@ -146,6 +149,8 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 | `stability.affordance_fail_threshold` | Stability monitor | Controls alerts when affordance failures spike.
 | `economy.*` | WorldState economy logic | Defines meal costs, cook costs, wage income defaults.
 | `jobs.*` | Job scheduler | Shift windows, wage rates, lateness penalties.
+| `stability.lateness_threshold` | Stability monitor | Alert threshold for lateness spikes.
+| `behavior.*` | Behavior controller | Need thresholds and job arrival buffer guiding scripted policy.
 | `perturbations/*.yaml` | Scheduler, lifecycle | Event probabilities, fairness buckets.
 
 ## 5. Extension Points & TBD Work

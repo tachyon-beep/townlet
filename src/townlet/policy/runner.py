@@ -5,6 +5,7 @@ from typing import Dict
 
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
+from townlet.policy.behavior import AgentIntent, BehaviorController, build_behavior
 
 
 class PolicyRuntime:
@@ -12,12 +13,23 @@ class PolicyRuntime:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        # TODO(@townlet): Initialise PettingZoo env and scripted controllers.
+        self.behavior: BehaviorController = build_behavior(config)
 
     def decide(self, world: WorldState, tick: int) -> Dict[str, object]:
         """Return a primitive action per agent."""
-        # TODO(@townlet): Integrate meta-policy + scripted controllers.
-        return {agent_id: {"action": "wait", "tick": tick} for agent_id in world.agents}
+        actions: Dict[str, object] = {}
+        for agent_id in world.agents:
+            intent: AgentIntent = self.behavior.decide(world, agent_id)
+            if intent.kind == "wait":
+                actions[agent_id] = {"kind": "wait"}
+            else:
+                actions[agent_id] = {
+                    "kind": intent.kind,
+                    "object": intent.object_id,
+                    "affordance": intent.affordance_id,
+                    "blocked": intent.blocked,
+                }
+        return actions
 
     def post_step(self, rewards: Dict[str, float], terminated: Dict[str, bool]) -> None:
         """Record rewards and termination signals into buffers."""

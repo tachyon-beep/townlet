@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from townlet.config import load_config
+from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
@@ -8,6 +9,9 @@ def _make_world() -> WorldState:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)
     world.register_object("shower", "shower")
+    world.register_object("fridge_1", "fridge")
+    world.register_object("stove_1", "stove")
+    world.register_object("bed_1", "bed")
     # Update the loaded affordance to known duration/effects for deterministic tests
     world.register_affordance(
         affordance_id="use_shower",
@@ -178,3 +182,24 @@ def test_wage_income_applied_on_shift() -> None:
     world.tick = 401
     world.resolve_affordances(current_tick=world.tick)
     assert alice.on_shift is False
+
+
+def test_stove_restock_event_emitted() -> None:
+    world = _make_world()
+    world.tick = 199
+    world.resolve_affordances(current_tick=world.tick)
+    world.tick = 200
+    world.resolve_affordances(current_tick=world.tick)
+    events = world.drain_events()
+    assert any(event.get("event") == "stock_replenish" for event in events)
+def test_scripted_behavior_handles_sleep() -> None:
+    world = _make_world()
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    loop.world = world
+    world.agents["alice"].needs["energy"] = 0.1
+
+    for _ in range(120):
+        loop.step()
+
+    assert world.agents["alice"].needs["energy"] > 0.1

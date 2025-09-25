@@ -47,6 +47,26 @@ class TelemetryPublisher:
             self._latest_events = []
         for subscriber in self._event_subscribers:
             subscriber(list(self._latest_events))
+        self._latest_job_snapshot = {
+            agent_id: {
+                "job_id": snapshot.job_id,
+                "on_shift": snapshot.on_shift,
+                "wallet": snapshot.wallet,
+                "lateness_counter": snapshot.lateness_counter,
+                "wages_earned": snapshot.inventory.get("wages_earned", 0),
+                "meals_cooked": snapshot.inventory.get("meals_cooked", 0),
+                "meals_consumed": snapshot.inventory.get("meals_consumed", 0),
+                "basket_cost": snapshot.inventory.get("basket_cost", 0.0),
+            }
+            for agent_id, snapshot in world.agents.items()
+        }
+        self._latest_economy_snapshot = {
+            object_id: {
+                "type": obj.object_type,
+                "stock": dict(obj.stock),
+            }
+            for object_id, obj in world.objects.items()
+        }
 
     def latest_queue_metrics(self) -> Dict[str, int] | None:
         """Expose the most recent queue-related telemetry counters."""
@@ -69,3 +89,9 @@ class TelemetryPublisher:
     ) -> None:
         """Register a callback to receive each tick's event batch."""
         self._event_subscribers.append(subscriber)
+
+    def latest_job_snapshot(self) -> Dict[str, Dict[str, object]]:
+        return getattr(self, "_latest_job_snapshot", {})
+
+    def latest_economy_snapshot(self) -> Dict[str, Dict[str, object]]:
+        return getattr(self, "_latest_economy_snapshot", {})
