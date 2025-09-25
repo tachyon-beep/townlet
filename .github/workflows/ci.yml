@@ -31,10 +31,15 @@ jobs:
       - name: PPO telemetry validator
         run: |
           python scripts/validate_ppo_telemetry.py docs/samples/ppo_conflict_telemetry.jsonl
-          python scripts/capture_rollout.py configs/scenarios/observation_baseline.yaml --output tmp/ci_capture --compress
-          python scripts/run_training.py configs/scenarios/observation_baseline.yaml --train-ppo --capture-dir tmp/ci_capture --epochs 1 --ppo-log tmp/ci_capture/ppo_log.jsonl
-          python scripts/validate_ppo_telemetry.py tmp/ci_capture/ppo_log.jsonl
-          python scripts/validate_ppo_telemetry.py tmp/ci_capture/ppo_log.jsonl --baseline <(head -n 1 tmp/ci_capture/ppo_log.jsonl)
+
+      - name: Mixed-mode rollout validation
+        run: |
+          python scripts/capture_rollout.py configs/scenarios/queue_conflict.yaml --output tmp/ci_phase4
+          python scripts/run_training.py configs/scenarios/queue_conflict.yaml --mode mixed --replay-manifest tmp/ci_phase4/rollout_sample_manifest.json --rollout-ticks 40 --epochs 1 --ppo-log tmp/ci_phase4/ppo_mixed.jsonl
+          python scripts/validate_ppo_telemetry.py tmp/ci_phase4/ppo_mixed.jsonl
+          python scripts/validate_ppo_telemetry.py tmp/ci_phase4/ppo_mixed.jsonl --baseline <(head -n 1 tmp/ci_phase4/ppo_mixed.jsonl)
+          python scripts/telemetry_watch.py tmp/ci_phase4/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5
+          python scripts/telemetry_summary.py tmp/ci_phase4/ppo_mixed.jsonl --format markdown > tmp/ci_phase4/summary.md
 
       - name: Rollout scenario tests
         run: pytest tests/test_rollout_capture.py

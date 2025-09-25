@@ -2,7 +2,10 @@
 
 ## Run Modes & Entry Points
 - `python scripts/run_simulation.py --config <yaml>` — starts a headless shard; honour `config_id` and observation variant declared in the file. Attach `--tick-limit` during smoke checks to bound runtime.
-- `python scripts/run_training.py --config <yaml>` — spins the PPO training harness; ensure release and shadow checkpoints write to distinct directories (`snapshots/rel`, `snapshots/shadow`).
+- `python scripts/run_training.py --config <yaml> [--mode replay|rollout|mixed]` — spins the PPO training harness; `mode` overrides `training.source` in YAML.
+- Replay example: `--mode replay --train-ppo --capture-dir captures/<scenario>`.
+- Rollout example: `--mode rollout --rollout-ticks 200 --rollout-auto-seed-agents --ppo-log logs/live.jsonl`.
+- Mixed example: `--mode mixed --capture-dir captures/<scenario> --rollout-ticks 100 --ppo-log logs/mixed.jsonl`.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
 - The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.
@@ -37,6 +40,10 @@
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/ARCHITECTURE_INTERFACES.md`.
 - Audit logs live in `logs/console/*.jsonl`; include `cmd_id`, issuer, result.
 - Promotion history tracked in `ops/rollouts.md`; append entry per promotion or rollback.
+- PPO telemetry tooling:
+  - `python scripts/validate_ppo_telemetry.py <log> --relative`
+  - `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--json]`
+  - `python scripts/telemetry_summary.py <log> --format markdown`
 
 ## Checklist Before Demos
 - Validate console commands `spawn`, `setneed`, `force_chat`, `arrange_meet` in a dry-run town.

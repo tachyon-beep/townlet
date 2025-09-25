@@ -1,0 +1,10 @@
+[
+  {
+    "sample": "rollout_sample_dawn_001.npz",
+    "meta": "rollout_sample_dawn_001.json"
+  },
+  {
+    "sample": "rollout_sample_erin_002.npz",
+    "meta": "rollout_sample_erin_002.json"
+  }
+]

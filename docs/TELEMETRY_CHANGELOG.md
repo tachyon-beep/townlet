@@ -2,6 +2,7 @@
 
 | Version | Date | Summary | Consumer Actions |
 | --- | --- | --- | --- |
+| 0.5.0 | 2025-09-28 | Expanded PPO telemetry (`telemetry_version` 1.1) with cycle/data-mode, epoch duration, entropy/grad maxima, reward↔adv correlation, rollout ticks, and streaming offsets; tooling emits summaries/watch alerts. | Move consumers to v1.1 schema; update validators/watchers; regenerate dashboards using new fields. |
 | 0.4.0 | 2025-09-26 | Introduced PPO training NDJSON telemetry (`telemetry_version` 1) with epoch-level KL divergence and conflict aggregates. | Update training log consumers to read `telemetry_version`, handle `kl_divergence`, and preserve baseline/conflict fields. |
 | 0.3.0 | 2025-09-26 | Added `conflict` payload with queue fairness counters and rivalry snapshot; schema default bumped. | Update clients to use `conflict.queues` and `conflict.rivalry`; ensure schema prefix `0.3.x`. |
 | 0.2.0 | 2025-09-25 | Added employment metrics to snapshots (shift state, attendance ratio, pending exits); console snapshot includes `schema_version`. | Update clients to respect `schema_version`, render employment KPIs, and validate payloads (use `scripts/telemetry_check.py`). |

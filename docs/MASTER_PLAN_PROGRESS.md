@@ -7,6 +7,7 @@
 - Replay DataLoader & PPO Phase 1 (conflict-aware batching, torch scaffolding).
 - Rollout Capture Foundations (PolicyRuntime metrics logging, capture CLI, scenario groundwork).
 - PPO Integration Phase 2 (rollout ingestion, PPO training loop, telemetry schema/tests, drift analytics tooling).
+- PPO Integration Phase 3 (telemetry_version 1.1 schema, streaming cycle IDs, validator/watch/summary tooling, CI harness validation).
   - Ops checklist: `docs/ops/ROLLOUT_PPO_CHECKLIST.md`
 
 ## Upcoming Work Packages
@@ -18,10 +19,10 @@
    - Owner: Systems/Gameplay
    - Status: In progress (queue fairness + rivalry scaffolding underway).
    - Next: risk reduction activities, telemetry/tests per work package.
-3. **PPO Integration Phase 3** (`docs/WORK_PACKAGE_PPO_PHASES_2_4.md`)
+3. **PPO Integration Phase 4** (`docs/WORK_PACKAGE_PPO_PHASES_2_4.md`)
    - Owner: RL/Training
-   - Status: In progress (telemetry dashboards + CI extensions pending).
-   - Next: expand telemetry streaming, integrate alternating rollout/train cycles, ramp CI coverage.
+   - Status: In progress (live rollout automation, telemetry bridge, ops playbook).
+   - Next: scripted scenario library, alternating rollout/train pipeline, rollout ops docs.
 4. **Renderer/Geometry Enhancements**
    - Dependent on observer UI feedback; adds real object coordinates to `WorldState.local_view`.
 

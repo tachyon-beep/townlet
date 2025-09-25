@@ -18,6 +18,8 @@
 | `reward_advantage_corr` | float | Pearson correlation between rewards and advantages (sanity check for GAE). |
 | `rollout_ticks` | int | Number of environment ticks captured for the dataset feeding the epoch (0 for pure replay). |
 | `log_stream_offset` | int | Incrementing counter for NDJSON streaming mode (used by tailers to resume). |
+| `queue_conflict_events` | float | Total queue-conflict events observed in the dataset feeding the epoch. |
+| `queue_conflict_intensity_sum` | float | Sum of conflict intensities for queue events (for ops trend monitoring). |
 
 ## Compatibility Strategy
 - Increment `telemetry_version` to `1.1` when new fields are present.
@@ -34,9 +36,10 @@
 4. Compute reward/advantage correlation using numpy (guard against zero variance).
 5. Surface rollout tick counts from `RolloutBuffer.build_dataset()` metadata.
 6. Maintain a log stream offset counter and include it in each summary.
-7. Update validator + tests (`tests/test_telemetry_validator.py`) for versioned checks and failure cases.
+7. Update validator + tests (`tests/test_telemetry_validator.py`) for versioned checks and failure cases (including queue conflict fields).
 8. Refresh docs/ops guides with new field explanations and streaming notes.
 9. Run long alternating-cycle endurance tests to exercise the expanded metrics.
+10. Capture queue conflict metrics from `TelemetryPublisher` during rollout capture and surface in PPO logs.
 
 ## Open Questions
 - Do we need per-agent breakdowns in schema v1.1 or leave for future release?

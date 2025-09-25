@@ -73,8 +73,9 @@ generalised replay samples, and feed them into PPO training/testing workflows.
      behaviour changes; refresh via capture suite CLI.
 3. **Tooling Enhancements** *(Planned)*
    - CLI options for filtered manifests, per-agent slicing, compression (partial: compression done).
-4. **Phase 3 – Telemetry Enhancements** *(Upcoming)*
-   - Enrich PPO telemetry schema and dashboards beyond baseline comparisons.
+4. **Phase 3 – Telemetry Enhancements** *(✅ Complete)*
+   - Telemetry schema bumped to 1.1 (cycle IDs, data modes, epoch duration, entropy/grad maxima, reward/adv correlation, rollout ticks, stream offset).
+   - Validator/watch/summary tooling in CI and ops docs; canonical sample regenerated.
 
 ## Scripted Scenario Analysis
 See `docs/ROLLOUT_SCENARIOS.md` for detailed proposals on scenario configs, capture strategy, and

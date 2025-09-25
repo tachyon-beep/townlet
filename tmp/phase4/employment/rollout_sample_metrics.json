@@ -1,0 +1,38 @@
+{
+  "rollout_sample_dawn_001.npz": {
+    "timesteps": 80.0,
+    "reward_sum": -16.000001907348633,
+    "reward_mean": -0.20000001788139343,
+    "log_prob_mean": -1.1203922033309937,
+    "value_pred_last": 0.00805988721549511,
+    "rivalry_max_mean": 0.7485625147819519,
+    "rivalry_max_max": 0.9800000190734863,
+    "rivalry_avoid_count_mean": 0.7124999761581421,
+    "rivalry_avoid_count_max": 1.0,
+    "lateness_mean": 0.887499988079071,
+    "action_nonzero": 2.0,
+    "action_total": 80.0,
+    "action_entropy": 0.6931471805599453,
+    "action_request_count": 40.0,
+    "action_unknown_count": 40.0,
+    "action_blocked_ratio": 0.0
+  },
+  "rollout_sample_erin_002.npz": {
+    "timesteps": 80.0,
+    "reward_sum": -16.000001907348633,
+    "reward_mean": -0.20000001788139343,
+    "log_prob_mean": -1.0652387142181396,
+    "value_pred_last": 0.00943978875875473,
+    "rivalry_max_mean": 0.7485625147819519,
+    "rivalry_max_max": 0.9800000190734863,
+    "rivalry_avoid_count_mean": 0.7124999761581421,
+    "rivalry_avoid_count_max": 1.0,
+    "lateness_mean": 0.887499988079071,
+    "action_nonzero": 2.0,
+    "action_total": 80.0,
+    "action_entropy": 0.6305810283860147,
+    "action_request_count": 26.0,
+    "action_wait_count": 54.0,
+    "action_blocked_ratio": 0.0
+  }
+}

@@ -17,6 +17,8 @@ REQUIRED_KEYS = {
     "reward_advantage_corr",
     "log_stream_offset",
     "data_mode",
+    "queue_conflict_events",
+    "queue_conflict_intensity_sum",
 }
 
 
@@ -61,6 +63,18 @@ def parse_args() -> argparse.Namespace:
         help="Fail if reward_advantage_corr falls below this value",
     )
     parser.add_argument(
+        "--queue-events-min",
+        type=float,
+        default=None,
+        help="Fail if queue_conflict_events falls below this value",
+    )
+    parser.add_argument(
+        "--queue-intensity-min",
+        type=float,
+        default=None,
+        help="Fail if queue_conflict_intensity_sum falls below this value",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON lines instead of human-readable text",
@@ -90,7 +104,11 @@ def stream_records(path: Path, follow: bool, interval: float) -> Iterator[dict[s
             missing = REQUIRED_KEYS - payload.keys()
             if missing:
                 raise ValueError(f"{path}: telemetry record missing keys: {sorted(missing)}")
-            record = {key: float(payload[key]) for key in REQUIRED_KEYS if key not in {"data_mode"}}
+            record = {
+                key: float(payload[key])
+                for key in REQUIRED_KEYS
+                if key not in {"data_mode"}
+            }
             record["data_mode"] = str(payload["data_mode"])
             yield record
 
@@ -117,6 +135,17 @@ def check_thresholds(record: dict[str, object], args: argparse.Namespace) -> Non
         raise SystemExit(
             f"Epoch {epoch}: reward_advantage_corr {record['reward_advantage_corr']:.6f} below threshold {args.reward_corr_threshold}"
         )
+    is_rollout = record["data_mode"] == "rollout"
+    if args.queue_events_min is not None and is_rollout:
+        if record["queue_conflict_events"] < args.queue_events_min:
+            raise SystemExit(
+                f"Epoch {epoch}: queue_conflict_events {record['queue_conflict_events']:.1f} below threshold {args.queue_events_min}"
+            )
+    if args.queue_intensity_min is not None and is_rollout:
+        if record["queue_conflict_intensity_sum"] < args.queue_intensity_min:
+            raise SystemExit(
+                f"Epoch {epoch}: queue_conflict_intensity_sum {record['queue_conflict_intensity_sum']:.2f} below threshold {args.queue_intensity_min}"
+            )
 
 
 def main() -> None:
@@ -136,6 +165,8 @@ def main() -> None:
                     f"grad_norm={record['grad_norm']:.6f}, "
                     f"entropy_mean={record['batch_entropy_mean']:.6f}, "
                     f"reward_adv_corr={record['reward_advantage_corr']:.6f}, "
+                    f"queue_events={record['queue_conflict_events']:.1f}, "
+                    f"queue_intensity_sum={record['queue_conflict_intensity_sum']:.2f}, "
                     f"offset={record['log_stream_offset']:.0f}"
                 )
     except SystemExit:

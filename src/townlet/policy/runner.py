@@ -229,6 +229,7 @@ class TrainingHarness:
         self.config = config
         self._ppo_state = {"step": 0, "learning_rate": 1e-3}
         # TODO(@townlet): Wire up PPO trainer, evaluators, and promotion hooks.
+        self._capture_loop = None
 
     def run(self) -> None:
         """Entry point for CLI training runs."""
@@ -279,7 +280,11 @@ class TrainingHarness:
             seed_default_agents,
         )
 
-        loop = SimulationLoop(self.config)
+        if self._capture_loop is None:
+            self._capture_loop = SimulationLoop(self.config)
+        else:
+            self._capture_loop.reset()
+        loop = self._capture_loop
         scenario_config = getattr(self.config, "scenario", None)
         if scenario_config:
             apply_scenario(loop, scenario_config)
@@ -295,6 +300,7 @@ class TrainingHarness:
             loop.step()
             frames = loop.policy.collect_trajectory(clear=True)
             buffer.extend(frames)
+            buffer.record_events(loop.telemetry.latest_events())
         buffer.extend(loop.policy.collect_trajectory(clear=True))
         buffer.set_tick_count(ticks)
 
@@ -627,6 +633,10 @@ class TrainingHarness:
                         "reward_advantage_corr": float(reward_adv_corr),
                         "rollout_ticks": float(rollout_ticks),
                         "log_stream_offset": float(log_stream_offset + 1),
+                        "queue_conflict_events": float(getattr(dataset, "queue_conflict_count", 0)),
+                        "queue_conflict_intensity_sum": float(
+                            getattr(dataset, "queue_conflict_intensity_sum", 0.0)
+                        ),
                     }
                 )
                 log_stream_offset += 1

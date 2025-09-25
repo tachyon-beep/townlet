@@ -82,6 +82,8 @@ def test_validate_ppo_telemetry_accepts_version_1_1(tmp_path: Path) -> None:
         "reward_advantage_corr": 0.9,
         "rollout_ticks": 0.0,
         "log_stream_offset": 1.0,
+        "queue_conflict_events": 0.0,
+        "queue_conflict_intensity_sum": 0.0,
     }
     _write_ndjson(log_path, record_v1_1)
 

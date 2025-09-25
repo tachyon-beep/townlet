@@ -36,9 +36,9 @@ and action distributions to simplify scenario tuning.
 # Capture rollout samples (kitchen breakfast example)
 python scripts/capture_rollout.py configs/scenarios/kitchen_breakfast.yaml --output tmp/kitchen
 
-# Run PPO against captured manifest/metrics
+# Run PPO against captured manifest/metrics (replay mode)
 python scripts/run_training.py configs/scenarios/kitchen_breakfast.yaml \
-  --train-ppo --capture-dir tmp/kitchen --epochs 2 --ppo-log tmp/kitchen/ppo_log.jsonl
+  --mode replay --train-ppo --capture-dir tmp/kitchen --epochs 2 --ppo-log tmp/kitchen/ppo_log.jsonl
 ```
 
 Use `--ppo-log-frequency` to thin the NDJSON output (e.g., `--ppo-log-frequency 5` to log every
@@ -58,7 +58,7 @@ to seed baseline comparisons in the PPO epoch logs.
 - Run `python scripts/ppo_telemetry_plot.py` to plot `loss_total` and
   `kl_divergence` (falls back to textual summaries if matplotlib is absent).
 - Validate new logs with `python scripts/validate_ppo_telemetry.py <log> [--baseline docs/samples/ppo_conflict_telemetry.jsonl] [--relative]` — version 1.1 requires cycle IDs, data modes, entropy/grad maxima, and streaming offsets.
-- Watch long runs with `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5` to surface regressions quickly (use `--json` for machine-readable alerts).
+- Watch long runs with `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --queue-events-min 25 --queue-intensity-min 45` to surface regressions quickly (use `--json` for machine-readable alerts). Baselines: see `docs/ops/queue_conflict_baselines.md` for recommended thresholds.
 - Generate operator summaries with `python scripts/telemetry_summary.py <log> [--baseline docs/samples/ppo_conflict_telemetry.jsonl] --format markdown` before filing status reports.
 - For exploratory analysis open `docs/notebooks/telemetry_quicklook.ipynb` in Jupyter or VS Code.
 
@@ -67,13 +67,26 @@ integration:
 
 ```bash
 python scripts/run_training.py configs/examples/poc_hybrid.yaml \
-  --rollout-ticks 50 --rollout-save-dir tmp/rollout_stub \
-  --rollout-auto-seed-agents --train-ppo --epochs 1 \
-  --ppo-log tmp/rollout_stub/ppo.jsonl
+  --mode rollout --rollout-ticks 50 --rollout-save-dir tmp/rollout_stub \
+  --rollout-auto-seed-agents --epochs 1 --ppo-log tmp/rollout_stub/ppo.jsonl
 ```
 
-This leverages `TrainingHarness.run_rollout_ppo` and `RolloutBuffer` to capture trajectories,
+This leverages `TrainingHarness.capture_rollout` and `RolloutBuffer` to capture trajectories,
 persist manifests/metrics, and immediately feed PPO via the in-memory dataset.
+
+## Training Mode Reference
+
+```yaml
+training:
+  source: rollout        # replay | rollout | mixed
+  rollout_ticks: 200
+  rollout_auto_seed_agents: true
+  replay_manifest: docs/samples/replay_manifest.json
+```
+
+- `--mode replay` (default) reads datasets from `--capture-dir`, `--replay-manifest`, or `--replay-sample`.
+- `--mode rollout` captures a fresh rollout using `--rollout-ticks` (falls back to `training.rollout_ticks`).
+- `--mode mixed` runs replay first, then a live rollout capture (requires both replay dataset and rollout ticks).
 
 ## Refreshing Golden Metrics
 

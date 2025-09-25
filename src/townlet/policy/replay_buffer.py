@@ -26,6 +26,8 @@ class InMemoryReplayDataset:
         self.batch_size = config.batch_size
         self._validate_shapes()
         self.rollout_ticks = int(config.rollout_ticks)
+        self.queue_conflict_count = 0
+        self.queue_conflict_intensity_sum = 0.0
 
     def _validate_shapes(self) -> None:
         base = self.samples[0]

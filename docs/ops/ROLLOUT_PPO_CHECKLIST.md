@@ -18,14 +18,14 @@
 1. Execute training with captured data:
  ```bash
   python scripts/run_training.py configs/scenarios/<scenario>.yaml \
-    --train-ppo --capture-dir captures/<scenario> --epochs 2 --ppo-log logs/<scenario>_ppo.jsonl
+    --mode replay --train-ppo --capture-dir captures/<scenario> --epochs 2 --ppo-log logs/<scenario>_ppo.jsonl
   ```
 2. Inspect epoch logs for `baseline_*` fields, conflict telemetry, and loss metrics.
-   - Confirm `telemetry_version` is `1`, `kl_divergence` is numeric, and
+   - Confirm `telemetry_version` is `1.1`, `kl_divergence` is numeric, and
      `conflict.rivalry_*` keys are present (see sample in
      `docs/samples/ppo_conflict_telemetry.jsonl`).
    - Run `python scripts/validate_ppo_telemetry.py logs/<scenario>_ppo.jsonl --relative` to enforce schema and baseline drift bounds (per-epoch/aggregate deltas + relative percentages). Version 1.1 requires extra fields (`epoch_duration_sec`, `data_mode`, `cycle_id`, `batch_entropy_mean/std`, `grad_norm_max`, `kl_divergence_max`, `reward_advantage_corr`, `rollout_ticks`, `log_stream_offset`).
-   - Optionally tail the run with `python scripts/telemetry_watch.py logs/<scenario>_ppo.jsonl --follow --kl-threshold 0.2 --grad-threshold 5.0` to alert on instability.
+   - Optionally tail the run with `python scripts/telemetry_watch.py logs/<scenario>_ppo.jsonl --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5` to alert on instability (add `--json` for automation).
    - Produce run summaries with `python scripts/telemetry_summary.py logs/<scenario>_ppo.jsonl --format markdown` (add `--baseline docs/samples/ppo_conflict_telemetry.jsonl` when comparing against canon).
    - Thin or rotate logs with `--ppo-log-frequency` (e.g., `--ppo-log-frequency 5`) and
      `--ppo-log-max-entries` to cap file size (creates suffixes like `.1`, `.2`).

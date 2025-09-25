@@ -59,6 +59,8 @@ REQUIRED_PPO_KEYS = {
     "reward_advantage_corr",
     "rollout_ticks",
     "log_stream_offset",
+    "queue_conflict_events",
+    "queue_conflict_intensity_sum",
 }
 
 REQUIRED_PPO_NUMERIC_KEYS = REQUIRED_PPO_KEYS - {"data_mode"}
@@ -544,6 +546,8 @@ def test_training_harness_ppo_conflict_telemetry(tmp_path: Path) -> None:
         "kl_divergence_max",
         "reward_advantage_corr",
         "rollout_ticks",
+        "queue_conflict_events",
+        "queue_conflict_intensity_sum",
     )
     for key in numeric_expectations:
         _validate_numeric(summary[key])
@@ -717,6 +721,31 @@ def test_training_harness_streaming_log_offsets(tmp_path: Path) -> None:
     assert len(lines) == 3
     offsets = [json.loads(line)["log_stream_offset"] for line in lines]
     assert offsets == [1.0, 2.0, 3.0]
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_rollout_queue_conflict_metrics(tmp_path: Path) -> None:
+    harness = TrainingHarness(load_config(Path("configs/scenarios/queue_conflict.yaml")))
+    log_path = tmp_path / "queue_conflict_log.jsonl"
+    summary = harness.run_rollout_ppo(
+        ticks=40,
+        batch_size=2,
+        epochs=1,
+        log_path=log_path,
+    )
+    _assert_ppo_log_schema(summary, require_baseline=True)
+    assert summary["data_mode"] == "rollout"
+    assert summary["queue_conflict_events"] >= 1.0
+    assert summary["queue_conflict_intensity_sum"] > 0.0
+
+    logged = json.loads(log_path.read_text().strip())
+    _assert_ppo_log_schema(logged, require_baseline=True)
+    assert logged["queue_conflict_events"] == pytest.approx(
+        summary["queue_conflict_events"], rel=1e-5
+    )
+    assert logged["queue_conflict_intensity_sum"] == pytest.approx(
+        summary["queue_conflict_intensity_sum"], rel=1e-5
+    )
 
 
 def test_policy_runtime_collects_frames(tmp_path: Path) -> None:

@@ -18,6 +18,12 @@ def parse_args() -> argparse.Namespace:
         help="Path to the simulation configuration YAML.",
     )
     parser.add_argument(
+        "--mode",
+        choices=["replay", "rollout", "mixed"],
+        default=None,
+        help="Override training mode (defaults to config.training.source).",
+    )
+    parser.add_argument(
         "--replay-sample",
         type=Path,
         default=None,
@@ -82,8 +88,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rollout-ticks",
         type=int,
-        default=0,
-        help="Number of ticks to run for rollout capture (0 disables).",
+        default=None,
+        help="Number of ticks to run for rollout capture (defaults to config.training.rollout_ticks).",
     )
     parser.add_argument(
         "--rollout-auto-seed-agents",
@@ -236,72 +242,125 @@ def main() -> None:
     if args.capture_dir is not None and args.replay_manifest is not None:
         raise ValueError("Specify either --capture-dir or --replay-manifest, not both")
 
+    mode = (args.mode or config.training.source).lower()
+    if mode not in {"replay", "rollout", "mixed"}:
+        raise ValueError(f"Unsupported training mode '{mode}'")
+
+    if args.rollout_ticks is not None and args.rollout_ticks > 0 and args.mode is None and config.training.source == "replay":
+        mode = "rollout"
+
+    train_ppo = bool(args.train_ppo or mode in {"rollout", "mixed"})
+
+    rollout_ticks = args.rollout_ticks if args.rollout_ticks is not None else config.training.rollout_ticks
+    if args.rollout_auto_seed_agents:
+        rollout_auto_seed = True
+    else:
+        rollout_auto_seed = config.training.rollout_auto_seed_agents
+    manifest_for_mode = args.replay_manifest or config.training.replay_manifest
+
     buffer_dataset = None
-    if args.rollout_ticks > 0:
-        if args.rollout_save_dir is None:
-            raise ValueError("--rollout-save-dir is required when --rollout-ticks > 0")
+    if mode in {"rollout", "mixed"}:
+        if args.capture_dir is not None:
+            raise ValueError("Rollout modes expect live capture; remove --capture-dir")
+        if manifest_for_mode is not None and mode == "rollout":
+            raise ValueError("Rollout mode does not use replay manifests")
+        if rollout_ticks is None or rollout_ticks <= 0:
+            raise ValueError("rollout_ticks must be positive for rollout/mixed modes")
         try:
             buffer = harness.capture_rollout(
-                ticks=args.rollout_ticks,
-                auto_seed_agents=args.rollout_auto_seed_agents,
+                ticks=rollout_ticks,
+                auto_seed_agents=rollout_auto_seed,
                 output_dir=args.rollout_save_dir,
             )
         except ValueError as exc:
             if "No agents available" in str(exc):
                 raise ValueError(
-                    "No agents available for rollout capture. Provide a scenario with agents or "
-                    "rerun with --rollout-auto-seed-agents."
+                    "No agents available for rollout capture. Provide a scenario with agents or rerun with --rollout-auto-seed-agents."
                 ) from exc
             raise
         buffer_dataset = buffer.build_dataset(
             batch_size=args.replay_batch_size,
             drop_last=args.replay_drop_last,
         )
-        if not args.train_ppo:
+        if not train_ppo:
             return
 
-    if args.train_ppo:
-        entries: list[tuple[Path, Path | None]] = []
-        dataset_config: ReplayDatasetConfig | None = None
-        if args.capture_dir is not None:
-            dataset_config = ReplayDatasetConfig.from_capture_dir(
-                args.capture_dir,
-                batch_size=args.replay_batch_size,
-                shuffle=args.replay_shuffle,
-                seed=args.replay_seed,
-                drop_last=args.replay_drop_last,
-                streaming=args.replay_streaming,
-            )
-        elif args.replay_manifest is not None:
-            dataset_config = ReplayDatasetConfig.from_manifest(
-                args.replay_manifest,
-                batch_size=args.replay_batch_size,
-                shuffle=args.replay_shuffle,
-                seed=args.replay_seed,
-                drop_last=args.replay_drop_last,
-                streaming=args.replay_streaming,
-            )
-        elif args.replay_sample is not None:
-            entries = [(args.replay_sample, args.replay_meta)]
-            dataset_config = ReplayDatasetConfig(
-                entries=entries,
-                batch_size=args.replay_batch_size,
-                shuffle=args.replay_shuffle,
-                seed=args.replay_seed,
-                drop_last=args.replay_drop_last,
-                streaming=args.replay_streaming,
-            )
-        else:
-            if buffer_dataset is None:
-                raise ValueError("PPO run requires rollout buffer, replay sample, or manifest")
-        harness.run_ppo(
-            dataset_config,
-            epochs=args.epochs,
-            log_path=args.ppo_log,
-            log_frequency=args.ppo_log_frequency,
-            max_log_entries=args.ppo_log_max_entries,
-            in_memory_dataset=buffer_dataset,
+    dataset_config: ReplayDatasetConfig | None = None
+    if args.capture_dir is not None:
+        dataset_config = ReplayDatasetConfig.from_capture_dir(
+            args.capture_dir,
+            batch_size=args.replay_batch_size,
+            shuffle=args.replay_shuffle,
+            seed=args.replay_seed,
+            drop_last=args.replay_drop_last,
+            streaming=args.replay_streaming,
         )
+    elif manifest_for_mode is not None and mode in {"replay", "mixed"}:
+        dataset_config = ReplayDatasetConfig.from_manifest(
+            manifest_for_mode,
+            batch_size=args.replay_batch_size,
+            shuffle=args.replay_shuffle,
+            seed=args.replay_seed,
+            drop_last=args.replay_drop_last,
+            streaming=args.replay_streaming,
+        )
+    elif args.replay_sample is not None:
+        entries = [(args.replay_sample, args.replay_meta)]
+        dataset_config = ReplayDatasetConfig(
+            entries=entries,
+            batch_size=args.replay_batch_size,
+            shuffle=args.replay_shuffle,
+            seed=args.replay_seed,
+            drop_last=args.replay_drop_last,
+            streaming=args.replay_streaming,
+        )
+
+    if train_ppo:
+        if mode == "replay":
+            if dataset_config is None:
+                raise ValueError(
+                    "Replay mode requires --capture-dir, --replay-manifest, --replay-sample, or config.training.replay_manifest"
+                )
+            harness.run_ppo(
+                dataset_config,
+                epochs=args.epochs,
+                log_path=args.ppo_log,
+                log_frequency=args.ppo_log_frequency,
+                max_log_entries=args.ppo_log_max_entries,
+            )
+        elif mode == "rollout":
+            if buffer_dataset is None:
+                raise ValueError("Rollout mode requires rollout capture; set --rollout-ticks or config.training.rollout_ticks")
+            harness.run_ppo(
+                None,
+                epochs=args.epochs,
+                log_path=args.ppo_log,
+                log_frequency=args.ppo_log_frequency,
+                max_log_entries=args.ppo_log_max_entries,
+                in_memory_dataset=buffer_dataset,
+            )
+        elif mode == "mixed":
+            if dataset_config is None:
+                raise ValueError(
+                    "Mixed mode requires replay dataset via --capture-dir, --replay-manifest, --replay-sample, or config.training.replay_manifest"
+                )
+            if buffer_dataset is None:
+                raise ValueError("Mixed mode requires rollout capture; set --rollout-ticks or config.training.rollout_ticks")
+            harness.run_ppo(
+                dataset_config,
+                epochs=args.epochs,
+                log_path=args.ppo_log,
+                log_frequency=args.ppo_log_frequency,
+                max_log_entries=args.ppo_log_max_entries,
+            )
+            harness.run_ppo(
+                None,
+                epochs=args.epochs,
+                log_path=args.ppo_log,
+                log_frequency=args.ppo_log_frequency,
+                max_log_entries=args.ppo_log_max_entries,
+                in_memory_dataset=buffer_dataset,
+            )
     elif args.replay_manifest is not None:
         dataset_config = ReplayDatasetConfig.from_manifest(
             args.replay_manifest,

@@ -33,15 +33,22 @@ class SimulationLoop:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self.world = WorldState.from_config(config)
-        self.lifecycle = LifecycleManager(config=config)
-        self.perturbations = PerturbationScheduler(config=config)
-        self.observations = ObservationBuilder(config=config)
-        self.policy = PolicyRuntime(config=config)
-        self.rewards = RewardEngine(config=config)
-        self.telemetry = TelemetryPublisher(config=config)
-        self.stability = StabilityMonitor(config=config)
-        self.tick: int = 0
+        self._build_components()
+
+    def _build_components(self) -> None:
+        self.world = WorldState.from_config(self.config)
+        self.lifecycle = LifecycleManager(config=self.config)
+        self.perturbations = PerturbationScheduler(config=self.config)
+        self.observations = ObservationBuilder(config=self.config)
+        self.policy = PolicyRuntime(config=self.config)
+        self.rewards = RewardEngine(config=self.config)
+        self.telemetry = TelemetryPublisher(config=self.config)
+        self.stability = StabilityMonitor(config=self.config)
+        self.tick = 0
+
+    def reset(self) -> None:
+        """Reset the simulation loop to its initial state."""
+        self._build_components()
 
     def run(self, max_ticks: int | None = None) -> Iterable[TickArtifacts]:
         """Run the loop until `max_ticks` or indefinitely."""

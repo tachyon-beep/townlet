@@ -64,6 +64,10 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
         "grad_norm": [float(rec.get("grad_norm", 0.0)) for rec in records],
         "batch_entropy_mean": [float(rec.get("batch_entropy_mean", 0.0)) for rec in records],
         "reward_advantage_corr": [float(rec.get("reward_advantage_corr", 0.0)) for rec in records],
+        "queue_conflict_events": [float(rec.get("queue_conflict_events", 0.0)) for rec in records],
+        "queue_conflict_intensity_sum": [
+            float(rec.get("queue_conflict_intensity_sum", 0.0)) for rec in records
+        ],
     }
     summary = {
         "epochs": int(recent.get("epoch", len(records))),
@@ -78,6 +82,8 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "reward_advantage_corr": metrics["reward_advantage_corr"][-1],
             "epoch_duration_sec": float(recent.get("epoch_duration_sec", 0.0)),
             "rollout_ticks": float(recent.get("rollout_ticks", 0.0)),
+            "queue_conflict_events": metrics["queue_conflict_events"][-1],
+            "queue_conflict_intensity_sum": metrics["queue_conflict_intensity_sum"][-1],
         },
         "extremes": {
             "loss_total": {
@@ -91,6 +97,10 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "grad_norm": {
                 "min": min(metrics["grad_norm"]),
                 "max": max(metrics["grad_norm"]),
+            },
+            "queue_conflict_events": {
+                "min": min(metrics["queue_conflict_events"]),
+                "max": max(metrics["queue_conflict_events"]),
             },
         },
     }
@@ -117,6 +127,9 @@ def render_text(summary: dict[str, object]) -> str:
     ]
     if latest["rollout_ticks"]:
         lines.append(f"              rollout_ticks={latest['rollout_ticks']:.0f}")
+    lines.append(
+        f"Queue conflicts: events={latest['queue_conflict_events']:.1f}, intensity_sum={latest['queue_conflict_intensity_sum']:.2f}"
+    )
     extremes = summary["extremes"]
     lines.append(
         "Extremes: "
@@ -151,12 +164,14 @@ def render_markdown(summary: dict[str, object]) -> str:
             f"`reward_adv_corr={latest['reward_advantage_corr']:.6f}`"
         ),
         f"- Epoch duration: `{latest['epoch_duration_sec']:.4f}s`, roll-out ticks: `{latest['rollout_ticks']:.0f}`",
+        f"- Queue conflicts: `{latest['queue_conflict_events']:.1f}` events (intensity sum `{latest['queue_conflict_intensity_sum']:.2f}`)",
         "",
         "| Metric | Min | Max |",
         "| --- | --- | --- |",
         f"| loss_total | {summary['extremes']['loss_total']['min']:.6f} | {summary['extremes']['loss_total']['max']:.6f} |",
         f"| kl_divergence | {summary['extremes']['kl_divergence']['min']:.6f} | {summary['extremes']['kl_divergence']['max']:.6f} |",
         f"| grad_norm | {summary['extremes']['grad_norm']['min']:.6f} | {summary['extremes']['grad_norm']['max']:.6f} |",
+        f"| queue_conflict_events | {summary['extremes']['queue_conflict_events']['min']:.1f} | {summary['extremes']['queue_conflict_events']['max']:.1f} |",
     ]
     drift = summary.get("baseline_drift")
     if drift:

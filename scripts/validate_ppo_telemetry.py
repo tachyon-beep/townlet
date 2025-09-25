@@ -94,6 +94,8 @@ REQUIRED_V1_1_NUMERIC_KEYS = {
     "reward_advantage_corr",
     "rollout_ticks",
     "log_stream_offset",
+    "queue_conflict_events",
+    "queue_conflict_intensity_sum",
 }
 
 REQUIRED_V1_1_STRING_KEYS = {"data_mode"}

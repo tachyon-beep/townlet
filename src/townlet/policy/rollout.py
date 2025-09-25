@@ -31,6 +31,18 @@ class RolloutBuffer:
     def __init__(self) -> None:
         self._frames: list[dict[str, object]] = []
         self._tick_count = 0
+        self._queue_conflict_count = 0
+        self._queue_conflict_intensity = 0.0
+
+    def record_events(self, events: Iterable[dict[str, object]]) -> None:
+        for event in events:
+            if event.get("event") == "queue_conflict":
+                self._queue_conflict_count += 1
+                intensity = event.get("intensity")
+                try:
+                    self._queue_conflict_intensity += float(intensity)
+                except (TypeError, ValueError):
+                    continue
 
     def extend(self, frames: Iterable[dict[str, object]]) -> None:
         for frame in frames:
@@ -107,6 +119,8 @@ class RolloutBuffer:
         )
         dataset = InMemoryReplayDataset(config)
         dataset.baseline_metrics = self._aggregate_metrics(samples)
+        dataset.queue_conflict_count = self._queue_conflict_count
+        dataset.queue_conflict_intensity_sum = self._queue_conflict_intensity
         return dataset
 
     def is_empty(self) -> bool:

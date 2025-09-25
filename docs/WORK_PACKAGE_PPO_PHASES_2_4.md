@@ -59,6 +59,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 
 ## Phase 3 — Telemetry & NDJSON Logging Enhancements
 **Risk Level:** Medium
+**Status:** ✅ Completed (2025-09-28) — telemetry_version 1.1 schema, streaming cycle IDs, validator/watch/summary tooling, CI harness validation, and operator docs delivered.
 **Goal:** Provide rich training telemetry for queue conflicts and rivalry signals, enabling dashboards and analytics.
 | Risk | Impact | Mitigation | Severity |
 | --- | --- | --- | --- |
@@ -116,6 +117,10 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 | Simulation drift | Live rollouts diverge from replay assumptions | Start with short rollouts, compare telemetry vs replay | High |
 | Performance | Rollout + training strain CPU | Support configurable rollout length, streaming, optional GPU | High |
 | Operational complexity | More steps to run training pipelines | Provide documentation, scripts, automation | Medium |
+| Rollout buffer leak | Long alternating runs exhaust memory | Reuse SimulationLoop/PolicyRuntime where possible, monitor memory, add cleanup hooks | Medium |
+| Telemetry backlog | Streaming log/NDJSON rotation can't keep up | Monitor `log_stream_offset`, add watch thresholds, run soak tests (10+ cycles) | Medium |
+| CI runtime creep | Capture + PPO validation extends pipeline duration | Keep harness iterations short (ticks/epochs) and cache staging artifacts | Low |
+| Schema regressions | Future tweaks break v1.1 controls | Validator tests cover v1.1 and back-compat, CI run generates fresh logs | Medium |
 
 ### Tasks & Steps
 **Risk Level:** High
@@ -123,20 +128,23 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
    - Implement rollout buffer capturing transitions from `PolicyRuntime` → environment.
    - Ensure observations include conflict features; rewards/advantages computed from live data.
    - *Pre-work (Complete):* `RolloutBuffer` scaffolding and `TrainingHarness.capture_rollout` added to capture/save trajectories without PPO integration. In-memory dataset path (`build_dataset`) allows rollout captures to feed PPO directly (no manifest required).
+   - Scenario coverage plan: use `queue_conflict`, `employment_punctuality`, `rivalry_decay`, and `observation_baseline` (plus `kitchen_breakfast` for soak tests). For each scenario, capture to `tmp/phase4/<scenario>` and archive summaries (`logs/phase4/<scenario>_ppo.jsonl`). Verify agents spawn without auto-seed. Capture queue conflict events/intensity from telemetry for rollout datasets and record baselines (`docs/ops/queue_conflict_baselines.md`).
 
 2. **Replay vs. Rollout Modes**
    - Allow `TrainingHarness` to switch between replay-only (offline) and rollout (online) modes.
    - Provide config/CLI flags to toggle modes and specify rollout length.
+   - `training.source` governs defaults (`replay`/`rollout`/`mixed`); CLI override via `--mode` with supporting flags (`--rollout-ticks`, `--capture-dir`, `--replay-manifest`).
 
 3. **Telemetry Bridge**
-   - During rollouts, collect queue conflict events via telemetry subscriber; aggregate for logging.
-   - Ensure training telemetry (Phase 3) captures both replay and rollout runs.
+   - During rollouts, collect queue conflict events via telemetry subscriber; aggregate for logging. *(In progress via Phase 4 workstream)*
+   - Ensure training telemetry (Phase 3) captures both replay and rollout runs. *(Covered by v1.1 schema + endurance tests)*
 
-4. **End-to-End Validation**
+4. **End-to-End Validation** *(Phase 4)*
    - Smoke test training harness performing short rollouts and PPO updates, verifying no crashes and telemetry output present.
    - Add documentation on running live rollouts, config prerequisites (torch, hardware considerations).
+   - Execute alternating capture→PPO cycles (≥10) per primary scenario, store summaries (`telemetry_summary.py`) and watcher logs for audit.
 
-5. **Documentation & Certificates**
+5. **Documentation & Certificates** *(Ongoing)*
    - Update `MASTER_PLAN_PROGRESS`, training guide, ops docs.
    - Issue completion certificate upon acceptance.
 
@@ -154,9 +162,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 - **Config:** `PPOConfig` currently exposes learning rate, clipping, loss coefficients, epochs, batch size; Phase 2 will extend with GAE/grad knobs.
 - **Harness State:** `TrainingHarness.run_ppo` logs epoch summaries, writes JSONL when `--ppo-log` provided; optimization still placeholder (mean feature loss).
 - **Open Tasks:**
-  - Phase 2: implement real PPO losses/GAE, optimizer, tests.
-  - Phase 3: NDJSON telemetry pipeline, schema docs, validators.
-  - Phase 4: live rollouts (PolicyRuntime integration, buffer), documentation & certificate.
+  - Phase 4: live rollouts (PolicyRuntime integration, buffer), telemetry bridge, documentation & certificate.
 - **Risks to Monitor:** loss instability, telemetry volume, rollout performance.
 - **Command Cheatsheet:**
   - Replay validation: `python scripts/run_replay.py <sample> --validate`.

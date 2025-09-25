@@ -19,6 +19,7 @@ SocialRewardStage = Literal["OFF", "C1", "C2", "C3"]
 LifecycleToggle = Literal["on", "off"]
 CuriosityToggle = Literal["phase_A", "off"]
 ConsoleMode = Literal["viewer", "admin"]
+TrainingSource = Literal["replay", "rollout", "mixed"]
 
 
 class StageFlags(BaseModel):
@@ -208,6 +209,13 @@ class BehaviorConfig(BaseModel):
     job_arrival_buffer: int = Field(20, ge=0)
 
 
+class TrainingConfig(BaseModel):
+    source: TrainingSource = "replay"
+    rollout_ticks: int = Field(100, ge=0)
+    rollout_auto_seed_agents: bool = False
+    replay_manifest: Path | None = None
+
+
 class JobSpec(BaseModel):
     start_tick: int = 0
     end_tick: int = 0
@@ -249,6 +257,7 @@ class SimulationConfig(BaseModel):
     queue_fairness: QueueFairnessConfig = QueueFairnessConfig()
     conflict: ConflictConfig = ConflictConfig()
     ppo: PPOConfig | None = None
+    training: TrainingConfig = TrainingConfig()
     embedding_allocator: EmbeddingAllocatorConfig = EmbeddingAllocatorConfig()
     observations_config: ObservationsConfig = ObservationsConfig()
     affordances: AffordanceConfig = AffordanceConfig()

@@ -1,0 +1,14 @@
+[
+  {
+    "sample": "rollout_sample_anna_001.npz",
+    "meta": "rollout_sample_anna_001.json"
+  },
+  {
+    "sample": "rollout_sample_ben_002.npz",
+    "meta": "rollout_sample_ben_002.json"
+  },
+  {
+    "sample": "rollout_sample_cara_003.npz",
+    "meta": "rollout_sample_cara_003.json"
+  }
+]
