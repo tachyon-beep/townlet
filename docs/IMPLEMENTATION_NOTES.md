@@ -95,7 +95,7 @@
 ## 2025-09-27 — PPO Loss & Optimizer Integration (Phase 2)
 - Implemented torch-based PPO loop: GAE computation, advantage normalisation, clipped policy/value losses, entropy bonus, and gradient clipping now drive optimisation in `TrainingHarness.run_ppo`.
 - Added `townlet.policy.ppo.utils` with reusable helpers (`compute_gae`, `policy_surrogate`, `clipped_value_loss`, etc.) and unit coverage to guard loss math.
-- Training harness builds a policy network from replay metadata, derives action space from samples, and logs per-epoch metrics (loss components, clip fraction, advantage stats, grad norms, conflict telemetry averages).
+- Training harness builds a policy network from replay metadata, derives action space from samples, and logs per-epoch metrics (loss components, clip fraction, advantage stats, grad norms, conflict telemetry averages) with NDJSON `telemetry_version` 1 entries including `kl_divergence` and baseline comparisons. Use `--ppo-log-frequency` / `--ppo-log-max-entries` to manage log volume; `scripts/ppo_telemetry_plot.py` provides a quick-look plotter for JSONL output. `TrainingHarness.capture_rollout` + `RolloutBuffer` scaffolding capture trajectories ahead of Phase 4 live integration, sharing the same manifest/metrics format as `capture_rollout.py`.
 - Replay samples/documentation refreshed; canonical NPZ manifests include bootstrap value predictions for GAE, multi-step sequences, and metadata tracks timestep alignment.
 
 - `PolicyRuntime` now buffers per-agent actions/rewards/done flags each tick and exposes `collect_trajectory` for downstream tooling; `SimulationLoop.step` flushes observations into this buffer automatically.

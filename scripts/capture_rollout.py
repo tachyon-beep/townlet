@@ -4,14 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.policy.replay import ReplaySample, frames_to_replay_sample
 from townlet.policy.behavior import AgentIntent, BehaviorController
+from townlet.policy.metrics import compute_sample_metrics
+from townlet.policy.replay import ReplaySample, frames_to_replay_sample
 from townlet.world.grid import AgentSnapshot
 
 
@@ -59,7 +60,7 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     loop = SimulationLoop(config)
-    scenario_config: Dict[str, Any] | None = getattr(config, "scenario", None)
+    scenario_config: dict[str, Any] | None = getattr(config, "scenario", None)
     if scenario_config:
         _apply_scenario(loop, scenario_config)
     elif args.auto_seed_agents and not loop.world.agents:
@@ -87,13 +88,13 @@ def main() -> None:
     if args.agent_id is not None:
         frames = [frame for frame in frames if frame.get("agent_id") == args.agent_id]
 
-    by_agent: dict[str, List[dict[str, object]]] = {}
+    by_agent: dict[str, list[dict[str, object]]] = {}
     for frame in frames:
         agent_id = frame.get("agent_id", "unknown")
         by_agent.setdefault(agent_id, []).append(frame)
 
     manifest_entries = []
-    metrics_map: Dict[str, Dict[str, float]] = {}
+    metrics_map: dict[str, dict[str, float]] = {}
     for index, (agent_id, agent_frames) in enumerate(by_agent.items(), start=1):
         if not agent_frames:
             continue
@@ -114,7 +115,7 @@ def main() -> None:
         meta_path = output_dir / f"{stem}.json"
         meta = sample.metadata.copy()
         meta.update({"agent_id": agent_id, "frame_count": len(agent_frames)})
-        sample_metrics = _compute_sample_metrics(sample)
+        sample_metrics = compute_sample_metrics(sample)
         metrics_map[sample_path.name] = sample_metrics
         meta["metrics"] = sample_metrics
         meta_path.write_text(json.dumps(meta, indent=2))
@@ -127,93 +128,13 @@ def main() -> None:
     print(f"Captured {len(manifest_entries)} replay samples to {output_dir}")
 
 
-def _compute_sample_metrics(sample: ReplaySample) -> Dict[str, float]:
-    metrics: Dict[str, float] = {}
-    rewards = sample.rewards
-    metrics["timesteps"] = float(rewards.shape[0])
-    metrics["reward_sum"] = float(np.sum(rewards))
-    metrics["reward_mean"] = float(np.mean(rewards)) if rewards.size else 0.0
-    metrics["log_prob_mean"] = float(np.mean(sample.old_log_probs)) if sample.old_log_probs.size else 0.0
-    metrics["value_pred_last"] = float(sample.value_preds[-1]) if sample.value_preds.size else 0.0
-
-    names = sample.metadata.get("feature_names")
-    if isinstance(names, list):
-        features = sample.features
-        if features.ndim == 1:
-            features = features[np.newaxis, :]
-
-        def add_stats(feature_name: str) -> None:
-            if feature_name in names:
-                idx = names.index(feature_name)
-                column = features[:, idx]
-                metrics[f"{feature_name}_mean"] = float(np.mean(column))
-                metrics[f"{feature_name}_max"] = float(np.max(column))
-
-        add_stats("rivalry_max")
-        add_stats("rivalry_avoid_count")
-        reward_idx = names.index("reward_total") if "reward_total" in names else None
-        if reward_idx is not None:
-            metrics["reward_feature_mean"] = float(np.mean(features[:, reward_idx]))
-        lateness_idx = names.index("lateness_counter") if "lateness_counter" in names else None
-        if lateness_idx is not None:
-            metrics["lateness_mean"] = float(np.mean(features[:, lateness_idx]))
-
-    # Action distribution
-    action_ids = sample.actions.astype(int)
-    action_counts = np.bincount(action_ids, minlength=int(action_ids.max() + 1)) if action_ids.size else np.array([])
-    total_actions = float(np.sum(action_counts)) if action_counts.size else 0.0
-    metrics["action_nonzero"] = float(np.count_nonzero(action_counts)) if action_counts.size else 0.0
-    metrics["action_total"] = total_actions
-    if total_actions > 0:
-        probs = action_counts / total_actions
-        metrics["action_entropy"] = float(-np.sum(np.where(probs > 0, probs * np.log(np.clip(probs, 1e-8, None)), 0.0)))
-    else:
-        metrics["action_entropy"] = 0.0
-
-    action_lookup_meta = sample.metadata.get("action_lookup")
-    kind_counts: Dict[str, float] = {}
-    blocked_total = 0.0
-    if isinstance(action_lookup_meta, dict):
-        id_to_payload: Dict[int, Dict[str, Any]] = {}
-        for key, value in action_lookup_meta.items():
-            if isinstance(value, int):
-                action_id = value
-                payload_str = key
-            else:
-                try:
-                    action_id = int(key)
-                    payload_str = value
-                except (TypeError, ValueError):
-                    continue
-            try:
-                payload = json.loads(payload_str)
-            except json.JSONDecodeError:
-                payload = {"raw": payload_str}
-            id_to_payload[action_id] = payload
-
-        for action_id, count in enumerate(action_counts):
-            if count == 0:
-                continue
-            payload = id_to_payload.get(action_id, {})
-            kind = payload.get("kind", "unknown")
-            kind_counts[kind] = kind_counts.get(kind, 0.0) + float(count)
-            if payload.get("blocked"):
-                blocked_total += float(count)
-
-    for kind, count in kind_counts.items():
-        metrics[f"action_{kind}_count"] = count
-    metrics["action_blocked_ratio"] = float(blocked_total / total_actions) if total_actions else 0.0
-
-    return metrics
-
-
 class ScenarioBehavior(BehaviorController):
     """Simple behavior controller driven by scenario schedules."""
 
-    def __init__(self, config, schedules: Dict[str, List[AgentIntent]]) -> None:
+    def __init__(self, config, schedules: dict[str, list[AgentIntent]]) -> None:
         self.config = config
         self._schedules = schedules
-        self._indices: Dict[str, int] = {agent_id: 0 for agent_id in schedules}
+        self._indices: dict[str, int] = dict.fromkeys(schedules, 0)
 
     def decide(self, world, agent_id):  # type: ignore[override]
         seq = self._schedules.get(agent_id)
@@ -225,12 +146,12 @@ class ScenarioBehavior(BehaviorController):
         return intent
 
 
-def _apply_scenario(loop: SimulationLoop, scenario: Dict[str, Any]) -> None:
+def _apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
     objects = scenario.get("objects", [])
     for obj in objects:
         loop.world.register_object(obj["id"], obj["type"])
 
-    schedules: Dict[str, List[AgentIntent]] = {}
+    schedules: dict[str, list[AgentIntent]] = {}
     for agent in scenario.get("agents", []):
         agent_id = agent["id"]
         position = tuple(agent.get("position", (0, 0)))  # type: ignore[arg-type]
@@ -246,7 +167,7 @@ def _apply_scenario(loop: SimulationLoop, scenario: Dict[str, Any]) -> None:
         loop.world.agents[agent_id] = snapshot
 
         schedule_entries = agent.get("schedule", [])
-        intents: List[AgentIntent] = []
+        intents: list[AgentIntent] = []
         for entry in schedule_entries:
             data = dict(entry)
             if "object" in data and "object_id" not in data:

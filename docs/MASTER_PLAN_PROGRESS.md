@@ -19,8 +19,8 @@
    - Next: risk reduction activities, telemetry/tests per work package.
 3. **PPO Integration Phase 2** (`docs/WORK_PACKAGE_PPO_INTEGRATION.md`)
    - Owner: RL/Training
-   - Status: In progress (scenario capture ingestion + PPO baseline telemetry shipped).
-   - Next: expand regression suite, harden telemetry exports, tune training stability.
+   - Status: In progress (scenario capture ingestion + PPO baseline telemetry/log schema guards + rollout buffer scaffolding shipped).
+   - Next: tune training stability, expand telemetry exports/dashboards, integrate live rollouts (Phase 4).
 4. **Renderer/Geometry Enhancements**
    - Dependent on observer UI feedback; adds real object coordinates to `WorldState.local_view`.
 

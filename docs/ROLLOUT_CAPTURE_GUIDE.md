@@ -41,9 +41,28 @@ python scripts/run_training.py configs/scenarios/kitchen_breakfast.yaml \
   --train-ppo --capture-dir tmp/kitchen --epochs 2 --ppo-log tmp/kitchen/ppo_log.jsonl
 ```
 
+Use `--ppo-log-frequency` to thin the NDJSON output (e.g., `--ppo-log-frequency 5` to log every
+fifth epoch) and `--ppo-log-max-entries` to rotate large logs (producing suffixes such as
+`ppo_log.jsonl.1`).
+
 `TrainingHarness.run_ppo` consumes the capture directory via `--capture-dir`,
 loading both `rollout_sample_manifest.json` and `rollout_sample_metrics.json`
 to seed baseline comparisons in the PPO epoch logs.
+Sample telemetry output (`telemetry_version` 1) is available at
+`docs/samples/ppo_epoch_log.jsonl` for quick inspection and dashboard prototyping.
+Run `python scripts/ppo_telemetry_plot.py` to plot `loss_total` and `kl_divergence` (falls back to
+textual summary if matplotlib is unavailable).
+
+For early Phase 4 work, the training CLI now supports lightweight rollout capture without PPO
+integration:
+
+```bash
+python scripts/run_training.py configs/examples/poc_hybrid.yaml \
+  --rollout-ticks 50 --rollout-save-dir tmp/rollout_stub
+```
+
+This leverages `TrainingHarness.capture_rollout` and `RolloutBuffer` to persist manifests/metrics,
+mirroring `capture_rollout.py` output while keeping PPO disabled.
 
 ## Refreshing Golden Metrics
 

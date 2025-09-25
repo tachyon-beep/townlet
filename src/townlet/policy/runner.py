@@ -1,23 +1,14 @@
 """Policy orchestration scaffolding."""
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, Iterable, List, Optional
-
 import json
+from collections.abc import Iterable
+from pathlib import Path
+
 import numpy as np
 
 from townlet.config import PPOConfig, SimulationConfig
-from townlet.world.grid import WorldState
 from townlet.policy.behavior import AgentIntent, BehaviorController, build_behavior
-from townlet.policy.replay import (
-    ReplayBatch,
-    ReplayDataset,
-    ReplayDatasetConfig,
-    ReplaySample,
-    build_batch,
-    load_replay_sample,
-)
 from townlet.policy.models import (
     ConflictAwarePolicyConfig,
     ConflictAwarePolicyNetwork,
@@ -32,6 +23,18 @@ from townlet.policy.ppo.utils import (
     policy_surrogate,
     value_baseline_from_old_preds,
 )
+from townlet.policy.replay import (
+    ReplayBatch,
+    ReplayDataset,
+    ReplayDatasetConfig,
+    ReplaySample,
+    build_batch,
+    load_replay_sample,
+)
+from townlet.policy.rollout import RolloutBuffer
+from townlet.world.grid import AgentSnapshot, WorldState
+
+PPO_TELEMETRY_VERSION = 1
 
 
 class PolicyRuntime:
@@ -40,20 +43,20 @@ class PolicyRuntime:
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.behavior: BehaviorController = build_behavior(config)
-        self._transitions: Dict[str, Dict[str, object]] = {}
-        self._trajectory: List[Dict[str, object]] = []
+        self._transitions: dict[str, dict[str, object]] = {}
+        self._trajectory: list[dict[str, object]] = []
         self._tick: int = 0
-        self._action_lookup: Dict[str, int] = {}
-        self._action_inverse: Dict[int, str] = {}
+        self._action_lookup: dict[str, int] = {}
+        self._action_inverse: dict[int, str] = {}
         self._policy_net: ConflictAwarePolicyNetwork | None = None
         self._policy_map_shape: tuple[int, int, int] | None = None
         self._policy_feature_dim: int | None = None
         self._policy_action_dim: int = 0
 
-    def decide(self, world: WorldState, tick: int) -> Dict[str, object]:
+    def decide(self, world: WorldState, tick: int) -> dict[str, object]:
         """Return a primitive action per agent."""
         self._tick = tick
-        actions: Dict[str, object] = {}
+        actions: dict[str, object] = {}
         for agent_id in world.agents:
             intent: AgentIntent = self.behavior.decide(world, agent_id)
             if intent.kind == "wait":
@@ -80,16 +83,18 @@ class PolicyRuntime:
             entry["action_id"] = action_id
         return actions
 
-    def post_step(self, rewards: Dict[str, float], terminated: Dict[str, bool]) -> None:
+    def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
         """Record rewards and termination signals into buffers."""
         for agent_id, reward in rewards.items():
             entry = self._transitions.setdefault(agent_id, {})
             entry.setdefault("rewards", []).append(reward)
             entry.setdefault("dones", []).append(bool(terminated.get(agent_id, False)))
 
-    def flush_transitions(self, observations: Dict[str, Dict[str, object]]) -> List[Dict[str, object]]:
+    def flush_transitions(
+        self, observations: dict[str, dict[str, object]]
+    ) -> list[dict[str, object]]:
         """Combine stored transition data with observations and return trajectory frames."""
-        frames: List[Dict[str, object]] = []
+        frames: list[dict[str, object]] = []
         for agent_id, payload in observations.items():
             entry = self._transitions.get(agent_id, {})
             frame = {
@@ -110,14 +115,14 @@ class PolicyRuntime:
         self._transitions.clear()
         return frames
 
-    def collect_trajectory(self, clear: bool = True) -> List[Dict[str, object]]:
+    def collect_trajectory(self, clear: bool = True) -> list[dict[str, object]]:
         """Return accumulated trajectory frames and reset internal buffer."""
         result = list(self._trajectory)
         if clear:
             self._trajectory.clear()
         return result
 
-    def _annotate_with_policy_outputs(self, frame: Dict[str, object]) -> None:
+    def _annotate_with_policy_outputs(self, frame: dict[str, object]) -> None:
         if not torch_available():  # pragma: no cover - torch optional
             frame.setdefault("log_prob", 0.0)
             frame.setdefault("value_pred", 0.0)
@@ -226,7 +231,7 @@ class TrainingHarness:
         """Entry point for CLI training runs."""
         raise NotImplementedError("Training harness not yet implemented")
 
-    def run_replay(self, sample_path: Path, meta_path: Optional[Path] = None) -> Dict[str, float]:
+    def run_replay(self, sample_path: Path, meta_path: Path | None = None) -> dict[str, float]:
         """Load a replay observation sample and surface conflict-aware stats."""
         sample: ReplaySample = load_replay_sample(sample_path, meta_path)
         batch = build_batch([sample])
@@ -234,16 +239,16 @@ class TrainingHarness:
         print("Replay sample loaded:", summary)
         return summary
 
-    def run_replay_batch(self, pairs: Iterable[tuple[Path, Optional[Path]]]) -> Dict[str, float]:
+    def run_replay_batch(self, pairs: Iterable[tuple[Path, Path | None]]) -> dict[str, float]:
         entries = list(pairs)
         if not entries:
             raise ValueError("Replay batch requires at least one entry")
         config = ReplayDatasetConfig(entries=entries, batch_size=len(entries))
         return self.run_replay_dataset(config)
 
-    def run_replay_dataset(self, dataset_config: ReplayDatasetConfig) -> Dict[str, float]:
+    def run_replay_dataset(self, dataset_config: ReplayDatasetConfig) -> dict[str, float]:
         dataset = ReplayDataset(dataset_config)
-        summary: Dict[str, float] = {}
+        summary: dict[str, float] = {}
         for idx, batch in enumerate(dataset, start=1):
             summary = self._summarise_batch(batch, batch_index=idx)
             print(f"Replay batch {idx}:", summary)
@@ -251,17 +256,66 @@ class TrainingHarness:
             raise ValueError("Replay dataset yielded no batches")
         return summary
 
+    def capture_rollout(
+        self,
+        ticks: int,
+        auto_seed_agents: bool = False,
+        output_dir: Path | None = None,
+        prefix: str = "rollout_sample",
+        compress: bool = True,
+    ) -> RolloutBuffer:
+        """Run the simulation loop for a fixed number of ticks and collect frames."""
+
+        if ticks <= 0:
+            raise ValueError("ticks must be positive to capture a rollout")
+
+        from townlet.core.sim_loop import SimulationLoop  # delayed import to avoid cycles
+
+        loop = SimulationLoop(self.config)
+        if auto_seed_agents and not loop.world.agents:
+            loop.world.register_object("stove_1", "stove")
+            loop.world.agents["alice"] = AgentSnapshot(
+                "alice",
+                (0, 0),
+                {"hunger": 0.3, "hygiene": 0.4, "energy": 0.5},
+                wallet=2.0,
+            )
+            loop.world.agents["bob"] = AgentSnapshot(
+                "bob",
+                (1, 0),
+                {"hunger": 0.6, "hygiene": 0.7, "energy": 0.8},
+                wallet=3.0,
+            )
+
+        buffer = RolloutBuffer()
+        for _ in range(ticks):
+            loop.step()
+            frames = loop.policy.collect_trajectory(clear=True)
+            buffer.extend(frames)
+        buffer.extend(loop.policy.collect_trajectory(clear=True))
+
+        if output_dir is not None:
+            buffer.save(output_dir, prefix=prefix, compress=compress)
+        return buffer
+
     def run_ppo(
-        self, dataset_config: ReplayDatasetConfig, epochs: int = 1, log_path: Optional[Path] = None
-    ) -> Dict[str, float]:
+        self,
+        dataset_config: ReplayDatasetConfig,
+        epochs: int = 1,
+        log_path: Path | None = None,
+        log_frequency: int = 1,
+        max_log_entries: int | None = None,
+    ) -> dict[str, float]:
         if not torch_available():
-            raise TorchNotAvailableError("PyTorch is required for PPO training. Install torch to proceed.")
+            raise TorchNotAvailableError(
+                "PyTorch is required for PPO training. Install torch to proceed."
+            )
 
         dataset = ReplayDataset(dataset_config)
         if len(dataset) == 0:
             raise ValueError("Replay dataset yielded no batches")
 
-        batches: List[ReplayBatch] = list(dataset)
+        batches: list[ReplayBatch] = list(dataset)
         if not batches:
             raise ValueError("Replay dataset yielded no batches")
 
@@ -295,13 +349,23 @@ class TrainingHarness:
         self._ppo_state["learning_rate"] = float(ppo_cfg.learning_rate)
         generator = torch.Generator(device=device)
 
+        log_frequency = max(1, int(log_frequency or 1))
+        max_log_entries = max_log_entries if max_log_entries and max_log_entries > 0 else None
+
         log_handle = None
+        log_entries_written = 0
+        rotation_index = 0
+
+        def _open_log(target_path: Path) -> None:
+            nonlocal log_handle
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            log_handle = target_path.open("a", encoding="utf-8", buffering=1)
+
         if log_path is not None:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_handle = log_path.open("a", encoding="utf-8")
-        last_summary: Dict[str, float] = {}
+            _open_log(log_path)
+        last_summary: dict[str, float] = {}
         for epoch in range(epochs):
-            conflict_acc: Dict[str, float] = {}
+            conflict_acc: dict[str, float] = {}
             metrics = {
                 "policy_loss": 0.0,
                 "value_loss": 0.0,
@@ -311,6 +375,7 @@ class TrainingHarness:
                 "adv_mean": 0.0,
                 "adv_std": 0.0,
                 "grad_norm": 0.0,
+                "kl_divergence": 0.0,
             }
             mini_batch_updates = 0
             transitions_processed = 0
@@ -399,7 +464,10 @@ class TrainingHarness:
                     optimizer.zero_grad()
                     total_loss.backward()
                     if ppo_cfg.max_grad_norm > 0.0:
-                        grad_norm = clip_grad_norm_(policy.parameters(), ppo_cfg.max_grad_norm).item()
+                        grad_norm = clip_grad_norm_(
+                            policy.parameters(),
+                            ppo_cfg.max_grad_norm,
+                        ).item()
                     else:
                         sq_sum = 0.0
                         for param in policy.parameters():
@@ -416,6 +484,9 @@ class TrainingHarness:
                     metrics["adv_mean"] += float(mb_advantages.mean().item())
                     metrics["adv_std"] += float(mb_advantages.std(unbiased=False).item())
                     metrics["grad_norm"] += float(grad_norm)
+                    metrics["kl_divergence"] += float(
+                        torch.mean(mb_old_log_probs - new_log_probs).item()
+                    )
                     mini_batch_updates += 1
                     transitions_processed += int(idx.shape[0])
 
@@ -442,6 +513,8 @@ class TrainingHarness:
                 "adv_mean": averaged_metrics["adv_mean"],
                 "adv_std": averaged_metrics["adv_std"],
                 "grad_norm": averaged_metrics["grad_norm"],
+                "kl_divergence": averaged_metrics["kl_divergence"],
+                "telemetry_version": float(PPO_TELEMETRY_VERSION),
                 "lr": lr,
                 "steps": float(self._ppo_state["step"]),
             }
@@ -468,15 +541,25 @@ class TrainingHarness:
                     epoch_summary[f"{key}_avg"] = value / len(batches)
 
             print(f"PPO epoch {epoch + 1}:", epoch_summary)
-            if log_handle is not None:
+            should_log_epoch = log_handle is not None and ((epoch + 1) % log_frequency == 0)
+            if should_log_epoch and log_path is not None:
+                if max_log_entries is not None and log_entries_written >= max_log_entries:
+                    assert log_handle is not None
+                    log_handle.close()
+                    rotation_index += 1
+                    rotated_path = log_path.with_name(f"{log_path.name}.{rotation_index}")
+                    _open_log(rotated_path)
+                    log_entries_written = 0
+                assert log_handle is not None
                 log_handle.write(json.dumps(epoch_summary) + "\n")
                 log_handle.flush()
+                log_entries_written += 1
             last_summary = epoch_summary
         if log_handle is not None:
             log_handle.close()
         return last_summary
 
-    def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> Dict[str, float]:
+    def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> dict[str, float]:
         summary = {
             "batch": float(batch_index),
             "batch_size": float(batch.features.shape[0]),
@@ -490,10 +573,16 @@ class TrainingHarness:
         return ReplayDataset(config)
 
     def build_policy_network(
-        self, feature_dim: int, map_shape: tuple[int, int, int], action_dim: int, hidden_dim: int | None = None
+        self,
+        feature_dim: int,
+        map_shape: tuple[int, int, int],
+        action_dim: int,
+        hidden_dim: int | None = None,
     ) -> ConflictAwarePolicyNetwork:
         if not torch_available():
-            raise TorchNotAvailableError("PyTorch is required to build the policy network. Install torch or disable PPO.")
+            raise TorchNotAvailableError(
+                "PyTorch is required to build the policy network. Install torch or disable PPO."
+            )
         cfg = ConflictAwarePolicyConfig(
             feature_dim=feature_dim,
             map_shape=map_shape,

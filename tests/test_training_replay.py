@@ -33,6 +33,71 @@ GOLDEN_STATS_PATH = Path("docs/samples/rollout_scenario_stats.json")
 GOLDEN_STATS = json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
 
 
+REQUIRED_PPO_KEYS = {
+    "epoch",
+    "updates",
+    "transitions",
+    "loss_policy",
+    "loss_value",
+    "loss_entropy",
+    "loss_total",
+    "clip_fraction",
+    "adv_mean",
+    "adv_std",
+    "grad_norm",
+    "kl_divergence",
+    "telemetry_version",
+    "lr",
+    "steps",
+}
+
+BASELINE_KEYS_REQUIRED = {
+    "baseline_sample_count",
+    "baseline_reward_sum",
+    "baseline_reward_sum_mean",
+    "baseline_reward_mean",
+}
+
+BASELINE_KEYS_OPTIONAL = {"baseline_log_prob_mean"}
+
+ALLOWED_KEY_PREFIXES = ("conflict.",)
+
+
+def _validate_numeric(value: object) -> None:
+    assert isinstance(value, (int, float)), f"Expected numeric value, got {type(value)}"
+    assert math.isfinite(float(value)), "Expected finite numeric value"
+
+
+def _assert_ppo_log_schema(summary: dict[str, object], require_baseline: bool) -> None:
+    missing_keys = REQUIRED_PPO_KEYS - summary.keys()
+    assert not missing_keys, f"Missing required PPO summary keys: {sorted(missing_keys)}"
+
+    for key in REQUIRED_PPO_KEYS:
+        _validate_numeric(summary[key])
+
+    seen_baseline = {key for key in summary if key.startswith("baseline_")}
+    if require_baseline:
+        missing_baseline = BASELINE_KEYS_REQUIRED - seen_baseline
+        assert not missing_baseline, f"Missing baseline keys: {sorted(missing_baseline)}"
+        for key in BASELINE_KEYS_REQUIRED | (seen_baseline & BASELINE_KEYS_OPTIONAL):
+            if key in summary:
+                _validate_numeric(summary[key])
+    else:
+        # Baseline keys are optional in this mode but must still be numeric if present.
+        for key in seen_baseline:
+            _validate_numeric(summary[key])
+
+    for key, value in summary.items():
+        if key in REQUIRED_PPO_KEYS:
+            continue
+        if key.startswith("baseline_"):
+            continue
+        if any(key.startswith(prefix) for prefix in ALLOWED_KEY_PREFIXES):
+            _validate_numeric(value)
+            continue
+        raise AssertionError(f"Unexpected PPO summary key encountered: {key}")
+
+
 def _load_expected_stats(config_path: Path) -> dict[str, dict[str, float]]:
     scenario_key = config_path.stem
     stats = GOLDEN_STATS.get(scenario_key)
@@ -295,6 +360,7 @@ def test_training_harness_run_ppo_on_capture(tmp_path: Path, config_path: Path) 
     summary = harness.run_ppo(dataset_config, epochs=1, log_path=log_path)
 
     aggregated_expected = _aggregate_expected_metrics(scenario_stats)
+    _assert_ppo_log_schema(summary, require_baseline=True)
     assert summary["baseline_sample_count"] == pytest.approx(
         aggregated_expected["sample_count"], rel=1e-5, abs=1e-6
     )
@@ -332,6 +398,7 @@ def test_training_harness_run_ppo_on_capture(tmp_path: Path, config_path: Path) 
     log_lines = log_contents.splitlines()
     assert len(log_lines) == 1
     logged_summary = json.loads(log_lines[0])
+    _assert_ppo_log_schema(logged_summary, require_baseline=True)
     for key in (
         "baseline_sample_count",
         "baseline_reward_sum",
@@ -353,6 +420,7 @@ def test_training_harness_run_ppo(tmp_path: Path) -> None:
     harness = TrainingHarness(load_config(Path('configs/examples/poc_hybrid.yaml')))
     log_path = tmp_path / 'ppo_log.jsonl'
     summary = harness.run_ppo(dataset_config, epochs=2, log_path=log_path)
+    _assert_ppo_log_schema(summary, require_baseline=False)
     assert summary['epoch'] == 2.0
     assert 'loss_total' in summary
     assert summary['transitions'] == pytest.approx(4.0)
@@ -361,6 +429,49 @@ def test_training_harness_run_ppo(tmp_path: Path) -> None:
     last = json.loads(lines[-1])
     assert last['epoch'] == 2.0
     assert 'loss_policy' in last
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_training_harness_log_sampling_and_rotation(tmp_path: Path) -> None:
+    sample = _make_sample(tmp_path, 0.2, 0.3, "sample")
+    dataset_config = ReplayDatasetConfig(
+        entries=[sample],
+        batch_size=1,
+        shuffle=False,
+    )
+    log_path = tmp_path / "ppo_log.jsonl"
+
+    harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
+    harness.run_ppo(
+        dataset_config,
+        epochs=3,
+        log_path=log_path,
+        log_frequency=2,
+    )
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["epoch"] == 2.0
+
+    log_path.unlink()
+
+    harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
+    harness.run_ppo(
+        dataset_config,
+        epochs=3,
+        log_path=log_path,
+        log_frequency=1,
+        max_log_entries=1,
+    )
+    base_lines = log_path.read_text().strip().splitlines()
+    assert len(base_lines) == 1
+    assert json.loads(base_lines[0])["epoch"] == 1.0
+
+    rotated_one = log_path.with_name(f"{log_path.name}.1")
+    rotated_two = log_path.with_name(f"{log_path.name}.2")
+    assert rotated_one.exists()
+    assert rotated_two.exists()
+    assert json.loads(rotated_one.read_text().strip().splitlines()[-1])["epoch"] == 2.0
+    assert json.loads(rotated_two.read_text().strip().splitlines()[-1])["epoch"] == 3.0
 
 
 def test_policy_runtime_collects_frames(tmp_path: Path) -> None:

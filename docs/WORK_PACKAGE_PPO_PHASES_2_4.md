@@ -106,6 +106,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 1. **Environment Runner Integration**
    - Implement rollout buffer capturing transitions from `PolicyRuntime` → environment.
    - Ensure observations include conflict features; rewards/advantages computed from live data.
+   - *Pre-work (Complete):* `RolloutBuffer` scaffolding and `TrainingHarness.capture_rollout` added to capture/save trajectories without PPO integration.
 
 2. **Replay vs. Rollout Modes**
    - Allow `TrainingHarness` to switch between replay-only (offline) and rollout (online) modes.
@@ -144,4 +145,3 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 - **Command Cheatsheet:**
   - Replay validation: `python scripts/run_replay.py <sample> --validate`.
   - PPO stub smoke: `python scripts/run_training.py configs/examples/poc_hybrid.yaml --replay-manifest docs/samples/replay_manifest.json --train-ppo --epochs 2 --ppo-log docs/samples/ppo_log.jsonl`.
-

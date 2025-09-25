@@ -21,9 +21,16 @@ generalised replay samples, and feed them into PPO training/testing workflows.
 - `scripts/run_training.py` accepts `--capture-dir` to ingest captured manifests/metrics, wire them
   into `ReplayDatasetConfig.from_capture_dir`, and surface baseline logs (`baseline_reward_*`,
   `baseline_log_prob_mean`) during PPO.
+- Use `--ppo-log-frequency` and `--ppo-log-max-entries` to control NDJSON volume when running longer
+  training jobs (logs rotate to `<name>.1`, `<name>.2`, ... when capped).
 - Regression tests parameterise PPO-on-capture runs across all scripted scenarios
   (`tests/test_training_replay.py::test_training_harness_run_ppo_on_capture`).
 - Operational runbook lives in `docs/ops/ROLLOUT_PPO_CHECKLIST.md`.
+- PPO epoch telemetry sample (`telemetry_version` 1) is published under
+  `docs/samples/ppo_epoch_log.jsonl` for dashboard consumers.
+  Use `scripts/ppo_telemetry_plot.py` for a quick visualization of loss/KL trends.
+- `TrainingHarness.capture_rollout` + `RolloutBuffer` provide a CLI-assisted rollout capture path
+  (`--rollout-ticks` / `--rollout-save-dir`) ahead of full Phase 4 integration.
 
 ## Phase 2 Hardening Status — PPO Integration
 - **Dataset plumbing:** capture CLI now serialises per-sample metrics, and replay datasets hydrate
@@ -32,6 +39,8 @@ generalised replay samples, and feed them into PPO training/testing workflows.
   drift comparison and logging to JSONL.
 - **Automation:** CI keeps scenario captures exercised via `tests/test_rollout_capture.py`; PPO
   smoke tests rely on torch availability and are skipped otherwise.
+- **Telemetry tests:** PPO JSONL logs are schema-checked during scenario regression to ensure
+  baseline metrics and conflict telemetry remain stable (`tests/test_training_replay.py`).
 
 ### How to Run Scenario-Based PPO
 1. Capture scenarios (single config or suite) – see
