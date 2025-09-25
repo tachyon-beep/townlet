@@ -236,3 +236,9 @@ def test_policy_runtime_collects_frames(tmp_path: Path) -> None:
     assert sample.actions.shape[0] == 3
     assert sample.value_preds.shape[0] == 4
     assert sample.metadata["timesteps"] == 3
+    assert "action_lookup" in sample.metadata
+    if torch_available():
+        assert not np.allclose(sample.old_log_probs, 0.0)
+        assert not np.allclose(sample.value_preds[:-1], 0.0)
+    else:
+        assert np.allclose(sample.old_log_probs, 0.0)

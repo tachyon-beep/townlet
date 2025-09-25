@@ -5,6 +5,7 @@
 - Observation Tensor Upgrade (hybrid tensors implemented; samples published).
 - Telemetry Consumer Tooling (schema versioning, validator, dashboard MVP).
 - Replay DataLoader & PPO Phase 1 (conflict-aware batching, torch scaffolding).
+- Rollout Capture Foundations (PolicyRuntime metrics logging, capture CLI, scenario groundwork).
 
 ## Upcoming Work Packages
 1. **Observer UI Integration** (`docs/WORK_PACKAGE_OBSERVER_UI.md`)
@@ -17,8 +18,8 @@
    - Next: risk reduction activities, telemetry/tests per work package.
 3. **PPO Integration Phase 2** (`docs/WORK_PACKAGE_PPO_INTEGRATION.md`)
    - Owner: RL/Training
-   - Status: Planned (Phase 1 complete).
-   - Next: implement PPO loss/optimizer, advantage computation, telemetry export.
+   - Status: In progress (loss/optimizer + rollout capture landed).
+   - Next: integrate scripted scenarios, regress on captured datasets, finalize telemetry export.
 4. **Renderer/Geometry Enhancements**
    - Dependent on observer UI feedback; adds real object coordinates to `WorldState.local_view`.
 
@@ -59,4 +60,3 @@
 - **M4+ (Perturbations, Personality)**
   - Phases: Event scheduler → Personality tuning → Ops polish
   - Tasks/Steps: follow roadmap for price spikes, persona balancing, release docs
-

@@ -42,6 +42,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--replay-drop-last", action="store_true", help="Drop final incomplete batch.")
     parser.add_argument("--replay-streaming", action="store_true", help="Stream samples from disk instead of preloading.")
     parser.add_argument("--train-ppo", action="store_true", help="Run PPO stub using replay dataloader.")
+    parser.add_argument("--rollout-save-dir", type=Path, default=None, help="Directory to save replay samples captured from live rollouts.")
+    parser.add_argument("--rollout-ticks", type=int, default=0, help="Number of ticks to run for rollout capture (0 disables).")
     parser.add_argument("--epochs", type=int, default=1, help="Number of epochs for PPO replay runs.")
     parser.add_argument("--ppo-log", type=Path, default=None, help="Optional JSONL file to log PPO epoch summaries.")
     ppo_group = parser.add_argument_group("PPO overrides")

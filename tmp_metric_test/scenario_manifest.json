@@ -1,0 +1,10 @@
+[
+  {
+    "sample": "scenario_alice_001.npz",
+    "meta": "scenario_alice_001.json"
+  },
+  {
+    "sample": "scenario_bob_002.npz",
+    "meta": "scenario_bob_002.json"
+  }
+]

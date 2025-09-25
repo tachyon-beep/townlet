@@ -1,0 +1,88 @@
+config_id: "scenario_employment_punctuality"
+seed: 6060
+
+features:
+  stages:
+    relationships: "OFF"
+    social_rewards: "OFF"
+  systems:
+    lifecycle: "on"
+    observations: "hybrid"
+  training:
+    curiosity: "off"
+  console:
+    mode: "viewer"
+
+world:
+  grid_size: [24, 24]
+  weather_seed: 404
+
+rewards:
+  needs_weights:
+    hunger: 1.0
+    hygiene: 0.5
+    energy: 0.6
+  decay_rates:
+    hunger: 0.0
+    hygiene: 0.0
+    energy: 0.0
+  survival_tick: 0.0
+  punctuality_bonus: 0.0
+  wage_rate: 0.02
+  faint_penalty: -1.0
+  eviction_penalty: -2.0
+
+employment:
+  enforce_job_loop: true
+
+jobs:
+  cafe_shift:
+    start_tick: 10
+    end_tick: 30
+    wage_rate: 0.03
+    lateness_penalty: 0.2
+    location: [12, 12]
+
+behavior:
+  hunger_threshold: 0.2
+  hygiene_threshold: 0.2
+  energy_threshold: 0.2
+  job_arrival_buffer: 5
+
+queue_fairness:
+  cooldown_ticks: 5
+  ghost_step_after: 1
+  age_priority_weight: 0.0
+
+conflict:
+  rivalry:
+    increment_per_conflict: 0.05
+    decay_per_tick: 0.02
+    avoid_threshold: 0.6
+    max_edges: 2
+
+scenario:
+  description: "Two agents with staggered arrival schedules to a shift—one punctual, one intentionally late—to showcase employment telemetry and penalties."
+  ticks: 80
+  objects:
+    - id: cafe_counter
+      type: checkout
+      position: [12, 12]
+  agents:
+    - id: dawn
+      position: [10, 12]
+      needs: {hunger: 0.5, hygiene: 0.5, energy: 0.6}
+      wallet: 1.0
+      job: cafe_shift
+      schedule:
+        - {kind: request, object: cafe_counter, affordance: work_shift, blocked: false}
+        - {kind: start, object: cafe_counter, affordance: work_shift, blocked: false}
+    - id: erin
+      position: [14, 12]
+      needs: {hunger: 0.5, hygiene: 0.5, energy: 0.5}
+      wallet: 1.0
+      job: cafe_shift
+      schedule:
+        - {kind: wait, object: null, affordance: null, blocked: false}
+        - {kind: wait, object: null, affordance: null, blocked: false}
+        - {kind: request, object: cafe_counter, affordance: work_shift, blocked: false}

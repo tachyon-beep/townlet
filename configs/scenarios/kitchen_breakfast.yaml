@@ -1,0 +1,79 @@
+config_id: "scenario_kitchen_breakfast"
+seed: 4242
+
+features:
+  stages:
+    relationships: "OFF"
+    social_rewards: "OFF"
+  systems:
+    lifecycle: "on"
+    observations: "hybrid"
+  training:
+    curiosity: "off"
+  console:
+    mode: "viewer"
+
+world:
+  grid_size: [24, 24]
+  weather_seed: 101
+
+rewards:
+  needs_weights:
+    hunger: 1.0
+    hygiene: 0.5
+    energy: 0.6
+  decay_rates:
+    hunger: 0.0
+    hygiene: 0.0
+    energy: 0.0
+  survival_tick: 0.0
+  punctuality_bonus: 0.0
+  wage_rate: 0.0
+  faint_penalty: -1.0
+  eviction_penalty: -2.0
+
+behavior:
+  hunger_threshold: 0.2
+  hygiene_threshold: 0.2
+  energy_threshold: 0.2
+  job_arrival_buffer: 10
+
+queue_fairness:
+  cooldown_ticks: 5
+  ghost_step_after: 1
+  age_priority_weight: 0.0
+
+conflict:
+  rivalry:
+    increment_per_conflict: 0.05
+    decay_per_tick: 0.03
+    avoid_threshold: 0.6
+    max_edges: 4
+
+scenario:
+  description: "Two agents take turns preparing breakfast; exercises queue-free affordance flow and basic rewards."
+  ticks: 40
+  objects:
+    - id: stove_1
+      type: stove
+      position: [12, 12]
+    - id: fridge_1
+      type: fridge
+      position: [12, 13]
+  agents:
+    - id: alice
+      position: [11, 12]
+      needs: {hunger: 0.7, hygiene: 0.6, energy: 0.5}
+      wallet: 1.5
+      schedule:
+        - {kind: request, object: fridge_1, affordance: cook, blocked: false}
+        - {kind: start, object: stove_1, affordance: cook, blocked: false}
+        - {kind: wait, object: null, affordance: null, blocked: false}
+    - id: bob
+      position: [13, 12]
+      needs: {hunger: 0.6, hygiene: 0.7, energy: 0.6}
+      wallet: 1.2
+      schedule:
+        - {kind: wait, object: null, affordance: null, blocked: false}
+        - {kind: request, object: fridge_1, affordance: cook, blocked: false}
+        - {kind: start, object: stove_1, affordance: cook, blocked: false}

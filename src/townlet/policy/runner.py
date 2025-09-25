@@ -43,6 +43,12 @@ class PolicyRuntime:
         self._transitions: Dict[str, Dict[str, object]] = {}
         self._trajectory: List[Dict[str, object]] = []
         self._tick: int = 0
+        self._action_lookup: Dict[str, int] = {}
+        self._action_inverse: Dict[int, str] = {}
+        self._policy_net: ConflictAwarePolicyNetwork | None = None
+        self._policy_map_shape: tuple[int, int, int] | None = None
+        self._policy_feature_dim: int | None = None
+        self._policy_action_dim: int = 0
 
     def decide(self, world: WorldState, tick: int) -> Dict[str, object]:
         """Return a primitive action per agent."""
@@ -59,7 +65,19 @@ class PolicyRuntime:
                     "affordance": intent.affordance_id,
                     "blocked": intent.blocked,
                 }
-            self._transitions.setdefault(agent_id, {})["action"] = actions[agent_id]
+            action_payload = actions[agent_id]
+            try:
+                action_key = json.dumps(action_payload, sort_keys=True)
+            except TypeError:
+                action_key = str(action_payload)
+            if action_key not in self._action_lookup:
+                action_id = len(self._action_lookup)
+                self._action_lookup[action_key] = action_id
+                self._action_inverse[action_id] = action_key
+            action_id = self._action_lookup[action_key]
+            entry = self._transitions.setdefault(agent_id, {})
+            entry["action"] = action_payload
+            entry["action_id"] = action_id
         return actions
 
     def post_step(self, rewards: Dict[str, float], terminated: Dict[str, bool]) -> None:
@@ -81,19 +99,119 @@ class PolicyRuntime:
                 "features": payload.get("features"),
                 "metadata": payload.get("metadata"),
                 "action": entry.get("action"),
+                "action_id": entry.get("action_id"),
                 "rewards": entry.get("rewards", []),
                 "dones": entry.get("dones", []),
+                "action_lookup": dict(self._action_inverse),
             }
+            self._annotate_with_policy_outputs(frame)
             frames.append(frame)
         self._trajectory.extend(frames)
         self._transitions.clear()
         return frames
 
-    def collect_trajectory(self) -> List[Dict[str, object]]:
+    def collect_trajectory(self, clear: bool = True) -> List[Dict[str, object]]:
         """Return accumulated trajectory frames and reset internal buffer."""
         result = list(self._trajectory)
-        self._trajectory.clear()
+        if clear:
+            self._trajectory.clear()
         return result
+
+    def _annotate_with_policy_outputs(self, frame: Dict[str, object]) -> None:
+        if not torch_available():  # pragma: no cover - torch optional
+            frame.setdefault("log_prob", 0.0)
+            frame.setdefault("value_pred", 0.0)
+            return
+
+        map_tensor = frame.get("map")
+        features = frame.get("features")
+        action_id = frame.get("action_id")
+        if map_tensor is None or features is None or action_id is None:
+            frame.setdefault("log_prob", 0.0)
+            frame.setdefault("value_pred", 0.0)
+            return
+
+        map_array = np.asarray(map_tensor, dtype=np.float32)
+        feature_array = np.asarray(features, dtype=np.float32)
+        if map_array.ndim != 3 or feature_array.ndim != 1:
+            frame.setdefault("log_prob", 0.0)
+            frame.setdefault("value_pred", 0.0)
+            return
+
+        action_dim = max(len(self._action_lookup), 1)
+        if not self._ensure_policy_network(map_array.shape, feature_array.shape[0], action_dim):
+            frame.setdefault("log_prob", 0.0)
+            frame.setdefault("value_pred", 0.0)
+            return
+
+        import torch
+
+        map_batch = torch.from_numpy(map_array).unsqueeze(0)
+        feature_batch = torch.from_numpy(feature_array).unsqueeze(0)
+
+        assert self._policy_net is not None
+        self._policy_net.eval()
+        with torch.no_grad():
+            logits, value = self._policy_net(map_batch, feature_batch)
+            valid_dim = min(logits.shape[-1], action_dim)
+            logits = logits[..., :valid_dim]
+            log_probs = torch.log_softmax(logits, dim=-1)
+            clipped_action = int(min(action_id, valid_dim - 1))
+            log_prob = log_probs[0, clipped_action].item()
+            value_pred = value[0].item()
+        frame["log_prob"] = log_prob
+        frame["value_pred"] = value_pred
+        frame["logits"] = logits.squeeze(0).cpu().numpy()
+
+    def _ensure_policy_network(
+        self,
+        map_shape: tuple[int, int, int],
+        feature_dim: int,
+        action_dim: int,
+    ) -> bool:
+        if not torch_available():  # pragma: no cover - torch optional
+            return False
+
+        rebuild = False
+        if self._policy_net is None:
+            rebuild = True
+        elif (
+            self._policy_map_shape != map_shape
+            or self._policy_feature_dim != feature_dim
+            or self._policy_action_dim != action_dim
+        ):
+            rebuild = True
+
+        if rebuild:
+            try:
+                import torch
+
+                torch.manual_seed(0)
+                policy = self._build_policy_network(
+                    feature_dim=feature_dim,
+                    map_shape=map_shape,
+                    action_dim=action_dim,
+                )
+            except TorchNotAvailableError:  # pragma: no cover - guard
+                return False
+            self._policy_net = policy
+            self._policy_map_shape = map_shape
+            self._policy_feature_dim = feature_dim
+            self._policy_action_dim = action_dim
+        return self._policy_net is not None
+
+    def _build_policy_network(
+        self,
+        feature_dim: int,
+        map_shape: tuple[int, int, int],
+        action_dim: int,
+    ) -> ConflictAwarePolicyNetwork:
+        config = ConflictAwarePolicyConfig(
+            feature_dim=feature_dim,
+            map_shape=map_shape,
+            action_dim=action_dim,
+        )
+        return ConflictAwarePolicyNetwork(config)
 
 
 class TrainingHarness:

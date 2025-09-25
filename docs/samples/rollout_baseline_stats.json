@@ -1,0 +1,16 @@
+{
+  "rollout_sample_alice_001.npz": {
+    "timesteps": 20,
+    "reward_sum": -4.0,
+    "reward_mean": -0.20000000298023224,
+    "log_prob_mean": -1.139763593673706,
+    "value_pred_last": -0.06301604956388474
+  },
+  "rollout_sample_bob_002.npz": {
+    "timesteps": 20,
+    "reward_sum": -4.0,
+    "reward_mean": -0.20000000298023224,
+    "log_prob_mean": -1.1322953701019287,
+    "value_pred_last": -0.06647346168756485
+  }
+}

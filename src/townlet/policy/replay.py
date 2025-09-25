@@ -420,19 +420,31 @@ def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
         [np.asarray(frame["features"], dtype=np.float32) for frame in frames], axis=0
     )
 
-    action_lookup: Dict[str, int] = {}
+    raw_lookup = dict(frames[0].get("action_lookup", {})) if frames[0].get("action_lookup") else {}
+    action_lookup: Dict[str, int]
+    if raw_lookup and all(isinstance(key, int) for key in raw_lookup):
+        action_lookup = {value: int(key) for key, value in raw_lookup.items()}
+    else:
+        action_lookup = raw_lookup
     action_ids: List[int] = []
     for frame in frames:
-        action = frame.get("action") or {}
-        try:
-            key = json.dumps(action, sort_keys=True)
-        except TypeError:
-            key = str(action)
-        action_id = action_lookup.setdefault(key, len(action_lookup))
-        action_ids.append(action_id)
+        if frame.get("action_id") is not None:
+            action_ids.append(int(frame["action_id"]))
+        else:
+            action = frame.get("action") or {}
+            try:
+                key = json.dumps(action, sort_keys=True)
+            except TypeError:
+                key = str(action)
+            if key not in action_lookup:
+                action_lookup[key] = len(action_lookup)
+            action_ids.append(action_lookup[key])
 
     actions = np.asarray(action_ids, dtype=np.int64)
-    old_log_probs = np.zeros(timesteps, dtype=np.float32)
+
+    log_probs = np.asarray(
+        [float(frame.get("log_prob", 0.0)) for frame in frames], dtype=np.float32
+    )
 
     rewards = np.asarray(
         [float((frame.get("rewards") or [0.0])[-1]) for frame in frames], dtype=np.float32
@@ -441,7 +453,13 @@ def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
         [bool((frame.get("dones") or [False])[-1]) for frame in frames], dtype=np.bool_
     )
 
-    value_preds = np.zeros(timesteps + 1, dtype=np.float32)
+    value_preds_seq = np.asarray(
+        [float(frame.get("value_pred", 0.0)) for frame in frames], dtype=np.float32
+    )
+    if value_preds_seq.size:
+        value_preds = np.concatenate([value_preds_seq, [value_preds_seq[-1]]])
+    else:
+        value_preds = np.zeros(1, dtype=np.float32)
 
     metadata = dict(frames[-1].get("metadata", {}))
     metadata.update(
@@ -450,6 +468,7 @@ def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
             "timesteps": timesteps,
             "value_pred_steps": len(value_preds),
             "action_lookup": action_lookup,
+            "action_dim": int(actions.max() + 1) if actions.size else 1,
         }
     )
 
@@ -457,7 +476,7 @@ def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
         map=map_seq,
         features=feature_seq,
         actions=actions,
-        old_log_probs=old_log_probs,
+        old_log_probs=log_probs,
         value_preds=value_preds,
         rewards=rewards,
         dones=dones,

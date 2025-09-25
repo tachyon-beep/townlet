@@ -98,7 +98,7 @@
 - Training harness builds a policy network from replay metadata, derives action space from samples, and logs per-epoch metrics (loss components, clip fraction, advantage stats, grad norms, conflict telemetry averages).
 - Replay samples/documentation refreshed; canonical NPZ manifests include bootstrap value predictions for GAE, multi-step sequences, and metadata tracks timestep alignment.
 
-## 2025-09-27 — Rollout Trajectory Capture
 - `PolicyRuntime` now buffers per-agent actions/rewards/done flags each tick and exposes `collect_trajectory` for downstream tooling; `SimulationLoop.step` flushes observations into this buffer automatically.
-- Added `frames_to_replay_sample` helper to convert collected frames into replay-ready tensors (map/features stacked per timestep, action IDs + lookup, placeholder log-probs/value baselines) so multi-step rollouts feed the PPO harness without bespoke scripts.
+- Added `frames_to_replay_sample` helper to convert collected frames into replay-ready tensors (map/features stacked per timestep, action IDs + lookup, logged policy log-probs/value baselines) so multi-step rollouts feed the PPO harness without bespoke scripts.
 - Tests cover trajectory capture → sample conversion (`tests/test_training_replay.py::test_policy_runtime_collects_frames`), ensuring schema guardrails hold for generated sequences.
+- Scenario configs and capture suite automation (`configs/scenarios/*.yaml`, `scripts/capture_rollout_suite.py`) plus regression tests (`tests/test_rollout_capture.py`) compare generated samples against golden metrics (`docs/samples/rollout_scenario_stats.json`).
