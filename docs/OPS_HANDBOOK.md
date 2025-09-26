@@ -52,6 +52,8 @@
 - **Drift response**: if event counts or intensity drop below thresholds, pause promotion, rerun capture to confirm reproducibility, and notify the training lead. Investigate agent availability (missing scenario agents are the usual culprit) and rerun with `--rollout-auto-seed-agents` only as a temporary workaround.
 - **CI guardrail**: GitHub Actions uploads `tmp/ci_phase4/{ppo_mixed.jsonl,summary.md,watch.jsonl}` for each run; inspect these artefacts when investigating regressions.
 - **Canonical captures**: reference `artifacts/phase4/` for the latest checked-in mixed-mode logs, watch outputs, and summaries per scenario.
+- **Soak reference**: `artifacts/phase4/queue_conflict_soak/summary.md` provides the latest alternating
+  replay↔rollout drift snapshot (12-cycle run); use it as a benchmark during incident reviews.
 
 ## Tooling & Logs
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/ARCHITECTURE_INTERFACES.md`.

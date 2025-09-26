@@ -1,4 +1,0 @@
-Epochs analysed: 1 (mode=replay, cycle_id=0.0)
-Latest metrics: loss_total=0.645413, kl_divergence=0.000000, grad_norm=1.116611
-              entropy_mean=0.000000, reward_adv_corr=0.000000, epoch_duration=0.0105s
-Extremes: loss_total[min=0.645413, max=0.645413], kl_divergence[min=0.000000, max=0.000000], grad_norm[min=1.116611, max=1.116611]

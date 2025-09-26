@@ -9,7 +9,7 @@
 - PPO Integration Phase 2 (rollout ingestion, PPO training loop, telemetry schema/tests, drift analytics tooling).
 - PPO Integration Phase 3 (telemetry_version 1.1 schema, streaming cycle IDs, validator/watch/summary tooling, CI harness validation).
   - Ops checklist: `docs/ops/ROLLOUT_PPO_CHECKLIST.md`
-- PPO Integration Phase 4 (rollout capture→PPO bridge, queue-conflict telemetry, mixed-mode ops workflow, CI artefact uploads).
+- PPO Integration Phase 4 (rollout capture→PPO bridge, queue-conflict telemetry, mixed-mode ops workflow, CI artefact uploads, soak harness drift analysis).
 
 ## Upcoming Work Packages
 1. **Observer UI Integration** (`docs/WORK_PACKAGE_OBSERVER_UI.md`)
@@ -20,10 +20,10 @@
    - Owner: Systems/Gameplay
    - Status: In progress (queue fairness + rivalry scaffolding underway).
    - Next: risk reduction activities, telemetry/tests per work package.
-3. **PPO Long-Run Validation & Drift Analytics** (`docs/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
+3. **PPO Telemetry Monitoring** (`docs/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
    - Owner: RL/Training
-   - Status: Planned (post-Phase 4 soak testing, artefact retention strategy).
-   - Next: automate alternating replay/rollout cycles (10+), monitor queue-conflict drift, define archive target for scenario logs.
+   - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
+   - Next: schedule periodic soak runs if drift is suspected; feed results into ops review cadence.
 4. **Renderer/Geometry Enhancements**
    - Dependent on observer UI feedback; adds real object coordinates to `WorldState.local_view`.
 

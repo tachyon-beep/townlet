@@ -163,7 +163,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 - **Config:** `PPOConfig` currently exposes learning rate, clipping, loss coefficients, epochs, batch size; Phase 2 will extend with GAE/grad knobs.
 - **Harness State:** `TrainingHarness.run_ppo` logs epoch summaries, writes JSONL when `--ppo-log` provided; optimization still placeholder (mean feature loss).
 - **Open Tasks:**
-  - Endurance soak testing (10+ alternating replay/rollout cycles) and long-run drift analytics.
+  - None. Soak harness and drift analytics captured under `artifacts/phase4/queue_conflict_soak/`.
 - **Risks to Monitor:** loss instability, telemetry volume, rollout performance.
 - **Command Cheatsheet:**
   - Replay validation: `python scripts/run_replay.py <sample> --validate`.

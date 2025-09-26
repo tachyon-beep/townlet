@@ -30,9 +30,7 @@
 - `python scripts/telemetry_summary.py tmp/ci_phase4/ppo_mixed.jsonl --format markdown > tmp/ci_phase4/summary.md`
 
 ## Outstanding Follow-Ups
-- Add endurance tests alternating replay/rollout cycles to monitor queue-conflict drift over long
-  runs.
-- Run soak harness using `artifacts/phase4/` captures as baselines and record drift analytics in the
-  acceptance report.
+- None — soak harness output archived in `artifacts/phase4/queue_conflict_soak/` with drift analysis
+  recorded in the acceptance report. Continue to monitor future runs via the ops playbook.
 
 **Prepared by:** Townlet Engineering Team

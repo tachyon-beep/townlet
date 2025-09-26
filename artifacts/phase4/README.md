@@ -16,6 +16,7 @@ Phase 4 of the PPO integration workstream. Each scenario folder contains:
 | `employment_punctuality` | `configs/scenarios/employment_punctuality.yaml` | mixed (replay→rollout) | 60 | Employment punctuality mixed-mode benchmark |
 | `rivalry_decay` | `configs/scenarios/rivalry_decay.yaml` | mixed (replay→rollout) | 50 | Rivalry decay coverage |
 | `observation_baseline` | `configs/scenarios/observation_baseline.yaml` | rollout | 30 | Control run (zero queue conflicts) |
+| `queue_conflict_soak` | `configs/scenarios/queue_conflict.yaml` | alternating replay/rollout | 40 | 12-cycle soak harness output |
 
 ## Repro Commands
 ```
@@ -27,6 +28,9 @@ python scripts/telemetry_watch.py artifacts/phase4/<dir>/ppo_mixed.jsonl --json 
 python scripts/telemetry_summary.py artifacts/phase4/<dir>/ppo_mixed.jsonl --format markdown > artifacts/phase4/<dir>/summary.md
 ```
 Adjust `--mode`/`--rollout-ticks` for the control scenario where replay input is not required.
+
+For soak runs, use `python scripts/run_mixed_soak.py ... --output-dir artifacts/phase4/queue_conflict_soak`
+and inspect `ppo_soak.jsonl`/`summary.md` for drift analytics.
 
 ## Baselines
 Queue-conflict event and intensity baselines are tabulated in `docs/ops/queue_conflict_baselines.md`.

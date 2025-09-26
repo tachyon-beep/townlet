@@ -38,8 +38,18 @@ jobs:
           python scripts/run_training.py configs/scenarios/queue_conflict.yaml --mode mixed --replay-manifest tmp/ci_phase4/rollout_sample_manifest.json --rollout-ticks 40 --epochs 1 --ppo-log tmp/ci_phase4/ppo_mixed.jsonl
           python scripts/validate_ppo_telemetry.py tmp/ci_phase4/ppo_mixed.jsonl
           python scripts/validate_ppo_telemetry.py tmp/ci_phase4/ppo_mixed.jsonl --baseline <(head -n 1 tmp/ci_phase4/ppo_mixed.jsonl)
-          python scripts/telemetry_watch.py tmp/ci_phase4/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5
+          python scripts/telemetry_watch.py tmp/ci_phase4/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --json > tmp/ci_phase4/watch.jsonl
           python scripts/telemetry_summary.py tmp/ci_phase4/ppo_mixed.jsonl --format markdown > tmp/ci_phase4/summary.md
+      - name: Upload PPO telemetry artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ppo-mixed-telemetry
+          path: |
+            tmp/ci_phase4/ppo_mixed.jsonl
+            tmp/ci_phase4/summary.md
+            tmp/ci_phase4/watch.jsonl
+          if-no-files-found: error
 
       - name: Rollout scenario tests
         run: pytest tests/test_rollout_capture.py

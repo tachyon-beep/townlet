@@ -41,10 +41,21 @@ Baseline thresholds and interpretation guidance live in `docs/ops/queue_conflict
 - `artifacts/phase4/README.md` documents the curated capture set and repro commands for future
   refreshes.
 
+## Soak Validation
+- Ran 12 alternating replay ↔ rollout cycles via
+  `scripts/run_mixed_soak.py configs/scenarios/queue_conflict.yaml --baseline-dir artifacts/phase4/queue_conflict --output-dir artifacts/phase4/queue_conflict_soak --cycles 12 --rollout-ticks 40`.
+- Artefacts captured under `artifacts/phase4/queue_conflict_soak/` (`ppo_soak.jsonl`, `watch.jsonl`,
+  `summary.md`). Watch thresholds matched the ops playbook (KL 0.5, grad 5, queue minima 28/45) with
+  no alerts.
+- Drift summary (`summary.md`) vs. the baseline rollout shows queue-conflict metrics unchanged
+  (events/intensity delta = 0) and acceptable movement on loss/gradient statistics (≤+8.5% loss
+  total, +0.67 grad_norm). Cycle IDs/log offsets progressed as expected across the soak.
+
 ## Acceptance Checklist
 - [x] Mixed-mode PPO run succeeds for each scenario with queue-conflict telemetry recorded.
 - [x] Watcher and summary artefacts exported and referenced in ops docs.
 - [x] CI wiring validated manually; artefact upload enabled for automation.
 - [x] Ops runbook updated with thresholds and response playbook.
+- [x] Alternating replay/rollout soak captured with drift analysis recorded.
 
 **Prepared by:** Townlet Engineering Team — PPO Integration Task Force
