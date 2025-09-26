@@ -31,5 +31,5 @@ Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-age
 
 ## Roadmap
 - Integrate richer map/object visualisation once `WorldState` exposes geometry.
-- Add web/GUI layer (see `docs/WORK_PACKAGE_OBSERVER_UI.md` stretch goals).
+- Add web/GUI layer (see `docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md` stretch goals).
 - Hook into the renderer roadmap for combined observation + employment views.

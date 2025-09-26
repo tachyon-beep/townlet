@@ -71,7 +71,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 **Risk Level:** High
 1. **Telemetry Schema Definition**
    - Define NDJSON schema for training telemetry (epoch summary, per-batch stats) including conflict metrics.
-   - Update `TELEMETRY_CHANGELOG.md` and training guide.
+   - Update `docs/telemetry/TELEMETRY_CHANGELOG.md` and training guide.
 
 2. **Logging Implementation**
    - Add NDJSON writer that records per-epoch loss components, conflict averages, and KL/clip fractions.
@@ -100,7 +100,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
   compatibility steps.
 
 5. **Documentation**
-   - Update `IMPLEMENTATION_NOTES`, `ARCHITECTURE_INTERFACES`, and training guide with telemetry instructions.
+   - Update `docs/engineering/IMPLEMENTATION_NOTES.md`, `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`, and training guide with telemetry instructions.
 
 ### Deliverables
 - NDJSON logging path for PPO runs.
@@ -129,7 +129,7 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
    - Ensure observations include conflict features; rewards/advantages computed from live data.
    - *Pre-work (Complete):* `RolloutBuffer` scaffolding and `TrainingHarness.capture_rollout` added to capture/save trajectories without PPO integration. In-memory dataset path (`build_dataset`) allows rollout captures to feed PPO directly (no manifest required).
    - Scenario coverage plan: use `queue_conflict`, `employment_punctuality`, `rivalry_decay`, and `observation_baseline` (plus `kitchen_breakfast` for soak tests). For each scenario, capture to `artifacts/phase4/<scenario>` and archive summaries (`ppo_*.jsonl`, `watch.jsonl`, `summary.md`). Verify agents spawn without auto-seed. Capture queue conflict events/intensity from telemetry for rollout datasets and record baselines (`docs/ops/queue_conflict_baselines.md`).
-   - *Status (2025-09-29):* Completed mixed-mode captures for queue_conflict, employment_punctuality, rivalry_decay, and rollout control; artefacts summarised in `docs/ROLLOUT_PHASE4_ACCEPTANCE.md` and checked into `artifacts/phase4/`.
+   - *Status (2025-09-29):* Completed mixed-mode captures for queue_conflict, employment_punctuality, rivalry_decay, and rollout control; artefacts summarised in `docs/rollout/ROLLOUT_PHASE4_ACCEPTANCE.md` and checked into `artifacts/phase4/`.
 
 2. **Replay vs. Rollout Modes**
    - Allow `TrainingHarness` to switch between replay-only (offline) and rollout (online) modes.
@@ -142,11 +142,11 @@ This document captures the detailed plan for evolving the conflict-aware PPO tra
 
 4. **End-to-End Validation** *(Phase 4)*
    - Smoke test training harness performing short rollouts and PPO updates, verifying no crashes and telemetry output present. *(Complete via queue_conflict/employment/rivalry/baseline runs.)*
-   - Add documentation on running live rollouts, config prerequisites (torch, hardware considerations). *(Complete — `docs/OPS_HANDBOOK.md` mixed-mode workflow, checklist refresh.)*
+   - Add documentation on running live rollouts, config prerequisites (torch, hardware considerations). *(Complete — `docs/ops/OPS_HANDBOOK.md` mixed-mode workflow, checklist refresh.)*
    - Execute alternating capture→PPO cycles (≥10) per primary scenario, store summaries (`telemetry_summary.py`) and watcher logs for audit. *(Initial mixed-mode cycles captured; endurance soak remains a follow-up task.)*
 
 5. **Documentation & Certificates** *(Ongoing)*
-   - Update `MASTER_PLAN_PROGRESS`, training guide, ops docs. *(Complete — ops handbook, master plan, acceptance report refreshed.)*
+   - Update `docs/program_management/MASTER_PLAN_PROGRESS.md`, training guide, ops docs. *(Complete — ops handbook, master plan, acceptance report refreshed.)*
    - Issue completion certificate upon acceptance. *(Complete — see `docs/COMPLETION_CERTIFICATE_PPO_PHASE2_4.md`.)*
 
 ### Deliverables

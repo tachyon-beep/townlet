@@ -1,0 +1,47 @@
+# Project Progress Tracker (2025-09-29)
+
+Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progress against the milestone roadmap.
+
+## Completed Work Packages
+- Employment Loop Hardening (R1–R7 mitigated; default config enabled).
+- Observation Tensor Upgrade (hybrid tensors implemented; samples published).
+- Telemetry Consumer Tooling (schema versioning, validator, dashboard MVP).
+- Replay DataLoader & PPO Phase 1 (conflict-aware batching, torch scaffolding).
+- Rollout Capture Foundations (PolicyRuntime metrics logging, capture CLI, scenario groundwork).
+- PPO Integration Phase 2 (rollout ingestion, PPO training loop, telemetry schema/tests, drift analytics tooling).
+- PPO Integration Phase 3 (telemetry_version 1.1 schema, streaming cycle IDs, validator/watch/summary tooling, CI harness validation).
+  - Ops checklist: `docs/ops/ROLLOUT_PPO_CHECKLIST.md`
+- PPO Integration Phase 4 (rollout capture→PPO bridge, queue-conflict telemetry, mixed-mode ops workflow, CI artefact uploads, soak harness drift analysis).
+
+## In-Flight Work Packages
+1. **Observer UI Integration** (`docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md`)
+   - Owner: DevEx/UX
+   - Status: In progress (telemetry client + dashboard shipped).
+   - Next: usability capture, legend toggles, concurrency executor polish, documentation refresh.
+2. **Conflict Intro (M2.5)** (`docs/work_packages/WORK_PACKAGE_CONFLICT_INTRO.md`)
+   - Owner: Systems/Gameplay
+   - Status: In progress (queue fairness + rivalry scaffolding underway).
+   - Next: ghost-step telemetry, rivalry decay tuning, ops troubleshooting guide.
+3. **PPO Telemetry Monitoring** (`docs/work_packages/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
+   - Owner: RL/Training
+   - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
+   - Next: schedule periodic soak runs, wire results into ops review cadence.
+
+## Upcoming Milestones (see `PROJECT_PLAN.md` for detail)
+- **M4 – Social Foundations**: relationship storage, social observation snippets, chat rewards, narration throttling.
+- **M5 – Behaviour Cloning & Anneal**: trajectory capture, BC harness, mixed scripted→learned control with rollback guard.
+- **M6 – Observer Experience & Policy Inspector**: dashboard overlays, policy inspector, audio toggles, KPI panels.
+- **M7 – Promotion & Release Governance**: automated promotion gate, golden rollouts, rollback drills.
+- **M8 – Perturbations & Narrative Events**: scheduler fairness buckets, lifecycle vignettes, perturbation telemetry.
+- **M9 – Personality & Ops Polish**: personality balancing, admin console extensions, privacy/ethics controls.
+
+## Open Risks
+- UI toolkit decision for Observer UI (Rich/Textual vs web) may delay UX polish.
+- Observation map fidelity requires geometry enhancements; solution TBD.
+- PPO endurance drift if soak harness uncovers longer-run issues; monitor queue-conflict baselines.
+- Behaviour cloning data quality risks (M5) – need representative scripted coverage before training.
+
+## Upcoming Decision Points
+1. Observer UI toolkit sign-off (Rich/Textual vs web).
+2. Conflict telemetry metric prioritisation vs UI polish trade-offs.
+3. Definition of BC dataset scope and anneal schedule (ties to M5).

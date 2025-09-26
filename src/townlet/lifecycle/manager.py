@@ -8,7 +8,7 @@ from townlet.world.grid import WorldState
 
 
 class LifecycleManager:
-    """Centralises lifecycle checks described in docs/CONCEPTUAL_DESIGN.md#18."""
+    """Centralises lifecycle checks described in docs/program_management/snapshots/CONCEPTUAL_DESIGN.md#18."""
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config

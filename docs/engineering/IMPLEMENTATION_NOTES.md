@@ -48,9 +48,9 @@
 - New pytest coverage: `tests/test_employment_loop.py` (attendance) and console command regressions.
 - Risk R2 smoke validation: `python scripts/run_employment_smoke.py configs/examples/poc_hybrid.yaml --ticks 1000` with and without `--enforce-job-loop` recorded zero alerts/pending exits; metrics captured in `employment_smoke_metrics.json`.
 - Telemetry schema bumped to `0.2.0`; console snapshots now include `schema_version`, employment snapshots versioned; updated docs and tests to lock consumer expectations.
-- Added telemetry consumer tooling: `scripts/telemetry_check.py` validator, sample payload `docs/samples/telemetry_snapshot_0.2.0.json`, and schema change log (`docs/TELEMETRY_CHANGELOG.md`).
+- Added telemetry consumer tooling: `scripts/telemetry_check.py` validator, sample payload `docs/samples/telemetry_snapshot_0.2.0.json`, and schema change log (`docs/telemetry/TELEMETRY_CHANGELOG.md`).
 - Console router now emits schema compatibility warnings when shards report newer versions; tests cover warning copy.
-- Console dry run executed (`scripts/console_dry_run.py`); validated employment commands and documented procedure in `docs/CONSOLE_DRY_RUN.md`.
+- Console dry run executed (`scripts/console_dry_run.py`); validated employment commands and documented procedure in `docs/guides/CONSOLE_DRY_RUN.md`.
 - Added employment docs/tests checklist (`docs/EMPLOYMENT_DOCS_TEST_CHECKLIST.md`) and referenced in Ops handbook to institutionalise doc + test updates (addresses Risk R6).
 - Benchmarked tick duration with and without employment enforcement (`scripts/benchmark_tick.py`); 1,000-tick runs averaged 4–5µs per tick with <25% delta, within guardrail for R7.
 - Implemented hybrid observation tensor encoding (map + feature vector) per `docs/design/OBSERVATION_TENSOR_SPEC.md`; added tests and local view helper.

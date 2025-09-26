@@ -25,7 +25,7 @@ Introduce basic conflict dynamics so interactive queues recover from friction, r
 
 ## High-Level Tasks
 1. **Spec & Design Alignment**
-   - Extract conflict specifics from `docs/CONCEPTUAL_DESIGN.md` and requirements section 5.
+   - Extract conflict specifics from `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md` and requirements section 5.
    - Finalise rivalry attribute schema (caps, decay functions, thresholds) and queue fairness parameters.
    - Document config additions/changes (e.g., `queue_fairness`, rivalry decay config block).
 2. **Queue Fairness Enhancements**
@@ -47,7 +47,7 @@ Introduce basic conflict dynamics so interactive queues recover from friction, r
 6. **Validation & Documentation**
    - Add deterministic queue fairness tests, rivalry decay unit tests, telemetry serialization checks, and dashboard snapshot tests.
    - Run extended smoke (≥2 days sim) to ensure no regressions.
-   - Update docs (`ARCHITECTURE_INTERFACES.md`, `IMPLEMENTATION_NOTES.md`, `OPS_HANDBOOK.md`, `TELEMETRY_CHANGELOG.md`, roadmap/progress trackers).
+   - Update docs (`program_management/snapshots/ARCHITECTURE_INTERFACES.md`, `engineering/IMPLEMENTATION_NOTES.md`, `ops/OPS_HANDBOOK.md`, `telemetry/TELEMETRY_CHANGELOG.md`, roadmap/progress trackers).
 
 ## Risk Register
 | ID | Risk | Prob | Impact | Exposure | Early Indicators | Mitigation | Contingency | Owner |
@@ -85,6 +85,6 @@ Introduce basic conflict dynamics so interactive queues recover from friction, r
 - [ ] UX checklist completed and stored in `docs/`.
 
 ## Reporting
-- Update `docs/MASTER_PLAN_PROGRESS.md` and `docs/MILESTONE_ROADMAP.md` upon completion.
+- Update `docs/program_management/MASTER_PLAN_PROGRESS.md` and `docs/program_management/MILESTONE_ROADMAP.md` upon completion.
 - Capture telemetry sample in `docs/samples/conflict_intro_snapshot.json` (to be generated).
-- Log stakeholder sign-off in `docs/IMPLEMENTATION_NOTES.md`.
+- Log stakeholder sign-off in `docs/engineering/IMPLEMENTATION_NOTES.md`.

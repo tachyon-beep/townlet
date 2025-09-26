@@ -31,7 +31,7 @@ Replace placeholder observation payloads with fully realised tensors for the hyb
    - Snapshot tests with deterministic fixtures
    - Update existing observer tests to assert new keys
 5. **Documentation & Samples**
-   - Update `docs/ARCHITECTURE_INTERFACES.md` observation section
+  - Update `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md` observation section
    - Add sample tensor dump in `docs/samples/`
    - Update checklist for observation changes
 

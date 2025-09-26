@@ -1,4 +1,4 @@
-# Remediation Project Plan
+# Townlet Delivery Project Plan
 
 ## Objectives
 
@@ -8,7 +8,7 @@
 
 ## Governance & Roles
 
-- **Remediation Lead (Engineering Manager):** Owns schedule, unblockers, and weekly status reporting.
+- **Delivery Lead (Engineering Manager):** Owns schedule, unblockers, and weekly status reporting.
 - **Simulation Strike Team:** 2 engineers focused on world/affordance and reward subsystems.
 - **Observability Squad:** 1 engineer + 1 UX partner covering telemetry, console, and stability workflows.
 - **Quality Owner:** 1 SDET responsible for regression automation and policy compliance tests.
@@ -24,7 +24,7 @@
 
 ## Future Milestones (Beyond Remediation)
 
-These milestones map the remaining functionality promised in `docs/HIGH_LEVEL_DESIGN.md` and `docs/CONCEPTUAL_DESIGN.md`. They follow immediately after the remediation backlog so this directory stays the single source of truth for "finished" Townlet scope.
+These milestones map the remaining functionality promised in `docs/program_management/snapshots/HIGH_LEVEL_DESIGN.md` and `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md`. They follow immediately after the remediation backlog so this directory stays the single source of truth for "finished" Townlet scope.
 
 | Milestone | Target Window* | Scope Highlights | Exit Criteria |
 |-----------|----------------|------------------|---------------|
@@ -39,21 +39,21 @@ These milestones map the remaining functionality promised in `docs/HIGH_LEVEL_DE
 
 ## Design Alignment
 
-- **M1–M3** close the runtime and operational gaps documented in `docs/REQUIREMENTS.md` and the core simulator sections of `docs/HIGH_LEVEL_DESIGN.md` (affordances, observations, rewards, stability/console, telemetry, persistence).
-- **M4** traces to the social relationship and narration features in `docs/CONCEPTUAL_DESIGN.md` §§5–12 and the UI hooks in `docs/HIGH_LEVEL_DESIGN.md` (Telemetry & UI Gateway).
-- **M5** covers the behaviour-cloning and scripted→learned handoff described in `docs/CONCEPTUAL_DESIGN.md` §9.
-- **M6** delivers the observer experience, policy inspector, and KPI dashboards called out in `docs/CONCEPTUAL_DESIGN.md` §12 and `docs/HIGH_LEVEL_DESIGN.md` (Telemetry/UI modules).
-- **M7** aligns with the promotion governance and stability monitor expectations in `docs/CONCEPTUAL_DESIGN.md` §9 and `docs/HIGH_LEVEL_DESIGN.md` (Stability Monitor & Promotion).
-- **M8** implements perturbations, narrative events, and lifecycle vignettes from `docs/CONCEPTUAL_DESIGN.md` §§11–12.
+- **M1–M3** close the runtime and operational gaps documented in `docs/program_management/snapshots/HIGH_LEVEL_DESIGN.md` and related requirements.
+- **M4** traces to the social relationship and narration features in `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md` §§5–12 and the UI hooks in `docs/program_management/snapshots/HIGH_LEVEL_DESIGN.md` (Telemetry & UI Gateway).
+- **M5** covers the behaviour-cloning and scripted→learned handoff described in `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md` §9.
+- **M6** delivers the observer experience, policy inspector, and KPI dashboards called out in `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md` §12 and `docs/program_management/snapshots/HIGH_LEVEL_DESIGN.md` (Telemetry/UI modules).
+- **M7** aligns with the promotion governance and stability monitor expectations in `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md` §9 and `docs/program_management/snapshots/HIGH_LEVEL_DESIGN.md` (Stability Monitor & Promotion).
+- **M8** implements perturbations, narrative events, and lifecycle vignettes from `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md` §§11–12.
 - **M9** completes personality polish, console extensions, and privacy/ethics controls described across the design documents’ later phases.
 
-The current codebase already fulfils the PPO Phase 2–4 hardening and telemetry bridge (refer to `docs/ROLLOUT_PHASE4_ACCEPTANCE.md`). The milestone stack above captures the remaining functionality required to meet the full design specification.
+The current codebase already fulfils the PPO Phase 2–4 hardening and telemetry bridge (refer to `docs/rollout/ROLLOUT_PHASE4_ACCEPTANCE.md`). The milestone stack above captures the remaining functionality required to meet the full design specification.
 
 
 ## Iteration Structure
 
 - **Cadence:** Two-week sprints with mid-sprint demos of guarded features (feature flags off in production until DoD met).
-- **Backlog Grooming:** Remediation Lead + squads refine WP tasks every Monday; blockers escalated same day.
+- **Backlog Grooming:** Delivery Lead + squads refine WP tasks every Monday; blockers escalated same day.
 - **Quality Gates:** No work package closes without (a) unit/integration coverage for happy/sad paths, (b) documentation updates, (c) telemetry assertions when relevant.
 
 ## Dependency Management
@@ -75,7 +75,7 @@ The current codebase already fulfils the PPO Phase 2–4 hardening and telemetry
 
 - **Status Reports:** Weekly email + dashboard updates summarising progress against milestones and open risks.
 - **Stakeholder Reviews:** End-of-milestone demos with Ops and Product to sign off acceptance criteria.
-- **Incident Handling:** Any blocker extending >2 days triggers an escalation meeting with Remediation Lead and affected squad.
+- **Incident Handling:** Any blocker extending >2 days triggers an escalation meeting with the Delivery Lead and affected squad.
 
 ## Acceptance & Exit Criteria
 

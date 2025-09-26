@@ -45,7 +45,7 @@
    ```
    (The PPO capture test parameterises across all scripted scenarios and validates
    baseline metrics against the golden stats; see
-   `docs/ROLLOUT_CAPTURE_GUIDE.md#refreshing-golden-metrics` for the update
+   `docs/rollout/ROLLOUT_CAPTURE_GUIDE.md#refreshing-golden-metrics` for the update
    procedure.)
 
 ## Notes

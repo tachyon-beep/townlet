@@ -199,4 +199,4 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 4. Build integration test harness for policy step → reward → telemetry pipeline.
 5. Stand up telemetry transport prototype (WebSocket) for demo readiness.
 
-This guide will evolve alongside implementation milestones; keep cross-references (`docs/CONCEPTUAL_DESIGN.md`, `docs/REQUIREMENTS.md`, `docs/OPS_HANDBOOK.md`) up to date when interfaces shift.
+This guide will evolve alongside implementation milestones; keep cross-references (`docs/program_management/snapshots/CONCEPTUAL_DESIGN.md`, `docs/program_management/snapshots/REQUIREMENTS.md`, `docs/ops/OPS_HANDBOOK.md`) up to date when interfaces shift.

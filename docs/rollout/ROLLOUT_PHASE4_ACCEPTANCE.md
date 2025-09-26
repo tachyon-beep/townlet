@@ -34,9 +34,9 @@ Baseline thresholds and interpretation guidance live in `docs/ops/queue_conflict
   writes JSONL output so ops can diff runs without re-tailing.
 
 ## Documentation Updates
-- `docs/OPS_HANDBOOK.md` now details the mixed-mode workflow, queue-conflict troubleshooting steps,
+- `docs/ops/OPS_HANDBOOK.md` now details the mixed-mode workflow, queue-conflict troubleshooting steps,
   and links to the new artefacts.
-- `docs/WORK_PACKAGE_PPO_PHASES_2_4.md` reflects the completion of Phases 2 and 3 plus the Phase 4
+- `docs/work_packages/WORK_PACKAGE_PPO_PHASES_2_4.md` reflects the completion of Phases 2 and 3 plus the Phase 4
   telemetry bridge plan.
 - `artifacts/phase4/README.md` documents the curated capture set and repro commands for future
   refreshes.

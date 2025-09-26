@@ -11,7 +11,7 @@ generalised replay samples, and feed them into PPO training/testing workflows.
   tensors and metadata (action lookup, timesteps, bootstrapped value baselines).
 - `scripts/capture_rollout.py` runs the simulation loop for configurable tick counts, optionally
   seeding placeholder agents, and emits per-agent samples plus a manifest. Usage/documentation is
-  covered in `docs/ROLLOUT_CAPTURE_GUIDE.md`.
+  covered in `docs/rollout/ROLLOUT_CAPTURE_GUIDE.md`.
 - Replay ingestion path fully supports multi-step trajectories for PPO (`TrainingHarness.run_ppo`).
 - Scenario configs under `configs/scenarios/` define deterministic object/agent layouts with
   scripted schedules (kitchen breakfast rush, queue conflict, employment punctuality, rivalry decay,
@@ -59,7 +59,7 @@ generalised replay samples, and feed them into PPO training/testing workflows.
 
 ### How to Run Scenario-Based PPO
 1. Capture scenarios (single config or suite) – see
-   `docs/ROLLOUT_CAPTURE_GUIDE.md#running-ppo-with-captured-scenarios`.
+   `docs/rollout/ROLLOUT_CAPTURE_GUIDE.md#running-ppo-with-captured-scenarios`.
 2. Train via `scripts/run_training.py CONFIG --train-ppo --capture-dir <capture>` to replay captured
    batches with optional shuffling/seed flags.
 3. Inspect PPO logs for the `baseline_*` fields to ensure replay parity. Follow the ops checklist
@@ -78,7 +78,7 @@ generalised replay samples, and feed them into PPO training/testing workflows.
    - Validator/watch/summary tooling in CI and ops docs; canonical sample regenerated.
 
 ## Scripted Scenario Analysis
-See `docs/ROLLOUT_SCENARIOS.md` for detailed proposals on scenario configs, capture strategy, and
+See `docs/rollout/ROLLOUT_SCENARIOS.md` for detailed proposals on scenario configs, capture strategy, and
 validation hooks.
 
 ## Validation Checklist

@@ -1,6 +1,6 @@
 # Townlet
 
-Townlet is a small-town life simulation that explores emergent behaviour in a population of reinforcement-learning agents. The proof of concept targets 6–10 agents living in a 48×48 grid world with scripted primitives, hierarchical options, and configurable observation variants. This repository contains the core simulation, training harness, telemetry surfaces, and operational tooling described in `docs/CONCEPTUAL_DESIGN.md`, `docs/HIGH_LEVEL_DESIGN.md`, and `docs/REQUIREMENTS.md`.
+Townlet is a small-town life simulation that explores emergent behaviour in a population of reinforcement-learning agents. The proof of concept targets 6–10 agents living in a 48×48 grid world with scripted primitives, hierarchical options, and configurable observation variants. This repository contains the core simulation, training harness, telemetry surfaces, and operational tooling described in `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md`, `docs/program_management/snapshots/HIGH_LEVEL_DESIGN.md`, and `docs/program_management/snapshots/REQUIREMENTS.md`.
 
 ## Status
 

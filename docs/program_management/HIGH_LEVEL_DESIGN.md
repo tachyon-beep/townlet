@@ -1,6 +1,6 @@
 # Townlet — High-Level Design (v1.3)
 
-This is a one-page architecture map aligned to docs/CONCEPTUAL_DESIGN.md and docs/REQUIREMENTS.md.
+This is a one-page architecture map aligned to docs/program_management/snapshots/CONCEPTUAL_DESIGN.md and docs/program_management/snapshots/REQUIREMENTS.md.
 
 ## Modules
 

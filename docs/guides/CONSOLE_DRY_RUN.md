@@ -49,6 +49,6 @@ print(router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={
 - No schema mismatch warnings (shard version `0.2.0`).
 
 ## Follow-up
-- Record dry-run completion in `docs/IMPLEMENTATION_NOTES.md`.
+- Record dry-run completion in `docs/engineering/IMPLEMENTATION_NOTES.md`.
 - Mark Risk R5 mitigated in work-package register.
 - Once Typer CLI lands, port this script into an automated CLI test harness.

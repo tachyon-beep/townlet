@@ -86,4 +86,4 @@ employment:
 - Product/PM: sign off on penalties and unemployment thresholds. ✅ (2025-09-25, P. Lead)
 - Ops lead: validate telemetry fields and event names. _(Not applicable; ops function not yet staffed.)_
 
-_Once approvals are logged, update `docs/IMPLEMENTATION_NOTES.md` and mark Risk R1 as mitigated._
+_Once approvals are logged, update `docs/engineering/IMPLEMENTATION_NOTES.md` and mark Risk R1 as mitigated._

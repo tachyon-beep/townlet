@@ -1,15 +1,17 @@
 # Townlet Documentation Plan
 
-_Last updated: 2025-09-24_
+_Last updated: 2025-09-29_
 
 ## Overview
 
 This plan defines the documentation suite required to deliver Townlet from proof of concept through Phases A–C, and the order in which artefacts will be produced. It aligns with the conceptual, high-level, and requirements design documents already in `docs/`.
 
+This plan now lives under `docs/program_management/` alongside the delivery roadmap, charter, and milestone plan.
+
 ## Target Document Set
 
-- **Product Charter** — states the Townlet vision, target KPIs, success metrics, and key guardrails; provides executive alignment (ties to `CONCEPTUAL_DESIGN.md`).
-- **Milestone Roadmap** — milestone-by-milestone scope (M0–M4), feature flag posture, and KPI expectations; the source of record for sprint planning and reporting.
+- **Product Charter** — states the Townlet vision, target KPIs, success metrics, and key guardrails; provides executive alignment (ties to `docs/program_management/snapshots/CONCEPTUAL_DESIGN.md`).
+- **Milestone Roadmap** — milestone-by-milestone scope (M1–M9), feature flag posture, and KPI expectations (see `MILESTONE_ROADMAP.md`).
 - **Architecture & Interfaces Guide** — authoritative reference for module responsibilities, PettingZoo contracts, telemetry schema, snapshot layout, and config identity rules (extends `HIGH_LEVEL_DESIGN.md`).
 - **Operations Handbook** — runbooks for standing up training shards, release vs shadow policy promotion, console administration, monitoring dashboards, alert thresholds, and rollback policy.
 - **RL Experiment Playbook** — experiment templates, reward tuning levers, BC→anneal procedures, KPI evaluation suites, and logging conventions for reproducibility.
@@ -21,8 +23,8 @@ This plan defines the documentation suite required to deliver Townlet from proof
 
 | Week | Focus | Deliverables | Dependencies |
 | ---- | ----- | ------------ | ------------ |
-| 1 | Kick-off & vision | Product Charter (draft), Milestone Roadmap (skeleton) | Requires alignment with existing design docs |
-| 2 | Architecture alignment | Architecture & Interfaces Guide (draft), Roadmap dates finalised | Charter + roadmap skeleton |
+| 1 | Kick-off & vision | Product Charter (refresh), Milestone Roadmap (revise to match delivery plan) | High-level & conceptual designs |
+| 2 | Architecture alignment | Architecture & Interfaces Guide (draft), roadmap dates baselined | Updated charter/roadmap |
 | 3 | Ops readiness | Operations Handbook (draft), RL Experiment Playbook outline | Architecture draft for interfaces |
 | 4 | Quality strategy | Testing & Verification Plan (draft), Experiment Playbook v1 | Roadmap + architecture inputs |
 | 5 | Privacy & compliance | Data & Privacy Policy (draft) | Architecture (telemetry), Ops (logging) |
@@ -36,7 +38,7 @@ This plan defines the documentation suite required to deliver Townlet from proof
 
 ## Ownership & Next Steps
 
-- **Program Manager** owns the Product Charter and Milestone Roadmap.
+- **Program Manager** owns the Product Charter and Milestone Roadmap (now in `docs/program_management/`).
 - **Architecture Lead** owns Architecture & Interfaces Guide and supports downstream documents.
 - **Operations Lead** owns Operations Handbook; **RL Lead** owns Experiment Playbook.
 - **QA Lead** owns Testing & Verification Plan.

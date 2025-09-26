@@ -26,7 +26,7 @@ Stand up the initial RL training harness capable of consuming conflict-aware obs
    - Integrate with future PPO stub (no-op for now) to verify shapes.
 4. **Testing & Docs**
    - Add pytest coverage for loader, batching, and harness CLI path.
-   - Update `docs/IMPLEMENTATION_NOTES.md`, `docs/design/OBSERVATION_TENSOR_SPEC.md`, and training workflow guides; log telemetry change entry if schema touched.
+   - Update `docs/engineering/IMPLEMENTATION_NOTES.md`, `docs/design/OBSERVATION_TENSOR_SPEC.md`, and training workflow guides; log telemetry change entry if schema touched.
 
 ## Risks
 - **Schema drift**: loader must tolerate future observation additions; guard with metadata version check.

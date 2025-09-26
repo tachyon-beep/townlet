@@ -34,7 +34,7 @@
    - Add serialization tests in `tests/test_console_commands.py` + new telemetry snapshot tests.
    - Implement console diagnostics (`employment_status`, `debug queues`, override commands) and capture handbook updates.
 4. **Documentation & Knowledge Transfer (addresses R6)**
-   - Update `docs/ARCHITECTURE_INTERFACES.md`, `docs/OPS_HANDBOOK.md`, `docs/IMPLEMENTATION_NOTES.md` in sync with code.
+   - Update `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`, `docs/ops/OPS_HANDBOOK.md`, `docs/engineering/IMPLEMENTATION_NOTES.md` in sync with code.
    - Add runbook appendix describing employment KPIs and alert responses.
    - Ensure PR template includes “Employment docs/tests updated” checkbox.
 5. **Performance Monitoring (addresses R7)**
@@ -74,10 +74,10 @@ Bring the employment system up to Milestone M2 expectations by enforcing punctua
    - Surface new telemetry/stability metrics mirroring design specs.
 5. **Console & Ops Surfaces**
    - Implement diagnostic/override commands (e.g., `employment_status`, `debug queues`) with proper auth routing.
-   - Extend telemetry bridges and update `docs/OPS_HANDBOOK.md` playbooks.
+   - Extend telemetry bridges and update `docs/ops/OPS_HANDBOOK.md` playbooks.
 6. **Validation & Documentation**
    - Add pytest coverage for attendance transitions, exit-cap enforcement, and console handlers.
-   - Refresh `docs/ARCHITECTURE_INTERFACES.md`, `docs/IMPLEMENTATION_NOTES.md`, and related guides; capture sample telemetry output post-regression (`pytest`, lint, smoke sim).
+   - Refresh `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`, `docs/engineering/IMPLEMENTATION_NOTES.md`, and related guides; capture sample telemetry output post-regression (`pytest`, lint, smoke sim).
 
 ## Timeline & Dependencies
 - Tasks 1–3 must complete before implementation begins.

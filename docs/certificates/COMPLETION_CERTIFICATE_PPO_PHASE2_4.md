@@ -15,7 +15,7 @@
 - Delivered scenario coverage for queue_conflict, employment_punctuality, rivalry_decay, and the
   observation baseline, capturing mixed-mode PPO artefacts and publishing baselines in
   `docs/ops/queue_conflict_baselines.md`.
-- Expanded ops documentation (`docs/OPS_HANDBOOK.md`, `docs/ops/ROLLOUT_PPO_CHECKLIST.md`) with
+- Expanded ops documentation (`docs/ops/OPS_HANDBOOK.md`, `docs/ops/ROLLOUT_PPO_CHECKLIST.md`) with
   mixed-mode workflow, thresholds, and incident response guidance.
 - CI workflow now exercises the mixed queue_conflict scenario end-to-end and uploads telemetry
   artefacts for audit.

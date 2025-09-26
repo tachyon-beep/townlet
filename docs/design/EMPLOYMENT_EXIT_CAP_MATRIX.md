@@ -46,4 +46,4 @@ We must define how unemployment exits trigger when agents repeatedly miss shifts
 - Ops lead: agree on review workflow and console commands. _(Not applicable; ops function not yet staffed.)_
 - Architecture lead: sign off on lifecycle complexity and queue semantics. ✅ (2025-09-25, A. Director)
 
-_Once approvals logged, record in `docs/IMPLEMENTATION_NOTES.md` and update Risk Register (R4)._ 
+_Once approvals logged, record in `docs/engineering/IMPLEMENTATION_NOTES.md` and update Risk Register (R4)._ 

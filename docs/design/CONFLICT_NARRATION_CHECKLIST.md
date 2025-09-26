@@ -13,6 +13,6 @@
 3. **Throttling Verification** — Capture telemetry snapshot showing throttled vs published counts and attach to review notes. Ensure counters reset predictably across tick windows.
 4. **UI Demonstration** — Record a short dashboard capture (GIF/video) highlighting at least one conflict narration and the associated conflict panel metrics.
 5. **Accessibility Pass** — Check narration text with screen-reader (Rich console export) and ensure badge colours meet contrast requirements.
-6. **Sign-Off Log** — Document reviewer names, date, and decisions in `docs/IMPLEMENTATION_NOTES.md` under the Conflict Intro section, noting any follow-up tasks.
+6. **Sign-Off Log** — Document reviewer names, date, and decisions in `docs/engineering/IMPLEMENTATION_NOTES.md` under the Conflict Intro section, noting any follow-up tasks.
 
 Use this checklist before flipping the conflict events feature flag to `on` in default configs.

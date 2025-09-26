@@ -20,9 +20,9 @@
 - Employment commands:
   - `employment_status` — dumps employment KPIs (pending exits, exit cap usage, queue limit) and latest queue contents.
   - `employment_exit review` — view backlog; `employment_exit approve <agent_id>` requests immediate exit; `employment_exit defer <agent_id>` clears the queue entry.
-- Validation: run `python scripts/telemetry_check.py <payload.json>` to confirm consumer compatibility; consult `docs/TELEMETRY_CHANGELOG.md` for schema history.
+- Validation: run `python scripts/telemetry_check.py <payload.json>` to confirm consumer compatibility; consult `docs/telemetry/TELEMETRY_CHANGELOG.md` for schema history.
 - Change management: follow `docs/EMPLOYMENT_DOCS_TEST_CHECKLIST.md` when modifying employment logic; reviewers should require the checklist is satisfied before merge.
-- Observer dashboard: `scripts/observer_ui.py` launches a Rich-based console view of employment KPIs; see `docs/OBSERVER_UI_GUIDE.md`.
+- Observer dashboard: `scripts/observer_ui.py` launches a Rich-based console view of employment KPIs; see `docs/guides/OBSERVER_UI_GUIDE.md`.
 
 ## Promotion Playbook
 1. **Pre-flight**
@@ -56,7 +56,7 @@
   replay↔rollout drift snapshot (12-cycle run); use it as a benchmark during incident reviews.
 
 ## Tooling & Logs
-- Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/ARCHITECTURE_INTERFACES.md`.
+- Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`.
 - Audit logs live in `logs/console/*.jsonl`; include `cmd_id`, issuer, result.
 - Promotion history tracked in `ops/rollouts.md`; append entry per promotion or rollback.
 - PPO telemetry tooling:

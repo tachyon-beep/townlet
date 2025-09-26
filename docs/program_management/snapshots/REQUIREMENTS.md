@@ -1,6 +1,6 @@
 # Townlet — Requirements v1.3
 
-Source of truth: docs/CONCEPTUAL_DESIGN.md (v1.3)
+Source of truth: docs/program_management/snapshots/CONCEPTUAL_DESIGN.md (v1.3)
 Config identity: `config_id` must be included in logs, snapshots, and release metadata.
 
 ## 1. Feature Flags

@@ -30,7 +30,7 @@ Build a reusable replay dataloader that batches observation/telemetry samples—
 
 ### Phase 4 — Validation & Docs
 - Pytests: dataset shape/len checks; shuffle determinism with seed; CLI integration smoke using manifest with conflict-high/low samples.
-- Documentation updates: `docs/IMPLEMENTATION_NOTES.md`, training guide quickstart, observation spec referencing manifest usage.
+- Documentation updates: `docs/engineering/IMPLEMENTATION_NOTES.md`, training guide quickstart, observation spec referencing manifest usage.
 
 ## Risks
 | Risk | Impact | Mitigation | Risk Reduction Activity |
