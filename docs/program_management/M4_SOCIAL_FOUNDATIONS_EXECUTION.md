@@ -151,6 +151,8 @@ throttle tuning plus troubleshooting steps.
 | 4.4-R2 | UI backlog dependency delays milestone exit. | Medium | High | Align sprint planning; provide mock payloads early (Task 4.2-T4). | UI tasks slip two sprints | Delivery lead |
 | 4.4-R3 | Telemetry watcher thresholds misaligned with new narration volume. | Low | Medium | Update watcher defaults; add CI test to assert thresholds. | Watcher alerts spike post rollout | Observability lead |
 
+Mitigation outcome: R1 addressed via priority bypass + ops guidance; R2 mitigated with delivered dashboard overlays; R3 covered by updated watcher thresholds and narration tests.
+
 ## Phase 4.5 – QA, Ops, and Risk Controls
 
 **Phase Objective:** Finalise validation, documentation, and governance to close Milestone M4.
@@ -161,11 +163,19 @@ throttle tuning plus troubleshooting steps.
 - **Task 4.5-T2:** Schedule stakeholder go/no-go review with artefact summary (training metrics, UI demo, ops checklist).
   - *Acceptance:* Meeting notes stored under `docs/program_management/snapshots/`; decision logged.
 
+**Status:** Completed — Master plan tracker refreshed (2025-09-30) with updated risks/decision points; go/no-go
+prep bundle logged in `docs/program_management/snapshots/M4_GO_NO_GO_PREP.md` plus invite/checklist snapshots;
+decision recorded in `M4_GO_NO_GO_DECISION.md` with follow-up action items.
+
 ### Step 4.5-S2 – Quality Gates & Reporting
 - **Task 4.5-T3:** Extend CI to run social scenario suite, telemetry validator, and narration throttle tests.
   - *Acceptance:* `.github/workflows/ci.yml` updated; dry-run executed; badges reflect new checks.
 - **Task 4.5-T4:** Compile acceptance report and update `MASTER_PLAN_PROGRESS.md` to mark M4 complete.
   - *Acceptance:* `docs/rollout/M4_SOCIAL_FOUNDATIONS_ACCEPTANCE.md` created with metrics, tests run, and artefacts.
+
+**Status:** Completed — CI workflow updated with social telemetry/UI test step (local runtime <1 s) and
+artefact upload retained; acceptance report refreshed (`docs/rollout/ROLLOUT_PHASE4_ACCEPTANCE.md`) capturing
+schema 0.7.0, social rewards, narration work; master plan progress lists M4 as closed.
 
 #### Phase 4.5 Risk Assessment
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |

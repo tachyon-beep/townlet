@@ -25,6 +25,9 @@ jobs:
       - name: Unit tests
         run: pytest -k "not rollout_capture"
 
+      - name: Social telemetry & UI tests
+        run: pytest tests/test_telemetry_narration.py tests/test_observer_ui_dashboard.py tests/test_telemetry_client.py
+
       - name: Telemetry schema tests
         run: pytest tests/test_training_replay.py::test_training_harness_ppo_conflict_telemetry
 
