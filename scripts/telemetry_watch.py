@@ -19,6 +19,12 @@ REQUIRED_KEYS = {
     "data_mode",
     "queue_conflict_events",
     "queue_conflict_intensity_sum",
+    "shared_meal_events",
+    "late_help_events",
+    "shift_takeover_events",
+    "chat_success_events",
+    "chat_failure_events",
+    "chat_quality_mean",
 }
 
 
@@ -73,6 +79,30 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help="Fail if queue_conflict_intensity_sum falls below this value",
+    )
+    parser.add_argument(
+        "--shared-meal-min",
+        type=float,
+        default=None,
+        help="Fail if shared_meal_events falls below this value",
+    )
+    parser.add_argument(
+        "--late-help-min",
+        type=float,
+        default=None,
+        help="Fail if late_help_events falls below this value",
+    )
+    parser.add_argument(
+        "--shift-takeover-max",
+        type=float,
+        default=None,
+        help="Fail if shift_takeover_events exceeds this value",
+    )
+    parser.add_argument(
+        "--chat-quality-min",
+        type=float,
+        default=None,
+        help="Fail if chat_quality_mean falls below this value",
     )
     parser.add_argument(
         "--json",
@@ -146,6 +176,26 @@ def check_thresholds(record: dict[str, object], args: argparse.Namespace) -> Non
             raise SystemExit(
                 f"Epoch {epoch}: queue_conflict_intensity_sum {record['queue_conflict_intensity_sum']:.2f} below threshold {args.queue_intensity_min}"
             )
+    if args.shared_meal_min is not None and is_rollout:
+        if record["shared_meal_events"] < args.shared_meal_min:
+            raise SystemExit(
+                f"Epoch {epoch}: shared_meal_events {record['shared_meal_events']:.1f} below threshold {args.shared_meal_min}"
+            )
+    if args.late_help_min is not None and is_rollout:
+        if record["late_help_events"] < args.late_help_min:
+            raise SystemExit(
+                f"Epoch {epoch}: late_help_events {record['late_help_events']:.1f} below threshold {args.late_help_min}"
+            )
+    if args.shift_takeover_max is not None and is_rollout:
+        if record["shift_takeover_events"] > args.shift_takeover_max:
+            raise SystemExit(
+                f"Epoch {epoch}: shift_takeover_events {record['shift_takeover_events']:.1f} exceeds threshold {args.shift_takeover_max}"
+            )
+    if args.chat_quality_min is not None and is_rollout:
+        if record["chat_quality_mean"] < args.chat_quality_min:
+            raise SystemExit(
+                f"Epoch {epoch}: chat_quality_mean {record['chat_quality_mean']:.3f} below threshold {args.chat_quality_min}"
+            )
 
 
 def main() -> None:
@@ -167,6 +217,12 @@ def main() -> None:
                     f"reward_adv_corr={record['reward_advantage_corr']:.6f}, "
                     f"queue_events={record['queue_conflict_events']:.1f}, "
                     f"queue_intensity_sum={record['queue_conflict_intensity_sum']:.2f}, "
+                    f"shared_meals={record['shared_meal_events']:.1f}, "
+                    f"late_help={record['late_help_events']:.1f}, "
+                    f"shift_takeovers={record['shift_takeover_events']:.1f}, "
+                    f"chat_success={record['chat_success_events']:.1f}, "
+                    f"chat_failure={record['chat_failure_events']:.1f}, "
+                    f"chat_quality_mean={record['chat_quality_mean']:.3f}, "
                     f"offset={record['log_stream_offset']:.0f}"
                 )
     except SystemExit:

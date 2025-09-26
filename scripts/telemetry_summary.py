@@ -68,6 +68,14 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
         "queue_conflict_intensity_sum": [
             float(rec.get("queue_conflict_intensity_sum", 0.0)) for rec in records
         ],
+        "shared_meal_events": [float(rec.get("shared_meal_events", 0.0)) for rec in records],
+        "late_help_events": [float(rec.get("late_help_events", 0.0)) for rec in records],
+        "shift_takeover_events": [
+            float(rec.get("shift_takeover_events", 0.0)) for rec in records
+        ],
+        "chat_success_events": [float(rec.get("chat_success_events", 0.0)) for rec in records],
+        "chat_failure_events": [float(rec.get("chat_failure_events", 0.0)) for rec in records],
+        "chat_quality_mean": [float(rec.get("chat_quality_mean", 0.0)) for rec in records],
     }
     summary = {
         "epochs": int(recent.get("epoch", len(records))),
@@ -84,6 +92,12 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "rollout_ticks": float(recent.get("rollout_ticks", 0.0)),
             "queue_conflict_events": metrics["queue_conflict_events"][-1],
             "queue_conflict_intensity_sum": metrics["queue_conflict_intensity_sum"][-1],
+            "shared_meal_events": metrics["shared_meal_events"][-1],
+            "late_help_events": metrics["late_help_events"][-1],
+            "shift_takeover_events": metrics["shift_takeover_events"][-1],
+            "chat_success_events": metrics["chat_success_events"][-1],
+            "chat_failure_events": metrics["chat_failure_events"][-1],
+            "chat_quality_mean": metrics["chat_quality_mean"][-1],
         },
         "extremes": {
             "loss_total": {
@@ -101,6 +115,14 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "queue_conflict_events": {
                 "min": min(metrics["queue_conflict_events"]),
                 "max": max(metrics["queue_conflict_events"]),
+            },
+            "shared_meal_events": {
+                "min": min(metrics["shared_meal_events"]),
+                "max": max(metrics["shared_meal_events"]),
+            },
+            "chat_quality_mean": {
+                "min": min(metrics["chat_quality_mean"]),
+                "max": max(metrics["chat_quality_mean"]),
             },
         },
     }
@@ -128,7 +150,22 @@ def render_text(summary: dict[str, object]) -> str:
     if latest["rollout_ticks"]:
         lines.append(f"              rollout_ticks={latest['rollout_ticks']:.0f}")
     lines.append(
-        f"Queue conflicts: events={latest['queue_conflict_events']:.1f}, intensity_sum={latest['queue_conflict_intensity_sum']:.2f}"
+        "Queue conflicts: events={events:.1f}, intensity_sum={intensity:.2f}".format(
+            events=latest["queue_conflict_events"],
+            intensity=latest["queue_conflict_intensity_sum"],
+        )
+    )
+    lines.append(
+        "Social interactions: shared_meals={meals:.1f}, late_help={helped:.1f}, "
+        "shift_takeovers={takeovers:.1f}, chat_success={chat_s:.1f}, chat_failure={chat_f:.1f}, "
+        "chat_quality_mean={chat_q:.3f}".format(
+            meals=latest["shared_meal_events"],
+            helped=latest["late_help_events"],
+            takeovers=latest["shift_takeover_events"],
+            chat_s=latest["chat_success_events"],
+            chat_f=latest["chat_failure_events"],
+            chat_q=latest["chat_quality_mean"],
+        )
     )
     extremes = summary["extremes"]
     lines.append(
@@ -172,6 +209,8 @@ def render_markdown(summary: dict[str, object]) -> str:
         f"| kl_divergence | {summary['extremes']['kl_divergence']['min']:.6f} | {summary['extremes']['kl_divergence']['max']:.6f} |",
         f"| grad_norm | {summary['extremes']['grad_norm']['min']:.6f} | {summary['extremes']['grad_norm']['max']:.6f} |",
         f"| queue_conflict_events | {summary['extremes']['queue_conflict_events']['min']:.1f} | {summary['extremes']['queue_conflict_events']['max']:.1f} |",
+        f"| shared_meal_events | {summary['extremes']['shared_meal_events']['min']:.1f} | {summary['extremes']['shared_meal_events']['max']:.1f} |",
+        f"| chat_quality_mean | {summary['extremes']['chat_quality_mean']['min']:.3f} | {summary['extremes']['chat_quality_mean']['max']:.3f} |",
     ]
     drift = summary.get("baseline_drift")
     if drift:

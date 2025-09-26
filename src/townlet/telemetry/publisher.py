@@ -25,6 +25,7 @@ class TelemetryPublisher:
             "queues": {"cooldown_events": 0, "ghost_step_events": 0},
             "rivalry": {},
         }
+        self._latest_relationship_metrics: Dict[str, object] | None = None
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -55,6 +56,13 @@ class TelemetryPublisher:
             "queues": dict(queue_metrics),
             "rivalry": rivalry_snapshot,
         }
+        relationship_metrics_getter = getattr(
+            world, "relationship_metrics_snapshot", None
+        )
+        if callable(relationship_metrics_getter):
+            metrics_snapshot = relationship_metrics_getter()
+            if metrics_snapshot is not None:
+                self._latest_relationship_metrics = dict(metrics_snapshot)
         self._latest_embedding_metrics = world.embedding_allocator.metrics()
         if events is not None:
             self._latest_events = list(events)
@@ -103,6 +111,20 @@ class TelemetryPublisher:
         if isinstance(queues, dict):
             snapshot["queues"] = dict(queues)
         return snapshot
+
+    def latest_relationship_metrics(self) -> Dict[str, object] | None:
+        """Expose relationship churn payload captured during publish."""
+        if self._latest_relationship_metrics is None:
+            return None
+        payload = dict(self._latest_relationship_metrics)
+        history = payload.get("history")
+        if isinstance(history, list):
+            payload["history"] = [dict(entry) for entry in history]
+        return payload
+
+    def update_relationship_metrics(self, payload: Dict[str, object]) -> None:
+        """Allow external callers to seed the latest relationship metrics."""
+        self._latest_relationship_metrics = dict(payload)
 
     def latest_embedding_metrics(self) -> Dict[str, float] | None:
         """Expose embedding allocator counters."""

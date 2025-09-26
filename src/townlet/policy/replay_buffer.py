@@ -28,6 +28,12 @@ class InMemoryReplayDataset:
         self.rollout_ticks = int(config.rollout_ticks)
         self.queue_conflict_count = 0
         self.queue_conflict_intensity_sum = 0.0
+        self.shared_meal_count = 0
+        self.late_help_count = 0
+        self.shift_takeover_count = 0
+        self.chat_success_count = 0
+        self.chat_failure_count = 0
+        self.chat_quality_mean = 0.0
 
     def _validate_shapes(self) -> None:
         base = self.samples[0]

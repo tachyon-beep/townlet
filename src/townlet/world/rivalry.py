@@ -7,7 +7,7 @@ These utilities intentionally stay decoupled from the world grid so we can unit
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 
 def _clamp(value: float, *, low: float, high: float) -> float:
@@ -35,7 +35,9 @@ class RivalryParameters:
 class RivalryLedger:
     """Maintains rivalry scores against other agents for a single actor."""
 
+    owner_id: str
     params: RivalryParameters = field(default_factory=RivalryParameters)
+    eviction_hook: Optional[Callable[[str, str, str], None]] = None
     _scores: Dict[str, float] = field(default_factory=dict)
 
     def apply_conflict(self, other_id: str, *, intensity: float = 1.0) -> float:
@@ -47,6 +49,7 @@ class RivalryLedger:
             high=self.params.max_value,
         )
         self._scores[other_id] = updated
+        evicted: List[str] = []
         if self.params.max_edges > 0 and len(self._scores) > self.params.max_edges:
             # Drop weakest edges to keep the ledger bounded.
             weakest = sorted(
@@ -55,7 +58,10 @@ class RivalryLedger:
                 reverse=True,
             )[self.params.max_edges :]
             for other, _ in weakest:
-                self._scores.pop(other, None)
+                if self._scores.pop(other, None) is not None:
+                    evicted.append(other)
+        for other in evicted:
+            self._emit_eviction(other, reason="capacity")
         return updated
 
     def decay(self, ticks: int = 1) -> None:
@@ -70,7 +76,8 @@ class RivalryLedger:
                 high=self.params.max_value,
             )
             if updated <= self.params.eviction_threshold:
-                self._scores.pop(other_id)
+                if self._scores.pop(other_id, None) is not None:
+                    self._emit_eviction(other_id, reason="decay")
             else:
                 self._scores[other_id] = updated
 
@@ -113,3 +120,8 @@ class RivalryLedger:
     def snapshot(self) -> Dict[str, float]:
         """Return a copy of rivalry scores for telemetry serialization."""
         return dict(self._scores)
+
+    def _emit_eviction(self, other_id: str, *, reason: str) -> None:
+        if self.eviction_hook is None:
+            return
+        self.eviction_hook(self.owner_id, other_id, reason)

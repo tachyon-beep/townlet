@@ -4,13 +4,15 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Tuple
+from typing import Any, Deque, Dict, Iterable, List, Set, Tuple
 
 import yaml
 
 from townlet.config import EmploymentConfig, SimulationConfig
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.world.queue_manager import QueueManager
+from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
+from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
 
 
@@ -88,6 +90,10 @@ class WorldState:
     _employment_manual_exits: set[str] = field(init=False, default_factory=set)
 
     _rivalry_ledgers: Dict[str, RivalryLedger] = field(init=False, default_factory=dict)
+    _relationship_ledgers: Dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
+    _relationship_churn: RelationshipChurnAccumulator = field(init=False)
+    _relationship_window_ticks: int = 600
+    _recent_meal_participants: Dict[str, Dict[str, Any]] = field(init=False, default_factory=dict)
 
     @classmethod
     def from_config(cls, config: SimulationConfig) -> "WorldState":
@@ -110,6 +116,13 @@ class WorldState:
         self._employment_exit_queue_timestamps = {}
         self._employment_manual_exits = set()
         self._rivalry_ledgers = {}
+        self._relationship_ledgers = {}
+        self._relationship_window_ticks = 600
+        self._relationship_churn = RelationshipChurnAccumulator(
+            window_ticks=self._relationship_window_ticks,
+            max_samples=8,
+        )
+        self._recent_meal_participants = {}
         self._load_affordance_definitions()
 
     def apply_console(self, operations: Iterable[Any]) -> None:
@@ -327,6 +340,24 @@ class WorldState:
     ) -> None:
         if actor == rival:
             return
+        payload = {
+            "object_id": object_id,
+            "actor": actor,
+            "rival": rival,
+            "reason": reason,
+            "queue_length": queue_length,
+        }
+        if reason == "handover":
+            self.update_relationship(
+                actor,
+                rival,
+                trust=0.05,
+                familiarity=0.05,
+                rivalry=-0.05,
+            )
+            self._emit_event("queue_interaction", {**payload, "variant": "handover"})
+            return
+
         params = self.config.conflict.rivalry
         base_intensity = intensity
         if base_intensity is None:
@@ -334,14 +365,11 @@ class WorldState:
             base_intensity = boost + params.queue_length_boost * max(queue_length - 1, 0)
         clamped_intensity = min(5.0, max(0.1, base_intensity))
         self.register_rivalry_conflict(actor, rival, intensity=clamped_intensity)
+        self.update_relationship(actor, rival, rivalry=0.05 * clamped_intensity)
         self._emit_event(
             "queue_conflict",
             {
-                "object_id": object_id,
-                "actor": actor,
-                "rival": rival,
-                "reason": reason,
-                "queue_length": queue_length,
+                **payload,
                 "intensity": clamped_intensity,
             },
         )
@@ -356,13 +384,25 @@ class WorldState:
             return
         ledger_a = self._get_rivalry_ledger(agent_a)
         ledger_b = self._get_rivalry_ledger(agent_b)
+        relationship_a = self._get_relationship_ledger(agent_a)
+        relationship_b = self._get_relationship_ledger(agent_b)
         ledger_a.apply_conflict(agent_b, intensity=intensity)
         ledger_b.apply_conflict(agent_a, intensity=intensity)
+        relationship_a.apply_delta(other_id=agent_b, rivalry=0.1 * intensity)
+        relationship_b.apply_delta(other_id=agent_a, rivalry=0.1 * intensity)
 
     def rivalry_snapshot(self) -> Dict[str, Dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
         snapshot: Dict[str, Dict[str, float]] = {}
         for agent_id, ledger in self._rivalry_ledgers.items():
+            data = ledger.snapshot()
+            if data:
+                snapshot[agent_id] = data
+        return snapshot
+
+    def relationships_snapshot(self) -> Dict[str, Dict[str, Dict[str, float]]]:
+        snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
+        for agent_id, ledger in self._relationship_ledgers.items():
             data = ledger.snapshot()
             if data:
                 snapshot[agent_id] = data
@@ -390,9 +430,25 @@ class WorldState:
     def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         ledger = self._rivalry_ledgers.get(agent_id)
         if ledger is None:
-            ledger = RivalryLedger(params=self._rivalry_parameters())
+            ledger = RivalryLedger(
+                owner_id=agent_id,
+                params=self._rivalry_parameters(),
+                eviction_hook=self._record_relationship_eviction,
+            )
             self._rivalry_ledgers[agent_id] = ledger
+        else:
+            ledger.eviction_hook = self._record_relationship_eviction
         return ledger
+
+    def _get_relationship_ledger(self, agent_id: str) -> RelationshipLedger:
+        ledger = self._relationship_ledgers.get(agent_id)
+        if ledger is None:
+            ledger = RelationshipLedger(params=self._relationship_parameters())
+            self._relationship_ledgers[agent_id] = ledger
+        return ledger
+
+    def _relationship_parameters(self) -> RelationshipParameters:
+        return RelationshipParameters(max_edges=self.config.conflict.rivalry.max_edges)
 
     def _rivalry_parameters(self) -> RivalryParameters:
         cfg = self.config.conflict.rivalry
@@ -416,6 +472,78 @@ class WorldState:
                 empty_agents.append(agent_id)
         for agent_id in empty_agents:
             self._rivalry_ledgers.pop(agent_id, None)
+        self._decay_relationship_ledgers()
+
+    def _decay_relationship_ledgers(self) -> None:
+        if not self._relationship_ledgers:
+            return
+        empty_agents: List[str] = []
+        for agent_id, ledger in self._relationship_ledgers.items():
+            ledger.decay()
+            if not ledger.snapshot():
+                empty_agents.append(agent_id)
+        for agent_id in empty_agents:
+            self._relationship_ledgers.pop(agent_id, None)
+
+    def _record_relationship_eviction(self, owner_id: str, other_id: str, reason: str) -> None:
+        self._relationship_churn.record_eviction(
+            tick=self.tick,
+            owner_id=owner_id,
+            evicted_id=other_id,
+            reason=reason,
+        )
+
+    def relationship_metrics_snapshot(self) -> Dict[str, object]:
+        return self._relationship_churn.latest_payload()
+
+    def update_relationship(
+        self,
+        agent_a: str,
+        agent_b: str,
+        *,
+        trust: float = 0.0,
+        familiarity: float = 0.0,
+        rivalry: float = 0.0,
+    ) -> None:
+        if agent_a == agent_b:
+            return
+        ledger_a = self._get_relationship_ledger(agent_a)
+        ledger_b = self._get_relationship_ledger(agent_b)
+        ledger_a.apply_delta(agent_b, trust=trust, familiarity=familiarity, rivalry=rivalry)
+        ledger_b.apply_delta(agent_a, trust=trust, familiarity=familiarity, rivalry=rivalry)
+
+    def record_chat_success(self, speaker: str, listener: str, quality: float) -> None:
+        clipped_quality = max(0.0, min(1.0, quality))
+        self.update_relationship(
+            speaker,
+            listener,
+            trust=0.05 * clipped_quality,
+            familiarity=0.10 * clipped_quality,
+        )
+        self._emit_event(
+            "chat_success",
+            {
+                "speaker": speaker,
+                "listener": listener,
+                "quality": clipped_quality,
+            },
+        )
+
+    def record_chat_failure(self, speaker: str, listener: str) -> None:
+        self.update_relationship(
+            speaker,
+            listener,
+            trust=0.0,
+            familiarity=-0.05,
+            rivalry=0.05,
+        )
+        self._emit_event(
+            "chat_failure",
+            {
+                "speaker": speaker,
+                "listener": listener,
+            },
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -675,6 +803,8 @@ class WorldState:
             "late_event_emitted": False,
             "absence_event_emitted": False,
             "departure_event_emitted": False,
+            "late_help_event_emitted": False,
+            "took_shift_event_emitted": False,
             "shift_started_tick": None,
             "shift_end_tick": None,
             "last_present_tick": None,
@@ -711,6 +841,8 @@ class WorldState:
             ctx["late_event_emitted"] = False
             ctx["absence_event_emitted"] = False
             ctx["departure_event_emitted"] = False
+            ctx["late_help_event_emitted"] = False
+            ctx["took_shift_event_emitted"] = False
             ctx["shift_started_tick"] = None
             ctx["shift_end_tick"] = None
             ctx["last_present_tick"] = None
@@ -739,6 +871,8 @@ class WorldState:
             ctx["late_event_emitted"] = False
             ctx["absence_event_emitted"] = False
             ctx["departure_event_emitted"] = False
+            ctx["late_help_event_emitted"] = False
+            ctx["took_shift_event_emitted"] = False
             ctx["shift_outcome_recorded"] = False
             ctx["ever_on_time"] = False
             ctx["last_present_tick"] = None
@@ -793,6 +927,7 @@ class WorldState:
         ctx["state"] = state
         snapshot.shift_state = state
         eligible_for_wage = state in {"on_time", "late"} and at_required_location
+        coworkers = self._employment_coworkers_on_shift(snapshot)
 
         if state == "on_time":
             ctx["on_time_ticks"] += 1
@@ -823,6 +958,23 @@ class WorldState:
                 if penalty:
                     snapshot.wallet = max(0.0, snapshot.wallet - penalty)
                 snapshot.wages_withheld += wage_rate
+            if coworkers and not ctx["late_help_event_emitted"]:
+                for other_id in coworkers:
+                    self.update_relationship(
+                        snapshot.agent_id,
+                        other_id,
+                        trust=0.2,
+                        familiarity=0.1,
+                        rivalry=-0.1,
+                    )
+                self._emit_event(
+                    "employment_helped_when_late",
+                    {
+                        "agent_id": snapshot.agent_id,
+                        "coworkers": coworkers,
+                    },
+                )
+                ctx["late_help_event_emitted"] = True
 
         if state == "absent":
             if not ctx["absence_penalty_applied"]:
@@ -840,6 +992,23 @@ class WorldState:
                 ctx["absence_event_emitted"] = True
                 ctx["absence_events"].append(self.tick)
                 snapshot.absent_shifts_7d = len(ctx["absence_events"])
+            if coworkers and not ctx["took_shift_event_emitted"]:
+                for other_id in coworkers:
+                    self.update_relationship(
+                        snapshot.agent_id,
+                        other_id,
+                        trust=-0.1,
+                        familiarity=0.0,
+                        rivalry=0.3,
+                    )
+                self._emit_event(
+                    "employment_took_my_shift",
+                    {
+                        "agent_id": snapshot.agent_id,
+                        "coworkers": coworkers,
+                    },
+                )
+                ctx["took_shift_event_emitted"] = True
         else:
             # Reset absence penalty if they return during the same shift.
             if state in {"on_time", "late"}:
@@ -903,6 +1072,19 @@ class WorldState:
         ctx["late_counter_recorded"] = False
         snapshot.late_ticks_today = ctx["late_ticks"]
         ctx["late_ticks"] = 0
+
+    def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> List[str]:
+        job_id = snapshot.job_id
+        if job_id is None:
+            return []
+        coworkers: List[str] = []
+        for other in self.agents.values():
+            if other.agent_id == snapshot.agent_id or other.job_id != job_id:
+                continue
+            other_ctx = self._get_employment_context(other.agent_id)
+            if other_ctx["state"] in {"on_time", "late"}:
+                coworkers.append(other.agent_id)
+        return coworkers
 
     def _employment_enqueue_exit(self, agent_id: str, tick: int) -> None:
         if agent_id in self._employment_exit_queue:
@@ -1037,6 +1219,25 @@ class WorldState:
         obj.stock["meals"] = max(0, obj.stock.get("meals", 0) - 1)
         snapshot.wallet -= meal_cost
         snapshot.inventory["meals_consumed"] = snapshot.inventory.get("meals_consumed", 0) + 1
+
+        record = self._recent_meal_participants.get(object_id)
+        if record and record.get("tick") == self.tick:
+            participants: Set[str] = record["agents"]
+        else:
+            participants = set()
+            record = {"tick": self.tick, "agents": participants}
+            self._recent_meal_participants[object_id] = record
+
+        for other_id in participants:
+            self.update_relationship(agent_id, other_id, trust=0.1, familiarity=0.25)
+        participants.add(agent_id)
+        self._emit_event(
+            "shared_meal",
+            {
+                "agents": sorted(participants),
+                "object_id": object_id,
+            },
+        )
 
     def _handle_cook_meal_start(self, agent_id: str, object_id: str) -> None:
         snapshot = self.agents.get(agent_id)

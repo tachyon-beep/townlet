@@ -33,6 +33,12 @@ class RolloutBuffer:
         self._tick_count = 0
         self._queue_conflict_count = 0
         self._queue_conflict_intensity = 0.0
+        self._shared_meal_count = 0
+        self._late_help_count = 0
+        self._shift_takeover_count = 0
+        self._chat_success_count = 0
+        self._chat_failure_count = 0
+        self._chat_quality_sum = 0.0
 
     def record_events(self, events: Iterable[dict[str, object]]) -> None:
         for event in events:
@@ -43,6 +49,22 @@ class RolloutBuffer:
                     self._queue_conflict_intensity += float(intensity)
                 except (TypeError, ValueError):
                     continue
+            elif event.get("event") == "queue_interaction":
+                continue
+            elif event.get("event") == "shared_meal":
+                self._shared_meal_count += 1
+            elif event.get("event") == "employment_helped_when_late":
+                self._late_help_count += 1
+            elif event.get("event") == "employment_took_my_shift":
+                self._shift_takeover_count += 1
+            elif event.get("event") == "chat_success":
+                self._chat_success_count += 1
+                try:
+                    self._chat_quality_sum += float(event.get("quality", 0.0))
+                except (TypeError, ValueError):
+                    pass
+            elif event.get("event") == "chat_failure":
+                self._chat_failure_count += 1
 
     def extend(self, frames: Iterable[dict[str, object]]) -> None:
         for frame in frames:
@@ -121,6 +143,16 @@ class RolloutBuffer:
         dataset.baseline_metrics = self._aggregate_metrics(samples)
         dataset.queue_conflict_count = self._queue_conflict_count
         dataset.queue_conflict_intensity_sum = self._queue_conflict_intensity
+        dataset.shared_meal_count = self._shared_meal_count
+        dataset.late_help_count = self._late_help_count
+        dataset.shift_takeover_count = self._shift_takeover_count
+        dataset.chat_success_count = self._chat_success_count
+        dataset.chat_failure_count = self._chat_failure_count
+        dataset.chat_quality_mean = (
+            self._chat_quality_sum / self._chat_success_count
+            if self._chat_success_count
+            else 0.0
+        )
         return dataset
 
     def is_empty(self) -> bool:

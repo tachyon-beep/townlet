@@ -45,6 +45,7 @@ class FeatureFlags(BaseModel):
     systems: SystemFlags
     training: TrainingFlags
     console: ConsoleFlags
+    relationship_modifiers: bool = False
 
 
 class NeedsWeights(BaseModel):
@@ -175,8 +176,24 @@ class HybridObservationConfig(BaseModel):
         return self
 
 
+class SocialSnippetConfig(BaseModel):
+    top_friends: int = Field(2, ge=0, le=8)
+    top_rivals: int = Field(2, ge=0, le=8)
+    embed_dim: int = Field(8, ge=1, le=32)
+    include_aggregates: bool = True
+
+    @model_validator(mode="after")
+    def _validate_totals(self) -> "SocialSnippetConfig":
+        if self.top_friends == 0 and self.top_rivals == 0:
+            object.__setattr__(self, "include_aggregates", False)
+        if self.top_friends + self.top_rivals > 8:
+            raise ValueError("Sum of top_friends and top_rivals must be <= 8 for tensor budget")
+        return self
+
+
 class ObservationsConfig(BaseModel):
     hybrid: HybridObservationConfig = HybridObservationConfig()
+    social_snippet: SocialSnippetConfig = SocialSnippetConfig()
 
 
 class StabilityConfig(BaseModel):

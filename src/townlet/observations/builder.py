@@ -1,8 +1,9 @@
 """Observation encoding across variants."""
 from __future__ import annotations
 
+import hashlib
 from math import cos, sin, tau
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, Iterable, List, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -17,12 +18,12 @@ class ObservationBuilder:
 
     MAP_CHANNELS = ("self", "agents", "objects", "reservations")
     SHIFT_STATES = ("pre_shift", "on_time", "late", "absent", "post_shift")
-    SOCIAL_PLACEHOLDER_DIM = 16
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.variant: ObservationVariant = config.observation_variant
         self.hybrid_cfg = config.observations_config.hybrid
+        self.social_cfg = config.observations_config.social_snippet
         self._shift_feature_map = {
             "pre_shift": "shift_pre",
             "on_time": "shift_on_time",
@@ -30,7 +31,7 @@ class ObservationBuilder:
             "absent": "shift_absent",
             "post_shift": "shift_post",
         }
-        self._feature_names = [
+        base_feature_names = [
             "need_hunger",
             "need_hygiene",
             "need_energy",
@@ -47,8 +48,41 @@ class ObservationBuilder:
             "episode_progress",
             "rivalry_max",
             "rivalry_avoid_count",
-        ] + [f"social_placeholder_{i}" for i in range(self.SOCIAL_PLACEHOLDER_DIM)]
+        ]
+
+        self._social_slots = max(0, self.social_cfg.top_friends + self.social_cfg.top_rivals)
+        if self._social_slots and self.variant != "hybrid":
+            raise ValueError("Social snippet is only supported for hybrid observations")
+        if self._social_slots and self.config.features.stages.relationships == "OFF":
+            self._social_slots = 0
+
+        self._social_slot_dim = self.social_cfg.embed_dim + 3  # id embedding + trust/fam/rivalry
+        social_feature_names: List[str] = []
+        for slot_index in range(self._social_slots):
+            for component_index in range(self._social_slot_dim):
+                social_feature_names.append(f"social_slot{slot_index}_d{component_index}")
+
+        if self.social_cfg.include_aggregates:
+            self._social_aggregate_names = [
+                "social_trust_mean",
+                "social_trust_max",
+                "social_rivalry_mean",
+                "social_rivalry_max",
+            ]
+        else:
+            self._social_aggregate_names = []
+        social_feature_names.extend(self._social_aggregate_names)
+
+        self._feature_names = base_feature_names + social_feature_names
         self._feature_index = {name: idx for idx, name in enumerate(self._feature_names)}
+        self._base_feature_len = len(base_feature_names)
+        self._social_vector_length = len(social_feature_names)
+        self._social_slice = slice(
+            self._base_feature_len,
+            self._base_feature_len + self._social_vector_length,
+        )
+
+        self._empty_social_vector = np.zeros(self._social_vector_length, dtype=np.float32)
 
     def build_batch(self, world: "WorldState", terminated: Dict[str, bool]) -> Dict[str, Dict[str, np.ndarray]]:
         """Return a mapping from agent_id to observation payloads."""
@@ -126,6 +160,10 @@ class ObservationBuilder:
         features[self._feature_index["rivalry_max"]] = float(max_rivalry)
         features[self._feature_index["rivalry_avoid_count"]] = float(avoid_count)
 
+        if self._social_vector_length:
+            social_vector = self._build_social_vector(world, snapshot)
+            features[self._social_slice] = social_vector
+
         metadata = {
             "variant": self.variant,
             "map_shape": map_tensor.shape,
@@ -139,3 +177,154 @@ class ObservationBuilder:
             "features": features,
             "metadata": metadata,
         }
+
+    # ------------------------------------------------------------------
+    # Social snippet helpers
+    # ------------------------------------------------------------------
+    def _build_social_vector(
+        self,
+        world: "WorldState",
+        snapshot: "AgentSnapshot",
+    ) -> np.ndarray:
+        if not self._social_vector_length:
+            return self._empty_social_vector
+
+        vector = np.zeros(self._social_vector_length, dtype=np.float32)
+        slot_values = self._collect_social_slots(world, snapshot)
+        offset = 0
+        for slot in slot_values:
+            embed_vector = slot["embedding"]
+            vector[offset : offset + self.social_cfg.embed_dim] = embed_vector
+            offset += self.social_cfg.embed_dim
+            vector[offset] = slot["trust"]
+            offset += 1
+            vector[offset] = slot["familiarity"]
+            offset += 1
+            vector[offset] = slot["rivalry"]
+            offset += 1
+
+        if self._social_aggregate_names:
+            trust_values = [slot["trust"] for slot in slot_values if slot["valid" ]]
+            rivalry_values = [slot["rivalry"] for slot in slot_values if slot["valid"]]
+            aggregates = self._compute_aggregates(trust_values, rivalry_values)
+            for value in aggregates:
+                if offset < len(vector):
+                    vector[offset] = value
+                    offset += 1
+        return vector
+
+    def _collect_social_slots(
+        self,
+        world: "WorldState",
+        snapshot: "AgentSnapshot",
+    ) -> List[Dict[str, float]]:
+        total_slots = self._social_slots
+        if total_slots == 0:
+            return []
+
+        relations = self._resolve_relationships(world, snapshot.agent_id)
+        friend_candidates = sorted(
+            relations,
+            key=lambda entry: entry["trust"] + entry["familiarity"],
+            reverse=True,
+        )
+        rival_candidates = sorted(
+            relations,
+            key=lambda entry: entry["rivalry"],
+            reverse=True,
+        )
+
+        friends = friend_candidates[: self.social_cfg.top_friends]
+        rivals = [entry for entry in rival_candidates if entry not in friends][: self.social_cfg.top_rivals]
+
+        slots: List[Dict[str, float]] = []
+        for entry in friends + rivals:
+            slots.append(self._encode_relationship(entry))
+
+        while len(slots) < total_slots:
+            slots.append(self._empty_relationship_entry())
+
+        return slots[:total_slots]
+
+    def _resolve_relationships(
+        self,
+        world: "WorldState",
+        agent_id: str,
+    ) -> List[Dict[str, float]]:
+        snapshot_getter = getattr(world, "relationships_snapshot", None)
+        relationships: Dict[str, Dict[str, float]] = {}
+        if callable(snapshot_getter):
+            data = snapshot_getter()
+            if isinstance(data, dict):
+                relationships = data.get(agent_id, {}) or {}
+
+        entries: List[Dict[str, float]] = []
+        for other_id, metrics in relationships.items():
+            if not isinstance(metrics, dict):
+                continue
+            entries.append(
+                {
+                    "other_id": str(other_id),
+                    "trust": float(metrics.get("trust", 0.0)),
+                    "familiarity": float(metrics.get("familiarity", 0.0)),
+                    "rivalry": float(metrics.get("rivalry", 0.0)),
+                }
+            )
+
+        if entries:
+            return entries
+
+        # Fallback to rivalry ledger until full relationship system lands.
+        rivalry_data = world.rivalry_top(agent_id, limit=self.social_cfg.top_rivals)
+        fallback_entries = []
+        for other_id, rivalry in rivalry_data:
+            fallback_entries.append(
+                {
+                    "other_id": other_id,
+                    "trust": 0.0,
+                    "familiarity": 0.0,
+                    "rivalry": float(rivalry),
+                }
+            )
+        return fallback_entries
+
+    def _encode_relationship(self, entry: Dict[str, float]) -> Dict[str, float]:
+        other_id = entry["other_id"]
+        embedding = self._embed_agent_id(other_id)
+        return {
+            "embedding": embedding,
+            "trust": entry.get("trust", 0.0),
+            "familiarity": entry.get("familiarity", 0.0),
+            "rivalry": entry.get("rivalry", 0.0),
+            "valid": True,
+        }
+
+    def _empty_relationship_entry(self) -> Dict[str, float]:
+        return {
+            "embedding": np.zeros(self.social_cfg.embed_dim, dtype=np.float32),
+            "trust": 0.0,
+            "familiarity": 0.0,
+            "rivalry": 0.0,
+            "valid": False,
+        }
+
+    def _embed_agent_id(self, other_id: str) -> np.ndarray:
+        digest = hashlib.blake2s(other_id.encode("utf-8")).digest()
+        values = np.frombuffer(digest, dtype=np.uint8)
+        floats = values.astype(np.float32) / 255.0
+        repeats = int(np.ceil(self.social_cfg.embed_dim / floats.size))
+        tiled = np.tile(floats, repeats)
+        return tiled[: self.social_cfg.embed_dim]
+
+    def _compute_aggregates(
+        self,
+        trust_values: Iterable[float],
+        rivalry_values: Iterable[float],
+    ) -> Tuple[float, float, float, float]:
+        trust_list = list(trust_values)
+        rivalry_list = list(rivalry_values)
+        trust_mean = float(np.mean(trust_list)) if trust_list else 0.0
+        trust_max = float(np.max(trust_list)) if trust_list else 0.0
+        rivalry_mean = float(np.mean(rivalry_list)) if rivalry_list else 0.0
+        rivalry_max = float(np.max(rivalry_list)) if rivalry_list else 0.0
+        return trust_mean, trust_max, rivalry_mean, rivalry_max

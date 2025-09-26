@@ -637,6 +637,14 @@ class TrainingHarness:
                         "queue_conflict_intensity_sum": float(
                             getattr(dataset, "queue_conflict_intensity_sum", 0.0)
                         ),
+                        "shared_meal_events": float(getattr(dataset, "shared_meal_count", 0)),
+                        "late_help_events": float(getattr(dataset, "late_help_count", 0)),
+                        "shift_takeover_events": float(
+                            getattr(dataset, "shift_takeover_count", 0)
+                        ),
+                        "chat_success_events": float(getattr(dataset, "chat_success_count", 0)),
+                        "chat_failure_events": float(getattr(dataset, "chat_failure_count", 0)),
+                        "chat_quality_mean": float(getattr(dataset, "chat_quality_mean", 0.0)),
                     }
                 )
                 log_stream_offset += 1

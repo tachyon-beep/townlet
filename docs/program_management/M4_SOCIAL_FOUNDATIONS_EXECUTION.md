@@ -35,6 +35,17 @@ Each phase below lists numbered steps (S) and tasks (T). Acceptance criteria inc
 | 4.1-R2 | Snapshot persistence misses new relationship fields leading to data loss. | Low | High | Extend snapshot schema tests; add schema version bump and backward-compat check (Task 4.1-T4). | QA detects mismatch or CI snapshot test failure / Storage owner |
 | 4.1-R3 | Personality multipliers introduce instability in reward shaping. | Medium | Medium | Gate multipliers behind `features.relationship_modifiers`; include toggle tests verifying baseline parity. | KPI drift in soak run >10% vs control / RL lead |
 
+##### Mitigation Notes (2025-09-29)
+- Introduced `RelationshipChurnAccumulator` telemetry helper (`src/townlet/telemetry/relationship_metrics.py`) and coverage in `tests/test_relationship_metrics.py` to quantify eviction churn and feed soak harness dashboards.
+- `TelemetryPublisher.latest_relationship_metrics()` now exposes relationship payloads, enabling ops tooling to monitor eviction spikes during Phase 4.1 development.
+- Snapshot schema now persists relationship ledgers with schema bump + guard rails (`src/townlet/snapshots/state.py`, `tests/test_snapshot_manager.py`), preventing silent data loss during save/load.
+- Personality multipliers gated behind `features.relationship_modifiers` with parity/behaviour tests (`src/townlet/config/loader.py`, `src/townlet/agents/relationship_modifiers.py`, `tests/test_relationship_personality_modifiers.py`).
+- Rivalry-ledger evictions now feed churn metrics directly via `WorldState.relationship_metrics_snapshot()` (`src/townlet/world/grid.py`, `src/townlet/world/rivalry.py`, `tests/test_relationship_metrics.py`).
+- Relationship ledger scaffolding and update APIs landed (`src/townlet/world/relationships.py`, `src/townlet/world/grid.py`, `tests/test_relationship_ledger.py`), enabling symmetric trust/familiarity/rivalry storage and observation wiring.
+- Queue events now drive ledger deltas: ghost-step conflicts raise rivalry while polite handovers boost trust/familiarity (`src/townlet/world/grid.py`, `tests/test_relationship_metrics.py::test_queue_events_modify_relationships`).
+- Shared meals and employment shift dynamics are wired into relationship deltas (`shared_meal`, `took_my_shift`, `helped_when_late`) with regression coverage (`src/townlet/world/grid.py`, `tests/test_relationship_metrics.py`).
+- Chat outcomes are exposed via `record_chat_success`/`record_chat_failure` to support Phase 4.3 social reward hooks, with tests covering ledger effects (`src/townlet/world/grid.py`, `tests/test_relationship_metrics.py::test_chat_outcomes_adjust_relationships`).
+
 ## Phase 4.2 – Social Observations & Telemetry
 
 **Phase Objective:** Surface relationship context within agent observations and telemetry streams.
@@ -50,6 +61,14 @@ Each phase below lists numbered steps (S) and tasks (T). Acceptance criteria inc
   - *Acceptance:* `telemetry_version` incremented; validator updated; docs in `docs/telemetry/RELATIONSHIP_FEED.md`.
 - **Task 4.2-T4:** Coordinate with Observer UI work package to consume new telemetry; add contract tests to UI client stub.
   - *Acceptance:* Mock UI test ensures overlay renders sample payload; API reference updated.
+
+**Prep Notes:** see `M4_PHASE4_2_PREP.md` for snippet layout, profiling targets, and open questions logged prior to implementation.
+
+##### Progress Notes (2025-09-29)
+- Observation config now exposes `social_snippet` controls and the hybrid builder emits structured tie vectors with rivalry fallbacks (`src/townlet/config/loader.py`, `src/townlet/observations/builder.py`).
+- Regression coverage added for snippet gating and vector sizing (`tests/test_observations_social_snippet.py`).
+- Added profiling helper `scripts/profile_observation_tensor.py` and captured baseline dimensions for `configs/examples/poc_hybrid.yaml` (feature_dim 68, map 4×11×11, trust aggregates 0.0 pending richer events).
+- PPO telemetry now reports social interaction metrics (shared meals, late-help assists, shift takeovers, chat success/failure quality) and watcher/summary tooling exposes thresholds for them (`src/townlet/policy/runner.py`, `scripts/telemetry_watch.py`, `scripts/telemetry_summary.py`).
 
 #### Phase 4.2 Risk Assessment
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |
@@ -131,3 +150,6 @@ Each phase below lists numbered steps (S) and tasks (T). Acceptance criteria inc
 
 **Change Log**
 - 2025-09-29: Initial execution plan drafted.
+- 2025-09-29: Risk mitigation 4.1-R1 instrumentation scaffolding added (relationship churn telemetry + publisher hook).
+- 2025-09-29: Risk mitigation 4.1-R2 snapshot schema implemented with round-trip tests.
+- 2025-09-29: Risk mitigation 4.1-R3 feature flag + personality modifier parity suite added.
