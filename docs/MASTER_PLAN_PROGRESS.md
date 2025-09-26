@@ -9,6 +9,7 @@
 - PPO Integration Phase 2 (rollout ingestion, PPO training loop, telemetry schema/tests, drift analytics tooling).
 - PPO Integration Phase 3 (telemetry_version 1.1 schema, streaming cycle IDs, validator/watch/summary tooling, CI harness validation).
   - Ops checklist: `docs/ops/ROLLOUT_PPO_CHECKLIST.md`
+- PPO Integration Phase 4 (rollout capture→PPO bridge, queue-conflict telemetry, mixed-mode ops workflow, CI artefact uploads).
 
 ## Upcoming Work Packages
 1. **Observer UI Integration** (`docs/WORK_PACKAGE_OBSERVER_UI.md`)
@@ -19,17 +20,17 @@
    - Owner: Systems/Gameplay
    - Status: In progress (queue fairness + rivalry scaffolding underway).
    - Next: risk reduction activities, telemetry/tests per work package.
-3. **PPO Integration Phase 4** (`docs/WORK_PACKAGE_PPO_PHASES_2_4.md`)
+3. **PPO Long-Run Validation & Drift Analytics** (`docs/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
    - Owner: RL/Training
-   - Status: In progress (live rollout automation, telemetry bridge, ops playbook).
-   - Next: scripted scenario library, alternating rollout/train pipeline, rollout ops docs.
+   - Status: Planned (post-Phase 4 soak testing, artefact retention strategy).
+   - Next: automate alternating replay/rollout cycles (10+), monitor queue-conflict drift, define archive target for scenario logs.
 4. **Renderer/Geometry Enhancements**
    - Dependent on observer UI feedback; adds real object coordinates to `WorldState.local_view`.
 
 ## Open Risks
 - UI toolkit decisions (Observer UI work package).
 - Geometry fidelity for observation map (renderer roadmap).
-- PPO performance tuning once torch models active (loss/optimizer integration).
+- PPO endurance drift once torch models run extended cycles (requires soak harness).
 
 ## Next Decision Points
 1. Observer UI MVP toolkit sign-off (Rich/Textual vs web).

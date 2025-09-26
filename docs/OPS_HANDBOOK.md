@@ -6,6 +6,14 @@
 - Replay example: `--mode replay --train-ppo --capture-dir captures/<scenario>`.
 - Rollout example: `--mode rollout --rollout-ticks 200 --rollout-auto-seed-agents --ppo-log logs/live.jsonl`.
 - Mixed example: `--mode mixed --capture-dir captures/<scenario> --rollout-ticks 100 --ppo-log logs/mixed.jsonl`.
+- Mixed-mode queue-conflict workflow:
+  1. `python scripts/capture_rollout.py configs/scenarios/queue_conflict.yaml --output tmp/ops_run`
+  2. `python scripts/run_training.py configs/scenarios/queue_conflict.yaml --mode mixed --replay-manifest tmp/ops_run/rollout_sample_manifest.json --rollout-ticks 40 --epochs 1 --ppo-log tmp/ops_run/ppo_mixed.jsonl`
+  3. `head -n 1 docs/samples/ppo_conflict_telemetry.jsonl > tmp/ops_run/baseline.json`
+  4. `python scripts/validate_ppo_telemetry.py tmp/ops_run/ppo_mixed.jsonl --baseline tmp/ops_run/baseline.json`
+  5. `python scripts/telemetry_watch.py tmp/ops_run/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --queue-events-min 30 --queue-intensity-min 45 --json > tmp/ops_run/watch.jsonl`
+  6. `python scripts/telemetry_summary.py tmp/ops_run/ppo_mixed.jsonl --format markdown > tmp/ops_run/summary.md`
+  Attach `tmp/ops_run/{ppo_mixed.jsonl,watch.jsonl,summary.md}` to the ops log for audit.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
 - The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.
@@ -36,13 +44,22 @@
 - **Telemetry Backpressure**: check publisher backlog; if exceeds threshold, enable aggregation mode and archive raw stream for analysis.
 - **Employment Backlog**: monitor `employment_status`. If `pending_count` exceeds `queue_limit`, issue `employment_exit review`, approve or defer entries, and document decisions in ops log. Manual approvals emit `employment_exit_manual_request`; ensure lifecycle processes the exit next tick.
 
+## Queue-Conflict Troubleshooting
+- **Purpose**: ensure live or mixed-mode PPO runs maintain the conflict pressure captured in baselines.
+- **Baselines**: reference `docs/ops/queue_conflict_baselines.md` for expected event counts and intensity sums. Queue-conflict mixed runs should stay within ±15% of the recorded intensity unless intentionally experimenting.
+- **Validation**: run `telemetry_watch.py` with `--json` to capture alerts; set `--queue-events-min` and `--queue-intensity-min` using baseline values (rounded down). Keep the JSONL artefact with the training log.
+- **Summary review**: use `telemetry_summary.py --format markdown` to produce a one-page digest; file under `ops/rollouts/<date>-<scenario>.md`.
+- **Drift response**: if event counts or intensity drop below thresholds, pause promotion, rerun capture to confirm reproducibility, and notify the training lead. Investigate agent availability (missing scenario agents are the usual culprit) and rerun with `--rollout-auto-seed-agents` only as a temporary workaround.
+- **CI guardrail**: GitHub Actions uploads `tmp/ci_phase4/{ppo_mixed.jsonl,summary.md,watch.jsonl}` for each run; inspect these artefacts when investigating regressions.
+- **Canonical captures**: reference `artifacts/phase4/` for the latest checked-in mixed-mode logs, watch outputs, and summaries per scenario.
+
 ## Tooling & Logs
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/ARCHITECTURE_INTERFACES.md`.
 - Audit logs live in `logs/console/*.jsonl`; include `cmd_id`, issuer, result.
 - Promotion history tracked in `ops/rollouts.md`; append entry per promotion or rollback.
 - PPO telemetry tooling:
   - `python scripts/validate_ppo_telemetry.py <log> --relative`
-  - `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--json]`
+  - `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--queue-events-min INT] [--queue-intensity-min FLOAT] [--json]`
   - `python scripts/telemetry_summary.py <log> --format markdown`
 
 ## Checklist Before Demos

@@ -1,0 +1,10 @@
+[
+  {
+    "sample": "rollout_sample_finn_001.npz",
+    "meta": "rollout_sample_finn_001.json"
+  },
+  {
+    "sample": "rollout_sample_gina_002.npz",
+    "meta": "rollout_sample_gina_002.json"
+  }
+]
