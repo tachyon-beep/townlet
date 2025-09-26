@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from typing import Iterable
+from typing import Iterable, Mapping
 
 import numpy as np
 from rich.console import Console
@@ -71,6 +71,25 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
     conflict_border = "magenta" if conflict.queue_ghost_step_events or conflict.queue_cooldown_events else "blue"
     panels.append(Panel(conflict_table, title="Conflict", border_style=conflict_border))
 
+    relationships = snapshot.relationships
+    if relationships is not None:
+        rel_table = Table(title="Relationship Churn", expand=True)
+        rel_table.add_column("Window", justify="left")
+        rel_table.add_column("Evictions", justify="right")
+        rel_table.add_column("Top Owners", justify="left")
+        rel_table.add_column("Reasons", justify="left")
+        window_label = f"{relationships.window_start}–{relationships.window_end}"
+        owners_summary = _format_top_entries(relationships.per_owner)
+        reasons_summary = _format_top_entries(relationships.per_reason)
+        rel_table.add_row(
+            window_label,
+            str(relationships.total_evictions),
+            owners_summary,
+            reasons_summary,
+        )
+        rel_border = "red" if relationships.total_evictions else "green"
+        panels.append(Panel(rel_table, title="Relationships", border_style=rel_border))
+
     agent_table = Table(title="Agents", expand=True)
     agent_table.add_column("Agent")
     agent_table.add_column("Wallet", justify="right")
@@ -101,11 +120,19 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         "Legend: S=self (center), A=other agents.",
         "Employment panel turns red when pending queue > 0.",
         "Conflict panel highlights queue cooldowns/ghost steps; rivalry count shows active edges.",
+        "Relationships panel displays eviction churn window, top owners, and reasons.",
     ]
     legend = Text("\n".join(legend_lines), style="dim")
     panels.append(Panel(legend, title="Legend"))
 
     return panels
+
+
+def _format_top_entries(entries: Mapping[str, int]) -> str:
+    if not entries:
+        return "(none)"
+    sorted_entries = sorted(entries.items(), key=lambda item: item[1], reverse=True)
+    return ", ".join(f"{owner}:{count}" for owner, count in sorted_entries[:3])
 
 
 def run_dashboard(

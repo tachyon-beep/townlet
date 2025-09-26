@@ -12,6 +12,7 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
 - PPO Integration Phase 3 (telemetry_version 1.1 schema, streaming cycle IDs, validator/watch/summary tooling, CI harness validation).
   - Ops checklist: `docs/ops/ROLLOUT_PPO_CHECKLIST.md`
 - PPO Integration Phase 4 (rollout capture→PPO bridge, queue-conflict telemetry, mixed-mode ops workflow, CI artefact uploads, soak harness drift analysis).
+  - 2025-09-29 update: social telemetry metrics surfaced end-to-end (watcher/summary/ops docs); scenario soaks captured for queue_conflict, employment_punctuality, rivalry_decay, kitchen_breakfast, observation_baseline.
 
 ## In-Flight Work Packages
 1. **Observer UI Integration** (`docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md`)

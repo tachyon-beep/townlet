@@ -26,6 +26,15 @@ class ConflictMetrics:
 
 
 @dataclass(frozen=True)
+class RelationshipChurn:
+    window_start: int
+    window_end: int
+    total_evictions: int
+    per_owner: Mapping[str, int]
+    per_reason: Mapping[str, int]
+
+
+@dataclass(frozen=True)
 class AgentSummary:
     agent_id: str
     wallet: float
@@ -42,6 +51,7 @@ class TelemetrySnapshot:
     schema_warning: Optional[str]
     employment: EmploymentMetrics
     conflict: ConflictMetrics
+    relationships: Optional[RelationshipChurn]
     agents: List[AgentSummary]
     raw: Mapping[str, Any]
 
@@ -66,6 +76,7 @@ class TelemetryClient:
         employment_payload = self._get_section(payload, "employment", dict)
         jobs_payload = self._get_section(payload, "jobs", dict)
         conflict_payload = self._get_section(payload, "conflict", Mapping)
+        relationships_payload = payload.get("relationships")
 
         employment = EmploymentMetrics(
             pending=list(employment_payload.get("pending", [])),
@@ -94,6 +105,22 @@ class TelemetryClient:
             raw=conflict_payload,
         )
 
+        relationships = None
+        if isinstance(relationships_payload, Mapping) and relationships_payload:
+            relationships = RelationshipChurn(
+                window_start=int(relationships_payload.get("window_start", 0)),
+                window_end=int(relationships_payload.get("window_end", 0)),
+                total_evictions=int(relationships_payload.get("total", 0)),
+                per_owner={
+                    str(owner): int(count)
+                    for owner, count in (relationships_payload.get("owners", {}) or {}).items()
+                },
+                per_reason={
+                    str(reason): int(count)
+                    for reason, count in (relationships_payload.get("reasons", {}) or {}).items()
+                },
+            )
+
         agents: List[AgentSummary] = []
         for agent_id, info in jobs_payload.items():
             agents.append(
@@ -115,6 +142,7 @@ class TelemetryClient:
             schema_warning=schema_warning,
             employment=employment,
             conflict=conflict,
+            relationships=relationships,
             agents=agents,
             raw=payload,
         )

@@ -36,7 +36,7 @@ Targeting the conceptual design requirements (`snapshots/CONCEPTUAL_DESIGN.md` Â
 
 - `TelemetryPublisher` already exposes relationship churn payload; Phase 4.2 will add per-tick tie snapshot entry.
 - Update `scripts/telemetry_summary.py`/`telemetry_watch.py` with social interaction metrics (shared meals, late help, shift takeovers, chat quality) so ops can enforce thresholds.
-- Ops: add watch thresholds (`relationships_evicted_per_window`, social interaction mins) in watcher CLI and Ops handbook.
+- Ops: add watch thresholds (`relationships_evicted_per_window`, social interaction mins) in watcher CLI and Ops handbook. Current baseline table lives in `docs/ops/queue_conflict_baselines.md` and is sourced from automated soaks (see `tmp/social_metric_aggregates.json`).
 
 ## Open Questions / TBD
 

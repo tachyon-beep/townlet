@@ -72,6 +72,7 @@ class TelemetryBridge:
             "economy": self._publisher.latest_economy_snapshot(),
             "employment": self._publisher.latest_employment_metrics(),
             "conflict": self._publisher.latest_conflict_snapshot(),
+            "relationships": self._publisher.latest_relationship_metrics() or {},
             "events": list(self._publisher.latest_events()),
         }
 

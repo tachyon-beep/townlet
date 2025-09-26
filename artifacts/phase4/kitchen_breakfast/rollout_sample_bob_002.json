@@ -1,0 +1,76 @@
+{
+  "variant": "hybrid",
+  "map_shape": [
+    4,
+    11,
+    11
+  ],
+  "map_channels": [
+    "self",
+    "agents",
+    "objects",
+    "reservations"
+  ],
+  "feature_names": [
+    "need_hunger",
+    "need_hygiene",
+    "need_energy",
+    "wallet",
+    "lateness_counter",
+    "on_shift",
+    "time_sin",
+    "time_cos",
+    "attendance_ratio",
+    "wages_withheld",
+    "shift_pre",
+    "shift_on_time",
+    "shift_late",
+    "shift_absent",
+    "shift_post",
+    "embedding_slot_norm",
+    "ctx_reset_flag",
+    "episode_progress",
+    "rivalry_max",
+    "rivalry_avoid_count",
+    "social_trust_mean",
+    "social_trust_max",
+    "social_rivalry_mean",
+    "social_rivalry_max"
+  ],
+  "embedding_slot": 1,
+  "training_arrays": [
+    "actions",
+    "old_log_probs",
+    "rewards",
+    "dones",
+    "value_preds"
+  ],
+  "timesteps": 40,
+  "value_pred_steps": 41,
+  "action_lookup": {
+    "{\"affordance\": \"cook\", \"blocked\": false, \"kind\": \"request\", \"object\": \"fridge_1\"}": 0,
+    "{\"kind\": \"wait\"}": 1
+  },
+  "action_dim": 3,
+  "agent_id": "bob",
+  "frame_count": 40,
+  "metrics": {
+    "timesteps": 40.0,
+    "reward_sum": -8.0,
+    "reward_mean": -0.20000000298023224,
+    "log_prob_mean": -1.0900784730911255,
+    "value_pred_last": 0.029580088332295418,
+    "rivalry_max_mean": 0.0,
+    "rivalry_max_max": 0.0,
+    "rivalry_avoid_count_mean": 0.0,
+    "rivalry_avoid_count_max": 0.0,
+    "lateness_mean": 0.0,
+    "action_nonzero": 3.0,
+    "action_total": 40.0,
+    "action_entropy": 1.0979923063985968,
+    "action_request_count": 13.0,
+    "action_wait_count": 14.0,
+    "action_unknown_count": 13.0,
+    "action_blocked_ratio": 0.0
+  }
+}

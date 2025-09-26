@@ -22,7 +22,14 @@ def make_loop() -> SimulationLoop:
             needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
             wallet=1.0,
         )
+        world.agents["bob"] = AgentSnapshot(
+            agent_id="bob",
+            position=(1, 0),
+            needs={"hunger": 0.6, "hygiene": 0.4, "energy": 0.5},
+            wallet=1.2,
+        )
         world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+        world.update_relationship("alice", "bob", trust=0.2, familiarity=0.1)
     return loop
 
 
@@ -31,6 +38,7 @@ def test_render_snapshot_produces_panels() -> None:
     router = create_console_router(loop.telemetry, loop.world)
     for _ in range(3):
         loop.step()
+    loop.world.update_relationship("alice", "bob", trust=0.1, familiarity=0.05, rivalry=0.02)
     snapshot = TelemetryClient().from_console(router)
 
     panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00"))
@@ -38,6 +46,7 @@ def test_render_snapshot_produces_panels() -> None:
     panel_titles = [getattr(p, "title", "") for p in panels]
     assert any((title or "").startswith("Employment") for title in panel_titles)
     assert any((title or "").startswith("Conflict") for title in panel_titles)
+    assert any((title or "").startswith("Relationships") for title in panel_titles)
     assert any("Legend" in (title or "") for title in panel_titles)
 
 

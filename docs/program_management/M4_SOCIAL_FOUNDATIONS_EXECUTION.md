@@ -69,6 +69,8 @@ Each phase below lists numbered steps (S) and tasks (T). Acceptance criteria inc
 - Regression coverage added for snippet gating and vector sizing (`tests/test_observations_social_snippet.py`).
 - Added profiling helper `scripts/profile_observation_tensor.py` and captured baseline dimensions for `configs/examples/poc_hybrid.yaml` (feature_dim 68, map 4×11×11, trust aggregates 0.0 pending richer events).
 - PPO telemetry now reports social interaction metrics (shared meals, late-help assists, shift takeovers, chat success/failure quality) and watcher/summary tooling exposes thresholds for them (`src/townlet/policy/runner.py`, `scripts/telemetry_watch.py`, `scripts/telemetry_summary.py`).
+- Mixed-soak benchmarks captured for queue_conflict, employment_punctuality (incl. extended runs), rivalry_decay, kitchen_breakfast, and observation_baseline; social counters currently surface only in employment punctuality (`late_help_events ≈ 1`). Results and thresholds recorded in `docs/ops/queue_conflict_baselines.md` with artefacts under `artifacts/phase4/*/`.
+- Observer dashboard (`scripts/observer_ui.py`) now renders relationship churn (window, evictions, top owners/reasons) via telemetry snapshot support (`src/townlet/console/handlers.py`, `src/townlet_ui/telemetry.py`, `src/townlet_ui/dashboard.py`).
 
 #### Phase 4.2 Risk Assessment
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |
