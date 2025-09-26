@@ -69,6 +69,7 @@ class SimulationLoop:
             self.world,
             lifecycle=self.lifecycle,
             telemetry=self.telemetry,
+            perturbations=self.perturbations,
         )
         return manager.save(state)
 
@@ -77,12 +78,15 @@ class SimulationLoop:
 
         manager = SnapshotManager(root=path.parent)
         state = manager.load(path, self.config)
+        self.policy.reset_state()
+        self.perturbations.reset_state()
         apply_snapshot_to_world(
             self.world,
             state,
             lifecycle=self.lifecycle,
         )
         apply_snapshot_to_telemetry(self.telemetry, state)
+        self.perturbations.import_state(state.perturbations)
         self.tick = state.tick
 
     def run(self, max_ticks: int | None = None) -> Iterable[TickArtifacts]:

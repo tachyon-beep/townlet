@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
 
-SUPPORTED_SCHEMA_PREFIX = "0.3"
+SUPPORTED_SCHEMA_PREFIX = "0.6"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
 
 
@@ -73,6 +73,8 @@ class TelemetryBridge:
             "employment": self._publisher.latest_employment_metrics(),
             "conflict": self._publisher.latest_conflict_snapshot(),
             "relationships": self._publisher.latest_relationship_metrics() or {},
+            "relationship_snapshot": self._publisher.latest_relationship_snapshot(),
+            "relationship_updates": self._publisher.latest_relationship_updates(),
             "events": list(self._publisher.latest_events()),
         }
 

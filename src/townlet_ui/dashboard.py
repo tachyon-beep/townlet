@@ -90,6 +90,25 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         rel_border = "red" if relationships.total_evictions else "green"
         panels.append(Panel(rel_table, title="Relationships", border_style=rel_border))
 
+    if snapshot.relationship_updates:
+        update_table = Table(title="Relationship Updates", expand=True)
+        update_table.add_column("Owner")
+        update_table.add_column("Other")
+        update_table.add_column("Status")
+        update_table.add_column("Trust", justify="right")
+        update_table.add_column("Fam", justify="right")
+        update_table.add_column("Rivalry", justify="right")
+        for update in snapshot.relationship_updates[:8]:
+            update_table.add_row(
+                update.owner,
+                update.other,
+                update.status,
+                f"{update.trust:.2f}",
+                f"{update.familiarity:.2f}",
+                f"{update.rivalry:.2f}",
+            )
+        panels.append(Panel(update_table, title="Relationship Updates", border_style="cyan"))
+
     agent_table = Table(title="Agents", expand=True)
     agent_table.add_column("Agent")
     agent_table.add_column("Wallet", justify="right")
@@ -120,7 +139,7 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         "Legend: S=self (center), A=other agents.",
         "Employment panel turns red when pending queue > 0.",
         "Conflict panel highlights queue cooldowns/ghost steps; rivalry count shows active edges.",
-        "Relationships panel displays eviction churn window, top owners, and reasons.",
+        "Relationships panel displays eviction churn; updates table lists recent tie changes.",
     ]
     legend = Text("\n".join(legend_lines), style="dim")
     panels.append(Panel(legend, title="Legend"))

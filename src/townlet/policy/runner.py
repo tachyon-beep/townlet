@@ -125,6 +125,12 @@ class PolicyRuntime:
             self._trajectory.clear()
         return result
 
+    def reset_state(self) -> None:
+        """Reset transient buffers so snapshot loads don’t duplicate data."""
+
+        self._transitions.clear()
+        self._trajectory.clear()
+
     def _annotate_with_policy_outputs(self, frame: dict[str, object]) -> None:
         if not torch_available():  # pragma: no cover - torch optional
             frame.setdefault("log_prob", 0.0)

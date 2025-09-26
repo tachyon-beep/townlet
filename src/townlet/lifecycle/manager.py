@@ -39,6 +39,10 @@ class LifecycleManager:
         self.exits_today = int(payload.get("exits_today", 0))
         self._employment_day = int(payload.get("employment_day", -1))
 
+    def reset_state(self) -> None:
+        self.exits_today = 0
+        self._employment_day = -1
+
     def _evaluate_employment(self, world: WorldState, tick: int) -> Dict[str, bool]:
         results: Dict[str, bool] = {}
         cfg = self.config.employment

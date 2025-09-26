@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-SUPPORTED_SCHEMA_PREFIX = "0.3"
+SUPPORTED_SCHEMA_PREFIX = "0.6"
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,19 @@ class RelationshipChurn:
 
 
 @dataclass(frozen=True)
+class RelationshipUpdate:
+    owner: str
+    other: str
+    status: str
+    trust: float
+    familiarity: float
+    rivalry: float
+    delta_trust: float
+    delta_familiarity: float
+    delta_rivalry: float
+
+
+@dataclass(frozen=True)
 class AgentSummary:
     agent_id: str
     wallet: float
@@ -52,6 +65,8 @@ class TelemetrySnapshot:
     employment: EmploymentMetrics
     conflict: ConflictMetrics
     relationships: Optional[RelationshipChurn]
+    relationship_snapshot: Mapping[str, Mapping[str, Mapping[str, float]]]
+    relationship_updates: List[RelationshipUpdate]
     agents: List[AgentSummary]
     raw: Mapping[str, Any]
 
@@ -77,6 +92,8 @@ class TelemetryClient:
         jobs_payload = self._get_section(payload, "jobs", dict)
         conflict_payload = self._get_section(payload, "conflict", Mapping)
         relationships_payload = payload.get("relationships")
+        relationship_snapshot_payload = payload.get("relationship_snapshot", {})
+        relationship_updates_payload = payload.get("relationship_updates", [])
 
         employment = EmploymentMetrics(
             pending=list(employment_payload.get("pending", [])),
@@ -121,6 +138,43 @@ class TelemetryClient:
                 },
             )
 
+        relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
+        if isinstance(relationship_snapshot_payload, Mapping):
+            for owner, ties in relationship_snapshot_payload.items():
+                if not isinstance(ties, Mapping):
+                    continue
+                relationship_snapshot[str(owner)] = {
+                    str(other): {
+                        "trust": float(values.get("trust", 0.0)) if isinstance(values, Mapping) else 0.0,
+                        "familiarity": float(values.get("familiarity", 0.0)) if isinstance(values, Mapping) else 0.0,
+                        "rivalry": float(values.get("rivalry", 0.0)) if isinstance(values, Mapping) else 0.0,
+                    }
+                    for other, values in ties.items()
+                    if isinstance(values, Mapping)
+                }
+
+        relationship_updates: List[RelationshipUpdate] = []
+        if isinstance(relationship_updates_payload, list):
+            for entry in relationship_updates_payload:
+                if not isinstance(entry, Mapping):
+                    continue
+                delta = entry.get("delta", {})
+                if not isinstance(delta, Mapping):
+                    delta = {}
+                relationship_updates.append(
+                    RelationshipUpdate(
+                        owner=str(entry.get("owner", "")),
+                        other=str(entry.get("other", "")),
+                        status=str(entry.get("status", "")),
+                        trust=float(entry.get("trust", 0.0)),
+                        familiarity=float(entry.get("familiarity", 0.0)),
+                        rivalry=float(entry.get("rivalry", 0.0)),
+                        delta_trust=float(delta.get("trust", 0.0)),
+                        delta_familiarity=float(delta.get("familiarity", 0.0)),
+                        delta_rivalry=float(delta.get("rivalry", 0.0)),
+                    )
+                )
+
         agents: List[AgentSummary] = []
         for agent_id, info in jobs_payload.items():
             agents.append(
@@ -143,6 +197,8 @@ class TelemetryClient:
             employment=employment,
             conflict=conflict,
             relationships=relationships,
+            relationship_snapshot=relationship_snapshot,
+            relationship_updates=relationship_updates,
             agents=agents,
             raw=payload,
         )

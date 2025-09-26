@@ -39,6 +39,7 @@ def test_render_snapshot_produces_panels() -> None:
     for _ in range(3):
         loop.step()
     loop.world.update_relationship("alice", "bob", trust=0.1, familiarity=0.05, rivalry=0.02)
+    loop.step()
     snapshot = TelemetryClient().from_console(router)
 
     panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00"))
@@ -47,6 +48,7 @@ def test_render_snapshot_produces_panels() -> None:
     assert any((title or "").startswith("Employment") for title in panel_titles)
     assert any((title or "").startswith("Conflict") for title in panel_titles)
     assert any((title or "").startswith("Relationships") for title in panel_titles)
+    assert any((title or "").startswith("Relationship Updates") for title in panel_titles)
     assert any("Legend" in (title or "") for title in panel_titles)
 
 

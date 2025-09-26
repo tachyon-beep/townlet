@@ -59,11 +59,8 @@ def test_relationship_stage_required(base_config: SimulationConfig) -> None:
     data = base_config.model_dump()
     data["features"]["stages"]["relationships"] = "OFF"
     config = SimulationConfig.model_validate(data)
-    builder = ObservationBuilder(config)
-    world = _build_world(config)
-    obs = builder.build_batch(world, terminated={})
-    features = obs["alice"]["features"]
-    assert len(builder._feature_names) == features.shape[0]
+    with pytest.raises(ValueError, match="relationships stage"):
+        ObservationBuilder(config)
 
 
 def test_disable_aggregates_via_config(base_config: SimulationConfig) -> None:

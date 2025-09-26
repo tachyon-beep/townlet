@@ -54,7 +54,9 @@ class ObservationBuilder:
         if self._social_slots and self.variant != "hybrid":
             raise ValueError("Social snippet is only supported for hybrid observations")
         if self._social_slots and self.config.features.stages.relationships == "OFF":
-            self._social_slots = 0
+            raise ValueError(
+                "Social snippet requires relationships stage enabled"
+            )
 
         self._social_slot_dim = self.social_cfg.embed_dim + 3  # id embedding + trust/fam/rivalry
         social_feature_names: List[str] = []
@@ -235,7 +237,13 @@ class ObservationBuilder:
         )
 
         friends = friend_candidates[: self.social_cfg.top_friends]
-        rivals = [entry for entry in rival_candidates if entry not in friends][: self.social_cfg.top_rivals]
+        rivals: List[Dict[str, float]] = []
+        for entry in rival_candidates:
+            if entry in friends:
+                continue
+            rivals.append(entry)
+            if len(rivals) >= self.social_cfg.top_rivals:
+                break
 
         slots: List[Dict[str, float]] = []
         for entry in friends + rivals:

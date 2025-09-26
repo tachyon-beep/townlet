@@ -18,6 +18,7 @@ from townlet.snapshots.state import (
 )
 from townlet.world.grid import AgentSnapshot, WorldState
 from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.scheduler.perturbations import PerturbationScheduler
 
 
 @pytest.fixture(scope="module")
@@ -184,7 +185,15 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     telemetry._latest_events = [{"event": "test"}]
     telemetry.queue_console_command({"cmd": "foo"})
 
-    state = snapshot_from_world(sample_config, world, telemetry=telemetry)
+    scheduler = PerturbationScheduler(sample_config)
+    scheduler.enqueue([{"event": "price_spike"}])
+
+    state = snapshot_from_world(
+        sample_config,
+        world,
+        telemetry=telemetry,
+        perturbations=scheduler,
+    )
     baseline_rng_state = random.getstate()
 
     manager = SnapshotManager(root=tmp_path)
@@ -208,5 +217,7 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     assert restored_world._employment_manual_exits == world._employment_manual_exits
     assert restored_world._employment_exits_today == world._employment_exits_today
     assert random.getstate() == baseline_rng_state
+    assert state.perturbations == scheduler.export_state()
     assert restored_telemetry.export_state() == telemetry.export_state()
     assert restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()
+    # Perturbation scheduler is external in this test; ensure state maintained via scheduler snapshot.

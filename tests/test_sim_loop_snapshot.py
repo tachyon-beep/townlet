@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import random
 
+import numpy as np
+
 import pytest
 
 from townlet.config import load_config
@@ -36,6 +38,7 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
 
     loop.world.update_relationship("alice", "bob", trust=0.3, familiarity=0.1)
     loop.telemetry.queue_console_command({"cmd": "noop"})
+    loop.perturbations.enqueue([{"event": "test"}])
     saved_path = loop.save_snapshot(tmp_path)
 
     restored = SimulationLoop(base_config)
@@ -48,6 +51,7 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
     assert restored.world.objects.keys() == loop.world.objects.keys()
     assert restored.telemetry.export_state() == loop.telemetry.export_state()
     assert restored.telemetry.export_console_buffer() == loop.telemetry.export_console_buffer()
+    assert restored.perturbations.export_state() == loop.perturbations.export_state()
 
 
 def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
@@ -108,3 +112,29 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     assert resumed_snapshots == baseline_snapshots
     assert resumed.telemetry.export_state() == baseline.telemetry.export_state()
     assert resumed.telemetry.export_console_buffer() == baseline.telemetry.export_console_buffer()
+
+def test_policy_transitions_resume(tmp_path: Path, base_config) -> None:
+    random.seed(303)
+    loop = SimulationLoop(base_config)
+    loop.world.register_object("fridge_1", "fridge")
+    loop.world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.4, "hygiene": 0.4, "energy": 0.6},
+    )
+    loop.step()
+
+    trajectory_before = loop.policy.collect_trajectory(clear=True)
+    snapshot_path = loop.save_snapshot(tmp_path)
+
+    resumed = SimulationLoop(base_config)
+    resumed.load_snapshot(snapshot_path)
+    loop.step()
+    resumed.step()
+    resumed_frames = resumed.policy.collect_trajectory(clear=True)
+    baseline_frames = loop.policy.collect_trajectory(clear=True)
+    assert len(resumed_frames) == len(baseline_frames)
+    compare_keys = {"agent_id", "action", "rewards", "dones"}
+    for lhs, rhs in zip(resumed_frames, baseline_frames):
+        for key in compare_keys:
+            assert lhs[key] == rhs[key]

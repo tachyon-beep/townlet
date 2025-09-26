@@ -12,6 +12,7 @@ from typing import Dict, Mapping, Optional, TYPE_CHECKING
 from townlet.agents.models import Personality
 from townlet.config import SimulationConfig
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 
 if TYPE_CHECKING:
@@ -34,6 +35,7 @@ class SnapshotState:
     rng_state: Optional[str] = None
     telemetry: Dict[str, object] = field(default_factory=dict)
     console_buffer: list[object] = field(default_factory=list)
+    perturbations: Dict[str, object] = field(default_factory=dict)
     relationships: Dict[str, Dict[str, Dict[str, float]]] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, object]:
@@ -53,6 +55,7 @@ class SnapshotState:
             "rng_state": self.rng_state,
             "telemetry": dict(self.telemetry),
             "console_buffer": list(self.console_buffer),
+            "perturbations": dict(self.perturbations),
             "relationships": {
                 owner: {
                     other: dict(values) for other, values in edges.items()
@@ -108,6 +111,11 @@ class SnapshotState:
         console_buffer_payload = payload.get("console_buffer", [])
         console_buffer = list(console_buffer_payload) if isinstance(console_buffer_payload, list) else []
 
+        perturbations_payload = payload.get("perturbations", {})
+        perturbations: Dict[str, object] = (
+            dict(perturbations_payload) if isinstance(perturbations_payload, Mapping) else {}
+        )
+
         if "relationships" not in payload:
             raise ValueError("Snapshot payload missing relationships field")
         relationships_obj = payload["relationships"]
@@ -147,6 +155,7 @@ class SnapshotState:
             rng_state=rng_state_str,
             telemetry=telemetry,
             console_buffer=console_buffer,
+            perturbations=perturbations,
             relationships=relationships,
         )
 
@@ -157,6 +166,7 @@ def snapshot_from_world(
     *,
     lifecycle: Optional[LifecycleManager] = None,
     telemetry: Optional["TelemetryPublisher"] = None,
+    perturbations: Optional[PerturbationScheduler] = None,
 ) -> SnapshotState:
     """Capture the current world state into a snapshot payload."""
 
@@ -215,6 +225,10 @@ def snapshot_from_world(
         telemetry_payload = telemetry.export_state()
         console_buffer = telemetry.export_console_buffer()
 
+    perturbations_payload = {}
+    if perturbations is not None:
+        perturbations_payload = perturbations.export_state()
+
     return SnapshotState(
         config_id=config.config_id,
         tick=world.tick,
@@ -227,6 +241,7 @@ def snapshot_from_world(
         rng_state=rng_payload,
         telemetry=telemetry_payload,
         console_buffer=console_buffer,
+        perturbations=perturbations_payload,
         relationships=world.relationships_snapshot(),
     )
 
