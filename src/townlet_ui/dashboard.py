@@ -71,6 +71,9 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
     conflict_border = "magenta" if conflict.queue_ghost_step_events or conflict.queue_cooldown_events else "blue"
     panels.append(Panel(conflict_table, title="Conflict", border_style=conflict_border))
 
+    narration_panel = _build_narration_panel(snapshot)
+    panels.append(narration_panel)
+
     relationships = snapshot.relationships
     if relationships is not None:
         rel_table = Table(title="Relationship Churn", expand=True)
@@ -140,6 +143,7 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         "Employment panel turns red when pending queue > 0.",
         "Conflict panel highlights queue cooldowns/ghost steps; rivalry count shows active edges.",
         "Relationships panel displays eviction churn; updates table lists recent tie changes.",
+        "Narrations panel shows the latest throttled conflict narrations (priority flagged with !).",
     ]
     legend = Text("\n".join(legend_lines), style="dim")
     panels.append(Panel(legend, title="Legend"))
@@ -152,6 +156,29 @@ def _format_top_entries(entries: Mapping[str, int]) -> str:
         return "(none)"
     sorted_entries = sorted(entries.items(), key=lambda item: item[1], reverse=True)
     return ", ".join(f"{owner}:{count}" for owner, count in sorted_entries[:3])
+
+
+def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
+    narrations = snapshot.narrations
+    if narrations:
+        table = Table(expand=True)
+        table.add_column("Tick", justify="right")
+        table.add_column("Category")
+        table.add_column("Message")
+        table.add_column("!", justify="center")
+        for entry in narrations[:5]:
+            priority_flag = "[bold red]![/bold red]" if entry.priority else ""
+            table.add_row(
+                str(entry.tick),
+                entry.category,
+                entry.message,
+                priority_flag,
+            )
+        border_style = "yellow" if any(entry.priority for entry in narrations) else "blue"
+        return Panel(table, title="Narrations", border_style=border_style)
+
+    body = Text("No recent narrations", style="dim")
+    return Panel(body, title="Narrations", border_style="green")
 
 
 def run_dashboard(

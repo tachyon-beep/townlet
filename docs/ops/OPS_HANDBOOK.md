@@ -18,6 +18,11 @@
   - Toggle global stage: `python scripts/manage_phase_c.py set-stage configs/examples/poc_hybrid.yaml --stage C1 --in-place`.
   - Stage schedule overrides live under `training.social_reward_schedule`; e.g. `python scripts/manage_phase_c.py schedule configs/examples/poc_hybrid.yaml --override OFF --schedule 0:OFF --schedule 1:C1 --in-place` ensures rollouts stay OFF on cycle 0 and enable C1 afterwards.
   - Use `--output` to dry-run changes (`--output -` prints to stdout) before committing; the helper preserves existing schedules unless `--clear` is supplied.
+- Narration controls:
+  - Tune throttles via `telemetry.narration` (global/category cooldowns, dedupe window, rolling window limit). Example: `global_cooldown_ticks=30`, `category_cooldown_ticks.queue_conflict=30` keeps conflict narrations to ~1 every 30 ticks per queue.
+  - Recent narrations surface in the observer dashboard (look for the "Narrations" panel); priority items (ghost steps) show a red `!` marker.
+  - Snapshot payloads now include `narrations` (latest entries) and `narration_state`; export/import these when copying snapshots between shards to preserve throttle continuity.
+  - For long-form audits, redirect the state to JSON: `python scripts/telemetry_summary.py <log> --format json | jq '.narrations'`.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
 - The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.

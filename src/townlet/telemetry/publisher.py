@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Iterable, List, TYPE_CHECKING
 
 from townlet.config import SimulationConfig
+from townlet.telemetry.narration import NarrationRateLimiter
 
 if TYPE_CHECKING:
     from townlet.world.grid import WorldState
@@ -14,7 +15,7 @@ class TelemetryPublisher:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self.schema_version = "0.6.0"
+        self.schema_version = "0.7.0"
         self._console_buffer: List[object] = []
         self._latest_queue_metrics: Dict[str, int] | None = None
         self._latest_embedding_metrics: Dict[str, float] | None = None
@@ -31,6 +32,8 @@ class TelemetryPublisher:
         self._latest_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
         self._latest_relationship_updates: List[Dict[str, object]] = []
         self._previous_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
+        self._narration_limiter = NarrationRateLimiter(self.config.telemetry.narration)
+        self._latest_narrations: List[Dict[str, object]] = []
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -54,6 +57,8 @@ class TelemetryPublisher:
                 self._latest_relationship_snapshot
             ),
             "relationship_updates": [dict(update) for update in self._latest_relationship_updates],
+            "narrations": [dict(entry) for entry in self._latest_narrations],
+            "narration_state": self._narration_limiter.export_state(),
         }
         return state
 
@@ -85,6 +90,14 @@ class TelemetryPublisher:
         updates_payload = payload.get("relationship_updates", [])
         if isinstance(updates_payload, list):
             self._latest_relationship_updates = [dict(update) for update in updates_payload]
+        narrations_payload = payload.get("narrations", [])
+        if isinstance(narrations_payload, list):
+            self._latest_narrations = [dict(entry) for entry in narrations_payload]
+        else:
+            self._latest_narrations = []
+        narration_state = payload.get("narration_state")
+        if isinstance(narration_state, dict):
+            self._narration_limiter.import_state(narration_state)
 
     def export_console_buffer(self) -> List[object]:
         return list(self._console_buffer)
@@ -101,8 +114,10 @@ class TelemetryPublisher:
         rewards: Dict[str, float],
         events: Iterable[Dict[str, object]] | None = None,
     ) -> None:
-        # TODO(@townlet): Stream to pub/sub, write KPIs, emit narration.
-        _ = tick, world, observations, rewards
+        # TODO(@townlet): Stream to pub/sub, write KPIs.
+        _ = observations, rewards
+        self._narration_limiter.begin_tick(int(tick))
+        self._latest_narrations = []
         queue_metrics = world.queue_manager.metrics()
         self._latest_queue_metrics = queue_metrics
         rivalry_snapshot: Dict[str, object] = {}
@@ -134,6 +149,7 @@ class TelemetryPublisher:
             self._latest_events = list(events)
         else:
             self._latest_events = []
+        self._process_narrations(self._latest_events, int(tick))
         for subscriber in self._event_subscribers:
             subscriber(list(self._latest_events))
         self._latest_job_snapshot = {
@@ -197,6 +213,11 @@ class TelemetryPublisher:
     def update_relationship_metrics(self, payload: Dict[str, object]) -> None:
         """Allow external callers to seed the latest relationship metrics."""
         self._latest_relationship_metrics = dict(payload)
+
+    def latest_narrations(self) -> List[Dict[str, object]]:
+        """Expose narration entries emitted during the latest publish call."""
+
+        return [dict(entry) for entry in self._latest_narrations]
 
     def latest_embedding_metrics(self) -> Dict[str, float] | None:
         """Expose embedding allocator counters."""
@@ -329,6 +350,64 @@ class TelemetryPublisher:
                         }
                     )
         return updates
+
+    def _process_narrations(
+        self,
+        events: Iterable[Dict[str, object]],
+        tick: int,
+    ) -> None:
+        for event in events:
+            event_name = event.get("event")
+            if event_name == "queue_conflict":
+                self._handle_queue_conflict_narration(event, tick)
+
+    def _handle_queue_conflict_narration(
+        self,
+        event: Dict[str, object],
+        tick: int,
+    ) -> None:
+        actor = str(event.get("actor", ""))
+        rival = str(event.get("rival", ""))
+        if not actor or not rival:
+            return
+        object_id = str(event.get("object_id", "")) or "queue"
+        reason = str(event.get("reason", "unknown"))
+        intensity = float(event.get("intensity", 0.0) or 0.0)
+        queue_length = int(event.get("queue_length", 0))
+        priority = reason == "ghost_step"
+        dedupe_key = ":".join(
+            [
+                "queue_conflict",
+                object_id,
+                "::".join(sorted([actor, rival])),
+            ]
+        )
+        message = (
+            f"{actor} clashed with {rival} at {object_id}"
+            f" (intensity {intensity:.2f}, queue {queue_length})."
+        )
+        if self._narration_limiter.allow(
+            "queue_conflict",
+            message=message,
+            priority=priority,
+            dedupe_key=dedupe_key,
+        ):
+            self._latest_narrations.append(
+                {
+                    "tick": int(tick),
+                    "category": "queue_conflict",
+                    "message": message,
+                    "priority": priority,
+                    "data": {
+                        "actor": actor,
+                        "rival": rival,
+                        "object_id": object_id,
+                        "reason": reason,
+                        "intensity": intensity,
+                        "queue_length": queue_length,
+                    },
+                }
+            )
 
     @staticmethod
     def _copy_relationship_snapshot(

@@ -18,6 +18,9 @@ from .loader import (
     RivalryConfig,
     SimulationConfig,
     SocialRewardStage,
+    SocialRewardScheduleEntry,
+    TelemetryConfig,
+    NarrationThrottleConfig,
     load_config,
 )
 
@@ -38,5 +41,8 @@ __all__ = [
     "RivalryConfig",
     "SimulationConfig",
     "SocialRewardStage",
+    "SocialRewardScheduleEntry",
+    "TelemetryConfig",
+    "NarrationThrottleConfig",
     "load_config",
 ]

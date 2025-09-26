@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-SUPPORTED_SCHEMA_PREFIX = "0.6"
+SUPPORTED_SCHEMA_PREFIX = "0.7"
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,15 @@ class ConflictMetrics:
     queue_ghost_step_events: int
     rivalry_agents: int
     raw: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class NarrationEntry:
+    tick: int
+    category: str
+    message: str
+    priority: bool
+    data: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -64,6 +73,8 @@ class TelemetrySnapshot:
     schema_warning: Optional[str]
     employment: EmploymentMetrics
     conflict: ConflictMetrics
+    narrations: List[NarrationEntry]
+    narration_state: Mapping[str, Any]
     relationships: Optional[RelationshipChurn]
     relationship_snapshot: Mapping[str, Mapping[str, Mapping[str, float]]]
     relationship_updates: List[RelationshipUpdate]
@@ -94,6 +105,8 @@ class TelemetryClient:
         relationships_payload = payload.get("relationships")
         relationship_snapshot_payload = payload.get("relationship_snapshot", {})
         relationship_updates_payload = payload.get("relationship_updates", [])
+        narrations_payload = payload.get("narrations", [])
+        narration_state_payload = payload.get("narration_state", {})
 
         employment = EmploymentMetrics(
             pending=list(employment_payload.get("pending", [])),
@@ -189,6 +202,30 @@ class TelemetryClient:
                 )
             )
 
+        narrations: List[NarrationEntry] = []
+        if isinstance(narrations_payload, list):
+            for entry in narrations_payload:
+                if not isinstance(entry, Mapping):
+                    continue
+                data = entry.get("data")
+                if not isinstance(data, Mapping):
+                    data = {}
+                narrations.append(
+                    NarrationEntry(
+                        tick=int(entry.get("tick", 0)),
+                        category=str(entry.get("category", "")),
+                        message=str(entry.get("message", "")),
+                        priority=bool(entry.get("priority", False)),
+                        data=dict(data),
+                    )
+                )
+
+        narration_state: Mapping[str, Any]
+        if isinstance(narration_state_payload, Mapping):
+            narration_state = dict(narration_state_payload)
+        else:
+            narration_state = {}
+
         agents.sort(key=lambda summary: summary.agent_id)
 
         return TelemetrySnapshot(
@@ -196,6 +233,8 @@ class TelemetryClient:
             schema_warning=schema_warning,
             employment=employment,
             conflict=conflict,
+            narrations=narrations,
+            narration_state=narration_state,
             relationships=relationships,
             relationship_snapshot=relationship_snapshot,
             relationship_updates=relationship_updates,

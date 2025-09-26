@@ -83,3 +83,11 @@ affordances:
 stability:
   affordance_fail_threshold: 5
   lateness_threshold: 3
+telemetry:
+  narration:
+    global_cooldown_ticks: 30
+    category_cooldown_ticks:
+      queue_conflict: 30
+    dedupe_window_ticks: 20
+    global_window_ticks: 600
+    global_window_limit: 10

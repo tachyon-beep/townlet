@@ -129,11 +129,20 @@ the new `scripts/manage_phase_c.py` helper plus OPS handbook guidance document t
 - **Task 4.4-T2:** Add priority tagging so critical events bypass limiter within configured allowance.
   - *Acceptance:* Integration test ensures queue conflict arguments still surface; telemetry flags priority.
 
+**Status:** Completed — `NarrationRateLimiter` enforces global/category cooldowns, dedupe, and window caps,
+with priority bypass for ghost-step conflicts. Telemetry snapshots now include narration state and per-tick
+entries, driven by configurable `telemetry.narration` settings. Coverage lives in
+`tests/test_telemetry_narration.py`, and the telemetry changelog documents schema 0.7.0.
+
 ### Step 4.4-S2 – Experience Integration
 - **Task 4.4-T3:** Extend Observer UI backlog tasks to overlay relationship status/narration context; align API contracts.
   - *Acceptance:* Updated user stories in Observer UI work package; shared design snapshot appended.
 - **Task 4.4-T4:** Update ops handbook with narration troubleshooting and response runbook.
   - *Acceptance:* `docs/ops/OPS_HANDBOOK.md` includes new section; training material refreshed.
+
+**Status:** Completed — Observer dashboard now renders a Narrations panel (priority conflicts highlighted),
+`TelemetryClient` parses schema 0.7 payloads with narration entries/state, and the ops handbook documents
+throttle tuning plus troubleshooting steps.
 
 #### Phase 4.4 Risk Assessment
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |

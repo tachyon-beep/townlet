@@ -36,7 +36,7 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     client = TelemetryClient()
     snapshot = client.from_console(router)
 
-    assert snapshot.schema_version.startswith("0.3")
+    assert snapshot.schema_version.startswith("0.7")
     assert snapshot.schema_warning is None
     assert snapshot.employment.pending_count >= 0
     assert snapshot.conflict.queue_cooldown_events >= 0
@@ -44,6 +44,7 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     assert snapshot.conflict.rivalry_agents >= 0
     assert snapshot.agents
     assert snapshot.agents[0].agent_id
+    assert isinstance(snapshot.narrations, list)
 
 
 def test_telemetry_client_warns_on_newer_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,7 +61,7 @@ def test_telemetry_client_warns_on_newer_schema(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_telemetry_client_raises_on_major_mismatch() -> None:
-    client = TelemetryClient(expected_schema_prefix="0.3")
+    client = TelemetryClient(expected_schema_prefix="0.7")
     payload = {"schema_version": "1.0.0", "employment": {}, "jobs": {}, "conflict": {}}
     with pytest.raises(SchemaMismatchError):
         client.parse_snapshot(payload)

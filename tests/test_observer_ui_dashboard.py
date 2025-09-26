@@ -47,6 +47,7 @@ def test_render_snapshot_produces_panels() -> None:
     panel_titles = [getattr(p, "title", "") for p in panels]
     assert any((title or "").startswith("Employment") for title in panel_titles)
     assert any((title or "").startswith("Conflict") for title in panel_titles)
+    assert any((title or "").startswith("Narrations") for title in panel_titles)
     assert any((title or "").startswith("Relationships") for title in panel_titles)
     assert any((title or "").startswith("Relationship Updates") for title in panel_titles)
     assert any("Legend" in (title or "") for title in panel_titles)

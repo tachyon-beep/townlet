@@ -231,6 +231,22 @@ class SocialRewardScheduleEntry(BaseModel):
     stage: SocialRewardStage
 
 
+class NarrationThrottleConfig(BaseModel):
+    global_cooldown_ticks: int = Field(30, ge=0, le=10_000)
+    category_cooldown_ticks: Dict[str, int] = Field(default_factory=dict)
+    dedupe_window_ticks: int = Field(20, ge=0, le=10_000)
+    global_window_ticks: int = Field(600, ge=1, le=10_000)
+    global_window_limit: int = Field(10, ge=1, le=1_000)
+    priority_categories: List[str] = Field(default_factory=list)
+
+    def get_category_cooldown(self, category: str) -> int:
+        return int(self.category_cooldown_ticks.get(category, self.global_cooldown_ticks))
+
+
+class TelemetryConfig(BaseModel):
+    narration: NarrationThrottleConfig = NarrationThrottleConfig()
+
+
 class TrainingConfig(BaseModel):
     source: TrainingSource = "replay"
     rollout_ticks: int = Field(100, ge=0)
@@ -288,6 +304,7 @@ class SimulationConfig(BaseModel):
     stability: StabilityConfig = StabilityConfig()
     behavior: BehaviorConfig = BehaviorConfig()
     employment: EmploymentConfig = EmploymentConfig()
+    telemetry: TelemetryConfig = TelemetryConfig()
 
     model_config = ConfigDict(extra="allow")
 
