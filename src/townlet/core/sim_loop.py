@@ -7,6 +7,7 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 from townlet.config import SimulationConfig
@@ -16,6 +17,12 @@ from townlet.policy.runner import PolicyRuntime
 from townlet.rewards.engine import RewardEngine
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.stability.monitor import StabilityMonitor
+from townlet.snapshots import (
+    SnapshotManager,
+    apply_snapshot_to_telemetry,
+    apply_snapshot_to_world,
+    snapshot_from_world,
+)
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import WorldState
 
@@ -49,6 +56,34 @@ class SimulationLoop:
     def reset(self) -> None:
         """Reset the simulation loop to its initial state."""
         self._build_components()
+
+    # ------------------------------------------------------------------
+    # Snapshot helpers
+    # ------------------------------------------------------------------
+    def save_snapshot(self, root: Path) -> Path:
+        """Persist the current world relationships and tick to ``root``."""
+
+        manager = SnapshotManager(root=root)
+        state = snapshot_from_world(
+            self.config,
+            self.world,
+            lifecycle=self.lifecycle,
+            telemetry=self.telemetry,
+        )
+        return manager.save(state)
+
+    def load_snapshot(self, path: Path) -> None:
+        """Restore world relationships and tick from the snapshot at ``path``."""
+
+        manager = SnapshotManager(root=path.parent)
+        state = manager.load(path, self.config)
+        apply_snapshot_to_world(
+            self.world,
+            state,
+            lifecycle=self.lifecycle,
+        )
+        apply_snapshot_to_telemetry(self.telemetry, state)
+        self.tick = state.tick
 
     def run(self, max_ticks: int | None = None) -> Iterable[TickArtifacts]:
         """Run the loop until `max_ticks` or indefinitely."""

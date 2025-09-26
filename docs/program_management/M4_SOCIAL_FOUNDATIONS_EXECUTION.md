@@ -39,12 +39,17 @@ Each phase below lists numbered steps (S) and tasks (T). Acceptance criteria inc
 - Introduced `RelationshipChurnAccumulator` telemetry helper (`src/townlet/telemetry/relationship_metrics.py`) and coverage in `tests/test_relationship_metrics.py` to quantify eviction churn and feed soak harness dashboards.
 - `TelemetryPublisher.latest_relationship_metrics()` now exposes relationship payloads, enabling ops tooling to monitor eviction spikes during Phase 4.1 development.
 - Snapshot schema now persists relationship ledgers with schema bump + guard rails (`src/townlet/snapshots/state.py`, `tests/test_snapshot_manager.py`), preventing silent data loss during save/load.
+- Snapshot schema now encodes trust/familiarity/rivalry tuples (schema v1.1) so personality-aware deltas round-trip correctly across persistence.
+- Simulation loop integrates the snapshot helpers, persisting agent/object state so runs can resume without divergence (`src/townlet/core/sim_loop.py`, `tests/test_sim_loop_snapshot.py`).
+- Snapshot schema v1.2 now captures queue manager, embedding allocator, employment queues, lifecycle counters, and RNG state to keep resumed runs deterministic (`src/townlet/snapshots/state.py`, `tests/test_snapshot_manager.py`).
 - Personality multipliers gated behind `features.relationship_modifiers` with parity/behaviour tests (`src/townlet/config/loader.py`, `src/townlet/agents/relationship_modifiers.py`, `tests/test_relationship_personality_modifiers.py`).
 - Rivalry-ledger evictions now feed churn metrics directly via `WorldState.relationship_metrics_snapshot()` (`src/townlet/world/grid.py`, `src/townlet/world/rivalry.py`, `tests/test_relationship_metrics.py`).
 - Relationship ledger scaffolding and update APIs landed (`src/townlet/world/relationships.py`, `src/townlet/world/grid.py`, `tests/test_relationship_ledger.py`), enabling symmetric trust/familiarity/rivalry storage and observation wiring.
 - Queue events now drive ledger deltas: ghost-step conflicts raise rivalry while polite handovers boost trust/familiarity (`src/townlet/world/grid.py`, `tests/test_relationship_metrics.py::test_queue_events_modify_relationships`).
 - Shared meals and employment shift dynamics are wired into relationship deltas (`shared_meal`, `took_my_shift`, `helped_when_late`) with regression coverage (`src/townlet/world/grid.py`, `tests/test_relationship_metrics.py`).
 - Chat outcomes are exposed via `record_chat_success`/`record_chat_failure` to support Phase 4.3 social reward hooks, with tests covering ledger effects (`src/townlet/world/grid.py`, `tests/test_relationship_metrics.py::test_chat_outcomes_adjust_relationships`).
+- Relationship modifiers now flow through the world ledger so extroversion/forgiveness/ambition adjust deltas when the feature flag is enabled (`src/townlet/world/grid.py`, `tests/test_relationship_integration.py`).
+- Shared meal and employment events now tag relationship updates with explicit event codes, preparing downstream reward hooks and analytics (`src/townlet/world/grid.py`).
 
 ## Phase 4.2 – Social Observations & Telemetry
 

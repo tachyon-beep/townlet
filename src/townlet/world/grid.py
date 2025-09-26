@@ -4,16 +4,30 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Set, Tuple
+from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
+
+import random
 
 import yaml
 
+from townlet.agents.models import Personality
+from townlet.agents.relationship_modifiers import (
+    RelationshipDelta,
+    RelationshipEvent,
+    apply_personality_modifiers,
+)
 from townlet.config import EmploymentConfig, SimulationConfig
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.world.queue_manager import QueueManager
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
+
+
+def _default_personality() -> Personality:
+    """Provide a neutral personality for agents lacking explicit traits."""
+
+    return Personality(extroversion=0.0, forgiveness=0.0, ambition=0.0)
 
 
 @dataclass
@@ -24,6 +38,7 @@ class AgentSnapshot:
     position: tuple[int, int]
     needs: Dict[str, float]
     wallet: float = 0.0
+    personality: Personality = field(default_factory=_default_personality)
     inventory: Dict[str, int] = field(default_factory=dict)
     job_id: str | None = None
     on_shift: bool = False
@@ -94,6 +109,8 @@ class WorldState:
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: Dict[str, Dict[str, Any]] = field(init=False, default_factory=dict)
+    _rng_seed: Optional[int] = field(init=False, default=None)
+    _rng_state: Optional[Tuple[Any, ...]] = field(init=False, default=None)
 
     @classmethod
     def from_config(cls, config: SimulationConfig) -> "WorldState":
@@ -124,6 +141,8 @@ class WorldState:
         )
         self._recent_meal_participants = {}
         self._load_affordance_definitions()
+        self._rng_seed = None
+        self._rng_state = random.getstate()
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
@@ -354,6 +373,7 @@ class WorldState:
                 trust=0.05,
                 familiarity=0.05,
                 rivalry=-0.05,
+                event="queue_polite",
             )
             self._emit_event("queue_interaction", {**payload, "variant": "handover"})
             return
@@ -365,7 +385,12 @@ class WorldState:
             base_intensity = boost + params.queue_length_boost * max(queue_length - 1, 0)
         clamped_intensity = min(5.0, max(0.1, base_intensity))
         self.register_rivalry_conflict(actor, rival, intensity=clamped_intensity)
-        self.update_relationship(actor, rival, rivalry=0.05 * clamped_intensity)
+        self.update_relationship(
+            actor,
+            rival,
+            rivalry=0.05 * clamped_intensity,
+            event="conflict",
+        )
         self._emit_event(
             "queue_conflict",
             {
@@ -384,12 +409,14 @@ class WorldState:
             return
         ledger_a = self._get_rivalry_ledger(agent_a)
         ledger_b = self._get_rivalry_ledger(agent_b)
-        relationship_a = self._get_relationship_ledger(agent_a)
-        relationship_b = self._get_relationship_ledger(agent_b)
         ledger_a.apply_conflict(agent_b, intensity=intensity)
         ledger_b.apply_conflict(agent_a, intensity=intensity)
-        relationship_a.apply_delta(other_id=agent_b, rivalry=0.1 * intensity)
-        relationship_b.apply_delta(other_id=agent_a, rivalry=0.1 * intensity)
+        self.update_relationship(
+            agent_a,
+            agent_b,
+            rivalry=0.1 * intensity,
+            event="conflict",
+        )
 
     def rivalry_snapshot(self) -> Dict[str, Dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
@@ -443,12 +470,49 @@ class WorldState:
     def _get_relationship_ledger(self, agent_id: str) -> RelationshipLedger:
         ledger = self._relationship_ledgers.get(agent_id)
         if ledger is None:
-            ledger = RelationshipLedger(params=self._relationship_parameters())
+            ledger = RelationshipLedger(
+                owner_id=agent_id,
+                params=self._relationship_parameters(),
+                eviction_hook=self._record_relationship_eviction,
+            )
             self._relationship_ledgers[agent_id] = ledger
+        else:
+            ledger.set_eviction_hook(
+                owner_id=agent_id,
+                hook=self._record_relationship_eviction,
+            )
         return ledger
 
     def _relationship_parameters(self) -> RelationshipParameters:
         return RelationshipParameters(max_edges=self.config.conflict.rivalry.max_edges)
+
+    def _personality_for(self, agent_id: str) -> Personality:
+        snapshot = self.agents.get(agent_id)
+        if snapshot is None or snapshot.personality is None:
+            return _default_personality()
+        return snapshot.personality
+
+    def _apply_relationship_delta(
+        self,
+        owner_id: str,
+        other_id: str,
+        *,
+        delta: RelationshipDelta,
+        event: RelationshipEvent,
+    ) -> None:
+        ledger = self._get_relationship_ledger(owner_id)
+        adjusted = apply_personality_modifiers(
+            delta=delta,
+            personality=self._personality_for(owner_id),
+            event=event,
+            enabled=bool(self.config.features.relationship_modifiers),
+        )
+        ledger.apply_delta(
+            other_id,
+            trust=adjusted.trust,
+            familiarity=adjusted.familiarity,
+            rivalry=adjusted.rivalry,
+        )
 
     def _rivalry_parameters(self) -> RivalryParameters:
         cfg = self.config.conflict.rivalry
@@ -496,6 +560,25 @@ class WorldState:
     def relationship_metrics_snapshot(self) -> Dict[str, object]:
         return self._relationship_churn.latest_payload()
 
+    def load_relationship_snapshot(
+        self,
+        snapshot: Dict[str, Dict[str, Dict[str, float]]],
+    ) -> None:
+        """Restore relationship ledgers from persisted snapshot data."""
+
+        self._relationship_ledgers.clear()
+        for owner_id, edges in snapshot.items():
+            ledger = RelationshipLedger(
+                owner_id=owner_id,
+                params=self._relationship_parameters(),
+            )
+            ledger.inject(edges)
+            ledger.set_eviction_hook(
+                owner_id=owner_id,
+                hook=self._record_relationship_eviction,
+            )
+            self._relationship_ledgers[owner_id] = ledger
+
     def update_relationship(
         self,
         agent_a: str,
@@ -504,13 +587,13 @@ class WorldState:
         trust: float = 0.0,
         familiarity: float = 0.0,
         rivalry: float = 0.0,
+        event: RelationshipEvent = "generic",
     ) -> None:
         if agent_a == agent_b:
             return
-        ledger_a = self._get_relationship_ledger(agent_a)
-        ledger_b = self._get_relationship_ledger(agent_b)
-        ledger_a.apply_delta(agent_b, trust=trust, familiarity=familiarity, rivalry=rivalry)
-        ledger_b.apply_delta(agent_a, trust=trust, familiarity=familiarity, rivalry=rivalry)
+        delta = RelationshipDelta(trust=trust, familiarity=familiarity, rivalry=rivalry)
+        self._apply_relationship_delta(agent_a, agent_b, delta=delta, event=event)
+        self._apply_relationship_delta(agent_b, agent_a, delta=delta, event=event)
 
     def record_chat_success(self, speaker: str, listener: str, quality: float) -> None:
         clipped_quality = max(0.0, min(1.0, quality))
@@ -519,6 +602,7 @@ class WorldState:
             listener,
             trust=0.05 * clipped_quality,
             familiarity=0.10 * clipped_quality,
+            event="chat_success",
         )
         self._emit_event(
             "chat_success",
@@ -536,6 +620,7 @@ class WorldState:
             trust=0.0,
             familiarity=-0.05,
             rivalry=0.05,
+            event="chat_failure",
         )
         self._emit_event(
             "chat_failure",
@@ -966,6 +1051,7 @@ class WorldState:
                         trust=0.2,
                         familiarity=0.1,
                         rivalry=-0.1,
+                        event="employment_help",
                     )
                 self._emit_event(
                     "employment_helped_when_late",
@@ -1000,6 +1086,7 @@ class WorldState:
                         trust=-0.1,
                         familiarity=0.0,
                         rivalry=0.3,
+                        event="employment_shift_taken",
                     )
                 self._emit_event(
                     "employment_took_my_shift",
@@ -1229,7 +1316,13 @@ class WorldState:
             self._recent_meal_participants[object_id] = record
 
         for other_id in participants:
-            self.update_relationship(agent_id, other_id, trust=0.1, familiarity=0.25)
+            self.update_relationship(
+                agent_id,
+                other_id,
+                trust=0.1,
+                familiarity=0.25,
+                event="shared_meal",
+            )
         participants.add(agent_id)
         self._emit_event(
             "shared_meal",

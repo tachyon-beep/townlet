@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Tuple
+from typing import Callable, Dict, Iterable, List, Tuple
 
 
 def _clamp(value: float, *, low: float, high: float) -> float:
@@ -33,11 +33,22 @@ class RelationshipTie:
         }
 
 
+EvictionHook = Callable[[str, str, str], None]
+
+
 class RelationshipLedger:
     """Maintains multi-dimensional ties for a single agent."""
 
-    def __init__(self, params: RelationshipParameters | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        owner_id: str,
+        params: RelationshipParameters | None = None,
+        eviction_hook: EvictionHook | None = None,
+    ) -> None:
         self.params = params or RelationshipParameters()
+        self.owner_id = owner_id
+        self._eviction_hook: EvictionHook | None = eviction_hook
         self._ties: Dict[str, RelationshipTie] = {}
 
     def apply_delta(
@@ -55,7 +66,7 @@ class RelationshipLedger:
         tie.trust = _clamp(tie.trust + trust, low=-1.0, high=1.0)
         tie.familiarity = _clamp(tie.familiarity + familiarity, low=-1.0, high=1.0)
         tie.rivalry = _clamp(tie.rivalry + rivalry, low=0.0, high=1.0)
-        self._prune_if_needed()
+        self._prune_if_needed(reason="capacity")
         return tie
 
     def decay(self) -> None:
@@ -69,7 +80,7 @@ class RelationshipLedger:
             if tie.trust == 0.0 and tie.familiarity == 0.0 and tie.rivalry == 0.0:
                 removes.append(other_id)
         for other_id in removes:
-            self._ties.pop(other_id, None)
+            self._emit_eviction(other_id, reason="decay")
 
     def snapshot(self) -> Dict[str, Dict[str, float]]:
         return {other_id: tie.as_dict() for other_id, tie in self._ties.items()}
@@ -83,7 +94,11 @@ class RelationshipLedger:
                 rivalry=_clamp(float(values.get("rivalry", 0.0)), low=0.0, high=1.0),
             )
             self._ties[str(other_id)] = tie
-        self._prune_if_needed()
+        self._prune_if_needed(reason="capacity")
+
+    def set_eviction_hook(self, *, owner_id: str, hook: EvictionHook | None) -> None:
+        self.owner_id = owner_id
+        self._eviction_hook = hook
 
     def top_friends(self, limit: int) -> List[Tuple[str, RelationshipTie]]:
         if limit <= 0:
@@ -105,7 +120,7 @@ class RelationshipLedger:
         )
         return candidates[:limit]
 
-    def _prune_if_needed(self) -> None:
+    def _prune_if_needed(self, *, reason: str) -> None:
         max_edges = self.params.max_edges
         if max_edges <= 0 or len(self._ties) <= max_edges:
             return
@@ -114,8 +129,16 @@ class RelationshipLedger:
             key=lambda item: item[1].trust + item[1].familiarity,
             reverse=True,
         )
-        for other_id, _ in ordered[max_edges:]:
-            self._ties.pop(other_id, None)
+        to_remove = [other_id for other_id, _ in ordered[max_edges:]]
+        for other_id in to_remove:
+            self._emit_eviction(other_id, reason=reason)
+
+    def _emit_eviction(self, other_id: str, *, reason: str) -> None:
+        if other_id not in self._ties:
+            return
+        if self._eviction_hook is not None:
+            self._eviction_hook(self.owner_id, other_id, reason)
+        self._ties.pop(other_id, None)
 
 
 def _decay_value(value: float, decay: float, *, minimum: float = -1.0) -> float:

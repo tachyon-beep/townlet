@@ -26,6 +26,8 @@ class TelemetryPublisher:
             "rivalry": {},
         }
         self._latest_relationship_metrics: Dict[str, object] | None = None
+        self._latest_job_snapshot: Dict[str, object] = {}
+        self._latest_economy_snapshot: Dict[str, object] = {}
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -34,6 +36,47 @@ class TelemetryPublisher:
         drained = list(self._console_buffer)
         self._console_buffer.clear()
         return drained
+
+    def export_state(self) -> Dict[str, object]:
+        state: Dict[str, object] = {
+            "queue_metrics": dict(self._latest_queue_metrics or {}),
+            "embedding_metrics": dict(self._latest_embedding_metrics or {}),
+            "conflict_snapshot": dict(self._latest_conflict_snapshot),
+            "relationship_metrics": dict(self._latest_relationship_metrics or {}),
+            "job_snapshot": dict(getattr(self, "_latest_job_snapshot", {})),
+            "economy_snapshot": dict(getattr(self, "_latest_economy_snapshot", {})),
+            "employment_metrics": dict(self._latest_employment_metrics or {}),
+            "events": list(self._latest_events),
+        }
+        return state
+
+    def import_state(self, payload: Dict[str, object]) -> None:
+        self._latest_queue_metrics = payload.get("queue_metrics") or None
+        if self._latest_queue_metrics is not None:
+            self._latest_queue_metrics = dict(self._latest_queue_metrics)
+
+        self._latest_embedding_metrics = payload.get("embedding_metrics") or None
+        if self._latest_embedding_metrics is not None:
+            self._latest_embedding_metrics = dict(self._latest_embedding_metrics)
+
+        conflict_snapshot = payload.get("conflict_snapshot") or {}
+        self._latest_conflict_snapshot = dict(conflict_snapshot)
+
+        relationship_metrics = payload.get("relationship_metrics")
+        self._latest_relationship_metrics = (
+            dict(relationship_metrics) if relationship_metrics else None
+        )
+
+        self._latest_job_snapshot = dict(payload.get("job_snapshot", {}))
+        self._latest_economy_snapshot = dict(payload.get("economy_snapshot", {}))
+        self._latest_employment_metrics = dict(payload.get("employment_metrics", {}))
+        self._latest_events = list(payload.get("events", []))
+
+    def export_console_buffer(self) -> List[object]:
+        return list(self._console_buffer)
+
+    def import_console_buffer(self, buffer: Iterable[object]) -> None:
+        self._console_buffer = list(buffer)
 
     def publish_tick(
         self,

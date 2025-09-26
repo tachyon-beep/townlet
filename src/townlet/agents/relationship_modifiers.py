@@ -12,6 +12,9 @@ RelationshipEvent = Literal[
     "chat_failure",
     "queue_polite",
     "conflict",
+    "shared_meal",
+    "employment_help",
+    "employment_shift_taken",
 ]
 
 

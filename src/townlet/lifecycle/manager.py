@@ -29,6 +29,16 @@ class LifecycleManager:
                 terminated.setdefault(agent_id, False)
         return terminated
 
+    def export_state(self) -> Dict[str, int]:
+        return {
+            "exits_today": int(self.exits_today),
+            "employment_day": int(self._employment_day),
+        }
+
+    def import_state(self, payload: Dict[str, object]) -> None:
+        self.exits_today = int(payload.get("exits_today", 0))
+        self._employment_day = int(payload.get("employment_day", -1))
+
     def _evaluate_employment(self, world: WorldState, tick: int) -> Dict[str, bool]:
         results: Dict[str, bool] = {}
         cfg = self.config.employment

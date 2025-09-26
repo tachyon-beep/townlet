@@ -145,6 +145,64 @@ class QueueManager:
         for key in self._perf_metrics:
             self._perf_metrics[key] = 0
 
+    def export_state(self) -> Dict[str, object]:
+        """Serialise queue activity for snapshot persistence."""
+
+        return {
+            "active": dict(self._active),
+            "queues": {
+                object_id: [
+                    {"agent_id": entry.agent_id, "joined_tick": entry.joined_tick}
+                    for entry in entries
+                ]
+                for object_id, entries in self._queues.items()
+            },
+            "cooldowns": [
+                {
+                    "object_id": object_id,
+                    "agent_id": agent_id,
+                    "expiry": expiry,
+                }
+                for (object_id, agent_id), expiry in self._cooldowns.items()
+            ],
+            "stall_counts": dict(self._stall_counts),
+        }
+
+    def import_state(self, payload: Dict[str, object]) -> None:
+        """Restore queue activity from persisted snapshot data."""
+
+        active = payload.get("active", {})
+        if isinstance(active, dict):
+            self._active = {str(obj_id): str(agent_id) for obj_id, agent_id in active.items()}
+        else:
+            self._active = {}
+
+        queues_payload = payload.get("queues", {})
+        queues: Dict[str, List[QueueEntry]] = {}
+        if isinstance(queues_payload, dict):
+            for object_id, entries in queues_payload.items():
+                object_entries: List[QueueEntry] = []
+                for entry in entries or []:
+                    agent_id = str(entry.get("agent_id"))
+                    joined_tick = int(entry.get("joined_tick", 0))
+                    object_entries.append(QueueEntry(agent_id=agent_id, joined_tick=joined_tick))
+                queues[str(object_id)] = object_entries
+        self._queues = queues
+
+        cooldown_payload = payload.get("cooldowns", [])
+        self._cooldowns = {}
+        for entry in cooldown_payload or []:
+            object_id = str(entry.get("object_id"))
+            agent_id = str(entry.get("agent_id"))
+            expiry = int(entry.get("expiry", 0))
+            self._cooldowns[(object_id, agent_id)] = expiry
+
+        stall_payload = payload.get("stall_counts", {})
+        if isinstance(stall_payload, dict):
+            self._stall_counts = {str(obj_id): int(count) for obj_id, count in stall_payload.items()}
+        else:
+            self._stall_counts = {}
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -177,4 +235,3 @@ class QueueManager:
             return entry.agent_id
         finally:
             self._perf_metrics["assign_ns"] += time.perf_counter_ns() - start
-
