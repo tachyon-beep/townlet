@@ -236,6 +236,7 @@ class TrainingHarness:
         self._ppo_state = {"step": 0, "learning_rate": 1e-3}
         # TODO(@townlet): Wire up PPO trainer, evaluators, and promotion hooks.
         self._capture_loop = None
+        self._apply_social_reward_stage(-1)
 
     def run(self) -> None:
         """Entry point for CLI training runs."""
@@ -327,6 +328,8 @@ class TrainingHarness:
         log_frequency: int = 1,
         max_log_entries: int | None = None,
     ) -> dict[str, float]:
+        next_cycle = int(self._ppo_state.get("cycle_id", -1)) + 1
+        self._apply_social_reward_stage(next_cycle)
         buffer = self.capture_rollout(
             ticks=ticks,
             auto_seed_agents=auto_seed_agents,
@@ -416,6 +419,7 @@ class TrainingHarness:
             self._ppo_state["cycle_id"] = cycle_id
         else:
             cycle_id = max(cycle_id, 0)
+        self._apply_social_reward_stage(cycle_id)
 
         data_mode = "replay"
         rollout_ticks = 0
@@ -696,6 +700,33 @@ class TrainingHarness:
         if PPO_TELEMETRY_VERSION >= 1.1:
             self._ppo_state["log_stream_offset"] = log_stream_offset
         return last_summary
+
+    def _select_social_reward_stage(self, cycle_id: int) -> str | None:
+        training_cfg = getattr(self.config, "training", None)
+        if training_cfg is None:
+            return None
+        stage = getattr(training_cfg, "social_reward_stage_override", None)
+        schedule = getattr(training_cfg, "social_reward_schedule", []) or []
+        try:
+            iterable = sorted(
+                schedule,
+                key=lambda entry: int(getattr(entry, "cycle", 0)),
+            )
+        except TypeError:
+            iterable = []
+        for entry in iterable:
+            entry_cycle = int(getattr(entry, "cycle", 0))
+            if cycle_id >= entry_cycle:
+                stage = getattr(entry, "stage", stage)
+        return stage
+
+    def _apply_social_reward_stage(self, cycle_id: int) -> None:
+        stage = self._select_social_reward_stage(cycle_id)
+        if stage is None:
+            return
+        current = getattr(self.config.features.stages, "social_rewards", None)
+        if stage != current:
+            self.config.features.stages.social_rewards = stage
 
     def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> dict[str, float]:
         summary = {

@@ -109,6 +109,7 @@ class WorldState:
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: Dict[str, Dict[str, Any]] = field(init=False, default_factory=dict)
+    _chat_events: List[Dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
     _rng_state: Optional[Tuple[Any, ...]] = field(init=False, default=None)
 
@@ -140,6 +141,7 @@ class WorldState:
             max_samples=8,
         )
         self._recent_meal_participants = {}
+        self._chat_events = []
         self._load_affordance_definitions()
         self._rng_seed = None
         self._rng_state = random.getstate()
@@ -435,6 +437,21 @@ class WorldState:
                 snapshot[agent_id] = data
         return snapshot
 
+    def relationship_tie(self, agent_id: str, other_id: str) -> RelationshipTie | None:
+        """Return the current relationship tie between two agents, if any."""
+
+        ledger = self._relationship_ledgers.get(agent_id)
+        if ledger is None:
+            return None
+        return ledger.tie_for(other_id)
+
+    def consume_chat_events(self) -> List[Dict[str, Any]]:
+        """Return chat events staged for reward calculations and clear the buffer."""
+
+        events = list(self._chat_events)
+        self._chat_events.clear()
+        return events
+
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
         ledger = self._rivalry_ledgers.get(agent_id)
@@ -604,6 +621,15 @@ class WorldState:
             familiarity=0.10 * clipped_quality,
             event="chat_success",
         )
+        self._chat_events.append(
+            {
+                "event": "chat_success",
+                "speaker": speaker,
+                "listener": listener,
+                "quality": clipped_quality,
+                "tick": self.tick,
+            }
+        )
         self._emit_event(
             "chat_success",
             {
@@ -621,6 +647,14 @@ class WorldState:
             familiarity=-0.05,
             rivalry=0.05,
             event="chat_failure",
+        )
+        self._chat_events.append(
+            {
+                "event": "chat_failure",
+                "speaker": speaker,
+                "listener": listener,
+                "tick": self.tick,
+            }
         )
         self._emit_event(
             "chat_failure",

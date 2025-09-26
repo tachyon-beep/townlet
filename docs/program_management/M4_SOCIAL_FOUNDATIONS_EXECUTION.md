@@ -96,11 +96,21 @@ Each phase below lists numbered steps (S) and tasks (T). Acceptance criteria inc
 - **Task 4.3-T2:** Extend reward guardrails to block positive rewards within the configured termination window and ensure social rewards respect global clip.
   - *Acceptance:* Regression test using scripted eviction verifies guardrail enforcement; documentation in `docs/policy/REWARD_ENGINE.md`.
 
+**Status:** Completed — RewardEngine consumes chat success events, applies the Phase C1 formula,
+respects the need override, and enforces the termination window guardrail. Regression coverage lives
+in `tests/test_reward_engine.py` and `tests/test_relationship_metrics.py`.
+
 ### Step 4.3-S2 – Training Validation & Scheduling
 - **Task 4.3-T3:** Run PPO smoke + drift suite on social scenarios (baseline vs new rewards) with golden metrics.
   - *Acceptance:* New metrics stored under `tests/golden/ppo_social/`; CI check ensures metric drift within tolerance.
 - **Task 4.3-T4:** Add config schedule toggling Phase C1 rewards (feature flag, schedule hook) and document rollout procedure.
   - *Acceptance:* Ops checklist updated; automation script `scripts/manage_phase_c.py` created; training harness respects flag.
+
+**Status:** Completed — deterministic social PPO regression added in
+`tests/test_training_replay.py::test_ppo_social_chat_drift` with golden metrics under
+`tests/golden/ppo_social/baseline.json`. Training configs now expose
+`training.social_reward_stage_override` / `training.social_reward_schedule`, applied by the harness, and
+the new `scripts/manage_phase_c.py` helper plus OPS handbook guidance document the rollout procedure.
 
 #### Phase 4.3 Risk Assessment
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |

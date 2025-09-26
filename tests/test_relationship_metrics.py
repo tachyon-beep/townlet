@@ -258,6 +258,34 @@ def test_chat_outcomes_adjust_relationships() -> None:
     assert snapshot["alice"]["bob"]["trust"] > 0.0
     assert snapshot["alice"]["bob"]["familiarity"] > 0.0
 
+
+def test_relationship_tie_helper_returns_current_values() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.update_relationship("alice", "bob", trust=0.25, familiarity=0.15)
+
+    tie = world.relationship_tie("alice", "bob")
+    assert tie is not None
+    assert tie.trust == pytest.approx(0.25)
+    assert tie.familiarity == pytest.approx(0.15)
+
+
+def test_consume_chat_events_is_single_use() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.tick = 42
+
+    world.record_chat_success("alice", "bob", quality=0.8)
+    world.record_chat_failure("bob", "carol")
+
+    first_batch = world.consume_chat_events()
+    assert {event["event"] for event in first_batch} == {"chat_success", "chat_failure"}
+    success_event = next(event for event in first_batch if event["event"] == "chat_success")
+    assert success_event["quality"] == pytest.approx(0.8)
+    assert success_event["tick"] == 42
+
+    assert world.consume_chat_events() == []
+
     world.record_chat_failure("alice", "bob")
     snapshot = world.relationships_snapshot()
     assert snapshot["alice"]["bob"]["familiarity"] < 0.1

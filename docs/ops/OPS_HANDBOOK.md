@@ -14,6 +14,10 @@
   5. `python scripts/telemetry_watch.py tmp/ops_run/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --queue-events-min 30 --queue-intensity-min 45 --shared-meal-min 1 --late-help-min 0 --shift-takeover-max 2 --chat-quality-min 0.5 --json > tmp/ops_run/watch.jsonl`
   6. `python scripts/telemetry_summary.py tmp/ops_run/ppo_mixed.jsonl --format markdown > tmp/ops_run/summary.md`
   Attach `tmp/ops_run/{ppo_mixed.jsonl,watch.jsonl,summary.md}` to the ops log for audit.
+- Phase C social rewards:
+  - Toggle global stage: `python scripts/manage_phase_c.py set-stage configs/examples/poc_hybrid.yaml --stage C1 --in-place`.
+  - Stage schedule overrides live under `training.social_reward_schedule`; e.g. `python scripts/manage_phase_c.py schedule configs/examples/poc_hybrid.yaml --override OFF --schedule 0:OFF --schedule 1:C1 --in-place` ensures rollouts stay OFF on cycle 0 and enable C1 afterwards.
+  - Use `--output` to dry-run changes (`--output -` prints to stdout) before committing; the helper preserves existing schedules unless `--clear` is supplied.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
 - The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.

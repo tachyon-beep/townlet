@@ -15,9 +15,11 @@ from townlet.policy.models import torch_available
 from townlet.policy.replay import (
     ReplayDataset,
     ReplayDatasetConfig,
+    ReplaySample,
     frames_to_replay_sample,
     load_replay_sample,
 )
+from townlet.policy.replay_buffer import InMemoryReplayDataset, InMemoryReplayDatasetConfig
 from townlet.policy.runner import TrainingHarness
 from townlet.world.grid import AgentSnapshot, WorldState
 
@@ -218,6 +220,64 @@ def _make_sample(
     obs["metadata"]["action_dim"] = 3
     meta_path.write_text(json.dumps(obs["metadata"], indent=2))
     return sample_path, meta_path
+
+
+def _make_social_sample() -> ReplaySample:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.95, "hygiene": 0.85, "energy": 0.9},
+        wallet=2.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(0, 1),
+        needs={"hunger": 0.92, "hygiene": 0.8, "energy": 0.88},
+        wallet=2.0,
+    )
+    world.record_chat_success("alice", "bob", quality=0.8)
+
+    builder = ObservationBuilder(config)
+    observation = builder.build_batch(world, terminated={"alice": False, "bob": False})[
+        "alice"
+    ]
+    map_seq = np.stack([observation["map"], observation["map"]], axis=0)
+    feature_seq = np.stack([observation["features"], observation["features"]], axis=0)
+    actions = np.array([1, 2], dtype=np.int64)
+    old_log_probs = np.array([-0.2, -0.3], dtype=np.float32)
+    value_preds = np.array([0.1, 0.05, 0.01], dtype=np.float32)
+    rewards = np.array([0.06, 0.08], dtype=np.float32)
+    dones = np.array([False, True], dtype=np.bool_)
+    metadata = json.loads(json.dumps(observation["metadata"]))
+    metadata["training_arrays"] = [
+        "actions",
+        "old_log_probs",
+        "value_preds",
+        "rewards",
+        "dones",
+    ]
+    metadata["timesteps"] = 2
+    metadata["value_pred_steps"] = len(value_preds)
+    metadata["action_dim"] = 4
+    metadata["metrics"] = {
+        "reward_sum": float(rewards.sum()),
+        "reward_sum_mean": float(rewards.sum()),
+        "reward_mean": float(rewards.mean()),
+        "log_prob_mean": float(old_log_probs.mean()),
+    }
+
+    return ReplaySample(
+        map=map_seq,
+        features=feature_seq,
+        actions=actions,
+        old_log_probs=old_log_probs,
+        value_preds=value_preds,
+        rewards=rewards,
+        dones=dones,
+        metadata=metadata,
+    )
 
 
 def test_training_harness_replay_stats(tmp_path: Path) -> None:
@@ -762,6 +822,45 @@ def test_training_harness_rollout_queue_conflict_metrics(tmp_path: Path) -> None
     assert logged["queue_conflict_intensity_sum"] == pytest.approx(
         summary["queue_conflict_intensity_sum"], rel=1e-5
     )
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_ppo_social_chat_drift(tmp_path: Path) -> None:
+    import torch
+
+    sample = _make_social_sample()
+    dataset = InMemoryReplayDataset(
+        InMemoryReplayDatasetConfig(entries=[sample], batch_size=1)
+    )
+    dataset.baseline_metrics = sample.metadata.get("metrics", {}) | {"sample_count": 1.0}
+    dataset.chat_success_count = 1.0
+    dataset.chat_failure_count = 0.0
+    dataset.chat_quality_mean = 0.8
+
+    harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
+    torch.manual_seed(0)
+    log_path = tmp_path / "social_chat.jsonl"
+    summary = harness.run_ppo(
+        in_memory_dataset=dataset,
+        epochs=1,
+        log_path=log_path,
+        log_frequency=1,
+    )
+
+    golden_path = Path("tests/golden/ppo_social/baseline.json")
+    expected = json.loads(golden_path.read_text())
+    for key, value in expected.items():
+        assert summary[key] == pytest.approx(value, rel=1e-5, abs=1e-6)
+
+    logged_lines = log_path.read_text().strip().splitlines()
+    assert logged_lines, "PPO log should contain at least one entry"
+    logged = json.loads(logged_lines[-1])
+    for key, value in expected.items():
+        assert logged[key] == pytest.approx(value, rel=1e-5, abs=1e-6)
+
+    assert summary["chat_success_events"] == pytest.approx(dataset.chat_success_count)
+    assert summary["chat_failure_events"] == pytest.approx(dataset.chat_failure_count)
+    assert summary["chat_quality_mean"] == pytest.approx(dataset.chat_quality_mean)
 
 
 def test_policy_runtime_collects_frames(tmp_path: Path) -> None:

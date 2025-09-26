@@ -7,7 +7,7 @@ checks such as observation variant validation and reward guardrails.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Dict, List, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -226,11 +226,18 @@ class BehaviorConfig(BaseModel):
     job_arrival_buffer: int = Field(20, ge=0)
 
 
+class SocialRewardScheduleEntry(BaseModel):
+    cycle: int = Field(0, ge=0)
+    stage: SocialRewardStage
+
+
 class TrainingConfig(BaseModel):
     source: TrainingSource = "replay"
     rollout_ticks: int = Field(100, ge=0)
     rollout_auto_seed_agents: bool = False
     replay_manifest: Path | None = None
+    social_reward_stage_override: SocialRewardStage | None = None
+    social_reward_schedule: List["SocialRewardScheduleEntry"] = Field(default_factory=list)
 
 
 class JobSpec(BaseModel):

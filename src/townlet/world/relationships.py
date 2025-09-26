@@ -69,6 +69,11 @@ class RelationshipLedger:
         self._prune_if_needed(reason="capacity")
         return tie
 
+    def tie_for(self, other_id: str) -> RelationshipTie | None:
+        """Return the tie for ``other_id`` if it exists."""
+
+        return self._ties.get(other_id)
+
     def decay(self) -> None:
         if not self._ties:
             return
