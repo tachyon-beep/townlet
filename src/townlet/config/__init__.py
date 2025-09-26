@@ -21,6 +21,8 @@ from .loader import (
     SocialRewardScheduleEntry,
     TelemetryConfig,
     NarrationThrottleConfig,
+    BCTrainingSettings,
+    AnnealStage,
     load_config,
 )
 
@@ -44,5 +46,7 @@ __all__ = [
     "SocialRewardScheduleEntry",
     "TelemetryConfig",
     "NarrationThrottleConfig",
+    "BCTrainingSettings",
+    "AnnealStage",
     "load_config",
 ]

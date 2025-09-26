@@ -231,6 +231,22 @@ class SocialRewardScheduleEntry(BaseModel):
     stage: SocialRewardStage
 
 
+class BCTrainingSettings(BaseModel):
+    manifest: Path | None = None
+    learning_rate: float = Field(1e-3, gt=0.0)
+    batch_size: int = Field(64, ge=1)
+    epochs: int = Field(10, ge=1)
+    weight_decay: float = Field(0.0, ge=0.0)
+    device: str = "cpu"
+
+
+class AnnealStage(BaseModel):
+    cycle: int = Field(0, ge=0)
+    mode: Literal["bc", "ppo"] = "ppo"
+    epochs: int = Field(1, ge=1)
+    bc_weight: float = Field(1.0, ge=0.0, le=1.0)
+
+
 class NarrationThrottleConfig(BaseModel):
     global_cooldown_ticks: int = Field(30, ge=0, le=10_000)
     category_cooldown_ticks: Dict[str, int] = Field(default_factory=dict)
@@ -254,6 +270,9 @@ class TrainingConfig(BaseModel):
     replay_manifest: Path | None = None
     social_reward_stage_override: SocialRewardStage | None = None
     social_reward_schedule: List["SocialRewardScheduleEntry"] = Field(default_factory=list)
+    bc: BCTrainingSettings = BCTrainingSettings()
+    anneal_schedule: List[AnnealStage] = Field(default_factory=list)
+    anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
 
 
 class JobSpec(BaseModel):

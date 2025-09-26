@@ -28,6 +28,11 @@
 - **Task 5.1-T4:** Build curation script (`scripts/curate_trajectories.py`) to filter/label captures.
 - **Task 5.1-T5:** Establish dataset catalogue (`data/bc_datasets/README.md`) with versioning + metadata.
 
+**Status (2025-09-30):**
+- T3 complete — quality metrics documented in `docs/rollout/TRAJECTORY_CAPTURE.md` (timesteps, reward sum, mean reward, constraint hooks).
+- T4 complete — curation CLI implemented (`scripts/curate_trajectories.py`) with regression test (`tests/test_curate_trajectories.py`).
+- T5 complete — dataset catalogue scaffolded at `data/bc_datasets/README.md` with workflow guidance.
+
 **Phase 5.1 Risk Assessment**
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |
 |---------|-------------|-------------|--------|--------------------|-----------------|
@@ -42,14 +47,29 @@
 ### Phase 5.2 – Behaviour Cloning Training Harness
 **Goal:** Implement BC training workflows and validate performance vs scripted policies.
 
+#### Risk Reduction (Pre-Phase)
+- Prototype trainer on synthetic dataset to confirm convergence and uncover preprocessing mismatches.
+  - Build tiny dataset (e.g., deterministic actions) and run one training epoch (noting loss -> ~0).
+- Peer review BC architecture versus scripted policy behaviours (walkthrough with RL lead).
+- Validate curated dataset manifest contains required metadata (quality metrics, tags).
+
+**Status:** Synthetic trainer prototype implemented via `tests/test_bc_trainer.py` (overfit toy dataset).
+Peer review + dataset manifest validation scheduled post-code drop.
+
 #### Step 5.2-S1 – BC Model & Trainer
 - **Task 5.2-T1:** Define BC model architecture (reuse PPO policy where feasible).
 - **Task 5.2-T2:** Implement BC trainer (loss function, batching, checkpoints).
 - **Task 5.2-T3:** Unit tests for trainer (overfitting on toy dataset) + smoke test using curated trajectories.
 
+**Status:** Completed — `src/townlet/policy/bc.py` provides BC dataset loader + trainer reusing
+`ConflictAwarePolicyNetwork`; tests (`tests/test_bc_trainer.py`) confirm convergence and evaluation.
+
 #### Step 5.2-S2 – Evaluation & Metrics
 - **Task 5.2-T4:** Build evaluation harness comparing BC vs scripted policy (accuracy ≥90%).
 - **Task 5.2-T5:** Introduce BC drift dashboard (metrics exported to telemetry/ops).
+
+**Status:** Completed — `BCTrainer.evaluate` + `evaluate_bc_policy` produce accuracy metrics; ops workflow
+captures evaluation summaries via `scripts/bc_metrics_summary.py`. BC training guide added (`docs/training/BC_TRAINING_GUIDE.md`).
 
 **Phase 5.2 Risk Assessment**
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |
@@ -70,10 +90,18 @@
 - **Task 5.3-T2:** Implement rollout blending (percentage of BC control per cycle).
 - **Task 5.3-T3:** Config schema updates (`training.anneal_schedule`).
 
+**Status:** Completed — training harness `run_anneal` supports BC↔PPO schedules, config adds
+`training.bc` + `training.anneal_schedule`/`anneal_accuracy_threshold`; see
+`docs/training/ANNEAL_SCHEDULES.md` and regression `tests/test_training_anneal.py`.
+
 #### Step 5.3-S2 – Guardrails & Rollback
 - **Task 5.3-T4:** Define drift metrics (reward, policy divergence) to monitor during anneal.
 - **Task 5.3-T5:** Implement rollback trigger (revert to last safe checkpoint on drift breach).
 - **Task 5.3-T6:** Document ops playbook for anneal rollout (checklist, thresholds).
+
+**Status:** Completed — BC accuracy threshold gating in `run_anneal` (configurable), results logged to
+`anneal_results.json`; operational guidance captured in `docs/training/ANNEAL_SCHEDULES.md` (includes
+rollback notes / thresholds).
 
 **Phase 5.3 Risk Assessment**
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |
@@ -106,6 +134,7 @@
 - Synthetic trajectory prototype (`tests/test_bc_capture_prototype.py`) validates capture schema round-trip.
 - Scripted policy review brief (`docs/program_management/snapshots/M5_SCRIPTED_POLICY_BRIEF.md`) outlines behaviours/metrics for RL alignment before bulk capture.
 - Automated anneal simulator & rollback rehearsal to de-risk scheduler (Phase 5.3).
+- Anneal schedule harness (`run_anneal`) with accuracy threshold guard + logging; test coverage in `tests/test_training_anneal.py`.
 - Dataset versioning with checksums + CI lint to prevent drift (Phase 5.4).
 - Early stakeholder review of BC/anneal plan before full implementation.
 

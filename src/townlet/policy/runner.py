@@ -17,6 +17,13 @@ from townlet.policy.models import (
     TorchNotAvailableError,
     torch_available,
 )
+from townlet.policy.bc import (
+    BCTrainer,
+    BCTrainingConfig as BCTrainingParams,
+    BCTrajectoryDataset,
+    evaluate_bc_policy,
+    load_bc_samples,
+)
 from townlet.policy.ppo.utils import (
     AdvantageReturns,
     clipped_value_loss,
@@ -346,6 +353,107 @@ class TrainingHarness:
             max_log_entries=max_log_entries,
             in_memory_dataset=dataset,
         )
+
+    def _load_bc_dataset(self, manifest: Path) -> BCTrajectoryDataset:
+        samples = load_bc_samples(manifest)
+        return BCTrajectoryDataset(samples)
+
+    def run_bc_training(
+        self,
+        *,
+        manifest: Path | None = None,
+        config: BCTrainingParams | None = None,
+    ) -> dict[str, float]:
+        if not torch_available():
+            raise TorchNotAvailableError("PyTorch is required for behaviour cloning training")
+
+        bc_settings = self.config.training.bc
+        manifest_path = Path(manifest) if manifest is not None else bc_settings.manifest
+        if manifest_path is None:
+            raise ValueError("BC manifest is required for behaviour cloning")
+
+        dataset = self._load_bc_dataset(manifest_path)
+        params = config or BCTrainingParams(
+            learning_rate=bc_settings.learning_rate,
+            batch_size=bc_settings.batch_size,
+            epochs=bc_settings.epochs,
+            weight_decay=bc_settings.weight_decay,
+            device=bc_settings.device,
+        )
+
+        policy_cfg = ConflictAwarePolicyConfig(
+            feature_dim=dataset.feature_dim,
+            map_shape=dataset.map_shape,
+            action_dim=dataset.action_dim,
+        )
+        trainer = BCTrainer(params, policy_cfg)
+        metrics = trainer.fit(dataset)
+        metrics.update(
+            {
+                "mode": "bc",
+                "manifest": str(manifest_path),
+            }
+        )
+        return metrics
+
+    def run_anneal(
+        self,
+        *,
+        dataset_config: ReplayDatasetConfig | None = None,
+        in_memory_dataset: InMemoryReplayDataset | None = None,
+        log_dir: Path | None = None,
+        bc_manifest: Path | None = None,
+    ) -> list[dict[str, object]]:
+        schedule = sorted(
+            self.config.training.anneal_schedule,
+            key=lambda stage: stage.cycle,
+        )
+        if not schedule:
+            raise ValueError("anneal_schedule is empty; configure training.anneal_schedule in config")
+
+        if dataset_config is None and in_memory_dataset is None:
+            replay_manifest = self.config.training.replay_manifest
+            if replay_manifest is None:
+                raise ValueError("Replay manifest required for PPO stages in anneal")
+            dataset_config = ReplayDatasetConfig.from_manifest(Path(replay_manifest))
+
+        bc_threshold = float(self.config.training.anneal_accuracy_threshold)
+        results: list[dict[str, object]] = []
+
+        for stage in schedule:
+            if stage.mode == "bc":
+                metrics = self.run_bc_training(manifest=bc_manifest)
+                accuracy = float(metrics.get("accuracy", 0.0))
+                stage_result: dict[str, object] = {
+                    "cycle": float(stage.cycle),
+                    "mode": "bc",
+                    "accuracy": accuracy,
+                    "loss": float(metrics.get("loss", 0.0)),
+                    "threshold": bc_threshold,
+                    "passed": accuracy >= bc_threshold,
+                    "bc_weight": float(stage.bc_weight),
+                }
+                results.append(stage_result)
+                if not stage_result["passed"]:
+                    stage_result["rolled_back"] = True
+                    break
+            else:
+                summary = self.run_ppo(
+                    dataset_config=dataset_config,
+                    in_memory_dataset=in_memory_dataset,
+                    epochs=stage.epochs,
+                )
+                summary_result = {
+                    "cycle": float(stage.cycle),
+                    "mode": "ppo",
+                    **summary,
+                }
+                results.append(summary_result)
+
+        if log_dir is not None:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            (log_dir / "anneal_results.json").write_text(json.dumps(results, indent=2))
+        return results
 
     def run_ppo(
         self,

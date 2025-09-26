@@ -45,12 +45,14 @@ labels to support dataset curation. Each capture writes:
 ```
 
 ## Quality Metrics (to populate during curation)
-- `coverage`: fraction of scripted behaviours exercised
-- `reward_sum`: total reward
-- `constraint_violations`: counts per constraint (optional)
-- Scenario-specific metrics (queue waits, punctuality, rivalry windows)
+- `timesteps`: number of steps in the trajectory.
+- `reward_sum`: cumulative reward across the trajectory.
+- `mean_reward`: average reward per step (derived).
+- `done_count`: number of terminal steps.
+- `coverage`: fraction of scripted behaviours exercised (scenario-specific; optional until defined).
+- `constraint_violations`: counts per constraint (scenario-specific; optional).
+- Scenario metrics (e.g., average queue wait, punctuality score, rivalry window coverage) to be added per scripted policy.
 
 ## Validation
 - `tests/test_bc_capture_prototype.py` ensures schema round-trip compatibility
 - Future work: lint/CI check to confirm feature names + required fields before dataset ingestion
-
