@@ -11,8 +11,8 @@ This roadmap tracks the sequencing across remediation and forward-looking Townle
 | M3 | Continuity & Conflict Systems | Snapshot persistence, conflict/rivalry telemetry, observer UI smoke test. | M2 | Snapshots round-trip deterministically; conflict events influence telemetry; UI smoke passes. |
 | M4 | Social Foundations | Relationship storage, social observation snippets, chat rewards (C1), narration throttling. | M3 | Relationships persisted per design; observer UI surfaces ties; narration guard verified. |
 | M5 | Behaviour Cloning & Anneal | Scripted trajectory capture, BC training harness, mixed control scheduler with rollback guard. | M4 | BC accuracy ≥90%; anneal runs with rollback guard and tests. |
-| M6 | Observer Experience & Policy Inspector | Dashboard overlays, policy inspector, audio toggles, KPI panels. | M5 | Viewer exercises overlays and inspector without schema mismatches; ops handbook updated. |
-| M7 | Promotion & Release Governance | Automated promotion gate, golden rollouts, rollback/ops drills. | M6 | Promotion gate enforces KPIs, rollback drills documented and tested. |
+| M6 | Observer Experience & Policy Inspector | Dashboard overlays, policy inspector, audio toggles, KPI panels, anneal promotion indicators. | M5 | Viewer exercises overlays and inspector without schema mismatches; ops handbook updated; anneal status panel reflects promotion gate state. |
+| M7 | Promotion & Release Governance | Automated promotion gate, golden rollouts, rollback/ops drills, BC/anneal audit automation. | M6 | Promotion gate enforces KPIs, rollback drills documented and tested; dataset audits & anneal rehearsals integrated into release cadence. |
 | M8 | Perturbations & Narrative Events | Perturbation scheduler, fairness buckets, lifecycle vignettes, perturbation telemetry. | M7 | Events fire with cooldowns, vignettes render, telemetry captures perturbation metadata. |
 | M9 | Personality & Ops Polish | Personality balancing, admin console extensions, privacy/ethics controls. | M8 | KPI targets met with personalities enabled; console/ethics controls documented and tested. |
 

@@ -9,10 +9,10 @@ def _make_world() -> WorldState:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = False
     world = WorldState.from_config(config)
-    world.register_object("shower", "shower")
-    world.register_object("fridge_1", "fridge")
-    world.register_object("stove_1", "stove")
-    world.register_object("bed_1", "bed")
+    world.register_object(object_id="shower", object_type="shower")
+    world.register_object(object_id="fridge_1", object_type="fridge")
+    world.register_object(object_id="stove_1", object_type="stove")
+    world.register_object(object_id="bed_1", object_type="bed")
     # Update the loaded affordance to known duration/effects for deterministic tests
     world.register_affordance(
         affordance_id="use_shower",

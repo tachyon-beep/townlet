@@ -13,7 +13,7 @@ from townlet.policy.behavior import BehaviorController, AgentIntent
 def test_scripted_behavior_determinism() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
-    loop.world.register_object("stove_1", "stove")
+    loop.world.register_object(object_id="stove_1", object_type="stove")
     loop.world.agents["alice"] = AgentSnapshot(
         "alice",
         (0, 0),
@@ -46,7 +46,7 @@ def test_scripted_behavior_determinism() -> None:
         actions_first.extend(frame.get("action") for frame in frames)
 
     loop = SimulationLoop(config)
-    loop.world.register_object("stove_1", "stove")
+    loop.world.register_object(object_id="stove_1", object_type="stove")
     loop.world.agents["alice"] = AgentSnapshot(
         "alice",
         (0, 0),

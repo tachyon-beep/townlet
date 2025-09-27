@@ -1,0 +1,12 @@
+{
+  "idle_alice": {
+    "sample": "artifacts/m5/preflight/captures/idle_alice.npz",
+    "meta": "artifacts/m5/preflight/captures/idle_alice.json",
+    "sha256": "df15fec9dc08066a2965723c031516046006025c3d3a7449f0ea6fa1f1a865ef"
+  },
+  "idle_bob": {
+    "sample": "artifacts/m5/preflight/captures/idle_bob.npz",
+    "meta": "artifacts/m5/preflight/captures/idle_bob.json",
+    "sha256": "1ee7991bd0eb58245c6f4a8626a60bb11e9eec77e47e1e314e65c82e71b7cebe"
+  }
+}

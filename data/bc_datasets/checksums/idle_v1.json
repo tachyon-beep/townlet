@@ -1,0 +1,12 @@
+{
+  "idle_alice": {
+    "sample": "data/bc_datasets/captures/idle_v1/idle_alice.npz",
+    "meta": "data/bc_datasets/captures/idle_v1/idle_alice.json",
+    "sha256": "1b21db5c71db166dcaca45b14572733d7c3a983e860eeab20682b53663f2d9ae"
+  },
+  "idle_bob": {
+    "sample": "data/bc_datasets/captures/idle_v1/idle_bob.npz",
+    "meta": "data/bc_datasets/captures/idle_v1/idle_bob.json",
+    "sha256": "fe8de3731087901ada060d7b9e1a650ae22f36272ff99eb8d3acc97e229b5758"
+  }
+}

@@ -90,9 +90,9 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - Scripted controller plug-in (`BehaviorController`) currently returns idle intents; foundation laid for richer logic.
 
 ### 2.8 Reward Engine (`src/townlet/rewards/engine.py`)
-- computes per-agent reward: needs loss, shaping, wage, survival, social taps, curiosity; enforces clip bounds.
-- dependencies: lifecycle signals (exits), scheduler events (city disruptions), observation variant for context if needed.
-- current implementation covers homeostasis + survival tick with clipping; social/work taps remain TODO.
+- computes per-agent reward: survival tick, needs penalty, wage, punctuality, social taps; enforces per-tick & per-episode clip bounds, death-window suppression.
+- dependencies: lifecycle signals (exits), employment context (wages paid/withheld, punctuality), chat events, rivalry data for social guardrails.
+- outputs per-agent totals plus component breakdown (survival, needs penalty, social, wage, punctuality, clip adjustment); telemetry consumer records the breakdown for ops/console.
 
 ### 2.9 Stability Monitor (`src/townlet/stability/monitor.py`)
 - aggregates KPIs (lateness, starvation, option switch rate, reward variance) over rolling windows; decides release promotions and rollbacks.

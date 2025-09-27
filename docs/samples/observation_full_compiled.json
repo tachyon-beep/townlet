@@ -1,0 +1,78 @@
+{
+  "variant": "full",
+  "map_shape": [
+    6,
+    11,
+    11
+  ],
+  "map_channels": [
+    "self",
+    "agents",
+    "objects",
+    "reservations",
+    "path_dx",
+    "path_dy"
+  ],
+  "feature_names": [
+    "need_hunger",
+    "need_hygiene",
+    "need_energy",
+    "wallet",
+    "lateness_counter",
+    "on_shift",
+    "time_sin",
+    "time_cos",
+    "attendance_ratio",
+    "wages_withheld",
+    "shift_pre",
+    "shift_on_time",
+    "shift_late",
+    "shift_absent",
+    "shift_post",
+    "embedding_slot_norm",
+    "ctx_reset_flag",
+    "episode_progress",
+    "rivalry_max",
+    "rivalry_avoid_count",
+    "last_action_id_hash",
+    "last_action_success",
+    "last_action_duration",
+    "reservation_active",
+    "in_queue",
+    "path_hint_north",
+    "path_hint_south",
+    "path_hint_east",
+    "path_hint_west",
+    "fridge_dx",
+    "fridge_dy",
+    "fridge_dist",
+    "stove_dx",
+    "stove_dy",
+    "stove_dist",
+    "bed_dx",
+    "bed_dy",
+    "bed_dist",
+    "shower_dx",
+    "shower_dy",
+    "shower_dist"
+  ],
+  "embedding_slot": 0,
+  "landmark_slices": {
+    "fridge": [
+      29,
+      32
+    ],
+    "stove": [
+      32,
+      35
+    ],
+    "bed": [
+      35,
+      38
+    ],
+    "shower": [
+      38,
+      41
+    ]
+  }
+}

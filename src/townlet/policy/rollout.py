@@ -138,6 +138,7 @@ class RolloutBuffer:
             batch_size=batch_size,
             drop_last=drop_last,
             rollout_ticks=self._tick_count,
+            label="rollout_buffer",
         )
         dataset = InMemoryReplayDataset(config)
         dataset.baseline_metrics = self._aggregate_metrics(samples)

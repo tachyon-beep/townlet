@@ -105,6 +105,17 @@ def test_invalid_affordance_file_absent(tmp_path: Path) -> None:
     assert config.affordances.affordances_file.endswith("missing.yaml")
 
 
+def test_observation_variant_guard(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["features"]["systems"]["observations"] = "unsupported"
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="Input should be 'full', 'hybrid' or 'compact'"):
+        load_config(target)
+
+
 def test_ppo_config_defaults_roundtrip(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -119,3 +130,25 @@ def test_ppo_config_defaults_roundtrip(tmp_path: Path) -> None:
     assert config.ppo.value_clip == pytest.approx(0.2)
     assert config.ppo.advantage_normalization is True
     assert config.ppo.num_mini_batches == 4
+
+
+def test_observation_variant_full_supported(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["features"]["systems"]["observations"] = "full"
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    config = load_config(target)
+    assert config.observation_variant == "full"
+
+
+def test_observation_variant_compact_supported(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["features"]["systems"]["observations"] = "compact"
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    config = load_config(target)
+    assert config.observation_variant == "compact"

@@ -32,6 +32,7 @@
 - T3 complete — quality metrics documented in `docs/rollout/TRAJECTORY_CAPTURE.md` (timesteps, reward sum, mean reward, constraint hooks).
 - T4 complete — curation CLI implemented (`scripts/curate_trajectories.py`) with regression test (`tests/test_curate_trajectories.py`).
 - T5 complete — dataset catalogue scaffolded at `data/bc_datasets/README.md` with workflow guidance.
+- 2025-09-30 update — production idle dataset (`idle_v1_production`) captured and catalogued under `data/bc_datasets/captures/idle_v1`.
 
 **Phase 5.1 Risk Assessment**
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |
@@ -121,6 +122,14 @@ rollback notes / thresholds).
 - **Task 5.4-T2:** Update ops handbook with BC dataset management, anneal procedures, rollback drill instructions.
 - **Task 5.4-T3:** Extend CI: BC trainer unit tests, anneal schedule smoke test, dataset schema lint.
 - **Task 5.4-T4:** Stakeholder go/no-go review (dataset owners, ops, RL).
+
+**Status (2025-09-30 update):** Completed — acceptance smoke run (idle_v1) archived, ops playbooks updated, CI guardrails in place, and go/no-go decision recorded (see `docs/certificates/M5_BC_ANNEAL_ACCEPTANCE.md`).
+
+### Phase 5.5 – Anneal Promotion Governance (In progress)
+**Goal:** Surface anneal health in telemetry/ops tooling and prepare promotion controls.
+
+- **Task 5.5.b-S1** (Telemetry pipeline) — ✅ `PPO_TELEMETRY_VERSION` bumped to 1.2; logs now emit `anneal_*` metrics (BC accuracy, thresholds, drift flags). Watcher/summary CLIs consume the new fields.
+- **Task 5.5.b-S2** (Dashboard UX) — ✅ Observer UI adds an Anneal panel with BC gauges and drift alerts; guide updated.
 
 **Phase 5.4 Risk Assessment**
 | Risk ID | Description | Probability | Impact | Mitigation / Tasks | Trigger / Owner |

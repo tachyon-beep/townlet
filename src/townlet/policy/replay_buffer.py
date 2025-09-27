@@ -13,6 +13,7 @@ class InMemoryReplayDatasetConfig:
     batch_size: int = 1
     drop_last: bool = False
     rollout_ticks: int = 0
+    label: str | None = None
 
 
 class InMemoryReplayDataset:
@@ -26,6 +27,7 @@ class InMemoryReplayDataset:
         self.batch_size = config.batch_size
         self._validate_shapes()
         self.rollout_ticks = int(config.rollout_ticks)
+        self.label = config.label
         self.queue_conflict_count = 0
         self.queue_conflict_intensity_sum = 0.0
         self.shared_meal_count = 0

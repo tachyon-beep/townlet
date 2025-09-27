@@ -6,6 +6,7 @@
 - Replay example: `--mode replay --train-ppo --capture-dir captures/<scenario>`.
 - Rollout example: `--mode rollout --rollout-ticks 200 --rollout-auto-seed-agents --ppo-log logs/live.jsonl`.
 - Mixed example: `--mode mixed --capture-dir captures/<scenario> --rollout-ticks 100 --ppo-log logs/mixed.jsonl`.
+- Affordance manifest lint: `python scripts/validate_affordances.py --strict` — run after editing files under `configs/affordances/` to confirm schema, duplicate, and checksum compliance (CI runs the same check).
 - Mixed-mode queue-conflict workflow:
   1. `python scripts/capture_rollout.py configs/scenarios/queue_conflict.yaml --output tmp/ops_run`
   2. `python scripts/run_training.py configs/scenarios/queue_conflict.yaml --mode mixed --replay-manifest tmp/ops_run/rollout_sample_manifest.json --rollout-ticks 40 --epochs 1 --ppo-log tmp/ops_run/ppo_mixed.jsonl`
@@ -14,6 +15,39 @@
   5. `python scripts/telemetry_watch.py tmp/ops_run/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --queue-events-min 30 --queue-intensity-min 45 --shared-meal-min 1 --late-help-min 0 --shift-takeover-max 2 --chat-quality-min 0.5 --json > tmp/ops_run/watch.jsonl`
   6. `python scripts/telemetry_summary.py tmp/ops_run/ppo_mixed.jsonl --format markdown > tmp/ops_run/summary.md`
   Attach `tmp/ops_run/{ppo_mixed.jsonl,watch.jsonl,summary.md}` to the ops log for audit.
+- Behaviour cloning / anneal workflow:
+  1. Validate dataset integrity: `python - <<'PY' ...` (see below) to recompute SHA-256 for
+     `data/bc_datasets/checksums/idle_v1.json`. Abort if mismatches occur.
+  2. Run BC gate: `python - <<'PY'` (load config `artifacts/m5/acceptance/config_idle_v1.yaml`, invoke
+     `TrainingHarness.run_bc_training()`) and confirm accuracy ≥ threshold (`0.8` by default).
+  3. Execute anneal smoke: `python - <<'PY'` running `TrainingHarness.run_anneal(..., log_dir=Path('artifacts/m5/acceptance/logs'))` to emit `anneal_results.json`.
+  4. Archive artefacts under `artifacts/m5/acceptance/` (`config_idle_v1.yaml`, `logs/anneal_results.json`,
+     `summary_idle_v1.json`). Attach to acceptance report.
+  5. Rollback drill: increase `anneal_accuracy_threshold` to force failure; verify harness stops after BC
+     stage with `"rolled_back": true`.
+  6. Update `data/bc_datasets/versions.json` when publishing new datasets (increment id, capture
+     manifest + checksum, mark superseded entries `deprecated`).
+  7. Evaluate promotion gates using `docs/ops/ANNEAL_PROMOTION_GATES.md` (BC accuracy ≥0.90 rolling mean, queue/social metrics ±15 % bands, telemetry thresholds). Flag “hold” and initiate rollback if any gate is breached.
+  8. Monthly: `python scripts/audit_bc_datasets.py --versions data/bc_datasets/versions.json --exit-on-failure`.
+  9. Monthly: `python scripts/run_anneal_rehearsal.py --exit-on-failure` (captures updated summary under `artifacts/m5/acceptance/summary_<timestamp>.json`).
+  10. Pre-release bundle: include dataset manifest/checksums + audit report, anneal rehearsal artefacts, telemetry summary markdown, and dashboard screenshots.
+  11. If `run_anneal_rehearsal.py` returns `HOLD`, freeze promotion, capture watcher output (`telemetry_watch.py --anneal-bc-min 0.9`) and escalate for dataset refresh or drift investigation. `FAIL` indicates BC gate regression and requires rollback.
+  Dataset checksum helper:
+  ```bash
+  python - <<'PY'
+  import hashlib, json, pathlib
+  checks = json.loads(pathlib.Path("data/bc_datasets/checksums/idle_v1.json").read_text())
+  failures = []
+  for name, info in checks.items():
+      sample = pathlib.Path(info['sample'])
+      meta = pathlib.Path(info['meta'])
+      digest = hashlib.sha256(sample.read_bytes() + meta.read_bytes()).hexdigest()
+      if digest != info['sha256']:
+          failures.append(f"{name}: expected {info['sha256']} got {digest}")
+  if failures:
+      raise SystemExit("Checksum mismatch\n" + "\n".join(failures))
+  PY
+  ```
 - Phase C social rewards:
   - Toggle global stage: `python scripts/manage_phase_c.py set-stage configs/examples/poc_hybrid.yaml --stage C1 --in-place`.
   - Stage schedule overrides live under `training.social_reward_schedule`; e.g. `python scripts/manage_phase_c.py schedule configs/examples/poc_hybrid.yaml --override OFF --schedule 0:OFF --schedule 1:C1 --in-place` ensures rollouts stay OFF on cycle 0 and enable C1 afterwards.
@@ -70,8 +104,12 @@
 - Promotion history tracked in `ops/rollouts.md`; append entry per promotion or rollback.
 - PPO telemetry tooling:
   - `python scripts/validate_ppo_telemetry.py <log> --relative`
-  - `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--queue-events-min INT] [--queue-intensity-min FLOAT] [--shared-meal-min INT] [--late-help-min INT] [--shift-takeover-max INT] [--chat-quality-min FLOAT] [--json]`
-  - `python scripts/telemetry_summary.py <log> --format markdown`
+- `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--queue-events-min INT] [--queue-intensity-min FLOAT] [--shared-meal-min INT] [--late-help-min INT] [--shift-takeover-max INT] [--chat-quality-min FLOAT] [--json]`
+- `python scripts/telemetry_summary.py <log> --format markdown`
+- `python scripts/audit_bc_datasets.py --versions data/bc_datasets/versions.json`
+- `python scripts/run_anneal_rehearsal.py --exit-on-failure`
+- `python scripts/telemetry_summary.py artifacts/m5/acceptance/logs/anneal_results.json --format markdown > artifacts/m5/acceptance/summary_release.md`
+- `python scripts/telemetry_watch.py artifacts/m5/acceptance/logs/anneal_results.json --anneal-bc-min 0.9`
 
 ## Checklist Before Demos
 - Validate console commands `spawn`, `setneed`, `force_chat`, `arrange_meet` in a dry-run town.

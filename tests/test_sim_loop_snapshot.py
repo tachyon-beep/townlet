@@ -34,7 +34,7 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
         position=(1, 0),
         needs={"hunger": 0.4, "hygiene": 0.3, "energy": 0.7},
     )
-    loop.world.register_object("fridge_1", "fridge")
+    loop.world.register_object(object_id="fridge_1", object_type="fridge")
 
     loop.world.update_relationship("alice", "bob", trust=0.3, familiarity=0.1)
     loop.telemetry.queue_console_command({"cmd": "noop"})
@@ -58,7 +58,7 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     random.seed(2025)
     def setup_loop() -> SimulationLoop:
         loop = SimulationLoop(base_config)
-        loop.world.register_object("fridge_1", "fridge")
+        loop.world.register_object(object_id="fridge_1", object_type="fridge")
         loop.world.agents["alice"] = AgentSnapshot(
             agent_id="alice",
             position=(0, 0),
@@ -116,7 +116,7 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
 def test_policy_transitions_resume(tmp_path: Path, base_config) -> None:
     random.seed(303)
     loop = SimulationLoop(base_config)
-    loop.world.register_object("fridge_1", "fridge")
+    loop.world.register_object(object_id="fridge_1", object_type="fridge")
     loop.world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),

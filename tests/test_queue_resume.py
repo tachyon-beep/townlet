@@ -22,7 +22,7 @@ def base_config():
 def _setup_loop(config) -> SimulationLoop:
     loop = SimulationLoop(config)
     world = loop.world
-    world.register_object("stove_1", "stove")
+    world.register_object(object_id="stove_1", object_type="stove")
     for idx in range(3):
         agent_id = f"agent_{idx}"
         world.agents[agent_id] = AgentSnapshot(

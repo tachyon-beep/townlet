@@ -88,9 +88,28 @@ def load_bc_samples(manifest_path: Path) -> List[ReplaySample]:
     for entry in manifest_data:
         if not isinstance(entry, Mapping):
             continue
-        sample_path = manifest_dir / Path(entry.get("sample", ""))
-        meta_path = manifest_dir / Path(entry.get("meta", ""))
-        if not sample_path.exists() or not meta_path.exists():
+        sample_spec = Path(entry.get("sample", ""))
+        meta_spec = Path(entry.get("meta", ""))
+
+        sample_path = None
+        for candidate in (
+            sample_spec if sample_spec.is_absolute() else manifest_dir / sample_spec,
+            sample_spec,
+        ):
+            if candidate and Path(candidate).exists():
+                sample_path = Path(candidate)
+                break
+
+        meta_path = None
+        for candidate in (
+            meta_spec if meta_spec.is_absolute() else manifest_dir / meta_spec,
+            meta_spec,
+        ):
+            if candidate and Path(candidate).exists():
+                meta_path = Path(candidate)
+                break
+
+        if sample_path is None or meta_path is None:
             continue
         samples.append(load_replay_sample(sample_path, meta_path))
     if not samples:

@@ -7,6 +7,37 @@ from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
+class StubSnapshot:
+    def __init__(self, needs: dict[str, float], wallet: float) -> None:
+        self.needs = dict(needs)
+        self.wallet = wallet
+
+
+class StubWorld:
+    def __init__(
+        self,
+        config,
+        snapshot: StubSnapshot,
+        context: dict[str, float],
+    ) -> None:
+        self.config = config
+        self.tick = 0
+        self.agents = {"alice": snapshot}
+        self._context = context
+
+    def consume_chat_events(self):
+        return []
+
+    def agent_context(self, agent_id: str) -> dict[str, float]:
+        return self._context
+
+    def relationship_tie(self, subject: str, target: str):
+        return None
+
+    def rivalry_top(self, agent_id: str, limit: int):
+        return []
+
+
 def _make_world(hunger: float = 0.5) -> WorldState:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)
@@ -128,3 +159,54 @@ def test_chat_reward_blocked_within_termination_window() -> None:
     world.record_chat_success("alice", "bob", quality=1.0)
     rewards = engine.compute(world, {"alice": False, "bob": False})
     assert rewards["alice"] > 0.0
+
+
+def test_episode_clip_enforced() -> None:
+    world = _make_world(hunger=0.0)
+    engine = RewardEngine(world.config)
+    # Force large positive reward repeatedly to exceed clip_per_episode
+    world.agents["alice"].needs["hunger"] = 1.0
+    clip_episode = world.config.rewards.clip.clip_per_episode
+    rewards = []
+    for _ in range(10):
+        rewards.append(engine.compute(world, terminated={})["alice"])
+    assert sum(rewards) <= clip_episode
+    # Reset episode totals on termination
+    engine.compute(world, terminated={"alice": True})
+    # After reset the agent should accrue rewards again (bounded by tick clip)
+    next_reward = engine.compute(world, terminated={})["alice"]
+    assert next_reward >= -world.config.rewards.clip.clip_per_tick
+
+
+def test_wage_and_punctuality_bonus() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    context = {
+        "needs": {"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        "wallet": 0.0,
+        "lateness_counter": 0,
+        "on_shift": True,
+        "attendance_ratio": 0.5,
+        "wages_withheld": 0.0,
+        "shift_state": "on_time",
+        "last_action_id": "wait",
+        "last_action_success": True,
+        "last_action_duration": 1,
+        "wages_paid": 0.1,
+        "punctuality_bonus": 0.5,
+    }
+    snapshot = StubSnapshot(needs=context["needs"], wallet=context["wallet"])
+    world = StubWorld(config, snapshot, context)
+
+    engine = RewardEngine(config)
+    reward = engine.compute(world, terminated={})["alice"]
+    base = config.rewards.survival_tick  # needs all satisfied so only survival tick
+    expected = base + context["wages_paid"] + (
+        config.rewards.punctuality_bonus * context["punctuality_bonus"]
+    )
+    assert reward == pytest.approx(expected)
+    breakdown = engine.latest_reward_breakdown()["alice"]
+    assert breakdown["wage"] == context["wages_paid"]
+    assert breakdown["punctuality"] == pytest.approx(
+        config.rewards.punctuality_bonus * context["punctuality_bonus"]
+    )
+    assert breakdown["total"] == pytest.approx(reward)

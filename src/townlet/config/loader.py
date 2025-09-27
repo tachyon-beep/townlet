@@ -327,6 +327,17 @@ class SimulationConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    @model_validator(mode="after")
+    def _validate_observation_variant(self) -> "SimulationConfig":
+        variant = self.features.systems.observations
+        supported = {"hybrid", "full", "compact"}
+        if variant not in supported:
+            raise ValueError(
+                "Observation variant '%s' is not supported yet; supported variants: %s"
+                % (variant, sorted(supported))
+            )
+        return self
+
     @property
     def observation_variant(self) -> ObservationVariant:
         return self.features.systems.observations

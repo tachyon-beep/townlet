@@ -167,7 +167,7 @@ def _make_sample(
     config.conflict.rivalry.increment_per_conflict = rivalry_increment
     config.conflict.rivalry.avoid_threshold = avoid_threshold
     world = WorldState.from_config(config)
-    world.register_object("stove_1", "stove")
+    world.register_object(object_id="stove_1", object_type="stove")
     world.agents["alice"] = AgentSnapshot(
         "alice",
         (0, 0),
@@ -866,7 +866,7 @@ def test_ppo_social_chat_drift(tmp_path: Path) -> None:
 def test_policy_runtime_collects_frames(tmp_path: Path) -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
-    loop.world.register_object("stove_1", "stove")
+    loop.world.register_object(object_id="stove_1", object_type="stove")
     loop.world.agents["alice"] = AgentSnapshot(
         "alice",
         (0, 0),

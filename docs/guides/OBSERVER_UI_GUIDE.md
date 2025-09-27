@@ -8,10 +8,17 @@ The observer dashboard provides a console-based view of Townlet’s employment K
    ```bash
    scripts/observer_ui.py configs/examples/poc_hybrid.yaml --refresh 0.5 [--focus-agent alice]
    ```
-3. You’ll see three panels:
+3. You’ll see the following panels:
    - **Telemetry** — schema version and compatibility warning.
    - **Employment** — queue length, exits, caps.
+   - **Conflict** — queue cooldowns, ghost steps, rivalry edges.
+   - **Anneal Status** — latest BC/anneal gate metrics (accuracy vs threshold, drift flags, dataset).
+   - **Policy Inspector** — per-agent selected action, probability, value estimate, and top action distribution.
+   - **Relationship Overlay** — top trust ties with recent deltas (trust/fam/rivalry).
+   - **KPI Panel** — rolling KPIs (queue intensity, lateness, late help) with colour-coded thresholds.
+   - **Narrations** — recent narrated events with priority markers.
    - **Agents** — per-agent wallet, shift state, attendance, wages withheld.
+   - **Legend** — usage hints and colour semantics.
    - (Optional) **Local Map** — ASCII map derived from the hybrid observation tensor for the first agent.
 
 Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-agent` selects the map focus agent; `--approve/--defer` can trigger employment actions at startup.
@@ -23,6 +30,12 @@ Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-age
 ## Console Operations
 - Approve or defer employment exits from the dashboard by issuing commands in a separate terminal (see `scripts/console_dry_run.py` for examples).
 - Future versions may add interactive controls; current MVP is read-only.
+
+## Anneal Panel Reference
+- **BC Accuracy / Threshold** — derived from the latest anneal run (telemetry version ≥1.2). The panel turns red if BC gate failed and yellow if drift flags trip.
+- **Drift Flags** — summarise watcher alerts: `loss` (loss_total moved beyond tolerance), `queue` (events dipped below tolerance), `intensity` (intensity sum dipped). Values come from `anneal_*` fields in the PPO telemetry log.
+- **Dataset** — name of the manifest or rollout buffer feeding the anneal run.
+- To inspect the underlying log, run `python scripts/telemetry_summary.py <log> --format markdown`.
 
 ## Tests & Tooling
 - `tests/test_observer_ui_dashboard.py` validates rendering helpers.

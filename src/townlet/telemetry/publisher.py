@@ -1,7 +1,7 @@
 """Telemetry pipelines and console bridge."""
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List, TYPE_CHECKING
+from typing import Callable, Dict, Iterable, List, Mapping, TYPE_CHECKING
 
 from townlet.config import SimulationConfig
 from townlet.telemetry.narration import NarrationRateLimiter
@@ -15,7 +15,7 @@ class TelemetryPublisher:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self.schema_version = "0.7.0"
+        self.schema_version = "0.8.0"
         self._console_buffer: List[object] = []
         self._latest_queue_metrics: Dict[str, int] | None = None
         self._latest_embedding_metrics: Dict[str, float] | None = None
@@ -34,6 +34,16 @@ class TelemetryPublisher:
         self._previous_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
         self._narration_limiter = NarrationRateLimiter(self.config.telemetry.narration)
         self._latest_narrations: List[Dict[str, object]] = []
+        self._latest_anneal_status: Dict[str, object] | None = None
+        self._latest_relationship_overlay: Dict[str, List[Dict[str, object]]] = {}
+        self._latest_policy_snapshot: Dict[str, Dict[str, object]] = {}
+        self._kpi_history: Dict[str, List[float]] = {
+            "queue_conflict_intensity": [],
+            "employment_lateness": [],
+            "late_help_events": [],
+        }
+        self._latest_affordance_manifest: Dict[str, object] = {}
+        self._latest_reward_breakdown: Dict[str, Dict[str, float]] = {}
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -59,7 +69,23 @@ class TelemetryPublisher:
             "relationship_updates": [dict(update) for update in self._latest_relationship_updates],
             "narrations": [dict(entry) for entry in self._latest_narrations],
             "narration_state": self._narration_limiter.export_state(),
+            "reward_breakdown": self.latest_reward_breakdown(),
         }
+        if self._latest_affordance_manifest:
+            state["affordance_manifest"] = dict(self._latest_affordance_manifest)
+        if self._latest_anneal_status is not None:
+            state["anneal_status"] = dict(self._latest_anneal_status)
+        if self._latest_policy_snapshot:
+            state["policy_snapshot"] = {
+                agent: dict(entry) for agent, entry in self._latest_policy_snapshot.items()
+            }
+        if self._latest_relationship_overlay:
+            state["relationship_overlay"] = {
+                agent: [dict(item) for item in entries]
+                for agent, entries in self._latest_relationship_overlay.items()
+            }
+        if any(self._kpi_history.values()):
+            state["kpi_history"] = self.kpi_history()
         return state
 
     def import_state(self, payload: Dict[str, object]) -> None:
@@ -98,6 +124,43 @@ class TelemetryPublisher:
         narration_state = payload.get("narration_state")
         if isinstance(narration_state, dict):
             self._narration_limiter.import_state(narration_state)
+        anneal_status = payload.get("anneal_status")
+        if isinstance(anneal_status, dict):
+            self._latest_anneal_status = dict(anneal_status)
+        else:
+            self._latest_anneal_status = None
+        policy_snapshot = payload.get("policy_snapshot")
+        if isinstance(policy_snapshot, Mapping):
+            self._latest_policy_snapshot = {
+                str(agent): dict(data)
+                for agent, data in policy_snapshot.items()
+                if isinstance(data, Mapping)
+            }
+        else:
+            self._latest_policy_snapshot = {}
+        overlay_payload = payload.get("relationship_overlay")
+        if isinstance(overlay_payload, Mapping):
+            self._latest_relationship_overlay = {
+                str(agent): [dict(item) for item in entries]
+                for agent, entries in overlay_payload.items()
+                if isinstance(entries, list)
+            }
+        else:
+            self._latest_relationship_overlay = {}
+        manifest_payload = payload.get("affordance_manifest")
+        if isinstance(manifest_payload, Mapping):
+            self._latest_affordance_manifest = dict(manifest_payload)
+        else:
+            self._latest_affordance_manifest = {}
+        reward_payload = payload.get("reward_breakdown")
+        if isinstance(reward_payload, Mapping):
+            self._latest_reward_breakdown = {
+                str(agent): dict(data)
+                for agent, data in reward_payload.items()
+                if isinstance(data, Mapping)
+            }
+        else:
+            self._latest_reward_breakdown = {}
 
     def export_console_buffer(self) -> List[object]:
         return list(self._console_buffer)
@@ -113,6 +176,9 @@ class TelemetryPublisher:
         observations: Dict[str, object],
         rewards: Dict[str, float],
         events: Iterable[Dict[str, object]] | None = None,
+        policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
+        kpi_history: bool = False,
+        reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
     ) -> None:
         # TODO(@townlet): Stream to pub/sub, write KPIs.
         _ = observations, rewards
@@ -144,6 +210,7 @@ class TelemetryPublisher:
         self._previous_relationship_snapshot = self._copy_relationship_snapshot(
             relationship_snapshot
         )
+        self._latest_relationship_overlay = self._build_relationship_overlay()
         self._latest_embedding_metrics = world.embedding_allocator.metrics()
         if events is not None:
             self._latest_events = list(events)
@@ -152,6 +219,14 @@ class TelemetryPublisher:
         self._process_narrations(self._latest_events, int(tick))
         for subscriber in self._event_subscribers:
             subscriber(list(self._latest_events))
+        if policy_snapshot is not None:
+            self._latest_policy_snapshot = {
+                str(agent): dict(data)
+                for agent, data in policy_snapshot.items()
+                if isinstance(data, Mapping)
+            }
+        else:
+            self._latest_policy_snapshot = {}
         self._latest_job_snapshot = {
             agent_id: {
                 "job_id": snapshot.job_id,
@@ -179,12 +254,34 @@ class TelemetryPublisher:
             for object_id, obj in world.objects.items()
         }
         self._latest_employment_metrics = world.employment_queue_snapshot()
+        if reward_breakdown is not None:
+            self._latest_reward_breakdown = {
+                agent: dict(components)
+                for agent, components in reward_breakdown.items()
+            }
+        else:
+            self._latest_reward_breakdown = {}
+        manifest_getter = getattr(world, "affordance_manifest_metadata", None)
+        if callable(manifest_getter):
+            manifest_meta = manifest_getter() or {}
+            self._latest_affordance_manifest = dict(manifest_meta)
+        else:
+            self._latest_affordance_manifest = {}
+        if kpi_history:
+            self._update_kpi_history(world)
 
     def latest_queue_metrics(self) -> Dict[str, int] | None:
         """Expose the most recent queue-related telemetry counters."""
         if self._latest_queue_metrics is None:
             return None
         return dict(self._latest_queue_metrics)
+
+    def update_anneal_status(self, status: Mapping[str, object] | None) -> None:
+        """Record the latest anneal status payload for observer dashboards."""
+        self._latest_anneal_status = dict(status) if status else None
+
+    def kpi_history(self) -> Dict[str, List[float]]:
+        return {key: list(values) for key, values in self._kpi_history.items()}
 
     def latest_conflict_snapshot(self) -> Dict[str, object]:
         """Return the conflict-focused telemetry payload (queues + rivalry)."""
@@ -193,6 +290,25 @@ class TelemetryPublisher:
         if isinstance(queues, dict):
             snapshot["queues"] = dict(queues)
         return snapshot
+
+    def latest_affordance_manifest(self) -> Dict[str, object]:
+        """Expose the most recent affordance manifest metadata."""
+
+        return dict(self._latest_affordance_manifest)
+
+    def latest_reward_breakdown(self) -> Dict[str, Dict[str, float]]:
+        return {
+            agent: dict(components)
+            for agent, components in self._latest_reward_breakdown.items()
+        }
+
+    def latest_policy_snapshot(self) -> Dict[str, Dict[str, object]]:
+        return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
+
+    def latest_anneal_status(self) -> Dict[str, object] | None:
+        if self._latest_anneal_status is None:
+            return None
+        return dict(self._latest_anneal_status)
 
     def latest_relationship_metrics(self) -> Dict[str, object] | None:
         """Expose relationship churn payload captured during publish."""
@@ -213,6 +329,12 @@ class TelemetryPublisher:
     def update_relationship_metrics(self, payload: Dict[str, object]) -> None:
         """Allow external callers to seed the latest relationship metrics."""
         self._latest_relationship_metrics = dict(payload)
+
+    def latest_relationship_overlay(self) -> Dict[str, List[Dict[str, object]]]:
+        return {
+            agent: [dict(item) for item in entries]
+            for agent, entries in self._latest_relationship_overlay.items()
+        }
 
     def latest_narrations(self) -> List[Dict[str, object]]:
         """Expose narration entries emitted during the latest publish call."""
@@ -351,6 +473,46 @@ class TelemetryPublisher:
                     )
         return updates
 
+    def _build_relationship_overlay(self) -> Dict[str, List[Dict[str, object]]]:
+        overlay: Dict[str, List[Dict[str, object]]] = {}
+        delta_map: Dict[tuple[str, str], Dict[str, float]] = {}
+        for entry in self._latest_relationship_updates:
+            owner = str(entry.get("owner", ""))
+            other = str(entry.get("other", ""))
+            if not owner or not other:
+                continue
+            delta = entry.get("delta")
+            if isinstance(delta, Mapping):
+                delta_map[(owner, other)] = {
+                    "trust": float(delta.get("trust", 0.0)),
+                    "familiarity": float(delta.get("familiarity", 0.0)),
+                    "rivalry": float(delta.get("rivalry", 0.0)),
+                }
+        for owner, ties in self._latest_relationship_snapshot.items():
+            ranked = sorted(
+                ties.items(),
+                key=lambda item: item[1].get("trust", 0.0),
+                reverse=True,
+            )
+            summaries: List[Dict[str, object]] = []
+            for other, metrics in ranked[:3]:
+                delta = delta_map.get((owner, other), {})
+                summaries.append(
+                    {
+                        "owner": owner,
+                        "other": other,
+                        "trust": float(metrics.get("trust", 0.0)),
+                        "familiarity": float(metrics.get("familiarity", 0.0)),
+                        "rivalry": float(metrics.get("rivalry", 0.0)),
+                        "delta_trust": float(delta.get("trust", 0.0)),
+                        "delta_familiarity": float(delta.get("familiarity", 0.0)),
+                        "delta_rivalry": float(delta.get("rivalry", 0.0)),
+                    }
+                )
+            if summaries:
+                overlay[owner] = summaries
+        return overlay
+
     def _process_narrations(
         self,
         events: Iterable[Dict[str, object]],
@@ -424,3 +586,23 @@ class TelemetryPublisher:
             }
             for owner, ties in snapshot.items()
         }
+
+    def _update_kpi_history(self, world: "WorldState") -> None:
+        queue_sum = float(self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0))
+        lateness_avg = 0.0
+        agents = list(world.agents.values())
+        if agents:
+            lateness_avg = sum(agent.lateness_counter for agent in agents) / len(agents)
+        social_metric = float(
+            (self._latest_relationship_metrics or {}).get("late_help_events", 0.0)
+        )
+
+        def _push(name: str, value: float) -> None:
+            history = self._kpi_history.setdefault(name, [])
+            history.append(value)
+            if len(history) > 50:
+                del history[0]
+
+        _push("queue_conflict_intensity", queue_sum)
+        _push("employment_lateness", lateness_avg)
+        _push("late_help_events", social_metric)

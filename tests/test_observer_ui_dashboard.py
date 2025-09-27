@@ -5,6 +5,7 @@ import pytest
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.console.handlers import create_console_router
+from townlet.policy.models import torch_available
 from townlet_ui.dashboard import render_snapshot, run_dashboard, _build_map_panel
 from townlet_ui.telemetry import TelemetryClient
 
@@ -50,6 +51,8 @@ def test_render_snapshot_produces_panels() -> None:
     assert any((title or "").startswith("Narrations") for title in panel_titles)
     assert any((title or "").startswith("Relationships") for title in panel_titles)
     assert any((title or "").startswith("Relationship Updates") for title in panel_titles)
+    assert any((title or "").startswith("Policy Inspector") for title in panel_titles)
+    assert any((title or "").startswith("Relationship Overlay") for title in panel_titles)
     assert any("Legend" in (title or "") for title in panel_titles)
 
 
@@ -75,3 +78,17 @@ def test_build_map_panel_produces_table() -> None:
     panel = _build_map_panel(loop, snapshot, obs_batch, focus_agent=None)
     assert panel is not None
     assert "Local Map" in (panel.title or "")
+
+
+@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+def test_policy_inspector_snapshot_contains_entries() -> None:
+    loop = make_loop()
+    router = create_console_router(loop.telemetry, loop.world)
+    for _ in range(2):
+        loop.step()
+    snapshot = TelemetryClient().from_console(router)
+    entries = snapshot.policy_inspector
+    assert entries
+    entry = entries[0]
+    assert entry.top_actions
+    assert entry.selected_action is not None

@@ -11,9 +11,9 @@ def _make_world() -> WorldState:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.conflict.rivalry.avoid_threshold = 0.1
     world = WorldState.from_config(config)
-    world.register_object("shower_1", "shower")
-    world.register_object("fridge_1", "fridge")
-    world.register_object("stove_1", "stove")
+    world.register_object(object_id="shower_1", object_type="shower")
+    world.register_object(object_id="fridge_1", object_type="fridge")
+    world.register_object(object_id="stove_1", object_type="stove")
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),

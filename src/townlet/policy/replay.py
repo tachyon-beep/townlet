@@ -275,6 +275,7 @@ class ReplayDatasetConfig:
     drop_last: bool = False
     streaming: bool = False
     metrics_map: Optional[Dict[str, Dict[str, float]]] = None
+    label: Optional[str] = None
 
     @classmethod
     def from_manifest(
@@ -294,6 +295,7 @@ class ReplayDatasetConfig:
             seed=seed,
             drop_last=drop_last,
             streaming=streaming,
+            label=manifest_path.stem,
         )
 
     @classmethod
@@ -322,7 +324,25 @@ class ReplayDatasetConfig:
             drop_last=drop_last,
             streaming=streaming,
             metrics_map=metrics_map,
+            label=capture_dir.name,
         )
+
+
+def _resolve_manifest_path(path_spec: Path, base: Path) -> Path:
+    """Resolve manifest path specs that may be absolute or repo-relative."""
+
+    candidates = []
+    if path_spec.is_absolute():
+        candidates.append(path_spec)
+    else:
+        candidates.append(base / path_spec)
+        candidates.append(Path.cwd() / path_spec)
+        candidates.append(path_spec)
+    for candidate in candidates:
+        candidate_path = Path(candidate)
+        if candidate_path.exists():
+            return candidate_path
+    return (base / path_spec).resolve()
 
 
 def _load_manifest(manifest_path: Path) -> List[Tuple[Path, Optional[Path]]]:
@@ -340,14 +360,20 @@ def _load_manifest(manifest_path: Path) -> List[Tuple[Path, Optional[Path]]]:
     base = manifest_path.parent
     for item in data:
         if isinstance(item, str):
-            sample = base / item
+            sample_spec = Path(item)
+            sample = _resolve_manifest_path(sample_spec, base)
             meta = sample.with_suffix(".json")
         elif isinstance(item, dict):
             if "sample" not in item:
                 raise ValueError("Manifest entry missing 'sample' field")
-            sample = base / Path(item["sample"])
+            sample_spec = Path(item["sample"])
+            sample = _resolve_manifest_path(sample_spec, base)
             meta_value = item.get("meta")
-            meta = base / Path(meta_value) if meta_value else None
+            if meta_value:
+                meta_spec = Path(meta_value)
+                meta = _resolve_manifest_path(meta_spec, base)
+            else:
+                meta = None
         else:
             raise ValueError("Manifest entry must be string or mapping")
         entries.append((sample.resolve(), meta.resolve() if meta else None))

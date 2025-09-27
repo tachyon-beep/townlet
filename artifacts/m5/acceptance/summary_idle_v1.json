@@ -1,0 +1,8 @@
+{
+  "bc_accuracy": 1.0,
+  "bc_threshold": 0.8,
+  "bc_passed": true,
+  "ppo_loss_total": 0.22654872919831956,
+  "ppo_updates": 14.0,
+  "dataset": "idle_v1_production"
+}

@@ -11,7 +11,18 @@ from townlet.world.grid import AgentSnapshot
 def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
     objects = scenario.get("objects", [])
     for obj in objects:
-        loop.world.register_object(obj["id"], obj["type"])
+        position = None
+        if "position" in obj and obj["position"] is not None:
+            raw = obj["position"]
+            if isinstance(raw, (list, tuple)) and len(raw) == 2:
+                position = (int(raw[0]), int(raw[1]))
+            else:
+                raise ValueError(f"Invalid object position for {obj['id']}: {raw}")
+        loop.world.register_object(
+            object_id=obj["id"],
+            object_type=obj["type"],
+            position=position,
+        )
 
     schedules: dict[str, list[AgentIntent]] = {}
     for agent in scenario.get("agents", []):
@@ -44,7 +55,7 @@ def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
 
 
 def seed_default_agents(loop: SimulationLoop) -> None:
-    loop.world.register_object("stove_1", "stove")
+    loop.world.register_object(object_id="stove_1", object_type="stove")
     loop.world.agents["alice"] = AgentSnapshot(
         "alice",
         (0, 0),

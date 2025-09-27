@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-SUPPORTED_SCHEMA_PREFIX = "0.7"
+SUPPORTED_SCHEMA_PREFIX = "0.8"
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,49 @@ class AgentSummary:
 
 
 @dataclass(frozen=True)
+class RelationshipOverlayEntry:
+    other: str
+    trust: float
+    familiarity: float
+    rivalry: float
+    delta_trust: float
+    delta_familiarity: float
+    delta_rivalry: float
+
+
+@dataclass(frozen=True)
+class PolicyInspectorAction:
+    action: str
+    probability: float
+
+
+@dataclass(frozen=True)
+class PolicyInspectorEntry:
+    agent_id: str
+    tick: int
+    selected_action: str
+    log_prob: float
+    value_pred: float
+    top_actions: List[PolicyInspectorAction]
+
+
+@dataclass(frozen=True)
+class AnnealStatus:
+    stage: str
+    cycle: float | None
+    dataset: str
+    bc_accuracy: float | None
+    bc_threshold: float | None
+    bc_passed: bool
+    loss_flag: bool
+    queue_flag: bool
+    intensity_flag: bool
+    loss_baseline: float | None
+    queue_baseline: float | None
+    intensity_baseline: float | None
+
+
+@dataclass(frozen=True)
 class TelemetrySnapshot:
     schema_version: str
     schema_warning: Optional[str]
@@ -78,7 +121,11 @@ class TelemetrySnapshot:
     relationships: Optional[RelationshipChurn]
     relationship_snapshot: Mapping[str, Mapping[str, Mapping[str, float]]]
     relationship_updates: List[RelationshipUpdate]
+    relationship_overlay: Mapping[str, List[RelationshipOverlayEntry]]
     agents: List[AgentSummary]
+    anneal: Optional[AnnealStatus]
+    policy_inspector: List[PolicyInspectorEntry]
+    kpis: Mapping[str, List[float]]
     raw: Mapping[str, Any]
 
 
@@ -202,6 +249,29 @@ class TelemetryClient:
                 )
             )
 
+        overlay_payload = payload.get("relationship_overlay")
+        relationship_overlay: Dict[str, List[RelationshipOverlayEntry]] = {}
+        if isinstance(overlay_payload, Mapping):
+            for owner, ties in overlay_payload.items():
+                if not isinstance(ties, list):
+                    continue
+                entries: List[RelationshipOverlayEntry] = []
+                for tie in ties:
+                    if not isinstance(tie, Mapping):
+                        continue
+                    entries.append(
+                        RelationshipOverlayEntry(
+                            other=str(tie.get("other", "")),
+                            trust=float(tie.get("trust", 0.0)),
+                            familiarity=float(tie.get("familiarity", 0.0)),
+                            rivalry=float(tie.get("rivalry", 0.0)),
+                            delta_trust=float(tie.get("delta_trust", 0.0)),
+                            delta_familiarity=float(tie.get("delta_familiarity", 0.0)),
+                            delta_rivalry=float(tie.get("delta_rivalry", 0.0)),
+                        )
+                    )
+                relationship_overlay[str(owner)] = entries
+
         narrations: List[NarrationEntry] = []
         if isinstance(narrations_payload, list):
             for entry in narrations_payload:
@@ -228,6 +298,74 @@ class TelemetryClient:
 
         agents.sort(key=lambda summary: summary.agent_id)
 
+        anneal_status: AnnealStatus | None = None
+        anneal_payload = payload.get("anneal_status")
+        if isinstance(anneal_payload, Mapping) and anneal_payload:
+            anneal_status = AnnealStatus(
+                stage=str(anneal_payload.get("anneal_stage", "")),
+                cycle=float(anneal_payload.get("anneal_cycle", 0.0))
+                if isinstance(anneal_payload.get("anneal_cycle"), (int, float))
+                else None,
+                dataset=str(anneal_payload.get("anneal_dataset", "")),
+                bc_accuracy=float(anneal_payload.get("anneal_bc_accuracy"))
+                if isinstance(anneal_payload.get("anneal_bc_accuracy"), (int, float))
+                else None,
+                bc_threshold=float(anneal_payload.get("anneal_bc_threshold"))
+                if isinstance(anneal_payload.get("anneal_bc_threshold"), (int, float))
+                else None,
+                bc_passed=bool(anneal_payload.get("anneal_bc_passed", False)),
+                loss_flag=bool(anneal_payload.get("anneal_loss_flag", False)),
+                queue_flag=bool(anneal_payload.get("anneal_queue_flag", False)),
+                intensity_flag=bool(anneal_payload.get("anneal_intensity_flag", False)),
+                loss_baseline=float(anneal_payload.get("anneal_loss_baseline"))
+                if isinstance(anneal_payload.get("anneal_loss_baseline"), (int, float))
+                else None,
+                queue_baseline=float(anneal_payload.get("anneal_queue_baseline"))
+                if isinstance(anneal_payload.get("anneal_queue_baseline"), (int, float))
+                else None,
+                intensity_baseline=float(anneal_payload.get("anneal_intensity_baseline"))
+                if isinstance(anneal_payload.get("anneal_intensity_baseline"), (int, float))
+                else None,
+            )
+
+        kpi_payload = payload.get("kpi_history") or {}
+        kpi_history: Dict[str, List[float]] = {}
+        if isinstance(kpi_payload, Mapping):
+            for key, values in kpi_payload.items():
+                if isinstance(values, list):
+                    kpi_history[str(key)] = [float(v) for v in values if isinstance(v, (int, float))]
+
+        inspector_entries: List[PolicyInspectorEntry] = []
+        policy_snapshot_payload = payload.get("policy_snapshot")
+        if isinstance(policy_snapshot_payload, Mapping):
+            for agent_id, entry in policy_snapshot_payload.items():
+                if not isinstance(entry, Mapping):
+                    continue
+                top_actions_payload = entry.get("top_actions", [])
+                top_actions: List[PolicyInspectorAction] = []
+                if isinstance(top_actions_payload, list):
+                    for action_entry in top_actions_payload:
+                        if not isinstance(action_entry, Mapping):
+                            continue
+                        action_label = str(action_entry.get("action", ""))
+                        probability = float(action_entry.get("probability", 0.0))
+                        top_actions.append(
+                            PolicyInspectorAction(
+                                action=action_label,
+                                probability=probability,
+                            )
+                        )
+                inspector_entries.append(
+                    PolicyInspectorEntry(
+                        agent_id=str(agent_id),
+                        tick=int(entry.get("tick", 0)),
+                        selected_action=str(entry.get("selected_action", "")),
+                        log_prob=float(entry.get("log_prob", 0.0)),
+                        value_pred=float(entry.get("value_pred", 0.0)),
+                        top_actions=top_actions,
+                    )
+                )
+
         return TelemetrySnapshot(
             schema_version=schema_version,
             schema_warning=schema_warning,
@@ -238,7 +376,11 @@ class TelemetryClient:
             relationships=relationships,
             relationship_snapshot=relationship_snapshot,
             relationship_updates=relationship_updates,
+            relationship_overlay=relationship_overlay,
             agents=agents,
+            anneal=anneal_status,
+            policy_inspector=inspector_entries,
+            kpis=kpi_history,
             raw=payload,
         )
 

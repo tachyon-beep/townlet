@@ -104,11 +104,16 @@ class SimulationLoop:
         actions = self.policy.decide(self.world, self.tick)
         self.world.apply_actions(actions)
         self.world.resolve_affordances(current_tick=self.tick)
+        episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
+        for snapshot in self.world.agents.values():
+            snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
         terminated = self.lifecycle.evaluate(self.world, tick=self.tick)
         rewards = self.rewards.compute(self.world, terminated)
+        reward_breakdown = self.rewards.latest_reward_breakdown()
         self.policy.post_step(rewards, terminated)
         observations = self.observations.build_batch(self.world, terminated)
         self.policy.flush_transitions(observations)
+        policy_snapshot = self.policy.latest_policy_snapshot()
         events = self.world.drain_events()
         self.telemetry.publish_tick(
             tick=self.tick,
@@ -116,6 +121,9 @@ class SimulationLoop:
             observations=observations,
             rewards=rewards,
             events=events,
+            policy_snapshot=policy_snapshot,
+            kpi_history=True,
+            reward_breakdown=reward_breakdown,
         )
         self.stability.track(
             tick=self.tick,

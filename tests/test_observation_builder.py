@@ -11,14 +11,19 @@ def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.conflict.rivalry.avoid_threshold = 0.1
     config.employment.enforce_job_loop = enforce_job_loop
+    config.observations_config.hybrid.include_targets = True
     loop = SimulationLoop(config)
     world = loop.world
     world.agents.clear()
+    world.register_object(object_id="stove_test", object_type="stove", position=(2, 0))
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),
         needs={"hunger": 0.4, "hygiene": 0.5, "energy": 0.6},
         wallet=2.0,
+        last_action_id="wait",
+        last_action_success=True,
+        last_action_duration=4,
     )
     world.agents["bob"] = AgentSnapshot(
         agent_id="bob",
@@ -46,6 +51,8 @@ def test_observation_builder_hybrid_map_and_features() -> None:
     assert map_tensor[0, center, center] == 1.0
     # Bob is at (1,0) relative to Alice
     assert map_tensor[1, center, center + 1] == 1.0
+    # Stove object occupies (2,0)
+    assert map_tensor[2, center, center + 2] == 1.0
 
     feature_names = metadata["feature_names"]
     hunger_idx = feature_names.index("need_hunger")
@@ -59,6 +66,17 @@ def test_observation_builder_hybrid_map_and_features() -> None:
     assert features[feature_names.index("ctx_reset_flag")] == 0.0
     assert features[feature_names.index("rivalry_max")] == 0.0
     assert features[feature_names.index("rivalry_avoid_count")] == 0.0
+    assert features[feature_names.index("last_action_success")] == 1.0
+    assert features[feature_names.index("last_action_duration")] == 4.0
+    assert features[feature_names.index("last_action_id_hash")] > 0.0
+    stove_dx_idx = feature_names.index("stove_dx")
+    stove_dy_idx = feature_names.index("stove_dy")
+    stove_dist_idx = feature_names.index("stove_dist")
+    assert np.isclose(features[stove_dx_idx], 1.0)
+    assert np.isclose(features[stove_dy_idx], 0.0)
+    assert np.isclose(features[stove_dist_idx], 2.0)
+    landmark_slices = metadata.get("landmark_slices", {})
+    assert landmark_slices.get("stove") == (stove_dx_idx, stove_dist_idx + 1)
 
 
 def test_observation_ctx_reset_releases_slot() -> None:

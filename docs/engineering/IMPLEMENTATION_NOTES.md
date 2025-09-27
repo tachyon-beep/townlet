@@ -1,5 +1,12 @@
 # Implementation Notes
 
+## 2025-09-30 — Affordance Manifest Hardening
+- Replaced ad-hoc YAML parsing with `load_affordance_manifest` helper that validates ids, preconditions/hook structure, numeric fields, and emits SHA-256 checksums for auditing.
+- `WorldState` now records manifest metadata (`path`, `checksum`, counts) and exposes it via `affordance_manifest_metadata()` so telemetry and console surfaces report the active manifest.
+- Added CLI `scripts/validate_affordances.py` to lint manifests locally/CI (`--strict` enforces discovery); outputs checksum + entry counts for observability.
+- Telemetry publisher exports `latest_affordance_manifest()` and console snapshots include manifest summary to unblock ops validation prior to go-live.
+- Pytest coverage: `tests/test_affordance_manifest.py` for loader edge cases and `tests/test_cli_validate_affordances.py` for CLI recursion/error handling.
+
 ## 2025-09-24 — Queue & Affordance Integration
 - Added `QueueManager`-driven affordance execution in `WorldState`; actions now request/start/release objects and ghost-step failures clear running affordances.
 - Introduced lightweight `AffordanceSpec` and `InteractiveObject` tracking for tests; effects apply to agent needs and wallet when duration completes.

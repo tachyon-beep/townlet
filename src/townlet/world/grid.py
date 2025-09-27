@@ -4,11 +4,9 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Deque, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 import random
-
-import yaml
 
 from townlet.agents.models import Personality
 from townlet.agents.relationship_modifiers import (
@@ -17,6 +15,10 @@ from townlet.agents.relationship_modifiers import (
     apply_personality_modifiers,
 )
 from townlet.config import EmploymentConfig, SimulationConfig
+from townlet.config.affordance_manifest import (
+    AffordanceManifestError,
+    load_affordance_manifest,
+)
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.world.queue_manager import QueueManager
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
@@ -50,6 +52,10 @@ class AgentSnapshot:
     absent_shifts_7d: int = 0
     wages_withheld: float = 0.0
     exit_pending: bool = False
+    last_action_id: str = ""
+    last_action_success: bool = False
+    last_action_duration: int = 0
+    episode_tick: int = 0
 
 
 @dataclass
@@ -60,6 +66,7 @@ class InteractiveObject:
     object_type: str
     occupied_by: str | None = None
     stock: Dict[str, int] = field(default_factory=dict)
+    position: tuple[int, int] | None = None
 
 
 @dataclass
@@ -80,6 +87,8 @@ class AffordanceSpec:
     object_type: str
     duration: int
     effects: Dict[str, float]
+    preconditions: List[str] = field(default_factory=list)
+    hooks: Dict[str, List[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -112,6 +121,8 @@ class WorldState:
     _chat_events: List[Dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
     _rng_state: Optional[Tuple[Any, ...]] = field(init=False, default=None)
+    _affordance_manifest_info: Dict[str, object] = field(init=False, default_factory=dict)
+    _objects_by_position: Dict[tuple[int, int], List[str]] = field(init=False, default_factory=dict)
 
     @classmethod
     def from_config(cls, config: SimulationConfig) -> "WorldState":
@@ -152,9 +163,24 @@ class WorldState:
             # TODO(@townlet): Implement concrete console op handlers.
             _ = operation
 
-    def register_object(self, object_id: str, object_type: str) -> None:
-        """Register an interactive object in the world."""
-        obj = InteractiveObject(object_id=object_id, object_type=object_type)
+    def register_object(
+        self,
+        *,
+        object_id: str,
+        object_type: str,
+        position: tuple[int, int] | None = None,
+    ) -> None:
+        """Register or update an interactive object in the world."""
+
+        existing = self.objects.get(object_id)
+        if existing is not None and existing.position is not None:
+            self._unindex_object_position(object_id, existing.position)
+
+        obj = InteractiveObject(
+            object_id=object_id,
+            object_type=object_type,
+            position=position,
+        )
         if object_type == "fridge":
             obj.stock["meals"] = 5
         if object_type == "stove":
@@ -163,6 +189,26 @@ class WorldState:
             obj.stock["sleep_slots"] = 1
         self.objects[object_id] = obj
         self.store_stock[object_id] = obj.stock
+        if obj.position is not None:
+            self._index_object_position(object_id, obj.position)
+
+    def _index_object_position(self, object_id: str, position: tuple[int, int]) -> None:
+        bucket = self._objects_by_position.setdefault(position, [])
+        if object_id not in bucket:
+            bucket.append(object_id)
+
+    def _unindex_object_position(
+        self, object_id: str, position: tuple[int, int]
+    ) -> None:
+        bucket = self._objects_by_position.get(position)
+        if not bucket:
+            return
+        try:
+            bucket.remove(object_id)
+        except ValueError:
+            return
+        if not bucket:
+            self._objects_by_position.pop(position, None)
 
     def register_affordance(
         self,
@@ -171,13 +217,17 @@ class WorldState:
         object_type: str,
         duration: int,
         effects: Dict[str, float],
+        preconditions: Iterable[str] | None = None,
+        hooks: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
         """Register an affordance available in the world."""
         self.affordances[affordance_id] = AffordanceSpec(
             affordance_id=affordance_id,
             object_type=object_type,
             duration=duration,
-            effects=effects,
+            effects=dict(effects),
+            preconditions=list(preconditions or []),
+            hooks={key: list(values) for key, values in (hooks or {}).items()},
         )
 
     def apply_actions(self, actions: Dict[str, Any]) -> None:
@@ -192,19 +242,23 @@ class WorldState:
 
             kind = action.get("kind")
             object_id = action.get("object")
+            action_success = False
+            action_duration = int(action.get("duration", 1))
 
             if kind == "request" and object_id:
                 granted = self.queue_manager.request_access(object_id, agent_id, current_tick)
                 self._sync_reservation(object_id)
                 if not granted and action.get("blocked"):
                     self._handle_blocked(object_id, current_tick)
+                action_success = bool(granted)
             elif kind == "move" and action.get("position"):
                 target_pos = tuple(action["position"])
                 snapshot.position = target_pos
+                action_success = True
             elif kind == "start" and object_id:
                 affordance_id = action.get("affordance")
                 if affordance_id:
-                    self._start_affordance(agent_id, object_id, affordance_id)
+                    action_success = self._start_affordance(agent_id, object_id, affordance_id)
             elif kind == "release" and object_id:
                 success = bool(action.get("success", True))
                 running = self._running_affordances.pop(object_id, None)
@@ -234,9 +288,16 @@ class WorldState:
                             },
                         )
                     self._running_affordances.pop(object_id, None)
+                action_success = success
             elif kind == "blocked" and object_id:
                 self._handle_blocked(object_id, current_tick)
+                action_success = False
             # TODO(@townlet): Update agent snapshot based on outcomes.
+
+            if kind:
+                snapshot.last_action_id = str(kind)
+                snapshot.last_action_success = action_success
+                snapshot.last_action_duration = action_duration
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
@@ -306,35 +367,116 @@ class WorldState:
         include_objects: bool = True,
     ) -> Dict[str, Any]:
         """Return local neighborhood information for observation builders."""
+
         snapshot = self.agents.get(agent_id)
         if snapshot is None:
-            return {"tiles": [], "agents": [], "objects": []}
+            return {
+                "center": None,
+                "radius": radius,
+                "tiles": [],
+                "agents": [],
+                "objects": [],
+            }
+
         cx, cy = snapshot.position
-        tiles: List[Dict[str, Any]] = []
-        seen_agents: List[Dict[str, Any]] = []
-        seen_objects: List[Dict[str, Any]] = []
-        for dx in range(-radius, radius + 1):
+        agent_lookup: Dict[Tuple[int, int], List[str]] = {}
+        if include_agents:
+            for other in self.agents.values():
+                position = other.position
+                agent_lookup.setdefault(position, []).append(other.agent_id)
+
+        object_lookup: Dict[Tuple[int, int], List[str]] = {}
+        if include_objects:
+            for position, object_ids in self._objects_by_position.items():
+                filtered = [obj_id for obj_id in object_ids if obj_id in self.objects]
+                if filtered:
+                    object_lookup[position] = filtered
+
+        tiles: List[List[Dict[str, Any]]] = []
+        seen_agents: Dict[str, Dict[str, Any]] = {}
+        seen_objects: Dict[str, Dict[str, Any]] = {}
+
+        for dy in range(-radius, radius + 1):
             row: List[Dict[str, Any]] = []
-            for dy in range(-radius, radius + 1):
-                x, y = cx + dx, cy + dy
-                row.append({"position": (x, y)})
+            for dx in range(-radius, radius + 1):
+                x = cx + dx
+                y = cy + dy
+                position = (x, y)
+                agent_ids = agent_lookup.get(position, [])
+                object_ids = object_lookup.get(position, [])
                 if include_agents:
-                    for other in self.agents.values():
-                        if other.agent_id == agent_id:
+                    for agent_id_at_tile in agent_ids:
+                        if agent_id_at_tile == agent_id:
                             continue
-                        if other.position == (x, y):
-                            seen_agents.append({
-                                "agent_id": other.agent_id,
-                                "position": other.position,
-                            })
+                        other = self.agents.get(agent_id_at_tile)
+                        if other is not None:
+                            seen_agents.setdefault(
+                                agent_id_at_tile,
+                                {
+                                    "agent_id": agent_id_at_tile,
+                                    "position": other.position,
+                                    "on_shift": other.on_shift,
+                                },
+                            )
                 if include_objects:
-                    for object_id, obj in self.objects.items():
-                        if obj.object_type and obj.object_id == object_id:
-                            # Placeholder: real implementation will use object coordinates.
-                            pass
+                    for object_id in object_ids:
+                        obj = self.objects.get(object_id)
+                        if obj is None:
+                            continue
+                        seen_objects.setdefault(
+                            object_id,
+                            {
+                                "object_id": object_id,
+                                "object_type": obj.object_type,
+                                "position": obj.position,
+                                "occupied_by": obj.occupied_by,
+                            },
+                        )
+                reservation_active = False
+                if object_ids:
+                    reservation_active = any(
+                        self._active_reservations.get(object_id) is not None
+                        for object_id in object_ids
+                    )
+                row.append(
+                    {
+                        "position": position,
+                        "self": position == (cx, cy),
+                        "agent_ids": list(agent_ids),
+                        "object_ids": list(object_ids),
+                        "reservation_active": reservation_active,
+                    }
+                )
             tiles.append(row)
-        # TODO: integrate actual grid/object positions once world stores them.
-        return {"tiles": tiles, "agents": seen_agents, "objects": seen_objects}
+
+        return {
+            "center": (cx, cy),
+            "radius": radius,
+            "tiles": tiles,
+            "agents": list(seen_agents.values()),
+            "objects": list(seen_objects.values()),
+        }
+
+    def agent_context(self, agent_id: str) -> Dict[str, object]:
+        """Return scalar context fields for the requested agent."""
+
+        snapshot = self.agents.get(agent_id)
+        if snapshot is None:
+            return {}
+        return {
+            "needs": dict(snapshot.needs),
+            "wallet": snapshot.wallet,
+            "lateness_counter": snapshot.lateness_counter,
+            "on_shift": snapshot.on_shift,
+            "attendance_ratio": snapshot.attendance_ratio,
+            "wages_withheld": snapshot.wages_withheld,
+            "shift_state": snapshot.shift_state,
+            "last_action_id": snapshot.last_action_id,
+            "last_action_success": snapshot.last_action_success,
+            "last_action_duration": snapshot.last_action_duration,
+            "wages_paid": self._employment_context_wages(snapshot.agent_id),
+            "punctuality_bonus": self._employment_context_punctuality(snapshot.agent_id),
+        }
 
     @property
     def active_reservations(self) -> Dict[str, str]:
@@ -687,17 +829,17 @@ class WorldState:
             self._running_affordances.pop(object_id, None)
             self._sync_reservation(object_id)
 
-    def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> None:
+    def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
         if self.queue_manager.active_agent(object_id) != agent_id:
-            return
+            return False
         if object_id in self._running_affordances:
-            return
+            return False
         obj = self.objects.get(object_id)
         spec = self.affordances.get(affordance_id)
         if obj is None or spec is None:
-            return
+            return False
         if spec.object_type != obj.object_type:
-            return
+            return False
 
         self._running_affordances[object_id] = RunningAffordance(
             agent_id=agent_id,
@@ -716,6 +858,7 @@ class WorldState:
                 "duration": spec.duration,
             },
         )
+        return True
 
     def _apply_affordance_effects(self, agent_id: str, effects: Dict[str, float]) -> None:
         snapshot = self.agents.get(agent_id)
@@ -733,30 +876,70 @@ class WorldState:
         events.append({"event": event, "tick": self.tick, **payload})
 
     def _load_affordance_definitions(self) -> None:
-        config_path = Path(self.config.affordances.affordances_file).expanduser()
-        if not config_path.exists():
-            return
-        data = yaml.safe_load(config_path.read_text()) or []
-        for entry in data:
-            entry_type = entry.get("type", "affordance")
-            if entry_type == "object":
-                object_id = entry.get("id")
-                object_type = entry.get("object_type") or entry.get("objectType")
-                if object_id and object_type:
-                    self.register_object(object_id, object_type)
-            else:
-                affordance_id = entry.get("id")
-                object_type = entry.get("object_type") or entry.get("objectType")
-                duration = int(entry.get("duration", 1))
-                effects = entry.get("effects", {})
-                if affordance_id and object_type:
-                    self.register_affordance(
-                        affordance_id=affordance_id,
-                        object_type=object_type,
-                        duration=duration,
-                        effects=effects,
-                    )
+        manifest_path = Path(self.config.affordances.affordances_file).expanduser()
+        try:
+            manifest = load_affordance_manifest(manifest_path)
+        except FileNotFoundError as error:
+            raise RuntimeError(
+                f"Affordance manifest not found at {manifest_path}."
+            ) from error
+        except AffordanceManifestError as error:
+            raise RuntimeError(
+                f"Failed to load affordance manifest {manifest_path}: {error}"
+            ) from error
+
+        self.objects.clear()
+        self.affordances.clear()
+        self.store_stock.clear()
+
+        for entry in manifest.objects:
+            self.register_object(
+                object_id=entry.object_id,
+                object_type=entry.object_type,
+                position=getattr(entry, "position", None),
+            )
+            if entry.stock:
+                obj = self.objects.get(entry.object_id)
+                if obj is not None:
+                    obj.stock.update(entry.stock)
+                    self.store_stock[entry.object_id] = obj.stock
+
+        for entry in manifest.affordances:
+            self.register_affordance(
+                affordance_id=entry.affordance_id,
+                object_type=entry.object_type,
+                duration=entry.duration,
+                effects=entry.effects,
+                preconditions=entry.preconditions,
+                hooks=entry.hooks,
+            )
+
+        self._affordance_manifest_info = {
+            "path": str(manifest.path),
+            "checksum": manifest.checksum,
+            "object_count": manifest.object_count,
+            "affordance_count": manifest.affordance_count,
+        }
         self._assign_jobs_to_agents()
+
+    def affordance_manifest_metadata(self) -> Dict[str, object]:
+        """Expose manifest metadata (path, checksum, counts) for telemetry."""
+
+        return dict(self._affordance_manifest_info)
+
+    def find_nearest_object_of_type(
+        self, object_type: str, origin: tuple[int, int]
+    ) -> tuple[int, int] | None:
+        targets = [
+            obj.position
+            for obj in self.objects.values()
+            if obj.object_type == object_type and obj.position is not None
+        ]
+        if not targets:
+            return None
+        ox, oy = origin
+        closest = min(targets, key=lambda pos: (pos[0] - ox) ** 2 + (pos[1] - oy) ** 2)
+        return closest
 
     def _apply_need_decay(self) -> None:
         decay_rates = self.config.rewards.decay_rates
@@ -951,6 +1134,21 @@ class WorldState:
             new_samples: Deque[float] = deque(samples, maxlen=window)
             ctx["attendance_samples"] = new_samples
         return ctx
+
+    def _employment_context_wages(self, agent_id: str) -> float:
+        ctx = self._employment_state.get(agent_id)
+        if not ctx:
+            return 0.0
+        return float(ctx.get("wages_paid", 0.0))
+
+    def _employment_context_punctuality(self, agent_id: str) -> float:
+        ctx = self._employment_state.get(agent_id)
+        if not ctx:
+            return 0.0
+        scheduled = max(1, int(ctx.get("scheduled_ticks", 0)))
+        on_time = float(ctx.get("on_time_ticks", 0))
+        value = on_time / scheduled
+        return max(0.0, min(1.0, value))
 
     def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: Dict[str, Any]) -> None:
         if ctx["state"] != "pre_shift":

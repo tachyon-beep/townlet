@@ -32,6 +32,7 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     assert result["conflict"].get("rivalry") is not None
     assert "alice" in result["jobs"]
     assert isinstance(result["economy"], dict)
+    assert isinstance(result.get("reward_breakdown"), dict)
 
 
 def test_employment_console_commands_manage_queue() -> None:

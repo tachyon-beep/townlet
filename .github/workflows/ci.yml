@@ -18,12 +18,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
+      - name: Affordance manifest validation
+        run: python scripts/validate_affordances.py --strict
       - name: Lint
         run: |
           ruff check src tests
           mypy src
       - name: Unit tests
         run: pytest -k "not rollout_capture"
+
+      - name: Observation variant regressions
+        run: pytest tests/test_observation_builder_full.py tests/test_observation_builder_compact.py
 
       - name: Social telemetry & UI tests
         run: pytest tests/test_telemetry_narration.py tests/test_observer_ui_dashboard.py tests/test_telemetry_client.py
@@ -34,6 +39,65 @@ jobs:
       - name: PPO telemetry validator
         run: |
           python scripts/validate_ppo_telemetry.py docs/samples/ppo_conflict_telemetry.jsonl
+
+      - name: BC dataset checksum guard
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib
+          checksums = json.loads(pathlib.Path('data/bc_datasets/checksums/idle_v1.json').read_text())
+          failures = []
+          for name, info in checksums.items():
+              sample = pathlib.Path(info['sample'])
+              meta = pathlib.Path(info['meta'])
+              digest = hashlib.sha256(sample.read_bytes() + meta.read_bytes()).hexdigest()
+              if digest != info['sha256']:
+                  failures.append(f"{name}: expected {info['sha256']} got {digest}")
+          if failures:
+              raise SystemExit('Checksum mismatch\n' + "\n".join(failures))
+          PY
+
+      - name: BC & anneal regression tests
+        run: pytest tests/test_bc_trainer.py tests/test_training_anneal.py tests/test_curate_trajectories.py tests/test_capture_scripted_cli.py tests/test_bc_capture_prototype.py
+
+      - name: Anneal acceptance smoke
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from townlet.config import load_config
+          from townlet.policy.runner import TrainingHarness
+          from townlet.policy.replay import ReplayDatasetConfig
+
+          log_dir = Path('tmp/ci_phase5')
+          log_dir.mkdir(parents=True, exist_ok=True)
+
+          config = load_config(Path('artifacts/m5/acceptance/config_idle_v1.yaml'))
+          manifest = Path('data/bc_datasets/manifests/idle_v1.json')
+
+          harness = TrainingHarness(config)
+          dataset = ReplayDatasetConfig.from_manifest(manifest)
+          results = harness.run_anneal(dataset_config=dataset, log_dir=log_dir, bc_manifest=manifest)
+          summary = {
+              'bc_accuracy': results[0].get('accuracy'),
+              'bc_threshold': results[0].get('threshold'),
+              'bc_passed': results[0].get('passed'),
+              'ppo_loss_total': results[-1].get('loss_total'),
+              'ppo_updates': results[-1].get('updates'),
+              'dataset': 'idle_v1_production',
+          }
+          (log_dir / 'summary.json').write_text(json.dumps(summary, indent=2))
+          print(summary)
+          PY
+
+      - name: Upload BC/anneal artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bc-anneal-acceptance
+          path: |
+            tmp/ci_phase5/anneal_results.json
+            tmp/ci_phase5/summary.json
+          if-no-files-found: error
 
       - name: Mixed-mode rollout validation
         run: |

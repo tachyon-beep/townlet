@@ -148,7 +148,7 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     world.update_relationship("alice", "bob", trust=0.4, familiarity=0.2)
     world.update_relationship("alice", "carol", rivalry=0.3)
 
-    world.register_object("fridge_1", "fridge")
+    world.register_object(object_id="fridge_1", object_type="fridge")
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),

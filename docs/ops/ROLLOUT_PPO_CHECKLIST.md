@@ -51,3 +51,17 @@
 ## Notes
 - Scenario captures are deterministic (torch seeding handled in `PolicyRuntime`).
 - CI runs `tests/test_rollout_capture.py` separately; keep capture runtimes short.
+- For behaviour cloning & anneal acceptance:
+  1. Ensure production dataset manifest/checksum entries exist (`data/bc_datasets/versions.json`).
+  2. Recompute checksums before training (see Ops Handbook helper); block rollout if mismatched.
+  3. Run `python - <<'PY'` harness snippet to execute `run_bc_training` against the manifest; confirm
+     accuracy ≥ configured threshold.
+  4. Run `TrainingHarness.run_anneal` with `log_dir=artifacts/m5/acceptance/logs` and archive
+     `anneal_results.json` + summary (include watcher output, dashboard screenshots if available).
+  5. Perform rollback drill by raising `anneal_accuracy_threshold`; document outcome in
+     `docs/certificates/M5_BC_ANNEAL_ACCEPTANCE.md`.
+  6. Package release bundle:
+     - Dataset artefacts: manifest + checksums + `audit_bc_datasets.py` report.
+     - Anneal artefacts: `anneal_results.json`, `telemetry_summary` markdown, dashboard capture.
+     - Decision log: signed acceptance report, go/no-go notes.
+  7. If watcher or rehearsal exits with `HOLD`, freeze promotion, run `telemetry_watch.py --anneal-bc-min 0.9 --anneal-loss-max 0.1` on the log, and log remediation steps; `FAIL` requires rollback.

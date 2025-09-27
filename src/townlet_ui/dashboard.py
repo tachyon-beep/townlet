@@ -5,6 +5,8 @@ import time
 from typing import Iterable, Mapping
 
 import numpy as np
+import math
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -70,6 +72,11 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
     )
     conflict_border = "magenta" if conflict.queue_ghost_step_events or conflict.queue_cooldown_events else "blue"
     panels.append(Panel(conflict_table, title="Conflict", border_style=conflict_border))
+
+    panels.append(_build_anneal_panel(snapshot))
+    panels.append(_build_policy_inspector_panel(snapshot))
+    panels.append(_build_relationship_overlay_panel(snapshot))
+    panels.append(_build_kpi_panel(snapshot))
 
     narration_panel = _build_narration_panel(snapshot)
     panels.append(narration_panel)
@@ -142,6 +149,10 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         "Legend: S=self (center), A=other agents.",
         "Employment panel turns red when pending queue > 0.",
         "Conflict panel highlights queue cooldowns/ghost steps; rivalry count shows active edges.",
+        "Anneal panel uses green/yellow/red to reflect BC pass/fail and drift flags.",
+        "Policy Inspector lists per-agent top actions and probabilities.",
+        "Relationship Overlay shows top ties with trust/familiarity/rivalry deltas.",
+        "KPI Panel tracks queue intensity, lateness, and late help with colour-coded trends.",
         "Relationships panel displays eviction churn; updates table lists recent tie changes.",
         "Narrations panel shows the latest throttled conflict narrations (priority flagged with !).",
     ]
@@ -179,6 +190,211 @@ def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
 
     body = Text("No recent narrations", style="dim")
     return Panel(body, title="Narrations", border_style="green")
+
+
+def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
+    status = snapshot.anneal
+    if status is None:
+        body = Text("No anneal telemetry yet", style="dim")
+        return Panel(body, title="Anneal Status", border_style="green")
+
+    meta_table = Table(title="Cycle", expand=True)
+    meta_table.add_column("Cycle", justify="right")
+    meta_table.add_column("Stage")
+    meta_table.add_column("Dataset")
+    meta_table.add_row(
+        _safe_format(status.cycle),
+        status.stage or "-",
+        status.dataset or "-",
+    )
+
+    bc_table = Table(title="BC Gate", expand=True)
+    bc_table.add_column("Accuracy", justify="right")
+    bc_table.add_column("Threshold", justify="right")
+    bc_table.add_column("Passed", justify="center")
+    bc_table.add_row(
+        _format_optional_float(status.bc_accuracy),
+        _format_optional_float(status.bc_threshold),
+        "✅" if status.bc_passed else "❌",
+    )
+    drift_table = Table.grid(expand=True)
+    drift_table.add_column(justify="left")
+    drift_table.add_row(
+        "Loss drift: {} (baseline {})".format(
+            "⚠️" if status.loss_flag else "OK",
+            _format_optional_float(status.loss_baseline),
+        )
+    )
+    drift_table.add_row(
+        "Queue drift: {} (baseline {})".format(
+            "⚠️" if status.queue_flag else "OK",
+            _format_optional_float(status.queue_baseline),
+        )
+    )
+    drift_table.add_row(
+        "Intensity drift: {} (baseline {})".format(
+            "⚠️" if status.intensity_flag else "OK",
+            _format_optional_float(status.intensity_baseline),
+        )
+    )
+    composite = Panel.fit(
+        drift_table,
+        title="Drift",
+        border_style="yellow" if (status.loss_flag or status.queue_flag or status.intensity_flag) else "green",
+    )
+    container = Table.grid(expand=True)
+    container.add_row(meta_table)
+    container.add_row(bc_table)
+    container.add_row(composite)
+
+    border_style = "red" if not status.bc_passed else (
+        "yellow" if (status.loss_flag or status.queue_flag or status.intensity_flag) else "green"
+    )
+    return Panel(container, title="Anneal Status", border_style=border_style)
+
+
+def _safe_format(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.1f}"
+
+
+def _format_optional_float(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.3f}"
+
+
+def _build_policy_inspector_panel(snapshot: TelemetrySnapshot) -> Panel:
+    entries = snapshot.policy_inspector
+    if not entries:
+        body = Text("No policy inspector data yet", style="dim")
+        return Panel(body, title="Policy Inspector", border_style="green")
+
+    table = Table(expand=True)
+    table.add_column("Agent")
+    table.add_column("Selected")
+    table.add_column("p(selected)", justify="right")
+    table.add_column("Value", justify="right")
+    table.add_column("Top Actions")
+
+    for entry in entries[:8]:
+        try:
+            selected_prob = math.exp(entry.log_prob)
+        except OverflowError:
+            selected_prob = float("inf")
+        tops = ", ".join(
+            f"{action.action}:{action.probability:.2f}" for action in entry.top_actions[:3]
+        ) or "-"
+        table.add_row(
+            entry.agent_id,
+            entry.selected_action or "-",
+            f"{selected_prob:.2f}",
+            f"{entry.value_pred:.2f}",
+            tops,
+        )
+
+    border_style = "green"
+    if any(action.probability < 0.2 for e in entries for action in e.top_actions[:1]):
+        border_style = "yellow"
+    return Panel(table, title="Policy Inspector", border_style=border_style)
+
+
+def _build_relationship_overlay_panel(snapshot: TelemetrySnapshot) -> Panel:
+    overlay = snapshot.relationship_overlay
+    if not overlay:
+        body = Text("No relationship overlays yet", style="dim")
+        return Panel(body, title="Relationship Overlay", border_style="green")
+
+    table = Table(expand=True)
+    table.add_column("Owner")
+    table.add_column("Other")
+    table.add_column("Trust", justify="right")
+    table.add_column("ΔT", justify="right")
+    table.add_column("Fam", justify="right")
+    table.add_column("ΔF", justify="right")
+    table.add_column("Riv", justify="right")
+    table.add_column("ΔR", justify="right")
+
+    for owner, ties in overlay.items():
+        for entry in ties:
+            table.add_row(
+                owner,
+                entry.other,
+                f"{entry.trust:.2f}",
+                _format_delta(entry.delta_trust),
+                f"{entry.familiarity:.2f}",
+                _format_delta(entry.delta_familiarity),
+                f"{entry.rivalry:.2f}",
+                _format_delta(entry.delta_rivalry, inverse=True),
+            )
+
+    border_style = "green"
+    if any(abs(entry.delta_trust) > 0.1 for ties in overlay.values() for entry in ties):
+        border_style = "yellow"
+    return Panel(table, title="Relationship Overlay", border_style=border_style)
+
+
+def _format_delta(value: float, inverse: bool = False) -> str:
+    if value == 0:
+        return "±0.00"
+    arrow = "↑" if (value > 0) ^ inverse else "↓"
+    colour = "green" if (value > 0) ^ inverse else "red"
+    return f"[{colour}]{value:+.2f} {arrow}[/]"
+
+
+def _build_kpi_panel(snapshot: TelemetrySnapshot) -> Panel:
+    history = snapshot.kpis
+    if not history:
+        body = Text("No KPI history yet", style="dim")
+        return Panel(body, title="KPIs", border_style="green")
+
+    table = Table(expand=True)
+    table.add_column("Metric")
+    table.add_column("Latest", justify="right")
+    table.add_column("Trend", justify="left")
+
+    for key in ("queue_conflict_intensity", "employment_lateness", "late_help_events"):
+        series = history.get(key, [])
+        if not series:
+            continue
+        latest = series[-1]
+        trend_symbol, colour = _trend_from_series(series)
+        label = _humanize_kpi(key)
+        table.add_row(
+            label,
+            f"{latest:.2f}",
+            f"[{colour}]{trend_symbol}[/]",
+        )
+
+    if not table.rows:
+        body = Text("No KPI history yet", style="dim")
+        return Panel(body, title="KPIs", border_style="green")
+    return Panel(table, title="KPIs", border_style="blue")
+
+
+def _trend_from_series(series: list[float]) -> tuple[str, str]:
+    if len(series) < 2:
+        return "→", "green"
+    delta = series[-1] - series[-2]
+    if series[-2] == 0:
+        pct = delta
+    else:
+        pct = delta / abs(series[-2])
+    if pct > 0.1:
+        return "↑", "red"
+    if pct < -0.1:
+        return "↓", "green"
+    return "→", "yellow"
+
+
+def _humanize_kpi(key: str) -> str:
+    mapping = {
+        "queue_conflict_intensity": "Queue Intensity",
+        "employment_lateness": "Lateness",
+        "late_help_events": "Late Help",
+    }
+    return mapping.get(key, key)
 
 
 def run_dashboard(

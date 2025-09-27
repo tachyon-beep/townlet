@@ -23,3 +23,13 @@ This directory tracks curated scripted trajectories used for behaviour cloning.
 - Keep raw captures immutable once published; generate new versions for changes.
 - Store manifest files alongside capture directories for reproducibility.
 - Trajectories must include required conflict features (`rivalry_max`, `rivalry_avoid_count`).
+
+## Current Catalogue
+
+See `versions.json` for the authoritative list:
+
+- `idle_v1_production` → baseline idle scripted dataset (200 ticks per agent) stored in
+  `data/bc_datasets/captures/idle_v1`. Use this as the default BC bootstrap dataset until richer
+  scripted behaviours land.
+- `preflight_idle_v0` (deprecated) → synthetic rehearsal bundle archived under
+  `artifacts/m5/preflight/`; keep for historical reference only.

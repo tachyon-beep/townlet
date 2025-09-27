@@ -27,8 +27,29 @@ REQUIRED_KEYS = {
     "chat_quality_mean",
 }
 
+OPTIONAL_NUMERIC_KEYS = {
+    "anneal_cycle",
+    "anneal_bc_accuracy",
+    "anneal_bc_threshold",
+    "anneal_loss_baseline",
+    "anneal_queue_baseline",
+    "anneal_intensity_baseline",
+}
 
-def parse_args() -> argparse.Namespace:
+OPTIONAL_BOOL_KEYS = {
+    "anneal_bc_passed",
+    "anneal_loss_flag",
+    "anneal_queue_flag",
+    "anneal_intensity_flag",
+}
+
+OPTIONAL_TEXT_KEYS = {
+    "anneal_stage",
+    "anneal_dataset",
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Watch PPO telemetry logs for regressions")
     parser.add_argument("log", type=Path, help="Path to NDJSON PPO telemetry log")
     parser.add_argument("--follow", action="store_true", help="Continuously watch for new entries")
@@ -105,11 +126,43 @@ def parse_args() -> argparse.Namespace:
         help="Fail if chat_quality_mean falls below this value",
     )
     parser.add_argument(
+        "--anneal-bc-min",
+        type=float,
+        default=0.9,
+        help="Fail if anneal_bc_accuracy falls below this value (default: 0.9)",
+    )
+    parser.add_argument(
+        "--anneal-loss-max",
+        type=float,
+        default=0.1,
+        help="Fail if loss_total drifts beyond this fraction of baseline (default: 0.1 for ±10%)",
+    )
+    parser.add_argument(
+        "--anneal-queue-min",
+        type=float,
+        default=None,
+        help="Fail if queue_conflict_events falls below this value during anneal stages (default: baseline × (1 - queue-tolerance))",
+    )
+    parser.add_argument(
+        "--anneal-intensity-min",
+        type=float,
+        default=None,
+        help="Fail if queue_conflict_intensity_sum falls below this value during anneal stages (default: baseline × (1 - queue-tolerance))",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON lines instead of human-readable text",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
+
+
+def parse_args_from_list(argv: list[str]) -> argparse.Namespace:
+    return build_parser().parse_args(argv[1:])
 
 
 def stream_records(path: Path, follow: bool, interval: float) -> Iterator[dict[str, float]]:
@@ -140,6 +193,20 @@ def stream_records(path: Path, follow: bool, interval: float) -> Iterator[dict[s
                 if key not in {"data_mode"}
             }
             record["data_mode"] = str(payload["data_mode"])
+            for key in OPTIONAL_NUMERIC_KEYS:
+                if key in payload:
+                    value = payload[key]
+                    record[key] = (
+                        None
+                        if value is None
+                        else float(value)
+                    )
+            for key in OPTIONAL_BOOL_KEYS:
+                if key in payload:
+                    record[key] = bool(payload[key])
+            for key in OPTIONAL_TEXT_KEYS:
+                if key in payload:
+                    record[key] = str(payload[key])
             yield record
 
 
@@ -197,13 +264,47 @@ def check_thresholds(record: dict[str, object], args: argparse.Namespace) -> Non
                 f"Epoch {epoch}: chat_quality_mean {record['chat_quality_mean']:.3f} below threshold {args.chat_quality_min}"
             )
 
+    anneal_stage = record.get("anneal_stage")
+    if anneal_stage:
+        bc_accuracy = record.get("anneal_bc_accuracy")
+        if args.anneal_bc_min is not None and bc_accuracy is not None:
+            if bc_accuracy < args.anneal_bc_min:
+                raise SystemExit(
+                    f"Epoch {epoch}: anneal_bc_accuracy {bc_accuracy:.3f} below threshold {args.anneal_bc_min}"
+                )
+        loss_baseline = record.get("anneal_loss_baseline")
+        loss_limit = args.anneal_loss_max
+        if loss_baseline is not None and loss_limit is not None and loss_baseline:
+            if abs(record["loss_total"] - loss_baseline) / abs(loss_baseline) > loss_limit:
+                raise SystemExit(
+                    f"Epoch {epoch}: loss_total {record['loss_total']:.6f} drifts beyond ±{loss_limit*100:.1f}% of baseline {loss_baseline:.6f}"
+                )
+        queue_min = args.anneal_queue_min
+        if queue_min is None and is_rollout:
+            baseline = record.get("anneal_queue_baseline") or 0.0
+            queue_min = (1.0 - 0.15) * baseline if baseline else None
+        if queue_min is not None and is_rollout:
+            if record["queue_conflict_events"] < queue_min:
+                raise SystemExit(
+                    f"Epoch {epoch}: anneal queue_conflict_events {record['queue_conflict_events']:.1f} below threshold {queue_min}"
+                )
+        intensity_min = args.anneal_intensity_min
+        if intensity_min is None and is_rollout:
+            baseline = record.get("anneal_intensity_baseline") or 0.0
+            intensity_min = (1.0 - 0.15) * baseline if baseline else None
+        if intensity_min is not None and is_rollout:
+            if record["queue_conflict_intensity_sum"] < intensity_min:
+                raise SystemExit(
+                    f"Epoch {epoch}: anneal queue_conflict_intensity_sum {record['queue_conflict_intensity_sum']:.2f} below threshold {intensity_min}"
+                )
 
-def main() -> None:
-    args = parse_args()
+
+def main(args: list[str] | None = None) -> None:
+    parsed = parse_args() if args is None else parse_args_from_list(args)
     try:
-        for record in stream_records(args.log, args.follow, args.interval):
-            check_thresholds(record, args)
-            if args.json:
+        for record in stream_records(parsed.log, parsed.follow, parsed.interval):
+            check_thresholds(record, parsed)
+            if parsed.json:
                 import json
 
                 print(json.dumps(record))

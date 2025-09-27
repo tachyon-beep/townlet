@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import statistics
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
@@ -44,7 +44,43 @@ from townlet.policy.replay_buffer import InMemoryReplayDataset
 from townlet.policy.rollout import RolloutBuffer
 from townlet.world.grid import WorldState
 
-PPO_TELEMETRY_VERSION = 1.1
+PPO_TELEMETRY_VERSION = 1.2
+ANNEAL_BC_MIN_DEFAULT = 0.9
+ANNEAL_LOSS_TOLERANCE_DEFAULT = 0.10
+ANNEAL_QUEUE_TOLERANCE_DEFAULT = 0.15
+
+
+def _softmax(logits: np.ndarray) -> np.ndarray:
+    if logits.size == 0:
+        return logits
+    max_logit = float(np.max(logits))
+    shifted = logits - max_logit
+    exps = np.exp(shifted, dtype=np.float64)
+    denom = float(np.sum(exps))
+    if denom <= 0.0:
+        return np.full_like(logits, 1.0 / logits.size)
+    return (exps / denom).astype(np.float32)
+
+
+def _pretty_action(action_repr: str) -> str:
+    try:
+        data = json.loads(action_repr)
+    except json.JSONDecodeError:
+        return action_repr
+    if isinstance(data, dict):
+        kind = data.get("kind")
+        obj = data.get("object") or data.get("object_id")
+        aff = data.get("affordance") or data.get("affordance_id")
+        if kind and obj:
+            label = f"{kind}@{obj}"
+        elif kind:
+            label = str(kind)
+        else:
+            label = action_repr
+        if aff:
+            label = f"{label}:{aff}"
+        return label
+    return action_repr
 
 
 class PolicyRuntime:
@@ -62,6 +98,7 @@ class PolicyRuntime:
         self._policy_map_shape: tuple[int, int, int] | None = None
         self._policy_feature_dim: int | None = None
         self._policy_action_dim: int = 0
+        self._latest_policy_snapshot: dict[str, dict[str, object]] = {}
 
     def decide(self, world: WorldState, tick: int) -> dict[str, object]:
         """Return a primitive action per agent."""
@@ -123,6 +160,7 @@ class PolicyRuntime:
             frames.append(frame)
         self._trajectory.extend(frames)
         self._transitions.clear()
+        self._update_policy_snapshot(frames)
         return frames
 
     def collect_trajectory(self, clear: bool = True) -> list[dict[str, object]]:
@@ -184,6 +222,48 @@ class PolicyRuntime:
         frame["value_pred"] = value_pred
         frame["logits"] = logits.squeeze(0).cpu().numpy()
 
+    def _update_policy_snapshot(self, frames: list[dict[str, object]]) -> None:
+        snapshot: dict[str, dict[str, object]] = {}
+        for frame in frames:
+            agent_id = str(frame.get("agent_id", "unknown"))
+            logits = frame.get("logits")
+            if logits is None:
+                continue
+            logits_array = np.asarray(logits, dtype=np.float32)
+            if logits_array.ndim != 1 or logits_array.size == 0:
+                continue
+            probabilities = _softmax(logits_array)
+            action_lookup_raw = frame.get("action_lookup", {})
+            action_lookup: dict[int, str] = {}
+            if isinstance(action_lookup_raw, Mapping):
+                for action_repr, action_index in action_lookup_raw.items():
+                    if isinstance(action_index, int):
+                        action_lookup[action_index] = _pretty_action(str(action_repr))
+            top_indices = np.argsort(probabilities)[::-1][:5]
+            top_actions: list[dict[str, object]] = []
+            for idx in top_indices:
+                if idx < 0 or idx >= probabilities.size:
+                    continue
+                top_actions.append(
+                    {
+                        "action": action_lookup.get(idx, str(idx)),
+                        "probability": float(probabilities[idx]),
+                    }
+                )
+            selected_idx = frame.get("action_id")
+            selected_label = action_lookup.get(selected_idx, str(selected_idx))
+            snapshot[agent_id] = {
+                "tick": int(frame.get("tick", self._tick)),
+                "selected_action": selected_label,
+                "log_prob": float(frame.get("log_prob", 0.0)),
+                "value_pred": float(frame.get("value_pred", 0.0)),
+                "top_actions": top_actions,
+            }
+        self._latest_policy_snapshot = snapshot
+
+    def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
+        return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
+
     def _ensure_policy_network(
         self,
         map_shape: tuple[int, int, int],
@@ -244,6 +324,8 @@ class TrainingHarness:
         # TODO(@townlet): Wire up PPO trainer, evaluators, and promotion hooks.
         self._capture_loop = None
         self._apply_social_reward_stage(-1)
+        self._anneal_context: dict[str, object] | None = None
+        self._anneal_baselines: dict[str, dict[str, float]] = {}
 
     def run(self) -> None:
         """Entry point for CLI training runs."""
@@ -419,6 +501,15 @@ class TrainingHarness:
 
         bc_threshold = float(self.config.training.anneal_accuracy_threshold)
         results: list[dict[str, object]] = []
+        last_bc_stage: dict[str, object] | None = None
+        dataset_label = None
+        if dataset_config is not None:
+            dataset_label = dataset_config.label
+        elif in_memory_dataset is not None:
+            dataset_label = getattr(in_memory_dataset, "label", None)
+        dataset_key = str(dataset_label or "anneal_dataset")
+
+        baselines = self._anneal_baselines.setdefault(dataset_key, {})
 
         for stage in schedule:
             if stage.mode == "bc":
@@ -434,14 +525,41 @@ class TrainingHarness:
                     "bc_weight": float(stage.bc_weight),
                 }
                 results.append(stage_result)
+                last_bc_stage = stage_result
                 if not stage_result["passed"]:
                     stage_result["rolled_back"] = True
                     break
             else:
-                summary = self.run_ppo(
-                    dataset_config=dataset_config,
-                    in_memory_dataset=in_memory_dataset,
-                    epochs=stage.epochs,
+                context: dict[str, object] = {
+                    "cycle": float(stage.cycle),
+                    "stage": stage.mode,
+                    "dataset_label": dataset_key,
+                    "bc_accuracy": last_bc_stage.get("accuracy") if last_bc_stage else None,
+                    "bc_threshold": bc_threshold,
+                    "bc_passed": last_bc_stage.get("passed", True)
+                    if last_bc_stage
+                    else True,
+                    "loss_baseline": baselines.get("loss_total"),
+                    "queue_events_baseline": baselines.get("queue_conflict_events"),
+                    "queue_intensity_baseline": baselines.get("queue_conflict_intensity"),
+                    "loss_tolerance": ANNEAL_LOSS_TOLERANCE_DEFAULT,
+                    "queue_tolerance": ANNEAL_QUEUE_TOLERANCE_DEFAULT,
+                }
+                self._anneal_context = context
+                try:
+                    summary = self.run_ppo(
+                        dataset_config=dataset_config,
+                        in_memory_dataset=in_memory_dataset,
+                        epochs=stage.epochs,
+                    )
+                finally:
+                    self._anneal_context = None
+                baselines["loss_total"] = float(summary.get("loss_total", 0.0))
+                baselines["queue_conflict_events"] = float(
+                    summary.get("queue_conflict_events", 0.0)
+                )
+                baselines["queue_conflict_intensity"] = float(
+                    summary.get("queue_conflict_intensity_sum", 0.0)
                 )
                 summary_result = {
                     "cycle": float(stage.cycle),
@@ -766,6 +884,71 @@ class TrainingHarness:
                     }
                 )
                 log_stream_offset += 1
+
+            anneal_context = getattr(self, "_anneal_context", None)
+            if PPO_TELEMETRY_VERSION >= 1.2 and anneal_context:
+                bc_accuracy_value = anneal_context.get("bc_accuracy")
+                bc_threshold_value = anneal_context.get("bc_threshold")
+                loss_baseline = anneal_context.get("loss_baseline")
+                queue_baseline = anneal_context.get("queue_events_baseline")
+                intensity_baseline = anneal_context.get("queue_intensity_baseline")
+                loss_tolerance = float(
+                    anneal_context.get("loss_tolerance", ANNEAL_LOSS_TOLERANCE_DEFAULT)
+                )
+                queue_tolerance = float(
+                    anneal_context.get("queue_tolerance", ANNEAL_QUEUE_TOLERANCE_DEFAULT)
+                )
+                loss_total_value = averaged_metrics["total_loss"]
+                queue_events_value = float(epoch_summary.get("queue_conflict_events", 0.0))
+                queue_intensity_value = float(
+                    epoch_summary.get("queue_conflict_intensity_sum", 0.0)
+                )
+
+                loss_flag = False
+                if isinstance(loss_baseline, (int, float)) and loss_baseline:
+                    loss_flag = (
+                        abs(loss_total_value - float(loss_baseline))
+                        / abs(float(loss_baseline))
+                    ) > loss_tolerance
+
+                queue_flag = False
+                if isinstance(queue_baseline, (int, float)) and queue_baseline:
+                    queue_flag = queue_events_value < (1.0 - queue_tolerance) * float(
+                        queue_baseline
+                    )
+
+                intensity_flag = False
+                if isinstance(intensity_baseline, (int, float)) and intensity_baseline:
+                    intensity_flag = queue_intensity_value < (
+                        (1.0 - queue_tolerance) * float(intensity_baseline)
+                    )
+
+                epoch_summary.update(
+                    {
+                        "anneal_cycle": float(anneal_context.get("cycle", -1.0)),
+                        "anneal_stage": str(anneal_context.get("stage", "")),
+                        "anneal_dataset": str(anneal_context.get("dataset_label", "")),
+                        "anneal_bc_accuracy": float(bc_accuracy_value)
+                        if isinstance(bc_accuracy_value, (int, float))
+                        else None,
+                        "anneal_bc_threshold": float(bc_threshold_value)
+                        if isinstance(bc_threshold_value, (int, float))
+                        else float(self.config.training.anneal_accuracy_threshold),
+                        "anneal_bc_passed": bool(anneal_context.get("bc_passed", True)),
+                        "anneal_loss_baseline": float(loss_baseline)
+                        if isinstance(loss_baseline, (int, float))
+                        else None,
+                        "anneal_queue_baseline": float(queue_baseline)
+                        if isinstance(queue_baseline, (int, float))
+                        else None,
+                        "anneal_intensity_baseline": float(intensity_baseline)
+                        if isinstance(intensity_baseline, (int, float))
+                        else None,
+                        "anneal_loss_flag": bool(loss_flag),
+                        "anneal_queue_flag": bool(queue_flag),
+                        "anneal_intensity_flag": bool(intensity_flag),
+                    }
+                )
             if baseline_metrics:
                 epoch_summary["baseline_sample_count"] = float(
                     baseline_metrics.get("sample_count", 0.0)

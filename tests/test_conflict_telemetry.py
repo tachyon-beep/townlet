@@ -14,7 +14,7 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
     world = loop.world
     world.queue_manager._settings.ghost_step_after = 1
 
-    world.register_object("stove_1", "stove")
+    world.register_object(object_id="stove_1", object_type="stove")
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),

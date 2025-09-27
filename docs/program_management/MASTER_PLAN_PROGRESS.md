@@ -29,6 +29,11 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
    - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
    - Next: schedule periodic soak runs, wire results into ops review cadence.
 
+4. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
+   - Owner: RL/Training
+   - Status: Completed (BC dataset catalogued, acceptance smoke logged under `artifacts/m5/acceptance/`, ops & CI guardrails landed).
+   - Next: proceed to Phase 5.5 planning (anneal promotion governance).
+
 ## Upcoming Milestones (see `PROJECT_PLAN.md` for detail)
 - **M4 – Social Foundations** (Completed 2025-09-30)
 - **M5 – Behaviour Cloning & Anneal**: trajectory capture, BC harness, mixed scripted→learned control with rollback guard.
