@@ -1,4 +1,5 @@
 """Embedding slot allocation with cooldown logging."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -88,7 +89,9 @@ class EmbeddingAllocator:
 
         assignments = payload.get("assignments", {})
         if isinstance(assignments, dict):
-            self._assignments = {str(agent_id): int(slot) for agent_id, slot in assignments.items()}
+            self._assignments = {
+                str(agent_id): int(slot) for agent_id, slot in assignments.items()
+            }
         else:
             self._assignments = {}
 

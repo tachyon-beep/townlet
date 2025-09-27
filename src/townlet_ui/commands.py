@@ -1,4 +1,5 @@
 """Helper utilities for dispatching console commands asynchronously."""
+
 from __future__ import annotations
 
 import logging
@@ -7,7 +8,6 @@ import threading
 from typing import Any
 
 from townlet.console.handlers import ConsoleCommand
-
 
 logger = logging.getLogger(__name__)
 

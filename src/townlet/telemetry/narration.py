@@ -1,4 +1,5 @@
 """Narration throttling utilities."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -37,7 +38,10 @@ class NarrationRateLimiter:
         dedupe_window = int(self.config.dedupe_window_ticks)
         if dedupe_window >= 0:
             last_tick = self._recent_entries.get(key)
-            if last_tick is not None and self._current_tick - last_tick <= dedupe_window:
+            if (
+                last_tick is not None
+                and self._current_tick - last_tick <= dedupe_window
+            ):
                 return False
 
         if not priority:
@@ -66,7 +70,9 @@ class NarrationRateLimiter:
     def import_state(self, payload: Dict[str, object]) -> None:
         last_category = payload.get("last_category_tick", {})
         if isinstance(last_category, dict):
-            self._last_category_tick = {str(cat): int(tick) for cat, tick in last_category.items()}
+            self._last_category_tick = {
+                str(cat): int(tick) for cat, tick in last_category.items()
+            }
         last_global = payload.get("last_global_tick")
         if isinstance(last_global, (int, float)):
             self._last_global_tick = int(last_global)

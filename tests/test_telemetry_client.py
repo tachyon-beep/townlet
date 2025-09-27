@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
-from townlet.core.sim_loop import SimulationLoop
 from townlet.console.handlers import create_console_router
+from townlet.core.sim_loop import SimulationLoop
 from townlet_ui.telemetry import SchemaMismatchError, TelemetryClient
 
 
@@ -47,7 +47,9 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     assert isinstance(snapshot.narrations, list)
 
 
-def test_telemetry_client_warns_on_newer_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_telemetry_client_warns_on_newer_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     loop = make_simulation()
     router = create_console_router(loop.telemetry, loop.world, config=loop.config)
     for _ in range(2):

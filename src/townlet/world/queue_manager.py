@@ -5,6 +5,7 @@ Queues are maintained per interactive object, and fairness is controlled through
 cooldowns, queue-age prioritisation, and a ghost-step breaker that prevents
 long-lived deadlocks.
 """
+
 from __future__ import annotations
 
 import time
@@ -84,7 +85,9 @@ class QueueManager:
         finally:
             self._perf_metrics["request_ns"] += time.perf_counter_ns() - start
 
-    def release(self, object_id: str, agent_id: str, tick: int, *, success: bool = True) -> None:
+    def release(
+        self, object_id: str, agent_id: str, tick: int, *, success: bool = True
+    ) -> None:
         """Release the reservation and optionally apply cooldown."""
         start = time.perf_counter_ns()
         self._perf_metrics["releases"] += 1
@@ -94,7 +97,9 @@ class QueueManager:
 
             del self._active[object_id]
             if success:
-                self._cooldowns[(object_id, agent_id)] = tick + self._settings.cooldown_ticks
+                self._cooldowns[(object_id, agent_id)] = (
+                    tick + self._settings.cooldown_ticks
+                )
             else:
                 self._cooldowns.pop((object_id, agent_id), None)
             self._stall_counts.pop(object_id, None)
@@ -173,7 +178,9 @@ class QueueManager:
 
         active = payload.get("active", {})
         if isinstance(active, dict):
-            self._active = {str(obj_id): str(agent_id) for obj_id, agent_id in active.items()}
+            self._active = {
+                str(obj_id): str(agent_id) for obj_id, agent_id in active.items()
+            }
         else:
             self._active = {}
 
@@ -185,7 +192,9 @@ class QueueManager:
                 for entry in entries or []:
                     agent_id = str(entry.get("agent_id"))
                     joined_tick = int(entry.get("joined_tick", 0))
-                    object_entries.append(QueueEntry(agent_id=agent_id, joined_tick=joined_tick))
+                    object_entries.append(
+                        QueueEntry(agent_id=agent_id, joined_tick=joined_tick)
+                    )
                 queues[str(object_id)] = object_entries
         self._queues = queues
 
@@ -199,7 +208,9 @@ class QueueManager:
 
         stall_payload = payload.get("stall_counts", {})
         if isinstance(stall_payload, dict):
-            self._stall_counts = {str(obj_id): int(count) for obj_id, count in stall_payload.items()}
+            self._stall_counts = {
+                str(obj_id): int(count) for obj_id, count in stall_payload.items()
+            }
         else:
             self._stall_counts = {}
 
@@ -221,7 +232,9 @@ class QueueManager:
             best_priority: float | None = None
             for index, entry in enumerate(queue):
                 wait_time = tick - entry.joined_tick
-                priority = float(index) - self._settings.age_priority_weight * float(wait_time)
+                priority = float(index) - self._settings.age_priority_weight * float(
+                    wait_time
+                )
                 if best_priority is None or priority < best_priority:
                     best_priority = priority
                     best_index = index

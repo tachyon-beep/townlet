@@ -1,4 +1,5 @@
 """Schema-aware telemetry client utilities for observer UI components."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -136,7 +137,9 @@ class SchemaMismatchError(RuntimeError):
 class TelemetryClient:
     """Lightweight helper to parse telemetry payloads for the observer UI."""
 
-    def __init__(self, *, expected_schema_prefix: str = SUPPORTED_SCHEMA_PREFIX) -> None:
+    def __init__(
+        self, *, expected_schema_prefix: str = SUPPORTED_SCHEMA_PREFIX
+    ) -> None:
         self.expected_schema_prefix = expected_schema_prefix
 
     def parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
@@ -190,11 +193,15 @@ class TelemetryClient:
                 total_evictions=int(relationships_payload.get("total", 0)),
                 per_owner={
                     str(owner): int(count)
-                    for owner, count in (relationships_payload.get("owners", {}) or {}).items()
+                    for owner, count in (
+                        relationships_payload.get("owners", {}) or {}
+                    ).items()
                 },
                 per_reason={
                     str(reason): int(count)
-                    for reason, count in (relationships_payload.get("reasons", {}) or {}).items()
+                    for reason, count in (
+                        relationships_payload.get("reasons", {}) or {}
+                    ).items()
                 },
             )
 
@@ -205,9 +212,21 @@ class TelemetryClient:
                     continue
                 relationship_snapshot[str(owner)] = {
                     str(other): {
-                        "trust": float(values.get("trust", 0.0)) if isinstance(values, Mapping) else 0.0,
-                        "familiarity": float(values.get("familiarity", 0.0)) if isinstance(values, Mapping) else 0.0,
-                        "rivalry": float(values.get("rivalry", 0.0)) if isinstance(values, Mapping) else 0.0,
+                        "trust": (
+                            float(values.get("trust", 0.0))
+                            if isinstance(values, Mapping)
+                            else 0.0
+                        ),
+                        "familiarity": (
+                            float(values.get("familiarity", 0.0))
+                            if isinstance(values, Mapping)
+                            else 0.0
+                        ),
+                        "rivalry": (
+                            float(values.get("rivalry", 0.0))
+                            if isinstance(values, Mapping)
+                            else 0.0
+                        ),
                     }
                     for other, values in ties.items()
                     if isinstance(values, Mapping)
@@ -303,29 +322,51 @@ class TelemetryClient:
         if isinstance(anneal_payload, Mapping) and anneal_payload:
             anneal_status = AnnealStatus(
                 stage=str(anneal_payload.get("anneal_stage", "")),
-                cycle=float(anneal_payload.get("anneal_cycle", 0.0))
-                if isinstance(anneal_payload.get("anneal_cycle"), (int, float))
-                else None,
+                cycle=(
+                    float(anneal_payload.get("anneal_cycle", 0.0))
+                    if isinstance(anneal_payload.get("anneal_cycle"), (int, float))
+                    else None
+                ),
                 dataset=str(anneal_payload.get("anneal_dataset", "")),
-                bc_accuracy=float(anneal_payload.get("anneal_bc_accuracy"))
-                if isinstance(anneal_payload.get("anneal_bc_accuracy"), (int, float))
-                else None,
-                bc_threshold=float(anneal_payload.get("anneal_bc_threshold"))
-                if isinstance(anneal_payload.get("anneal_bc_threshold"), (int, float))
-                else None,
+                bc_accuracy=(
+                    float(anneal_payload.get("anneal_bc_accuracy"))
+                    if isinstance(
+                        anneal_payload.get("anneal_bc_accuracy"), (int, float)
+                    )
+                    else None
+                ),
+                bc_threshold=(
+                    float(anneal_payload.get("anneal_bc_threshold"))
+                    if isinstance(
+                        anneal_payload.get("anneal_bc_threshold"), (int, float)
+                    )
+                    else None
+                ),
                 bc_passed=bool(anneal_payload.get("anneal_bc_passed", False)),
                 loss_flag=bool(anneal_payload.get("anneal_loss_flag", False)),
                 queue_flag=bool(anneal_payload.get("anneal_queue_flag", False)),
                 intensity_flag=bool(anneal_payload.get("anneal_intensity_flag", False)),
-                loss_baseline=float(anneal_payload.get("anneal_loss_baseline"))
-                if isinstance(anneal_payload.get("anneal_loss_baseline"), (int, float))
-                else None,
-                queue_baseline=float(anneal_payload.get("anneal_queue_baseline"))
-                if isinstance(anneal_payload.get("anneal_queue_baseline"), (int, float))
-                else None,
-                intensity_baseline=float(anneal_payload.get("anneal_intensity_baseline"))
-                if isinstance(anneal_payload.get("anneal_intensity_baseline"), (int, float))
-                else None,
+                loss_baseline=(
+                    float(anneal_payload.get("anneal_loss_baseline"))
+                    if isinstance(
+                        anneal_payload.get("anneal_loss_baseline"), (int, float)
+                    )
+                    else None
+                ),
+                queue_baseline=(
+                    float(anneal_payload.get("anneal_queue_baseline"))
+                    if isinstance(
+                        anneal_payload.get("anneal_queue_baseline"), (int, float)
+                    )
+                    else None
+                ),
+                intensity_baseline=(
+                    float(anneal_payload.get("anneal_intensity_baseline"))
+                    if isinstance(
+                        anneal_payload.get("anneal_intensity_baseline"), (int, float)
+                    )
+                    else None
+                ),
             )
 
         kpi_payload = payload.get("kpi_history") or {}
@@ -333,7 +374,9 @@ class TelemetryClient:
         if isinstance(kpi_payload, Mapping):
             for key, values in kpi_payload.items():
                 if isinstance(values, list):
-                    kpi_history[str(key)] = [float(v) for v in values if isinstance(v, (int, float))]
+                    kpi_history[str(key)] = [
+                        float(v) for v in values if isinstance(v, (int, float))
+                    ]
 
         inspector_entries: List[PolicyInspectorEntry] = []
         policy_snapshot_payload = payload.get("policy_snapshot")
@@ -400,18 +443,20 @@ class TelemetryClient:
     def _check_schema(self, version: str) -> Optional[str]:
         if version.startswith(self.expected_schema_prefix):
             return None
-        message = (
-            f"Client supports schema prefix {self.expected_schema_prefix}, but shard reported {version}."
-        )
+        message = f"Client supports schema prefix {self.expected_schema_prefix}, but shard reported {version}."
         if version.split(".")[0] != self.expected_schema_prefix.split(".")[0]:
             raise SchemaMismatchError(message)
         return message
 
     @staticmethod
-    def _get_section(payload: Mapping[str, Any], key: str, expected: type) -> Mapping[str, Any]:
+    def _get_section(
+        payload: Mapping[str, Any], key: str, expected: type
+    ) -> Mapping[str, Any]:
         value = payload.get(key)
         if not isinstance(value, expected):
-            raise SchemaMismatchError(f"Telemetry payload missing expected section '{key}'")
+            raise SchemaMismatchError(
+                f"Telemetry payload missing expected section '{key}'"
+            )
         return value
 
 

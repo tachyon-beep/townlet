@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
-from townlet.core.sim_loop import SimulationLoop
 from townlet.console.handlers import create_console_router
+from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.models import torch_available
-from townlet_ui.dashboard import render_snapshot, run_dashboard, _build_map_panel
+from townlet_ui.dashboard import _build_map_panel, render_snapshot, run_dashboard
 from townlet_ui.telemetry import TelemetryClient
 
 
@@ -39,7 +39,9 @@ def test_render_snapshot_produces_panels() -> None:
     router = create_console_router(loop.telemetry, loop.world, config=loop.config)
     for _ in range(3):
         loop.step()
-    loop.world.update_relationship("alice", "bob", trust=0.1, familiarity=0.05, rivalry=0.02)
+    loop.world.update_relationship(
+        "alice", "bob", trust=0.1, familiarity=0.05, rivalry=0.02
+    )
     loop.step()
     snapshot = TelemetryClient().from_console(router)
 
@@ -50,9 +52,13 @@ def test_render_snapshot_produces_panels() -> None:
     assert any((title or "").startswith("Conflict") for title in panel_titles)
     assert any((title or "").startswith("Narrations") for title in panel_titles)
     assert any((title or "").startswith("Relationships") for title in panel_titles)
-    assert any((title or "").startswith("Relationship Updates") for title in panel_titles)
+    assert any(
+        (title or "").startswith("Relationship Updates") for title in panel_titles
+    )
     assert any((title or "").startswith("Policy Inspector") for title in panel_titles)
-    assert any((title or "").startswith("Relationship Overlay") for title in panel_titles)
+    assert any(
+        (title or "").startswith("Relationship Overlay") for title in panel_titles
+    )
     assert any("Legend" in (title or "") for title in panel_titles)
 
 

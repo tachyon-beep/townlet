@@ -1,4 +1,5 @@
 """Utility helpers for replay and rollout metrics."""
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,9 @@ def compute_sample_metrics(sample: ReplaySample) -> dict[str, float]:
     metrics["log_prob_mean"] = (
         float(np.mean(sample.old_log_probs)) if sample.old_log_probs.size else 0.0
     )
-    metrics["value_pred_last"] = float(sample.value_preds[-1]) if sample.value_preds.size else 0.0
+    metrics["value_pred_last"] = (
+        float(sample.value_preds[-1]) if sample.value_preds.size else 0.0
+    )
 
     names = sample.metadata.get("feature_names")
     if isinstance(names, list):
@@ -39,7 +42,9 @@ def compute_sample_metrics(sample: ReplaySample) -> dict[str, float]:
         reward_idx = names.index("reward_total") if "reward_total" in names else None
         if reward_idx is not None:
             metrics["reward_feature_mean"] = float(np.mean(features[:, reward_idx]))
-        lateness_idx = names.index("lateness_counter") if "lateness_counter" in names else None
+        lateness_idx = (
+            names.index("lateness_counter") if "lateness_counter" in names else None
+        )
         if lateness_idx is not None:
             metrics["lateness_mean"] = float(np.mean(features[:, lateness_idx]))
 
@@ -50,12 +55,16 @@ def compute_sample_metrics(sample: ReplaySample) -> dict[str, float]:
         else np.array([])
     )
     total_actions = float(np.sum(action_counts)) if action_counts.size else 0.0
-    metrics["action_nonzero"] = float(np.count_nonzero(action_counts)) if action_counts.size else 0.0
+    metrics["action_nonzero"] = (
+        float(np.count_nonzero(action_counts)) if action_counts.size else 0.0
+    )
     metrics["action_total"] = total_actions
     if total_actions > 0:
         probs = action_counts / total_actions
         metrics["action_entropy"] = float(
-            -np.sum(np.where(probs > 0, probs * np.log(np.clip(probs, 1e-8, None)), 0.0))
+            -np.sum(
+                np.where(probs > 0, probs * np.log(np.clip(probs, 1e-8, None)), 0.0)
+            )
         )
     else:
         metrics["action_entropy"] = 0.0
@@ -92,6 +101,8 @@ def compute_sample_metrics(sample: ReplaySample) -> dict[str, float]:
 
     for kind, count in kind_counts.items():
         metrics[f"action_{kind}_count"] = count
-    metrics["action_blocked_ratio"] = float(blocked_total / total_actions) if total_actions else 0.0
+    metrics["action_blocked_ratio"] = (
+        float(blocked_total / total_actions) if total_actions else 0.0
+    )
 
     return metrics

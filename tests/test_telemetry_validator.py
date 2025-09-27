@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-import json
 import pytest
 
 from scripts.validate_ppo_telemetry import validate_logs
-
 
 VALID_RECORD = {
     "epoch": 1.0,
@@ -55,16 +54,24 @@ def test_validate_ppo_telemetry_accepts_valid_log(tmp_path: Path) -> None:
     baseline_path.write_text(json.dumps(baseline_payload))
 
     # Should not raise; include relative drift for coverage.
-    validate_logs([log_path], baseline_path, drift_threshold=None, include_relative=True)
+    validate_logs(
+        [log_path], baseline_path, drift_threshold=None, include_relative=True
+    )
 
 
 def test_validate_ppo_telemetry_raises_for_missing_conflict(tmp_path: Path) -> None:
     log_path = tmp_path / "ppo_invalid.jsonl"
-    invalid_record = {key: value for key, value in VALID_RECORD.items() if not key.startswith("conflict.")}
+    invalid_record = {
+        key: value
+        for key, value in VALID_RECORD.items()
+        if not key.startswith("conflict.")
+    }
     _write_ndjson(log_path, invalid_record)
 
     with pytest.raises(ValueError, match="missing conflict telemetry keys"):
-        validate_logs([log_path], baseline_path=None, drift_threshold=None, include_relative=False)
+        validate_logs(
+            [log_path], baseline_path=None, drift_threshold=None, include_relative=False
+        )
 
 
 def test_validate_ppo_telemetry_accepts_version_1_1(tmp_path: Path) -> None:
@@ -87,7 +94,9 @@ def test_validate_ppo_telemetry_accepts_version_1_1(tmp_path: Path) -> None:
     }
     _write_ndjson(log_path, record_v1_1)
 
-    validate_logs([log_path], baseline_path=None, drift_threshold=None, include_relative=False)
+    validate_logs(
+        [log_path], baseline_path=None, drift_threshold=None, include_relative=False
+    )
 
 
 def test_validate_ppo_telemetry_v1_1_missing_field_raises(tmp_path: Path) -> None:
@@ -101,4 +110,6 @@ def test_validate_ppo_telemetry_v1_1_missing_field_raises(tmp_path: Path) -> Non
     _write_ndjson(log_path, record_v1_1)
 
     with pytest.raises(ValueError, match="requires numeric keys"):
-        validate_logs([log_path], baseline_path=None, drift_threshold=None, include_relative=False)
+        validate_logs(
+            [log_path], baseline_path=None, drift_threshold=None, include_relative=False
+        )

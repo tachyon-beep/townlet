@@ -1,4 +1,5 @@
 """Relationship ledger for Phase 4 social systems."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -80,8 +81,12 @@ class RelationshipLedger:
         removes: List[str] = []
         for other_id, tie in self._ties.items():
             tie.trust = _decay_value(tie.trust, self.params.trust_decay)
-            tie.familiarity = _decay_value(tie.familiarity, self.params.familiarity_decay)
-            tie.rivalry = _decay_value(tie.rivalry, self.params.rivalry_decay, minimum=0.0)
+            tie.familiarity = _decay_value(
+                tie.familiarity, self.params.familiarity_decay
+            )
+            tie.rivalry = _decay_value(
+                tie.rivalry, self.params.rivalry_decay, minimum=0.0
+            )
             if tie.trust == 0.0 and tie.familiarity == 0.0 and tie.rivalry == 0.0:
                 removes.append(other_id)
         for other_id in removes:
@@ -95,7 +100,9 @@ class RelationshipLedger:
         for other_id, values in payload.items():
             tie = RelationshipTie(
                 trust=_clamp(float(values.get("trust", 0.0)), low=-1.0, high=1.0),
-                familiarity=_clamp(float(values.get("familiarity", 0.0)), low=-1.0, high=1.0),
+                familiarity=_clamp(
+                    float(values.get("familiarity", 0.0)), low=-1.0, high=1.0
+                ),
                 rivalry=_clamp(float(values.get("rivalry", 0.0)), low=0.0, high=1.0),
             )
             self._ties[str(other_id)] = tie

@@ -1,4 +1,5 @@
 """Utility helpers for serialising deterministic RNG state."""
+
 from __future__ import annotations
 
 import base64

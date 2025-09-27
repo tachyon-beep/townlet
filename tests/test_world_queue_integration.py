@@ -193,6 +193,8 @@ def test_stove_restock_event_emitted() -> None:
     world.resolve_affordances(current_tick=world.tick)
     events = world.drain_events()
     assert any(event.get("event") == "stock_replenish" for event in events)
+
+
 def test_scripted_behavior_handles_sleep() -> None:
     world = _make_world()
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))

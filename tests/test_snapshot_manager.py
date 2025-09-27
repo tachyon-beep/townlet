@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import random
+from pathlib import Path
 
 import pytest
 
-from townlet.config import SimulationConfig, load_config
+from townlet.config import PerturbationKind, SimulationConfig, load_config
+from townlet.scheduler.perturbations import PerturbationScheduler, ScheduledPerturbation
 from townlet.snapshots.state import (
     SNAPSHOT_SCHEMA_VERSION,
     SnapshotManager,
@@ -14,11 +15,9 @@ from townlet.snapshots.state import (
     apply_snapshot_to_world,
     snapshot_from_world,
 )
-from townlet.world.grid import AgentSnapshot, WorldState
 from townlet.telemetry.publisher import TelemetryPublisher
-from townlet.scheduler.perturbations import PerturbationScheduler, ScheduledPerturbation
-from townlet.config import PerturbationKind
 from townlet.utils import encode_rng_state
+from townlet.world.grid import AgentSnapshot, WorldState
 
 
 @pytest.fixture(scope="module")
@@ -80,9 +79,7 @@ def test_snapshot_round_trip(tmp_path: Path, sample_config) -> None:
                     {"agent_id": "bob", "joined_tick": 6},
                 ]
             },
-            "cooldowns": [
-                {"object_id": "fridge_1", "agent_id": "alice", "expiry": 50}
-            ],
+            "cooldowns": [{"object_id": "fridge_1", "agent_id": "alice", "expiry": 50}],
             "stall_counts": {"fridge_1": 1},
         },
         embeddings={
@@ -128,7 +125,9 @@ def test_snapshot_config_mismatch_raises(tmp_path: Path, sample_config) -> None:
         manager.load(path, sample_config)
 
 
-def test_snapshot_missing_relationships_field_rejected(tmp_path: Path, sample_config) -> None:
+def test_snapshot_missing_relationships_field_rejected(
+    tmp_path: Path, sample_config
+) -> None:
     manager = SnapshotManager(root=tmp_path)
     path = tmp_path / "snapshot-1.json"
     payload = {
@@ -151,7 +150,56 @@ def test_snapshot_schema_version_mismatch(tmp_path: Path, sample_config) -> None
         manager.load(path, sample_config)
 
 
-def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: SimulationConfig) -> None:
+def _config_with_snapshot_updates(
+    config: SimulationConfig, updates: dict[str, object]
+) -> SimulationConfig:
+    payload = config.model_dump()
+    snapshot_payload = payload.get("snapshot", {})
+    snapshot_payload.update(updates)
+    payload["snapshot"] = snapshot_payload
+    return SimulationConfig.model_validate(payload)
+
+
+def test_snapshot_mismatch_allowed_when_guardrail_disabled(
+    tmp_path: Path, sample_config: SimulationConfig
+) -> None:
+    relaxed_config = _config_with_snapshot_updates(
+        sample_config,
+        {"guardrails": {"require_exact_config": False}},
+    )
+    manager = SnapshotManager(root=tmp_path)
+    state = SnapshotState(config_id="legacy", tick=7)
+    path = manager.save(state)
+
+    loaded = manager.load(path, relaxed_config, allow_migration=False)
+    assert loaded.config_id == "legacy"
+    assert loaded.migrations["required"] == [f"legacy->{relaxed_config.config_id}"]
+
+
+def test_snapshot_schema_downgrade_honours_allow_flag(
+    tmp_path: Path, sample_config: SimulationConfig
+) -> None:
+    manager = SnapshotManager(root=tmp_path)
+    state = SnapshotState(config_id=sample_config.config_id, tick=1)
+    path = manager.save(state)
+    data = json.loads(path.read_text())
+    data["schema_version"] = "2.0"
+    path.write_text(json.dumps(data))
+
+    with pytest.raises(ValueError):
+        manager.load(path, sample_config)
+
+    downgradable = _config_with_snapshot_updates(
+        sample_config,
+        {"guardrails": {"allow_downgrade": True}},
+    )
+    loaded = manager.load(path, downgradable)
+    assert loaded.config_id == sample_config.config_id
+
+
+def test_world_relationship_snapshot_round_trip(
+    tmp_path: Path, sample_config: SimulationConfig
+) -> None:
     random.seed(1337)
     world_rng = random.Random(2024)
     events_rng = random.Random(9090)
@@ -252,7 +300,10 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     assert set(restored_world.agents.keys()) == set(world.agents.keys())
     assert restored_world.agents["alice"].needs == world.agents["alice"].needs
     assert restored_world.objects.keys() == world.objects.keys()
-    assert restored_world.queue_manager.export_state() == world.queue_manager.export_state()
+    assert (
+        restored_world.queue_manager.export_state()
+        == world.queue_manager.export_state()
+    )
     assert restored_world._employment_exit_queue == world._employment_exit_queue
     assert restored_world._employment_manual_exits == world._employment_manual_exits
     assert restored_world._employment_exits_today == world._employment_exits_today
@@ -269,5 +320,7 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     assert state.migrations == {"applied": [], "required": []}
     assert state.perturbations == scheduler.export_state()
     assert restored_telemetry.export_state() == telemetry.export_state()
-    assert restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()
+    assert (
+        restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()
+    )
     # Perturbation scheduler is external in this test; ensure state maintained via scheduler snapshot.

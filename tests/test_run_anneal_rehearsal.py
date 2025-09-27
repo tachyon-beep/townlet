@@ -1,12 +1,10 @@
+import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
 from townlet.policy.models import torch_available
-
-import importlib.util
-import sys
-
 
 spec = importlib.util.spec_from_file_location(
     "run_anneal_rehearsal",

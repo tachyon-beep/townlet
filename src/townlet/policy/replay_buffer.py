@@ -1,4 +1,5 @@
 """In-memory replay dataset used for rollout captures."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -40,7 +41,10 @@ class InMemoryReplayDataset:
     def _validate_shapes(self) -> None:
         base = self.samples[0]
         for sample in self.samples[1:]:
-            if sample.map.shape != base.map.shape or sample.features.shape != base.features.shape:
+            if (
+                sample.map.shape != base.map.shape
+                or sample.features.shape != base.features.shape
+            ):
                 raise ValueError("In-memory samples have mismatched shapes")
 
     def __iter__(self) -> Iterator[ReplayBatch]:

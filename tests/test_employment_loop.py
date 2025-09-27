@@ -76,9 +76,7 @@ def test_late_arrival_accumulates_wages_withheld() -> None:
     assert bob.attendance_ratio < 1.0
     assert bob.late_ticks_today > 0
     assert bob.wages_withheld > 0
-    assert bob.inventory.get("wages_earned", 0) < (
-        job.end_tick - job.start_tick + 1
-    )
+    assert bob.inventory.get("wages_earned", 0) < (job.end_tick - job.start_tick + 1)
 
 
 def test_employment_exit_queue_respects_cap_and_manual_override() -> None:

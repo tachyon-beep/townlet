@@ -1,11 +1,12 @@
 """Behaviour cloning utilities."""
+
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence
 
-import json
 import numpy as np
 
 from townlet.policy.models import (
@@ -120,7 +121,9 @@ def load_bc_samples(manifest_path: Path) -> List[ReplaySample]:
 class BCTrainer:
     """Lightweight supervised trainer for behaviour cloning."""
 
-    def __init__(self, config: BCTrainingConfig, policy_config: ConflictAwarePolicyConfig) -> None:
+    def __init__(
+        self, config: BCTrainingConfig, policy_config: ConflictAwarePolicyConfig
+    ) -> None:
         if not torch_available():  # pragma: no cover - guard
             raise TorchNotAvailableError("PyTorch required for BC training")
         self.config = config
@@ -192,4 +195,7 @@ def evaluate_bc_policy(
             preds = logits.argmax(dim=-1)
             correct += int((preds == action_batch).sum().item())
             total += int(action_batch.shape[0])
-    return {"accuracy": float(correct / total) if total else 0.0, "samples": float(total)}
+    return {
+        "accuracy": float(correct / total) if total else 0.0,
+        "samples": float(total),
+    }

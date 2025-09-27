@@ -11,7 +11,9 @@ from townlet.policy.rollout import RolloutBuffer
 from townlet.policy.runner import TrainingHarness
 
 
-def _dummy_frame(agent_id: str, reward: float = 0.0, done: bool = False) -> dict[str, object]:
+def _dummy_frame(
+    agent_id: str, reward: float = 0.0, done: bool = False
+) -> dict[str, object]:
     return {
         "agent_id": agent_id,
         "map": np.zeros((1, 1, 1), dtype=np.float32),

@@ -1,10 +1,10 @@
 """Perturbation scheduler scaffolding."""
+
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Mapping, Optional
-
-import random
 
 from townlet.config import (
     ArrangedMeetEventConfig,
@@ -16,8 +16,8 @@ from townlet.config import (
     PriceSpikeEventConfig,
     SimulationConfig,
 )
-from townlet.world.grid import WorldState
 from townlet.utils import decode_rng_state, encode_rng_state
+from townlet.world.grid import WorldState
 
 
 @dataclass
@@ -114,7 +114,10 @@ class PerturbationScheduler:
     def _maybe_schedule(self, world: WorldState, current_tick: int) -> None:
         if not self.specs:
             return
-        if self.settings.max_concurrent_events and len(self._active) >= self.settings.max_concurrent_events:
+        if (
+            self.settings.max_concurrent_events
+            and len(self._active) >= self.settings.max_concurrent_events
+        ):
             return
         for name, spec in self.specs.items():
             if not self._can_fire_spec(name, spec, current_tick):
@@ -128,7 +131,10 @@ class PerturbationScheduler:
             if event is None:
                 continue
             self._activate(world, event)
-            if self.settings.max_concurrent_events and len(self._active) >= self.settings.max_concurrent_events:
+            if (
+                self.settings.max_concurrent_events
+                and len(self._active) >= self.settings.max_concurrent_events
+            ):
                 break
 
     def schedule_manual(
@@ -196,7 +202,9 @@ class PerturbationScheduler:
     def _activate(self, world: WorldState, event: ScheduledPerturbation) -> None:
         self._active[event.event_id] = event
         spec = self.spec_for(event.spec_name)
-        cooldown = (spec.cooldown_ticks if spec else 0) + self.settings.global_cooldown_ticks
+        cooldown = (
+            spec.cooldown_ticks if spec else 0
+        ) + self.settings.global_cooldown_ticks
         if cooldown > 0:
             self._event_cooldowns[event.spec_name] = event.ends_at + cooldown
         for agent in event.targets:
@@ -261,7 +269,9 @@ class PerturbationScheduler:
                 },
             )
 
-    def _on_event_concluded(self, world: WorldState, event: ScheduledPerturbation) -> None:
+    def _on_event_concluded(
+        self, world: WorldState, event: ScheduledPerturbation
+    ) -> None:
         world._emit_event(
             "perturbation_ended",
             {
@@ -283,13 +293,18 @@ class PerturbationScheduler:
         spec: PerturbationEventConfig,
         current_tick: int,
     ) -> bool:
-        if self.settings.max_concurrent_events and len(self._active) >= self.settings.max_concurrent_events:
+        if (
+            self.settings.max_concurrent_events
+            and len(self._active) >= self.settings.max_concurrent_events
+        ):
             return False
         cooldown_until = self._event_cooldowns.get(name, 0)
         if cooldown_until > current_tick:
             return False
         if self.settings.max_events_per_window > 0:
-            recent_count = sum(1 for _, spec_name in self._window_events if spec_name == name)
+            recent_count = sum(
+                1 for _, spec_name in self._window_events if spec_name == name
+            )
             if recent_count >= self.settings.max_events_per_window:
                 return False
         if spec.probability_per_day <= 0.0:
@@ -327,7 +342,9 @@ class PerturbationScheduler:
             else:
                 magnitude = spec.magnitude.min
                 if spec.magnitude.max > spec.magnitude.min:
-                    magnitude = self._random.uniform(spec.magnitude.min, spec.magnitude.max)
+                    magnitude = self._random.uniform(
+                        spec.magnitude.min, spec.magnitude.max
+                    )
                 payload["magnitude"] = magnitude
             if not targets:
                 targets = list(spec.targets)
@@ -370,7 +387,9 @@ class PerturbationScheduler:
     # ------------------------------------------------------------------
     # Queue management
     # ------------------------------------------------------------------
-    def enqueue(self, events: Iterable[ScheduledPerturbation | Mapping[str, object]]) -> None:
+    def enqueue(
+        self, events: Iterable[ScheduledPerturbation | Mapping[str, object]]
+    ) -> None:
         for event in events:
             if isinstance(event, ScheduledPerturbation):
                 self._pending.append(event)
@@ -478,9 +497,7 @@ class PerturbationScheduler:
     def rng(self) -> random.Random:
         return self._random
 
-    def _coerce_event(
-        self, data: Mapping[str, object]
-    ) -> ScheduledPerturbation:
+    def _coerce_event(self, data: Mapping[str, object]) -> ScheduledPerturbation:
         spec_name = str(
             data.get("spec_name")
             or data.get("event")
@@ -529,6 +546,7 @@ class PerturbationScheduler:
 
     def serialize_event(self, event: ScheduledPerturbation) -> Dict[str, object]:
         return self._serialize_event(event)
+
     def latest_state(self) -> Dict[str, object]:
         return {
             "active": {

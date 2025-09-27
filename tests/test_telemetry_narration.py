@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from townlet.config import load_config, NarrationThrottleConfig
+from townlet.config import NarrationThrottleConfig, load_config
 from townlet.telemetry.narration import NarrationRateLimiter
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import WorldState

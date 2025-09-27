@@ -34,12 +34,20 @@ Non-goals: replace storage backend, add remote persistence, or design full polic
 
 ## 3. Configuration & Runtime Plumbing
 ### 3.1 SnapshotConfig (new)
-Add `SnapshotConfig` to `SimulationConfig` with sections:
-- `storage.root: Path` (default `snapshots/`).
-- `autosave.cadence_ticks: int | None`, `autosave.retain: int`.
-- `identity.policy_hash: str` (required), `identity.policy_artifact: Path | None`, `identity.observation_variant: ObservationVariant | "infer"`, `identity.anneal_ratio: float | None`.
-- `migrations.handlers: dict[str, str]`, `migrations.auto_apply: bool`, `migrations.allow_minor: bool`.
-- `guardrails.require_exact_config: bool`, `guardrails.allow_downgrade: bool`.
+A dedicated `SnapshotConfig` subtree now lives under `SimulationConfig` so operators can centrally manage persistence behaviour. It is composed of the following sub-blocks, each with targeted validation:
+
+- **`storage`** — `root: Path = snapshots/`. The loader rejects empty strings and normalises the value to a `Path`, but does not touch the filesystem so CI/static analysis can run in read-only environments.
+- **`autosave`** — `cadence_ticks: int | None` (must be `>=100` when provided) and `retain: int >=1` with an upper guardrail at 1,000 to prevent runaway disk usage. A `None` cadence disables autosave, keeping legacy behaviour intact.
+- **`identity`** — Optional overrides for `policy_hash`, `policy_artifact`, `observation_variant`, and `anneal_ratio`. Hashes accept 40/64-character hex digests or base64 strings; variants may be `infer` (default) to fall back to `features.systems.observations`. Values remain optional so historical YAML files still validate.
+- **`migrations`** — `handlers: dict[str, str]` mapping legacy `config_id` → callable import path, plus `auto_apply`/`allow_minor` flags. Empty keys/targets are rejected early to surface typos before runtime.
+- **`guardrails`** — `require_exact_config: bool` (default `True`) and `allow_downgrade: bool` (default `False`) constrain load-time behaviour when schemas/config IDs differ.
+
+Because every subsection supplies defaults, existing configs without any `snapshot` stanza continue to parse; downstream consumers can opt-in gradually by setting overrides in YAML.
+
+Runtime wiring: `SimulationConfig.register_snapshot_migrations()` hydrates the registry from
+`snapshot.migrations.handlers` when the sim loop or console router boots. `SimulationLoop`
+sources policy identity and snapshot roots from the config block so telemetry snapshots and saved
+payloads stay consistent with operator overrides.
 
 ### 3.2 Policy Hash Source
 - `PolicyRunner` exposes `active_policy_hash()` returning deterministic hash of the loaded policy checkpoint (SHA256 of weight file plus observation variant).

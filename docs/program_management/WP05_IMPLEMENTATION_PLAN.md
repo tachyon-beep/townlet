@@ -127,10 +127,18 @@
 | `snapshot.migrations` | `handlers: dict[str, str]`, `auto_apply: bool`, `allow_minor: bool` | Map legacy `config_id` values to migration entrypoints; control auto-run behaviour. | `{}`, `False`, `False` | Keys must match legacy config IDs; values are import paths (`module:function`). Auto-apply toggles whether migrations run without operator confirmation. |
 | `snapshot.guardrails` | `require_exact_config: bool`, `allow_downgrade: bool` | Express policy for mismatched `config_id` / schema loads. | `True`, `False` | If `require_exact_config` is `True`, migrations must be configured; `allow_downgrade` gates loading snapshots with newer schema. |
 
+**2025-10-02 update:** Inventory reconciled with the implemented `SnapshotConfig` model (see `docs/program_management/WP05_DESIGN_NOTE.md §3.1`). Defaults ensure legacy configs lacking a `snapshot` stanza continue to load while exposing knobs for storage, cadence, identity overrides, and migration guardrails.
+
 ### Follow-Up Actions
-- Add a `SnapshotConfig` Pydantic model to `src/townlet/config/loader.py` encapsulating the sections above; expose via `SimulationConfig.snapshot`.
+- ✅ (2025-10-02) `SnapshotConfig` model added to `SimulationConfig` and wired through snapshot save/load + console handlers.
 - Wire config validation to ensure policy hash is provided for release configs; test fixture updates (`tests/test_config_loader.py`) will need sample values.
 - Update project documentation (`docs/program_management/PROJECT_PLAN.md`, `docs/ops/OPS_HANDBOOK.md`) once the configuration changes are implemented to instruct operators on new knobs and promotion gates.
+
+**2025-10-02 update:** Added regression coverage for autosave validation, guardrail toggles,
+config-driven migration registration, and identity overrides
+(`tests/test_config_loader.py`, `tests/test_snapshot_manager.py`, `tests/test_sim_loop_snapshot.py`).
+Ops handbook documents the `snapshot` block and console workflows, with a YAML example under
+`docs/samples/snapshot_config_example.yaml`.
 
 ### Technical Design Reference
 - Detailed technical design (schema deltas, migration flow, error taxonomy) captured in `docs/program_management/WP05_DESIGN_NOTE.md`.

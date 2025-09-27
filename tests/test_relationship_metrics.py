@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import pytest
-
 from pathlib import Path
+
+import pytest
 
 from townlet.config import load_config
 from townlet.telemetry.relationship_metrics import (
@@ -48,7 +48,9 @@ def test_window_rolls_and_history_records_samples() -> None:
 def test_latest_payload_round_trips_via_ingest() -> None:
     acc = RelationshipChurnAccumulator(window_ticks=4, max_samples=3)
     for idx in range(6):
-        acc.record_eviction(tick=idx, owner_id=f"agent-{idx % 2}", evicted_id=f"evicted-{idx}")
+        acc.record_eviction(
+            tick=idx, owner_id=f"agent-{idx % 2}", evicted_id=f"evicted-{idx}"
+        )
     payload = acc.latest_payload()
 
     restored = RelationshipChurnAccumulator(window_ticks=4, max_samples=3)
@@ -146,7 +148,9 @@ def test_shared_meal_updates_relationship() -> None:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=5.0,
     )
-    world.objects["fridge_1"] = InteractiveObject(object_id="fridge_1", object_type="fridge", stock={"meals": 5})
+    world.objects["fridge_1"] = InteractiveObject(
+        object_id="fridge_1", object_type="fridge", stock={"meals": 5}
+    )
 
     world.tick = 10
     world._handle_eat_meal_start("alice", "fridge_1")
@@ -161,7 +165,9 @@ def test_absence_triggers_took_my_shift_relationships() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)
     job_id = next(iter(config.jobs))
-    job_loc = tuple(config.jobs[job_id].location) if config.jobs[job_id].location else (0, 0)
+    job_loc = (
+        tuple(config.jobs[job_id].location) if config.jobs[job_id].location else (0, 0)
+    )
 
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
@@ -201,7 +207,9 @@ def test_late_help_creates_positive_relationship() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)
     job_id = next(iter(config.jobs))
-    job_loc = tuple(config.jobs[job_id].location) if config.jobs[job_id].location else (0, 0)
+    job_loc = (
+        tuple(config.jobs[job_id].location) if config.jobs[job_id].location else (0, 0)
+    )
 
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
@@ -280,7 +288,9 @@ def test_consume_chat_events_is_single_use() -> None:
 
     first_batch = world.consume_chat_events()
     assert {event["event"] for event in first_batch} == {"chat_success", "chat_failure"}
-    success_event = next(event for event in first_batch if event["event"] == "chat_success")
+    success_event = next(
+        event for event in first_batch if event["event"] == "chat_success"
+    )
     assert success_event["quality"] == pytest.approx(0.8)
     assert success_event["tick"] == 42
 

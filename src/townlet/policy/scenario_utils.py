@@ -1,4 +1,5 @@
 """Helpers for applying scenario initialisation to simulation loops."""
+
 from __future__ import annotations
 
 from typing import Any

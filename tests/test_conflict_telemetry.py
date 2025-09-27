@@ -55,12 +55,13 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
     assert rivalry["bob"]["alice"] > 0
 
     telemetry_events = list(loop.telemetry.latest_events())
-    queue_events = [event for event in telemetry_events if event.get("event") == "queue_conflict"]
+    queue_events = [
+        event for event in telemetry_events if event.get("event") == "queue_conflict"
+    ]
     assert queue_events
     payload = queue_events[0]
     assert payload["reason"] == "ghost_step"
     assert payload["intensity"] >= 1.0
-
 
 
 def test_replay_sample_matches_schema(tmp_path: Path) -> None:

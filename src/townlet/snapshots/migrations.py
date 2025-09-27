@@ -1,15 +1,18 @@
 """Snapshot migration registry and helpers."""
+
 from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig
     from townlet.snapshots.state import SnapshotState
 
-MigrationHandler = Callable[["SnapshotState", "SimulationConfig"], "SnapshotState | None"]
+MigrationHandler = Callable[
+    ["SnapshotState", "SimulationConfig"], "SnapshotState | None"
+]
 
 
 class MigrationNotFoundError(Exception):
@@ -28,7 +31,9 @@ class MigrationEdge:
 
     @property
     def identifier(self) -> str:
-        return getattr(self.handler, "__qualname__", getattr(self.handler, "__name__", "migration"))
+        return getattr(
+            self.handler, "__qualname__", getattr(self.handler, "__name__", "migration")
+        )
 
 
 class SnapshotMigrationRegistry:
@@ -37,7 +42,9 @@ class SnapshotMigrationRegistry:
     def __init__(self) -> None:
         self._graph: Dict[str, Dict[str, MigrationEdge]] = {}
 
-    def register(self, from_config: str, to_config: str, handler: MigrationHandler) -> None:
+    def register(
+        self, from_config: str, to_config: str, handler: MigrationHandler
+    ) -> None:
         source = str(from_config)
         target = str(to_config)
         edge = MigrationEdge(source=source, target=target, handler=handler)
@@ -66,7 +73,9 @@ class SnapshotMigrationRegistry:
                     return next_path
                 visited.add(edge.target)
                 queue.append((edge.target, next_path))
-        raise MigrationNotFoundError(f"No snapshot migration path from {start} to {goal}")
+        raise MigrationNotFoundError(
+            f"No snapshot migration path from {start} to {goal}"
+        )
 
     def apply_path(
         self,
@@ -81,7 +90,10 @@ class SnapshotMigrationRegistry:
             if result is None:
                 # handler mutated in-place
                 result = current
-            if result.config_id == current.config_id and edge.target != result.config_id:
+            if (
+                result.config_id == current.config_id
+                and edge.target != result.config_id
+            ):
                 raise MigrationExecutionError(
                     f"Migration {edge.identifier} did not update config_id from {current.config_id}"
                 )
@@ -94,7 +106,9 @@ registry = SnapshotMigrationRegistry()
 migration_registry = registry
 
 
-def register_migration(from_config: str, to_config: str, handler: MigrationHandler) -> None:
+def register_migration(
+    from_config: str, to_config: str, handler: MigrationHandler
+) -> None:
     """Register a snapshot migration handler."""
 
     registry.register(from_config, to_config, handler)

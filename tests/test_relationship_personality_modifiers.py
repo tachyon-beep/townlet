@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from townlet.agents import (
-    Personality,
-    RelationshipDelta,
-    apply_personality_modifiers,
-)
+from townlet.agents import Personality, RelationshipDelta, apply_personality_modifiers
 
 
 def test_modifiers_disabled_returns_baseline() -> None:

@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from townlet.policy import BCTrainer, BCTrainingConfig, BCTrajectoryDataset
-from townlet.policy.replay import frames_to_replay_sample
 from townlet.policy.models import ConflictAwarePolicyConfig, torch_available
+from townlet.policy.replay import frames_to_replay_sample
 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
@@ -36,8 +36,12 @@ def test_bc_trainer_overfits_toy_dataset(tmp_path: Path) -> None:
         samples.append(frames_to_replay_sample(frames))
 
     dataset = BCTrajectoryDataset(samples)
-    policy_cfg = ConflictAwarePolicyConfig(feature_dim=len(feature_names), map_shape=(1, 4, 4), action_dim=2)
-    trainer = BCTrainer(BCTrainingConfig(learning_rate=0.05, batch_size=4, epochs=50), policy_cfg)
+    policy_cfg = ConflictAwarePolicyConfig(
+        feature_dim=len(feature_names), map_shape=(1, 4, 4), action_dim=2
+    )
+    trainer = BCTrainer(
+        BCTrainingConfig(learning_rate=0.05, batch_size=4, epochs=50), policy_cfg
+    )
     metrics = trainer.fit(dataset)
     assert metrics["accuracy"] >= 0.95
 
@@ -66,8 +70,12 @@ def test_bc_evaluate_accuracy(tmp_path: Path) -> None:
         )
     sample = frames_to_replay_sample(frames)
     dataset = BCTrajectoryDataset([sample])
-    policy_cfg = ConflictAwarePolicyConfig(feature_dim=len(feature_names), map_shape=(1, 4, 4), action_dim=2)
-    trainer = BCTrainer(BCTrainingConfig(learning_rate=0.05, batch_size=2, epochs=30), policy_cfg)
+    policy_cfg = ConflictAwarePolicyConfig(
+        feature_dim=len(feature_names), map_shape=(1, 4, 4), action_dim=2
+    )
+    trainer = BCTrainer(
+        BCTrainingConfig(learning_rate=0.05, batch_size=2, epochs=30), policy_cfg
+    )
     trainer.fit(dataset)
     eval_metrics = trainer.evaluate(dataset)
     assert eval_metrics["accuracy"] >= 0.99

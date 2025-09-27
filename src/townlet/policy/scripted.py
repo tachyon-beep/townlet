@@ -1,4 +1,5 @@
 """Simple scripted policy helpers for trajectory capture."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,7 +13,9 @@ class ScriptedPolicy:
 
     name: str = "scripted"
 
-    def decide(self, world: WorldState, tick: int) -> Dict[str, dict]:  # pragma: no cover - interface
+    def decide(
+        self, world: WorldState, tick: int
+    ) -> Dict[str, dict]:  # pragma: no cover - interface
         raise NotImplementedError
 
     def describe(self) -> str:
@@ -63,14 +66,20 @@ class ScriptedPolicyAdapter:
 
     def post_step(self, rewards: Dict[str, float], terminated: Dict[str, bool]) -> None:
         base_agents = self.last_actions.keys()
-        self.last_rewards = {agent_id: float(rewards.get(agent_id, 0.0)) for agent_id in base_agents}
+        self.last_rewards = {
+            agent_id: float(rewards.get(agent_id, 0.0)) for agent_id in base_agents
+        }
         self.last_terminated = {
             agent_id: bool(terminated.get(agent_id, False)) for agent_id in base_agents
         }
 
-    def flush_transitions(self, observations) -> None:  # pragma: no cover - SimulationLoop hook
+    def flush_transitions(
+        self, observations
+    ) -> None:  # pragma: no cover - SimulationLoop hook
         # Scripted policies do not accumulate PPO transitions.
         return
 
-    def collect_trajectory(self, *, clear: bool = False):  # pragma: no cover - SimulationLoop hook
+    def collect_trajectory(
+        self, *, clear: bool = False
+    ):  # pragma: no cover - SimulationLoop hook
         return []

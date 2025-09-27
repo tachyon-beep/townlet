@@ -4,6 +4,7 @@ The loop follows the order defined in docs/HIGH_LEVEL_DESIGN.md and delegates to
 feature-specific subsystems. Each dependency is a thin façade around the actual
 implementation, allowing tests to substitute stubs while the real code evolves.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -18,13 +19,13 @@ from townlet.observations.builder import ObservationBuilder
 from townlet.policy.runner import PolicyRuntime
 from townlet.rewards.engine import RewardEngine
 from townlet.scheduler.perturbations import PerturbationScheduler
-from townlet.stability.monitor import StabilityMonitor
 from townlet.snapshots import (
     SnapshotManager,
     apply_snapshot_to_telemetry,
     apply_snapshot_to_world,
     snapshot_from_world,
 )
+from townlet.stability.monitor import StabilityMonitor
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.world.grid import WorldState
@@ -43,6 +44,7 @@ class SimulationLoop:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
+        self.config.register_snapshot_migrations()
         self._build_components()
 
     def _build_components(self) -> None:
@@ -69,16 +71,18 @@ class SimulationLoop:
     # ------------------------------------------------------------------
     # Snapshot helpers
     # ------------------------------------------------------------------
-    def save_snapshot(self, root: Path) -> Path:
+    def save_snapshot(self, root: Path | None = None) -> Path:
         """Persist the current world relationships and tick to ``root``."""
 
-        manager = SnapshotManager(root=root)
-        identity_payload = {
-            "config_id": self.config.config_id,
-            "policy_hash": self.policy.active_policy_hash(),
-            "observation_variant": self.config.observation_variant,
-            "anneal_ratio": self.policy.current_anneal_ratio(),
-        }
+        target_root = (
+            Path(root).expanduser() if root is not None else self.config.snapshot_root()
+        )
+        manager = SnapshotManager(root=target_root)
+        identity_payload = self.config.build_snapshot_identity(
+            policy_hash=self.policy.active_policy_hash(),
+            runtime_observation_variant=self.config.observation_variant,
+            runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+        )
         self.telemetry.update_policy_identity(identity_payload)
         state = snapshot_from_world(
             self.config,
@@ -100,7 +104,13 @@ class SimulationLoop:
         """Restore world relationships and tick from the snapshot at ``path``."""
 
         manager = SnapshotManager(root=path.parent)
-        state = manager.load(path, self.config)
+        state = manager.load(
+            path,
+            self.config,
+            allow_migration=self.config.snapshot.migrations.auto_apply,
+            allow_downgrade=self.config.snapshot.guardrails.allow_downgrade,
+            require_exact_config=self.config.snapshot.guardrails.require_exact_config,
+        )
         self.policy.reset_state()
         self.perturbations.reset_state()
         apply_snapshot_to_world(
@@ -166,12 +176,11 @@ class SimulationLoop:
             "reward_samples": dict(rewards),
         }
         perturbation_state = self.perturbations.latest_state()
-        policy_identity = {
-            "config_id": self.config.config_id,
-            "policy_hash": self.policy.active_policy_hash(),
-            "observation_variant": self.config.observation_variant,
-            "anneal_ratio": self.policy.current_anneal_ratio(),
-        }
+        policy_identity = self.config.build_snapshot_identity(
+            policy_hash=self.policy.active_policy_hash(),
+            runtime_observation_variant=self.config.observation_variant,
+            runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+        )
         self.telemetry.publish_tick(
             tick=self.tick,
             world=self.world,

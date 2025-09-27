@@ -55,8 +55,11 @@ def test_clipped_value_loss_respects_clip() -> None:
         value_clip=0.1,
     )
     value_pred_clipped = old_values + torch.clamp(new_values - old_values, -0.1, 0.1)
-    manual = 0.5 * torch.max(
-        (new_values - returns).pow(2),
-        (value_pred_clipped - returns).pow(2),
-    ).mean()
+    manual = (
+        0.5
+        * torch.max(
+            (new_values - returns).pow(2),
+            (value_pred_clipped - returns).pow(2),
+        ).mean()
+    )
     assert torch.allclose(loss, manual)

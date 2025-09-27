@@ -3,8 +3,8 @@ from pathlib import Path
 from townlet.config import load_config
 from townlet.observations.builder import ObservationBuilder
 from townlet.observations.embedding import EmbeddingAllocator
-from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.stability.monitor import StabilityMonitor
+from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
@@ -112,9 +112,16 @@ def test_telemetry_records_events() -> None:
     world = WorldState.from_config(config)
     telemetry = TelemetryPublisher(config)
     events = [
-        {"event": "affordance_start", "agent_id": "alice", "object_id": "shower", "affordance_id": "use_shower"}
+        {
+            "event": "affordance_start",
+            "agent_id": "alice",
+            "object_id": "shower",
+            "affordance_id": "use_shower",
+        }
     ]
-    telemetry.publish_tick(tick=0, world=world, observations={}, rewards={}, events=events)
+    telemetry.publish_tick(
+        tick=0, world=world, observations={}, rewards={}, events=events
+    )
     latest = list(telemetry.latest_events())
     assert latest and latest[0]["event"] == "affordance_start"
 

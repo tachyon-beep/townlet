@@ -1,12 +1,12 @@
 """Rich-based console dashboard for Townlet observer UI."""
+
 from __future__ import annotations
 
+import math
 import time
 from typing import Iterable, Mapping
 
 import numpy as np
-import math
-
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -20,7 +20,9 @@ MAP_AGENT_CHAR = "A"
 MAP_CENTER_CHAR = "S"
 
 
-def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> Iterable[Panel]:
+def render_snapshot(
+    snapshot: TelemetrySnapshot, tick: int, refreshed: str
+) -> Iterable[Panel]:
     """Yield rich Panels representing the current telemetry snapshot."""
     panels: list[Panel] = []
 
@@ -57,8 +59,14 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         str(employment.review_window),
     )
     border_style = "red" if employment.pending_count else "green"
-    badge = "[bold red]BACKLOG[/bold red]" if employment.pending_count else "[green]CLEAR[/green]"
-    panels.append(Panel(emp_table, title=f"Employment — {badge}", border_style=border_style))
+    badge = (
+        "[bold red]BACKLOG[/bold red]"
+        if employment.pending_count
+        else "[green]CLEAR[/green]"
+    )
+    panels.append(
+        Panel(emp_table, title=f"Employment — {badge}", border_style=border_style)
+    )
 
     conflict = snapshot.conflict
     conflict_table = Table(title="Conflict Snapshot", expand=True)
@@ -70,7 +78,11 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         str(conflict.queue_ghost_step_events),
         str(conflict.rivalry_agents),
     )
-    conflict_border = "magenta" if conflict.queue_ghost_step_events or conflict.queue_cooldown_events else "blue"
+    conflict_border = (
+        "magenta"
+        if conflict.queue_ghost_step_events or conflict.queue_cooldown_events
+        else "blue"
+    )
     panels.append(Panel(conflict_table, title="Conflict", border_style=conflict_border))
 
     panels.append(_build_anneal_panel(snapshot))
@@ -117,7 +129,9 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
                 f"{update.familiarity:.2f}",
                 f"{update.rivalry:.2f}",
             )
-        panels.append(Panel(update_table, title="Relationship Updates", border_style="cyan"))
+        panels.append(
+            Panel(update_table, title="Relationship Updates", border_style="cyan")
+        )
 
     agent_table = Table(title="Agents", expand=True)
     agent_table.add_column("Agent")
@@ -185,7 +199,9 @@ def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
                 entry.message,
                 priority_flag,
             )
-        border_style = "yellow" if any(entry.priority for entry in narrations) else "blue"
+        border_style = (
+            "yellow" if any(entry.priority for entry in narrations) else "blue"
+        )
         return Panel(table, title="Narrations", border_style=border_style)
 
     body = Text("No recent narrations", style="dim")
@@ -240,15 +256,25 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
     composite = Panel.fit(
         drift_table,
         title="Drift",
-        border_style="yellow" if (status.loss_flag or status.queue_flag or status.intensity_flag) else "green",
+        border_style=(
+            "yellow"
+            if (status.loss_flag or status.queue_flag or status.intensity_flag)
+            else "green"
+        ),
     )
     container = Table.grid(expand=True)
     container.add_row(meta_table)
     container.add_row(bc_table)
     container.add_row(composite)
 
-    border_style = "red" if not status.bc_passed else (
-        "yellow" if (status.loss_flag or status.queue_flag or status.intensity_flag) else "green"
+    border_style = (
+        "red"
+        if not status.bc_passed
+        else (
+            "yellow"
+            if (status.loss_flag or status.queue_flag or status.intensity_flag)
+            else "green"
+        )
     )
     return Panel(container, title="Anneal Status", border_style=border_style)
 
@@ -283,9 +309,13 @@ def _build_policy_inspector_panel(snapshot: TelemetrySnapshot) -> Panel:
             selected_prob = math.exp(entry.log_prob)
         except OverflowError:
             selected_prob = float("inf")
-        tops = ", ".join(
-            f"{action.action}:{action.probability:.2f}" for action in entry.top_actions[:3]
-        ) or "-"
+        tops = (
+            ", ".join(
+                f"{action.action}:{action.probability:.2f}"
+                for action in entry.top_actions[:3]
+            )
+            or "-"
+        )
         table.add_row(
             entry.agent_id,
             entry.selected_action or "-",
@@ -426,9 +456,13 @@ def run_dashboard(
     executor = ConsoleCommandExecutor(router)
 
     if approve:
-        executor.submit(ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={}))
+        executor.submit(
+            ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={})
+        )
     if defer:
-        executor.submit(ConsoleCommand(name="employment_exit", args=("defer", defer), kwargs={}))
+        executor.submit(
+            ConsoleCommand(name="employment_exit", args=("defer", defer), kwargs={})
+        )
 
     tick = 0
     try:
@@ -441,7 +475,9 @@ def run_dashboard(
             for panel in render_snapshot(snapshot, tick=loop.tick, refreshed=refreshed):
                 console.print(panel)
             obs_batch = loop.observations.build_batch(loop.world, terminated={})
-            map_panel = _build_map_panel(loop, snapshot, obs_batch, focus_agent, show_coords=show_coords)
+            map_panel = _build_map_panel(
+                loop, snapshot, obs_batch, focus_agent, show_coords=show_coords
+            )
             if map_panel is not None:
                 console.print(map_panel)
             console.print(f"Tick: {loop.tick}")
@@ -462,7 +498,11 @@ def _build_map_panel(
     agents = snapshot.agents
     if not agents:
         return None
-    agent_id = focus_agent if focus_agent and any(a.agent_id == focus_agent for a in agents) else agents[0].agent_id
+    agent_id = (
+        focus_agent
+        if focus_agent and any(a.agent_id == focus_agent for a in agents)
+        else agents[0].agent_id
+    )
     obs = obs_batch.get(agent_id)
     if not obs:
         return None
@@ -491,4 +531,8 @@ def _build_map_panel(
         if y != window - 1:
             panel_text.append("\n")
     subtitle = f"Focus: {agent_id}"
-    return Panel(panel_text, title=f"Local Map — {agent_id} ({window}×{window})", subtitle=subtitle)
+    return Panel(
+        panel_text,
+        title=f"Local Map — {agent_id} ({window}×{window})",
+        subtitle=subtitle,
+    )

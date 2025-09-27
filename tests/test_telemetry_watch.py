@@ -1,10 +1,8 @@
+import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
-
-import importlib.util
-import sys
-
 
 spec = importlib.util.spec_from_file_location(
     "telemetry_watch",
@@ -18,7 +16,9 @@ spec.loader.exec_module(telemetry_watch)  # type: ignore[arg-type]
 
 def write_log(tmp_path: Path, records: list[dict[str, object]]) -> Path:
     path = tmp_path / "log.jsonl"
-    path.write_text("\n".join([telemetry_watch.json.dumps(record) for record in records]))
+    path.write_text(
+        "\n".join([telemetry_watch.json.dumps(record) for record in records])
+    )
     return path
 
 

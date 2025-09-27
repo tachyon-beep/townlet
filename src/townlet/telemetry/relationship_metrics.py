@@ -4,6 +4,7 @@ These utilities let the simulation publish per-window counts of relationship
 edge evictions so drift or rapid churn can be observed by soak tests and the
 operations dashboards.
 """
+
 from __future__ import annotations
 
 from collections import Counter, deque
@@ -172,7 +173,9 @@ class RelationshipChurnAccumulator:
                 window_end=int(entry.get("window_end", 0)),
                 total_evictions=int(entry.get("total", 0)),
                 per_owner={str(k): int(v) for k, v in entry.get("owners", {}).items()},
-                per_reason={str(k): int(v) for k, v in entry.get("reasons", {}).items()},
+                per_reason={
+                    str(k): int(v) for k, v in entry.get("reasons", {}).items()
+                },
             )
             history.append(sample)
         maxlen = self._history.maxlen or len(history)

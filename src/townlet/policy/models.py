@@ -1,4 +1,5 @@
 """Torch-based policy/value networks for Townlet PPO."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -76,4 +77,6 @@ else:
             )
 
         def __call__(self, *args: object, **kwargs: object) -> None:
-            raise TorchNotAvailableError("PyTorch is required to call ConflictAwarePolicyNetwork.")
+            raise TorchNotAvailableError(
+                "PyTorch is required to call ConflictAwarePolicyNetwork."
+            )

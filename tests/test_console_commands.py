@@ -4,8 +4,8 @@ from pathlib import Path
 from townlet.config import (
     FloatRange,
     IntRange,
-    PriceSpikeEventConfig,
     PerturbationSchedulerConfig,
+    PriceSpikeEventConfig,
     load_config,
 )
 from townlet.console.handlers import ConsoleCommand, create_console_router
@@ -28,12 +28,16 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
 
-    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    router = create_console_router(
+        loop.telemetry, world, loop.perturbations, config=config
+    )
 
     for _ in range(5):
         loop.step()
 
-    result = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
+    result = router.dispatch(
+        ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})
+    )
     assert result["schema_version"] == loop.telemetry.schema()
     assert result["schema_warning"] is None
     assert "jobs" in result and "economy" in result and "employment" in result
@@ -61,10 +65,14 @@ def test_employment_console_commands_manage_queue() -> None:
         wallet=1.0,
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
-    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    router = create_console_router(
+        loop.telemetry, world, loop.perturbations, config=config
+    )
 
     world._employment_enqueue_exit("alice", world.tick)
-    review = router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={}))
+    review = router.dispatch(
+        ConsoleCommand(name="employment_exit", args=("review",), kwargs={})
+    )
     assert review["pending_count"] == 1
 
     defer = router.dispatch(
@@ -80,7 +88,9 @@ def test_employment_console_commands_manage_queue() -> None:
     assert approve["approved"] is True
     assert "alice" in world._employment_manual_exits
 
-    status = router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={}))
+    status = router.dispatch(
+        ConsoleCommand(name="employment_status", args=(), kwargs={})
+    )
     assert status["schema_version"] == loop.telemetry.schema()
     assert status["schema_warning"] is None
     assert "metrics" in status
@@ -90,11 +100,16 @@ def test_console_schema_warning_for_newer_version() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
     loop.telemetry.schema_version = "0.4.0"
-    router = create_console_router(loop.telemetry, loop.world, loop.perturbations, config=config)
+    router = create_console_router(
+        loop.telemetry, loop.world, loop.perturbations, config=config
+    )
 
-    snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
+    snapshot = router.dispatch(
+        ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})
+    )
     assert snapshot["schema_version"] == "0.4.0"
     assert isinstance(snapshot["schema_warning"], str)
+
 
 def test_console_perturbation_requires_admin_mode() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
@@ -112,7 +127,6 @@ def test_console_perturbation_requires_admin_mode() -> None:
     assert result["error"] == "forbidden"
 
 
-
 def test_console_perturbation_commands_schedule_and_cancel() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.perturbations = PerturbationSchedulerConfig(
@@ -124,7 +138,7 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
                 magnitude=FloatRange(min=1.5, max=1.5),
                 targets=["market"],
             )
-        }
+        },
     )
     loop = SimulationLoop(config)
     router = create_console_router(
@@ -135,7 +149,9 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
         config=config,
     )
 
-    queue_before = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
+    queue_before = router.dispatch(
+        ConsoleCommand(name="perturbation_queue", args=(), kwargs={})
+    )
     assert queue_before["active"] == {}
 
     trigger_pending = router.dispatch(
@@ -146,7 +162,9 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
         )
     )
     pending_id = trigger_pending["event"]["event_id"]
-    queue_mid = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
+    queue_mid = router.dispatch(
+        ConsoleCommand(name="perturbation_queue", args=(), kwargs={})
+    )
     assert any(evt["event_id"] == pending_id for evt in queue_mid["pending"])
     cancel_pending = router.dispatch(
         ConsoleCommand(name="perturbation_cancel", args=(pending_id,), kwargs={})
@@ -165,7 +183,9 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
     loop.step()
     telemetry_state = loop.telemetry.latest_perturbations()
 
-    queue_after = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
+    queue_after = router.dispatch(
+        ConsoleCommand(name="perturbation_queue", args=(), kwargs={})
+    )
     assert active_id not in queue_after["active"]
     assert "price_spike" in telemetry_state["cooldowns"]["spec"]
 

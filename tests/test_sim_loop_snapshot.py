@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
+import json
 import random
+from pathlib import Path
 
 import numpy as np
-
 import pytest
 
-from townlet.config import load_config
+from townlet.config import SimulationConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.snapshots.state import snapshot_from_world
 from townlet.world.grid import AgentSnapshot
@@ -45,21 +45,60 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
     restored.load_snapshot(saved_path)
 
     assert restored.tick == loop.tick
-    assert restored.world.relationships_snapshot() == loop.world.relationships_snapshot()
+    assert (
+        restored.world.relationships_snapshot() == loop.world.relationships_snapshot()
+    )
     assert set(restored.world.agents.keys()) == set(loop.world.agents.keys())
     assert restored.world.agents["alice"].needs == loop.world.agents["alice"].needs
     assert restored.world.objects.keys() == loop.world.objects.keys()
 
     restored_telemetry = restored.telemetry.export_state()
     baseline_telemetry = loop.telemetry.export_state()
-    for key in ("queue_metrics", "employment_metrics", "conflict_snapshot", "policy_identity"):
+    for key in (
+        "queue_metrics",
+        "employment_metrics",
+        "conflict_snapshot",
+        "policy_identity",
+    ):
         assert restored_telemetry.get(key) == baseline_telemetry.get(key)
-    assert restored.telemetry.export_console_buffer() == loop.telemetry.export_console_buffer()
+    assert (
+        restored.telemetry.export_console_buffer()
+        == loop.telemetry.export_console_buffer()
+    )
     assert restored.perturbations.export_state() == loop.perturbations.export_state()
+
+
+def test_save_snapshot_uses_config_root_and_identity_override(
+    tmp_path: Path, base_config
+) -> None:
+    custom_root = tmp_path / "autosave"
+    payload = base_config.model_dump()
+    payload["snapshot"] = {
+        **payload.get("snapshot", {}),
+        "storage": {"root": str(custom_root)},
+        "identity": {
+            "policy_hash": "feedface" * 5,
+            "policy_artifact": str(tmp_path / "policy.pt"),
+            "observation_variant": "full",
+        },
+    }
+    override_config = SimulationConfig.model_validate(payload)
+    loop = SimulationLoop(override_config)
+    snapshot_path = loop.save_snapshot()
+    assert snapshot_path.parent == custom_root
+    document = json.loads(snapshot_path.read_text())
+    identity = document["state"]["identity"]
+    assert identity["policy_hash"] == "feedface" * 5
+    assert identity["policy_artifact"] == str(tmp_path / "policy.pt")
+    assert identity["observation_variant"] == "full"
+    latest_identity = loop.telemetry.latest_policy_identity()
+    assert latest_identity is not None
+    assert latest_identity["policy_hash"] == "feedface" * 5
 
 
 def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     random.seed(2025)
+
     def setup_loop() -> SimulationLoop:
         loop = SimulationLoop(base_config)
         loop.world.register_object(object_id="fridge_1", object_type="fridge")
@@ -120,9 +159,18 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     assert resumed_snapshots == baseline_snapshots
     restored_telemetry = resumed.telemetry.export_state()
     baseline_telemetry = baseline.telemetry.export_state()
-    for key in ("queue_metrics", "employment_metrics", "conflict_snapshot", "policy_identity"):
+    for key in (
+        "queue_metrics",
+        "employment_metrics",
+        "conflict_snapshot",
+        "policy_identity",
+    ):
         assert restored_telemetry.get(key) == baseline_telemetry.get(key)
-    assert resumed.telemetry.export_console_buffer() == baseline.telemetry.export_console_buffer()
+    assert (
+        resumed.telemetry.export_console_buffer()
+        == baseline.telemetry.export_console_buffer()
+    )
+
 
 def test_policy_transitions_resume(tmp_path: Path, base_config) -> None:
     random.seed(303)

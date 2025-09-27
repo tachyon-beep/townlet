@@ -1,12 +1,12 @@
 """Utilities for validating affordance manifest files."""
-from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Tuple
+from __future__ import annotations
 
 import hashlib
 import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Iterable, List, Mapping, Tuple
 
 import yaml
 
@@ -147,7 +147,9 @@ def _parse_object_entry(
                 f"Entry {index} ({object_id}) in {path} has negative stock for '{key}'"
             )
         stock[key] = int_value
-    position = _parse_position(entry.get("position"), path=path, index=index, entry_id=object_id)
+    position = _parse_position(
+        entry.get("position"), path=path, index=index, entry_id=object_id
+    )
     return ManifestObject(
         object_id=object_id,
         object_type=object_type,

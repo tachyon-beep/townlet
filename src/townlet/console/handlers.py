@@ -1,10 +1,11 @@
 """Console validation scaffolding."""
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Protocol
 
 if TYPE_CHECKING:
     from townlet.telemetry.publisher import TelemetryPublisher
@@ -105,6 +106,8 @@ def create_console_router(
     config: "SimulationConfig" | None = None,
 ) -> ConsoleRouter:
     router = ConsoleRouter()
+    if config is not None:
+        config.register_snapshot_migrations()
     bridge = TelemetryBridge(publisher)
 
     def _forbidden(_: ConsoleCommand) -> object:
@@ -163,7 +166,10 @@ def create_console_router(
         if world is None:
             raise RuntimeError("employment_exit requires world access")
         if not command.args:
-            return {"error": "usage", "message": "employment_exit <approve|defer|review> [agent_id]"}
+            return {
+                "error": "usage",
+                "message": "employment_exit <approve|defer|review> [agent_id]",
+            }
         action = str(command.args[0])
         if action == "review":
             return world.employment_queue_snapshot()
@@ -267,9 +273,16 @@ def create_console_router(
         if cfg_error:
             return cfg_error
         manager = SnapshotManager(path.parent)
-        allow_migration = not bool(command.kwargs.get("strict", False))
+        strict = bool(command.kwargs.get("strict", False))
+        allow_migration = (not strict) and cfg.snapshot.migrations.auto_apply
         try:
-            state = manager.load(path, cfg, allow_migration=allow_migration)
+            state = manager.load(
+                path,
+                cfg,
+                allow_migration=allow_migration,
+                allow_downgrade=cfg.snapshot.guardrails.allow_downgrade,
+                require_exact_config=cfg.snapshot.guardrails.require_exact_config,
+            )
         except ValueError as exc:
             return {"valid": False, "error": str(exc), "path": str(path)}
         return {
@@ -290,7 +303,13 @@ def create_console_router(
             return cfg_error
         manager = SnapshotManager(path.parent)
         try:
-            state = manager.load(path, cfg, allow_migration=True)
+            state = manager.load(
+                path,
+                cfg,
+                allow_migration=True,
+                allow_downgrade=cfg.snapshot.guardrails.allow_downgrade,
+                require_exact_config=cfg.snapshot.guardrails.require_exact_config,
+            )
         except ValueError as exc:
             return {
                 "error": "migration_failed",

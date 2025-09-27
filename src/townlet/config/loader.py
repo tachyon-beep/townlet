@@ -4,15 +4,17 @@ This module reflects the expectations in docs/REQUIREMENTS.md#1 and related
 sections. It centralises config parsing, feature flag handling, and sanity
 checks such as observation variant validation and reward guardrails.
 """
+
 from __future__ import annotations
 
-from pathlib import Path
+import importlib
+import re
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, Dict, Iterable, List, Literal, Mapping, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
-
 
 ObservationVariant = Literal["full", "hybrid", "compact"]
 RelationshipStage = Literal["OFF", "A", "B", "C1", "C2", "C3"]
@@ -70,11 +72,13 @@ class RewardClips(BaseModel):
 
 class RewardsConfig(BaseModel):
     needs_weights: NeedsWeights
-    decay_rates: Dict[str, float] = Field(default_factory=lambda: {
-        "hunger": 0.01,
-        "hygiene": 0.005,
-        "energy": 0.008,
-    })
+    decay_rates: Dict[str, float] = Field(
+        default_factory=lambda: {
+            "hunger": 0.01,
+            "hygiene": 0.005,
+            "energy": 0.008,
+        }
+    )
     punctuality_bonus: float = Field(0.05, ge=0.0, le=0.1)
     wage_rate: float = Field(0.01, ge=0.0, le=0.05)
     survival_tick: float = Field(0.002, ge=0.0, le=0.01)
@@ -127,17 +131,25 @@ class RivalryConfig(BaseModel):
     def _validate_ranges(self) -> "RivalryConfig":
         if self.min_value > self.max_value:
             raise ValueError("rivalry.min_value must be <= max_value")
-        if self.avoid_threshold < self.min_value or self.avoid_threshold > self.max_value:
-            raise ValueError("rivalry.avoid_threshold must lie within [min_value, max_value]")
-        if self.eviction_threshold < self.min_value or self.eviction_threshold > self.max_value:
-            raise ValueError("rivalry.eviction_threshold must lie within [min_value, max_value]")
+        if (
+            self.avoid_threshold < self.min_value
+            or self.avoid_threshold > self.max_value
+        ):
+            raise ValueError(
+                "rivalry.avoid_threshold must lie within [min_value, max_value]"
+            )
+        if (
+            self.eviction_threshold < self.min_value
+            or self.eviction_threshold > self.max_value
+        ):
+            raise ValueError(
+                "rivalry.eviction_threshold must lie within [min_value, max_value]"
+            )
         return self
 
 
 class ConflictConfig(BaseModel):
     rivalry: RivalryConfig = RivalryConfig()
-
-
 
 
 class PPOConfig(BaseModel):
@@ -156,6 +168,7 @@ class PPOConfig(BaseModel):
     advantage_normalization: bool = True
     num_mini_batches: int = Field(4, ge=1, le=1024)
 
+
 class EmbeddingAllocatorConfig(BaseModel):
     """Embedding slot reuse guardrails (see REQUIREMENTS#3)."""
 
@@ -173,7 +186,9 @@ class HybridObservationConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_window(self) -> "HybridObservationConfig":
         if self.local_window % 2 == 0:
-            raise ValueError("observations.hybrid.local_window must be odd to center on agent")
+            raise ValueError(
+                "observations.hybrid.local_window must be odd to center on agent"
+            )
         return self
 
 
@@ -188,7 +203,9 @@ class SocialSnippetConfig(BaseModel):
         if self.top_friends == 0 and self.top_rivals == 0:
             object.__setattr__(self, "include_aggregates", False)
         if self.top_friends + self.top_rivals > 8:
-            raise ValueError("Sum of top_friends and top_rivals must be <= 8 for tensor budget")
+            raise ValueError(
+                "Sum of top_friends and top_rivals must be <= 8 for tensor budget"
+            )
         return self
 
 
@@ -422,11 +439,120 @@ class NarrationThrottleConfig(BaseModel):
     priority_categories: List[str] = Field(default_factory=list)
 
     def get_category_cooldown(self, category: str) -> int:
-        return int(self.category_cooldown_ticks.get(category, self.global_cooldown_ticks))
+        return int(
+            self.category_cooldown_ticks.get(category, self.global_cooldown_ticks)
+        )
 
 
 class TelemetryConfig(BaseModel):
     narration: NarrationThrottleConfig = NarrationThrottleConfig()
+
+
+class SnapshotStorageConfig(BaseModel):
+    root: Path = Field(default=Path("snapshots"))
+
+    @model_validator(mode="after")
+    def _validate_root(self) -> "SnapshotStorageConfig":
+        if str(self.root).strip() == "":
+            raise ValueError("snapshot.storage.root must not be empty")
+        return self
+
+
+class SnapshotAutosaveConfig(BaseModel):
+    cadence_ticks: int | None = Field(default=None, ge=1)
+    retain: int = Field(default=3, ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def _validate_cadence(self) -> "SnapshotAutosaveConfig":
+        if self.cadence_ticks is not None and self.cadence_ticks < 100:
+            raise ValueError(
+                "snapshot.autosave.cadence_ticks must be at least 100 ticks when enabled"
+            )
+        return self
+
+
+class SnapshotIdentityConfig(BaseModel):
+    policy_hash: str | None = None
+    policy_artifact: Path | None = None
+    observation_variant: ObservationVariant | Literal["infer"] = "infer"
+    anneal_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    _HEX40 = re.compile(r"^[0-9a-fA-F]{40}$")
+    _HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
+    _BASE64 = re.compile(r"^[A-Za-z0-9+/=]{32,88}$")
+
+    @model_validator(mode="after")
+    def _validate_policy_hash(self) -> "SnapshotIdentityConfig":
+        if self.policy_hash is None:
+            return self
+        candidate = self.policy_hash.strip()
+        if not candidate:
+            raise ValueError(
+                "snapshot.identity.policy_hash must not be blank if provided"
+            )
+        if not (
+            self._HEX40.match(candidate)
+            or self._HEX64.match(candidate)
+            or self._BASE64.match(candidate)
+        ):
+            raise ValueError(
+                "snapshot.identity.policy_hash must be a 40/64-char hex or base64-encoded digest"
+            )
+        self.policy_hash = candidate
+        return self
+
+    @model_validator(mode="after")
+    def _validate_variant(self) -> "SnapshotIdentityConfig":
+        if self.observation_variant == "infer":
+            return self
+        supported: set[str] = {"hybrid", "full", "compact"}
+        if self.observation_variant not in supported:
+            raise ValueError(
+                "snapshot.identity.observation_variant must be one of %s or 'infer'"
+                % sorted(supported)
+            )
+        return self
+
+
+class SnapshotMigrationsConfig(BaseModel):
+    handlers: Dict[str, str] = Field(default_factory=dict)
+    auto_apply: bool = False
+    allow_minor: bool = False
+
+    @model_validator(mode="after")
+    def _validate_handlers(self) -> "SnapshotMigrationsConfig":
+        for legacy_id, target in self.handlers.items():
+            if not str(legacy_id).strip():
+                raise ValueError("snapshot.migrations.handlers keys must not be empty")
+            if not str(target).strip():
+                raise ValueError(
+                    "snapshot.migrations.handlers values must not be empty"
+                )
+        return self
+
+
+class SnapshotGuardrailsConfig(BaseModel):
+    require_exact_config: bool = True
+    allow_downgrade: bool = False
+
+
+class SnapshotConfig(BaseModel):
+    storage: SnapshotStorageConfig = SnapshotStorageConfig()
+    autosave: SnapshotAutosaveConfig = SnapshotAutosaveConfig()
+    identity: SnapshotIdentityConfig = SnapshotIdentityConfig()
+    migrations: SnapshotMigrationsConfig = SnapshotMigrationsConfig()
+    guardrails: SnapshotGuardrailsConfig = SnapshotGuardrailsConfig()
+
+    @model_validator(mode="after")
+    def _validate_observation_override(self) -> "SnapshotConfig":
+        if (
+            self.identity.observation_variant != "infer"
+            and self.identity.observation_variant not in {"hybrid", "full", "compact"}
+        ):
+            raise ValueError(
+                "snapshot.identity.observation_variant must be one of ['hybrid', 'full', 'compact', 'infer']"
+            )
+        return self
 
 
 class TrainingConfig(BaseModel):
@@ -435,7 +561,9 @@ class TrainingConfig(BaseModel):
     rollout_auto_seed_agents: bool = False
     replay_manifest: Path | None = None
     social_reward_stage_override: SocialRewardStage | None = None
-    social_reward_schedule: List["SocialRewardScheduleEntry"] = Field(default_factory=list)
+    social_reward_schedule: List["SocialRewardScheduleEntry"] = Field(
+        default_factory=list
+    )
     bc: BCTrainingSettings = BCTrainingSettings()
     anneal_schedule: List[AnnealStage] = Field(default_factory=list)
     anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
@@ -453,30 +581,34 @@ class SimulationConfig(BaseModel):
     config_id: str
     features: FeatureFlags
     rewards: RewardsConfig
-    economy: Dict[str, float] = Field(default_factory=lambda: {
-        "meal_cost": 0.4,
-        "cook_energy_cost": 0.05,
-        "cook_hygiene_cost": 0.02,
-        "wage_income": 0.02,
-        "ingredients_cost": 0.15,
-        "stove_stock_replenish": 2,
-    })
-    jobs: Dict[str, JobSpec] = Field(default_factory=lambda: {
-        "grocer": JobSpec(
-            start_tick=180,
-            end_tick=360,
-            wage_rate=0.02,
-            lateness_penalty=0.1,
-            location=(0, 0),
-        ),
-        "barista": JobSpec(
-            start_tick=400,
-            end_tick=560,
-            wage_rate=0.025,
-            lateness_penalty=0.12,
-            location=(1, 0),
-        ),
-    })
+    economy: Dict[str, float] = Field(
+        default_factory=lambda: {
+            "meal_cost": 0.4,
+            "cook_energy_cost": 0.05,
+            "cook_hygiene_cost": 0.02,
+            "wage_income": 0.02,
+            "ingredients_cost": 0.15,
+            "stove_stock_replenish": 2,
+        }
+    )
+    jobs: Dict[str, JobSpec] = Field(
+        default_factory=lambda: {
+            "grocer": JobSpec(
+                start_tick=180,
+                end_tick=360,
+                wage_rate=0.02,
+                lateness_penalty=0.1,
+                location=(0, 0),
+            ),
+            "barista": JobSpec(
+                start_tick=400,
+                end_tick=560,
+                wage_rate=0.025,
+                lateness_penalty=0.12,
+                location=(1, 0),
+            ),
+        }
+    )
     shaping: ShapingConfig | None = None
     curiosity: CuriosityConfig | None = None
     queue_fairness: QueueFairnessConfig = QueueFairnessConfig()
@@ -490,6 +622,7 @@ class SimulationConfig(BaseModel):
     behavior: BehaviorConfig = BehaviorConfig()
     employment: EmploymentConfig = EmploymentConfig()
     telemetry: TelemetryConfig = TelemetryConfig()
+    snapshot: SnapshotConfig = SnapshotConfig()
     perturbations: PerturbationSchedulerConfig = PerturbationSchedulerConfig()
 
     model_config = ConfigDict(extra="allow")
@@ -512,11 +645,75 @@ class SimulationConfig(BaseModel):
     def require_observation_variant(self, expected: ObservationVariant) -> None:
         if self.observation_variant != expected:
             raise ValueError(
-                "Observation variant mismatch: expected %s, got %s" % (
+                "Observation variant mismatch: expected %s, got %s"
+                % (
                     expected,
                     self.observation_variant,
                 )
             )
+
+    def snapshot_root(self) -> Path:
+        root = Path(self.snapshot.storage.root)
+        return root.expanduser()
+
+    def build_snapshot_identity(
+        self,
+        *,
+        policy_hash: str | None,
+        runtime_observation_variant: ObservationVariant | None,
+        runtime_anneal_ratio: float | None,
+    ) -> Dict[str, object]:
+        identity_cfg = self.snapshot.identity
+        resolved_variant: str | None
+        if identity_cfg.observation_variant != "infer":
+            resolved_variant = identity_cfg.observation_variant
+        else:
+            resolved_variant = runtime_observation_variant or self.observation_variant
+
+        resolved_hash = identity_cfg.policy_hash or policy_hash
+        resolved_anneal: float | None
+        if identity_cfg.anneal_ratio is not None:
+            resolved_anneal = identity_cfg.anneal_ratio
+        else:
+            resolved_anneal = runtime_anneal_ratio
+
+        payload: Dict[str, object] = {"config_id": self.config_id}
+        if resolved_hash is not None:
+            payload["policy_hash"] = resolved_hash
+        artifact = identity_cfg.policy_artifact
+        if artifact is not None:
+            payload["policy_artifact"] = str(artifact)
+        if resolved_variant is not None:
+            payload["observation_variant"] = resolved_variant
+        if resolved_anneal is not None:
+            payload["anneal_ratio"] = resolved_anneal
+        return payload
+
+    def register_snapshot_migrations(self) -> None:
+        handlers = dict(self.snapshot.migrations.handlers)
+        if not handlers:
+            return
+        from townlet.snapshots import register_migration
+
+        for legacy_config, handler_path in handlers.items():
+            module_name, separator, attribute = handler_path.partition(":")
+            if not module_name or not attribute or separator != ":":
+                raise ValueError(
+                    "snapshot.migrations.handlers entries must use 'module:function' format"
+                )
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError as exc:  # pragma: no cover - defensive path
+                raise ImportError(
+                    f"Failed to import snapshot migration module '{module_name}'"
+                ) from exc
+            try:
+                handler = getattr(module, attribute)
+            except AttributeError as exc:  # pragma: no cover - defensive path
+                raise AttributeError(
+                    f"Snapshot migration handler '{attribute}' not found in module '{module_name}'"
+                ) from exc
+            register_migration(legacy_config, self.config_id, handler)
 
 
 def load_config(path: Path) -> SimulationConfig:

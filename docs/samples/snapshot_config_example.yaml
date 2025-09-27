@@ -1,0 +1,19 @@
+# Snapshot configuration example showing storage, cadence, identity overrides, and guardrails.
+snapshot:
+  storage:
+    root: snapshots/releases
+  autosave:
+    cadence_ticks: 7200
+    retain: 5
+  identity:
+    policy_hash: deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+    policy_artifact: artifacts/policies/release_v1.pt
+    observation_variant: infer
+    anneal_ratio: null
+  migrations:
+    auto_apply: false
+    handlers:
+      v1.3.0: townlet.snapshots.migrations:v13_to_v14
+  guardrails:
+    require_exact_config: true
+    allow_downgrade: false

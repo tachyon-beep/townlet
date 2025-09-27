@@ -1,4 +1,5 @@
 """Rollout buffer scaffolding for future live PPO integration."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,10 @@ import numpy as np
 
 from townlet.policy.metrics import compute_sample_metrics
 from townlet.policy.replay import ReplaySample, frames_to_replay_sample
-from townlet.policy.replay_buffer import InMemoryReplayDataset, InMemoryReplayDatasetConfig
+from townlet.policy.replay_buffer import (
+    InMemoryReplayDataset,
+    InMemoryReplayDatasetConfig,
+)
 
 
 @dataclass
@@ -86,7 +90,9 @@ class RolloutBuffer:
             for agent_id, rollout in self.by_agent().items()
         }
 
-    def save(self, output_dir: Path, prefix: str = "rollout_sample", compress: bool = True) -> None:
+    def save(
+        self, output_dir: Path, prefix: str = "rollout_sample", compress: bool = True
+    ) -> None:
         output_dir.mkdir(parents=True, exist_ok=True)
         save_fn = np.savez_compressed if compress else np.savez
 
@@ -113,7 +119,9 @@ class RolloutBuffer:
             meta["metrics"] = sample_metrics
             metrics_map[sample_path.name] = sample_metrics
             meta_path.write_text(json.dumps(meta, indent=2))
-            manifest_entries.append({"sample": sample_path.name, "meta": meta_path.name})
+            manifest_entries.append(
+                {"sample": sample_path.name, "meta": meta_path.name}
+            )
 
         manifest_path = output_dir / f"{prefix}_manifest.json"
         manifest_path.write_text(json.dumps(manifest_entries, indent=2))

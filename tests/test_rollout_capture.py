@@ -17,7 +17,9 @@ SCENARIO_CONFIGS = [
 ]
 
 GOLDEN_STATS_PATH = Path("docs/samples/rollout_scenario_stats.json")
-GOLDEN_STATS = json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
+GOLDEN_STATS = (
+    json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
+)
 
 
 @pytest.mark.parametrize("config_path", SCENARIO_CONFIGS)
@@ -45,7 +47,15 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     for npz_path in npz_files:
         data = np.load(npz_path)
-        for key in ("map", "features", "actions", "old_log_probs", "value_preds", "rewards", "dones"):
+        for key in (
+            "map",
+            "features",
+            "actions",
+            "old_log_probs",
+            "value_preds",
+            "rewards",
+            "dones",
+        ):
             assert key in data, f"missing {key} in {npz_path.name}"
         assert np.isfinite(data["old_log_probs"]).all()
         assert np.isfinite(data["value_preds"]).all()
@@ -74,9 +84,11 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
             metrics = golden.get(name)
             assert metrics is not None, f"Missing golden metrics for {name}"
             data = np.load(npz_path)
-            assert int(data['rewards'].shape[0]) == metrics['timesteps']
-            assert np.isclose(float(data['rewards'].sum()), metrics['reward_sum'])
-            assert np.isclose(float(data['old_log_probs'].mean()), metrics['log_prob_mean'])
+            assert int(data["rewards"].shape[0]) == metrics["timesteps"]
+            assert np.isclose(float(data["rewards"].sum()), metrics["reward_sum"])
+            assert np.isclose(
+                float(data["old_log_probs"].mean()), metrics["log_prob_mean"]
+            )
             sample_metrics = metrics_data.get(name)
             assert sample_metrics is not None
-            assert np.isclose(sample_metrics['reward_sum'], metrics['reward_sum'])
+            assert np.isclose(sample_metrics["reward_sum"], metrics["reward_sum"])

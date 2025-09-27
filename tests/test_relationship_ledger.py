@@ -17,7 +17,9 @@ def test_apply_delta_clamps_and_prunes() -> None:
 
 
 def test_decay_removes_zero_ties() -> None:
-    params = RelationshipParameters(max_edges=3, trust_decay=0.5, familiarity_decay=0.5, rivalry_decay=0.5)
+    params = RelationshipParameters(
+        max_edges=3, trust_decay=0.5, familiarity_decay=0.5, rivalry_decay=0.5
+    )
     ledger = RelationshipLedger(owner_id="alice", params=params)
     ledger.apply_delta("bob", trust=0.4)
     ledger.apply_delta("carol", rivalry=0.4)
@@ -51,7 +53,9 @@ def test_eviction_hook_invoked_for_decay() -> None:
 
     ledger = RelationshipLedger(
         owner_id="alice",
-        params=RelationshipParameters(trust_decay=1.0, familiarity_decay=1.0, rivalry_decay=1.0),
+        params=RelationshipParameters(
+            trust_decay=1.0, familiarity_decay=1.0, rivalry_decay=1.0
+        ),
         eviction_hook=hook,
     )
     ledger.apply_delta("bob", trust=0.5)

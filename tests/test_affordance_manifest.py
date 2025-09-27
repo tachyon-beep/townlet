@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from townlet.config import SimulationConfig, load_config
-from townlet.world.grid import WorldState
 from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.world.grid import WorldState
 
 
 def _configure_with_manifest(manifest_path: Path) -> SimulationConfig:

@@ -1,9 +1,10 @@
 """Observation encoding across variants."""
+
 from __future__ import annotations
 
 import hashlib
 from math import cos, sin, tau
-from typing import Dict, Iterable, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Iterable, List, Tuple
 
 import numpy as np
 
@@ -85,18 +86,22 @@ class ObservationBuilder:
             )
         }
 
-        self._social_slots = max(0, self.social_cfg.top_friends + self.social_cfg.top_rivals)
+        self._social_slots = max(
+            0, self.social_cfg.top_friends + self.social_cfg.top_rivals
+        )
         if self._social_slots and self.config.features.stages.relationships == "OFF":
-            raise ValueError(
-                "Social snippet requires relationships stage enabled"
-            )
+            raise ValueError("Social snippet requires relationships stage enabled")
 
-        self._social_slot_dim = self.social_cfg.embed_dim + 3  # id embedding + trust/fam/rivalry
+        self._social_slot_dim = (
+            self.social_cfg.embed_dim + 3
+        )  # id embedding + trust/fam/rivalry
         self.full_channels = self.MAP_CHANNELS + ("path_dx", "path_dy")
         social_feature_names: List[str] = []
         for slot_index in range(self._social_slots):
             for component_index in range(self._social_slot_dim):
-                social_feature_names.append(f"social_slot{slot_index}_d{component_index}")
+                social_feature_names.append(
+                    f"social_slot{slot_index}_d{component_index}"
+                )
 
         if self.social_cfg.include_aggregates:
             self._social_aggregate_names = [
@@ -110,7 +115,9 @@ class ObservationBuilder:
         social_feature_names.extend(self._social_aggregate_names)
 
         self._feature_names = base_feature_names + social_feature_names
-        self._feature_index = {name: idx for idx, name in enumerate(self._feature_names)}
+        self._feature_index = {
+            name: idx for idx, name in enumerate(self._feature_names)
+        }
         self._base_feature_len = len(base_feature_names)
         self._social_vector_length = len(social_feature_names)
         self._social_slice = slice(
@@ -118,9 +125,13 @@ class ObservationBuilder:
             self._base_feature_len + self._social_vector_length,
         )
 
-        self._empty_social_vector = np.zeros(self._social_vector_length, dtype=np.float32)
+        self._empty_social_vector = np.zeros(
+            self._social_vector_length, dtype=np.float32
+        )
 
-    def build_batch(self, world: "WorldState", terminated: Dict[str, bool]) -> Dict[str, Dict[str, np.ndarray]]:
+    def build_batch(
+        self, world: "WorldState", terminated: Dict[str, bool]
+    ) -> Dict[str, Dict[str, np.ndarray]]:
         """Return a mapping from agent_id to observation payloads."""
         observations: Dict[str, Dict[str, np.ndarray]] = {}
         snapshots = world.snapshot()
@@ -147,16 +158,24 @@ class ObservationBuilder:
         features[self._feature_index["need_hygiene"]] = float(needs.get("hygiene", 0.0))
         features[self._feature_index["need_energy"]] = float(needs.get("energy", 0.0))
         features[self._feature_index["wallet"]] = float(context.get("wallet", 0.0))
-        features[self._feature_index["lateness_counter"]] = float(context.get("lateness_counter", 0.0))
-        features[self._feature_index["on_shift"]] = 1.0 if context.get("on_shift") else 0.0
+        features[self._feature_index["lateness_counter"]] = float(
+            context.get("lateness_counter", 0.0)
+        )
+        features[self._feature_index["on_shift"]] = (
+            1.0 if context.get("on_shift") else 0.0
+        )
 
         ticks_per_day = self.hybrid_cfg.time_ticks_per_day
         phase = (world_tick % ticks_per_day) / ticks_per_day
         features[self._feature_index["time_sin"]] = sin(tau * phase)
         features[self._feature_index["time_cos"]] = cos(tau * phase)
 
-        features[self._feature_index["attendance_ratio"]] = float(context.get("attendance_ratio", 0.0))
-        features[self._feature_index["wages_withheld"]] = float(context.get("wages_withheld", 0.0))
+        features[self._feature_index["attendance_ratio"]] = float(
+            context.get("attendance_ratio", 0.0)
+        )
+        features[self._feature_index["wages_withheld"]] = float(
+            context.get("wages_withheld", 0.0)
+        )
 
         last_action_id = context.get("last_action_id") or ""
         if last_action_id:
@@ -176,10 +195,14 @@ class ObservationBuilder:
         if shift_state not in self.SHIFT_STATES:
             shift_state = "pre_shift"
         for name, feature_name in self._shift_feature_map.items():
-            features[self._feature_index[feature_name]] = 1.0 if name == shift_state else 0.0
+            features[self._feature_index[feature_name]] = (
+                1.0 if name == shift_state else 0.0
+            )
 
         max_slots = self.config.embedding_allocator.max_slots
-        features[self._feature_index["embedding_slot_norm"]] = float(slot) / float(max_slots)
+        features[self._feature_index["embedding_slot_norm"]] = float(slot) / float(
+            max_slots
+        )
         features[self._feature_index["ctx_reset_flag"]] = 0.0
 
         episode_length = max(1, self.hybrid_cfg.time_ticks_per_day)
@@ -192,7 +215,9 @@ class ObservationBuilder:
         world: "WorldState",
         snapshot: "AgentSnapshot",
     ) -> None:
-        top_rivals = world.rivalry_top(snapshot.agent_id, limit=self.config.conflict.rivalry.max_edges)
+        top_rivals = world.rivalry_top(
+            snapshot.agent_id, limit=self.config.conflict.rivalry.max_edges
+        )
         max_rivalry = top_rivals[0][1] if top_rivals else 0.0
         avoid_threshold = self.config.conflict.rivalry.avoid_threshold
         avoid_count = sum(1 for _, value in top_rivals if value >= avoid_threshold)
@@ -296,9 +321,13 @@ class ObservationBuilder:
                         if distance > 0:
                             norm = distance
                             if "path_dx" in channels:
-                                tensor[channels.index("path_dx"), y, x] = float(dx) / norm
+                                tensor[channels.index("path_dx"), y, x] = (
+                                    float(dx) / norm
+                                )
                             if "path_dy" in channels:
-                                tensor[channels.index("path_dy"), y, x] = float(dy) / norm
+                                tensor[channels.index("path_dy"), y, x] = (
+                                    float(dy) / norm
+                                )
         return tensor
 
     def _build_hybrid(
@@ -310,7 +339,9 @@ class ObservationBuilder:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         local_view = world.local_view(snapshot.agent_id, radius)
-        map_tensor = self._map_from_view(self.MAP_CHANNELS, local_view, window, radius, snapshot)
+        map_tensor = self._map_from_view(
+            self.MAP_CHANNELS, local_view, window, radius, snapshot
+        )
 
         features = np.zeros(len(self._feature_names), dtype=np.float32)
         context = world.agent_context(snapshot.agent_id)
@@ -361,7 +392,9 @@ class ObservationBuilder:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         local_view = world.local_view(snapshot.agent_id, radius)
-        map_tensor = self._map_from_view(self.full_channels, local_view, window, radius, snapshot)
+        map_tensor = self._map_from_view(
+            self.full_channels, local_view, window, radius, snapshot
+        )
 
         features = np.zeros(len(self._feature_names), dtype=np.float32)
         context = world.agent_context(snapshot.agent_id)
@@ -475,7 +508,7 @@ class ObservationBuilder:
             offset += 1
 
         if self._social_aggregate_names:
-            trust_values = [slot["trust"] for slot in slot_values if slot["valid" ]]
+            trust_values = [slot["trust"] for slot in slot_values if slot["valid"]]
             rivalry_values = [slot["rivalry"] for slot in slot_values if slot["valid"]]
             aggregates = self._compute_aggregates(trust_values, rivalry_values)
             for value in aggregates:
@@ -584,7 +617,9 @@ class ObservationBuilder:
             dy = position[1] - cy
             distance = float(np.hypot(dx, dy))
             norm = distance if distance > 0 else 1.0
-            values = np.array([float(dx) / norm, float(dy) / norm, distance], dtype=np.float32)
+            values = np.array(
+                [float(dx) / norm, float(dy) / norm, distance], dtype=np.float32
+            )
             features[slice_] = values
 
     def _encode_relationship(self, entry: Dict[str, float]) -> Dict[str, float]:

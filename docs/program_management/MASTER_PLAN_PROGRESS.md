@@ -31,8 +31,8 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
 
 4. **WP-05 Snapshot & Config Identity** (`docs/program_management/WP05_IMPLEMENTATION_PLAN.md`)
    - Owner: Core/Platform
-   - Status: In progress — Phases 5.2–5.3 delivered (schema v1.4, multi-stream RNG, policy identity telemetry, migration registry + console diagnostics).
-   - Next: add SnapshotConfig surface and CI/doc wiring for registry authoring (Phase 5.4+).
+   - Status: In progress — Schema v1.4, multi-stream RNG, policy identity telemetry, migration registry + console diagnostics delivered; SnapshotConfig now wires storage/autosave/guardrails with regression coverage (2025-10-02).
+   - Next: enforce release-time policy hash requirements, finish rollout comms, and expand CI gating (Phase 5.5).
 
 5. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
    - Owner: RL/Training

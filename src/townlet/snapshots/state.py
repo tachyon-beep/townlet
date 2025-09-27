@@ -1,4 +1,5 @@
 """Snapshot persistence scaffolding."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Mapping, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Mapping, Optional
 
 from townlet.agents.models import Personality
 from townlet.config import SimulationConfig
@@ -21,11 +22,23 @@ from townlet.utils import decode_rng_state, encode_rng, encode_rng_state
 from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 
 if TYPE_CHECKING:
-    from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.stability.monitor import StabilityMonitor
+    from townlet.telemetry.publisher import TelemetryPublisher
 
 
 SNAPSHOT_SCHEMA_VERSION = "1.4"
+
+
+def _parse_version(value: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for chunk in value.split("."):
+        if not chunk:
+            return ()
+        try:
+            parts.append(int(chunk))
+        except ValueError:
+            return ()
+    return tuple(parts)
 
 
 logger = logging.getLogger(__name__)
@@ -73,9 +86,7 @@ class SnapshotState:
             "console_buffer": list(self.console_buffer),
             "perturbations": dict(self.perturbations),
             "relationships": {
-                owner: {
-                    other: dict(values) for other, values in edges.items()
-                }
+                owner: {other: dict(values) for other, values in edges.items()}
                 for owner, edges in self.relationships.items()
             },
             "stability": dict(self.stability),
@@ -137,7 +148,8 @@ class SnapshotState:
         rng_streams_payload = payload.get("rng_streams", {})
         if isinstance(rng_streams_payload, Mapping):
             rng_streams: Dict[str, str] = {
-                str(name): str(data) for name, data in rng_streams_payload.items()
+                str(name): str(data)
+                for name, data in rng_streams_payload.items()
                 if isinstance(data, str)
             }
         else:
@@ -412,7 +424,10 @@ def apply_snapshot_to_world(
     active_payload = snapshot.queues.get("active", {})
     if isinstance(active_payload, dict):
         world._active_reservations.update(
-            {str(object_id): str(agent_id) for object_id, agent_id in active_payload.items()}
+            {
+                str(object_id): str(agent_id)
+                for object_id, agent_id in active_payload.items()
+            }
         )
 
     world.embedding_allocator.import_state(snapshot.embeddings)
@@ -456,7 +471,11 @@ def apply_snapshot_to_telemetry(
         telemetry.record_stability_metrics(dict(stability_metrics))
     if snapshot.identity:
         telemetry.update_policy_identity(snapshot.identity)
-    migrations_applied = snapshot.migrations.get("applied") if isinstance(snapshot.migrations, Mapping) else None
+    migrations_applied = (
+        snapshot.migrations.get("applied")
+        if isinstance(snapshot.migrations, Mapping)
+        else None
+    )
     if migrations_applied:
         telemetry.record_snapshot_migrations([str(item) for item in migrations_applied])
 
@@ -482,26 +501,63 @@ class SnapshotManager:
         path: Path,
         config: SimulationConfig,
         *,
-        allow_migration: bool = True,
+        allow_migration: bool | None = None,
+        allow_downgrade: bool | None = None,
+        require_exact_config: bool | None = None,
     ) -> SnapshotState:
         if not path.exists():
             raise FileNotFoundError(path)
         payload = json.loads(path.read_text())
         schema_version = payload.get("schema_version")
+        snapshot_cfg = getattr(config, "snapshot", None)
+        migrations_cfg = getattr(snapshot_cfg, "migrations", None)
+        guardrails_cfg = getattr(snapshot_cfg, "guardrails", None)
+        if allow_migration is None:
+            allow_migration = getattr(migrations_cfg, "auto_apply", True)
+        if allow_downgrade is None:
+            allow_downgrade = getattr(guardrails_cfg, "allow_downgrade", False)
+        if require_exact_config is None:
+            require_exact_config = getattr(guardrails_cfg, "require_exact_config", True)
+
+        if not isinstance(schema_version, str):
+            raise ValueError("Snapshot missing schema_version string")
+
         if schema_version != SNAPSHOT_SCHEMA_VERSION:
-            raise ValueError(
-                f"Unsupported snapshot schema version: {schema_version}"
-            )
+            parsed_snapshot = _parse_version(schema_version)
+            parsed_supported = _parse_version(SNAPSHOT_SCHEMA_VERSION)
+            if (
+                parsed_snapshot
+                and parsed_supported
+                and parsed_snapshot > parsed_supported
+            ):
+                if not allow_downgrade:
+                    raise ValueError(
+                        "Snapshot schema version %s is newer than supported %s (enable snapshot.guardrails.allow_downgrade to override)"
+                        % (schema_version, SNAPSHOT_SCHEMA_VERSION)
+                    )
+            else:
+                raise ValueError(
+                    f"Unsupported snapshot schema version: {schema_version}"
+                )
         state_payload = payload.get("state")
         if not isinstance(state_payload, Mapping):
             raise ValueError("Snapshot document missing state payload")
         state = SnapshotState.from_dict(state_payload)
         if state.config_id != config.config_id:
             if not allow_migration:
-                raise ValueError(
-                    "Snapshot config_id mismatch: expected %s, got %s"
-                    % (config.config_id, state.config_id)
+                if require_exact_config:
+                    raise ValueError(
+                        "Snapshot config_id mismatch: expected %s, got %s (auto-migration disabled)"
+                        % (config.config_id, state.config_id)
+                    )
+                migrations_meta = (
+                    state.migrations if isinstance(state.migrations, Mapping) else {}
                 )
+                state.migrations = {
+                    "applied": list(migrations_meta.get("applied", [])),
+                    "required": ["%s->%s" % (state.config_id, config.config_id)],
+                }
+                return state
             try:
                 path = migration_registry.find_path(state.config_id, config.config_id)
             except MigrationNotFoundError as exc:
@@ -518,7 +574,9 @@ class SnapshotManager:
                     "Snapshot migration chain did not reach target config_id %s (ended at %s)"
                     % (config.config_id, state.config_id)
                 )
-            migrations_meta = state.migrations if isinstance(state.migrations, Mapping) else {}
+            migrations_meta = (
+                state.migrations if isinstance(state.migrations, Mapping) else {}
+            )
             applied_list = list(migrations_meta.get("applied", []))
             applied_list.extend(applied)
             state.migrations = {
@@ -528,5 +586,19 @@ class SnapshotManager:
             logger.info("Applied snapshot migrations: %s", applied)
         identity_meta = dict(state.identity)
         identity_meta.setdefault("config_id", state.config_id)
+        identity_cfg = getattr(getattr(config, "snapshot", None), "identity", None)
+        if identity_cfg is not None:
+            policy_hash = getattr(identity_cfg, "policy_hash", None)
+            if policy_hash:
+                identity_meta.setdefault("policy_hash", policy_hash)
+            policy_artifact = getattr(identity_cfg, "policy_artifact", None)
+            if policy_artifact is not None:
+                identity_meta.setdefault("policy_artifact", str(policy_artifact))
+            observation_variant = getattr(identity_cfg, "observation_variant", "infer")
+            if observation_variant != "infer":
+                identity_meta.setdefault("observation_variant", observation_variant)
+            anneal_ratio = getattr(identity_cfg, "anneal_ratio", None)
+            if anneal_ratio is not None:
+                identity_meta.setdefault("anneal_ratio", anneal_ratio)
         state.identity = identity_meta
         return state

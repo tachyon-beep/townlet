@@ -1,4 +1,5 @@
 """Monitors KPIs and promotion guardrails."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -138,7 +139,9 @@ class StabilityMonitor:
         return {
             "starvation_streaks": dict(self._starvation_streaks),
             "starvation_active": list(self._starvation_active),
-            "starvation_incidents": [list(entry) for entry in self._starvation_incidents],
+            "starvation_incidents": [
+                list(entry) for entry in self._starvation_incidents
+            ],
             "reward_samples": [list(entry) for entry in self._reward_samples],
             "option_samples": [list(entry) for entry in self._option_samples],
             "latest_metrics": dict(self._latest_metrics),
@@ -147,7 +150,9 @@ class StabilityMonitor:
     def import_state(self, payload: Dict[str, object]) -> None:
         streaks = payload.get("starvation_streaks", {})
         if isinstance(streaks, dict):
-            self._starvation_streaks = {str(agent): int(value) for agent, value in streaks.items()}
+            self._starvation_streaks = {
+                str(agent): int(value) for agent, value in streaks.items()
+            }
         else:
             self._starvation_streaks = {}
 

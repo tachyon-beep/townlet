@@ -14,7 +14,9 @@ def base_config() -> SimulationConfig:
     return load_config(Path("configs/examples/poc_hybrid.yaml"))
 
 
-def _with_relationship_modifiers(config: SimulationConfig, enabled: bool) -> SimulationConfig:
+def _with_relationship_modifiers(
+    config: SimulationConfig, enabled: bool
+) -> SimulationConfig:
     data = config.model_dump()
     data["features"]["relationship_modifiers"] = enabled
     return SimulationConfig.model_validate(data)

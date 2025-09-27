@@ -3,9 +3,8 @@ from __future__ import annotations
 from argparse import Namespace
 from pathlib import Path
 
-from townlet.config import PPOConfig, load_config
-
 from scripts import run_training
+from townlet.config import PPOConfig, load_config
 
 
 def _make_namespace(**kwargs: object) -> Namespace:

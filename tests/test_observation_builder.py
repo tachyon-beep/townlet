@@ -1,5 +1,6 @@
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
@@ -46,7 +47,11 @@ def test_observation_builder_hybrid_map_and_features() -> None:
     features = obs["features"]
     metadata = obs["metadata"]
 
-    assert map_tensor.shape == (4, builder.hybrid_cfg.local_window, builder.hybrid_cfg.local_window)
+    assert map_tensor.shape == (
+        4,
+        builder.hybrid_cfg.local_window,
+        builder.hybrid_cfg.local_window,
+    )
     center = builder.hybrid_cfg.local_window // 2
     assert map_tensor[0, center, center] == 1.0
     # Bob is at (1,0) relative to Alice

@@ -59,9 +59,32 @@
   - For long-form audits, redirect the state to JSON: `python scripts/telemetry_summary.py <log> --format json | jq '.narrations'`.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
-  - `snapshot_inspect <path>` — read snapshot metadata (schema version, tick, identity, migrations) without applying it.
-  - `snapshot_validate <path> [--strict]` — load snapshot against the active config; with `--strict` it refuses to auto-migrate and surfaces the mismatch.
-  - `snapshot_migrate <path> [--output <dir>]` *(admin only)* — apply registered migrations and optionally re-save the migrated snapshot to a directory.
+- `snapshot_inspect <path>` — read snapshot metadata (schema version, tick, identity, migrations) without applying it.
+- `snapshot_validate <path> [--strict]` — load snapshot against the active config; with `--strict` it refuses to auto-migrate and surfaces the mismatch.
+- `snapshot_migrate <path> [--output <dir>]` *(admin only)* — apply registered migrations and optionally re-save the migrated snapshot to a directory.
+  - `snapshot` config block now drives behaviour:
+    - `snapshot.storage.root` defines the default save location; `SimulationLoop.save_snapshot()`
+      uses this when no directory is supplied.
+    - `snapshot.autosave.cadence_ticks` enables periodic saves (minimum 100 ticks) with retention
+      capped by `snapshot.autosave.retain`.
+    - `snapshot.identity.policy_hash|policy_artifact|observation_variant|anneal_ratio` override
+      runtime values used in telemetry and saved payloads.
+    - `snapshot.migrations.handlers` auto-registers migration callables (`module:function`) that
+      chain legacy `config_id` values to the current build; `auto_apply` toggles whether they run
+      automatically.
+    - `snapshot.guardrails.require_exact_config` controls whether mismatched `config_id`s fail
+      fast; set to `False` only for manual recovery flows. `snapshot.guardrails.allow_downgrade`
+      must be `True` before loading snapshots produced by newer schema versions.
+    - Quick reference YAML lives at `docs/samples/snapshot_config_example.yaml`.
+  - Console usage examples:
+    - `snapshot_validate snapshots/release/snapshot-900.json` → run migrations if the config
+      allows auto-apply; append `--strict` to verify without mutating.
+    - `snapshot_migrate snapshots/legacy/snapshot-800.json --output tmp/migrated` → admin-only
+      command that applies the registry chain, records audit metadata, and writes the migrated
+      artifact.
+    - `snapshot_validate --strict ...` returning `auto-migration disabled` indicates config
+      guardrails blocked the attempt; flip `snapshot.migrations.auto_apply` or run
+      `snapshot_migrate` in admin mode.
 - The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.
 - Employment commands:
   - `employment_status` — dumps employment KPIs (pending exits, exit cap usage, queue limit) and latest queue contents.

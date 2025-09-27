@@ -4,6 +4,7 @@ These utilities intentionally stay decoupled from the world grid so we can unit
  test rivalry increments/decay behaviour in isolation before wiring into the
  main simulation loop.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

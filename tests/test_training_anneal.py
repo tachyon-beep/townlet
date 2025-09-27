@@ -6,14 +6,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from townlet.config import load_config, AnnealStage
-from townlet.policy.runner import TrainingHarness
-from townlet.policy.replay import frames_to_replay_sample
+from townlet.config import AnnealStage, load_config
 from townlet.policy.models import torch_available
-from townlet.policy.replay import ReplayDatasetConfig
+from townlet.policy.replay import ReplayDatasetConfig, frames_to_replay_sample
+from townlet.policy.runner import TrainingHarness
 
 
-def _write_sample(output_dir: Path, stem: str, timesteps: int, action_dim: int = 2) -> tuple[Path, Path]:
+def _write_sample(
+    output_dir: Path, stem: str, timesteps: int, action_dim: int = 2
+) -> tuple[Path, Path]:
     feature_names = [f"f{i}" for i in range(4)] + ["rivalry_max", "rivalry_avoid_count"]
     frames = []
     for idx in range(timesteps):

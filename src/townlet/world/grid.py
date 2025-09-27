@@ -1,12 +1,12 @@
 """Grid world representation and affordance integration."""
+
 from __future__ import annotations
 
+import random
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, List, Mapping, Optional, Set, Tuple
-
-import random
 
 from townlet.agents.models import Personality
 from townlet.agents.relationship_modifiers import (
@@ -20,8 +20,8 @@ from townlet.config.affordance_manifest import (
     load_affordance_manifest,
 )
 from townlet.observations.embedding import EmbeddingAllocator
-from townlet.world.queue_manager import QueueManager
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
+from townlet.world.queue_manager import QueueManager
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
 
@@ -103,27 +103,43 @@ class WorldState:
     _active_reservations: Dict[str, str] = field(init=False, default_factory=dict)
     objects: Dict[str, InteractiveObject] = field(init=False, default_factory=dict)
     affordances: Dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
-    _running_affordances: Dict[str, RunningAffordance] = field(init=False, default_factory=dict)
-    _pending_events: Dict[int, List[Dict[str, Any]]] = field(init=False, default_factory=dict)
+    _running_affordances: Dict[str, RunningAffordance] = field(
+        init=False, default_factory=dict
+    )
+    _pending_events: Dict[int, List[Dict[str, Any]]] = field(
+        init=False, default_factory=dict
+    )
     store_stock: Dict[str, Dict[str, int]] = field(init=False, default_factory=dict)
     _job_keys: List[str] = field(init=False, default_factory=list)
-    _employment_state: Dict[str, Dict[str, Any]] = field(init=False, default_factory=dict)
+    _employment_state: Dict[str, Dict[str, Any]] = field(
+        init=False, default_factory=dict
+    )
     _employment_exit_queue: List[str] = field(init=False, default_factory=list)
     _employment_exits_today: int = field(init=False, default=0)
-    _employment_exit_queue_timestamps: Dict[str, int] = field(init=False, default_factory=dict)
+    _employment_exit_queue_timestamps: Dict[str, int] = field(
+        init=False, default_factory=dict
+    )
     _employment_manual_exits: set[str] = field(init=False, default_factory=set)
 
     _rivalry_ledgers: Dict[str, RivalryLedger] = field(init=False, default_factory=dict)
-    _relationship_ledgers: Dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
+    _relationship_ledgers: Dict[str, RelationshipLedger] = field(
+        init=False, default_factory=dict
+    )
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
     _relationship_window_ticks: int = 600
-    _recent_meal_participants: Dict[str, Dict[str, Any]] = field(init=False, default_factory=dict)
+    _recent_meal_participants: Dict[str, Dict[str, Any]] = field(
+        init=False, default_factory=dict
+    )
     _chat_events: List[Dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
     _rng_state: Optional[Tuple[Any, ...]] = field(init=False, default=None)
     _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
-    _affordance_manifest_info: Dict[str, object] = field(init=False, default_factory=dict)
-    _objects_by_position: Dict[tuple[int, int], List[str]] = field(init=False, default_factory=dict)
+    _affordance_manifest_info: Dict[str, object] = field(
+        init=False, default_factory=dict
+    )
+    _objects_by_position: Dict[tuple[int, int], List[str]] = field(
+        init=False, default_factory=dict
+    )
 
     @classmethod
     def from_config(
@@ -276,7 +292,9 @@ class WorldState:
             action_duration = int(action.get("duration", 1))
 
             if kind == "request" and object_id:
-                granted = self.queue_manager.request_access(object_id, agent_id, current_tick)
+                granted = self.queue_manager.request_access(
+                    object_id, agent_id, current_tick
+                )
                 self._sync_reservation(object_id)
                 if not granted and action.get("blocked"):
                     self._handle_blocked(object_id, current_tick)
@@ -288,7 +306,9 @@ class WorldState:
             elif kind == "start" and object_id:
                 affordance_id = action.get("affordance")
                 if affordance_id:
-                    action_success = self._start_affordance(agent_id, object_id, affordance_id)
+                    action_success = self._start_affordance(
+                        agent_id, object_id, affordance_id
+                    )
             elif kind == "release" and object_id:
                 success = bool(action.get("success", True))
                 running = self._running_affordances.pop(object_id, None)
@@ -305,7 +325,9 @@ class WorldState:
                     obj = self.objects.get(object_id)
                     if obj is not None:
                         obj.occupied_by = None
-                self.queue_manager.release(object_id, agent_id, current_tick, success=success)
+                self.queue_manager.release(
+                    object_id, agent_id, current_tick, success=success
+                )
                 self._sync_reservation(object_id)
                 if not success:
                     if running is not None:
@@ -341,7 +363,9 @@ class WorldState:
             if self.queue_manager.record_blocked_attempt(object_id):
                 waiting = self.queue_manager.queue_snapshot(object_id)
                 rival = waiting[0] if waiting else None
-                self.queue_manager.release(object_id, occupant, current_tick, success=False)
+                self.queue_manager.release(
+                    object_id, occupant, current_tick, success=False
+                )
                 if rival is not None:
                     self._record_queue_conflict(
                         object_id=object_id,
@@ -361,7 +385,9 @@ class WorldState:
                 self._apply_affordance_effects(running.agent_id, running.effects)
                 self._running_affordances.pop(object_id, None)
                 waiting = self.queue_manager.queue_snapshot(object_id)
-                self.queue_manager.release(object_id, running.agent_id, current_tick, success=True)
+                self.queue_manager.release(
+                    object_id, running.agent_id, current_tick, success=True
+                )
                 self._sync_reservation(object_id)
                 if waiting:
                     next_agent = waiting[0]
@@ -505,7 +531,9 @@ class WorldState:
             "last_action_success": snapshot.last_action_success,
             "last_action_duration": snapshot.last_action_duration,
             "wages_paid": self._employment_context_wages(snapshot.agent_id),
-            "punctuality_bonus": self._employment_context_punctuality(snapshot.agent_id),
+            "punctuality_bonus": self._employment_context_punctuality(
+                snapshot.agent_id
+            ),
         }
 
     @property
@@ -555,8 +583,14 @@ class WorldState:
         params = self.config.conflict.rivalry
         base_intensity = intensity
         if base_intensity is None:
-            boost = params.ghost_step_boost if reason == "ghost_step" else params.handover_boost
-            base_intensity = boost + params.queue_length_boost * max(queue_length - 1, 0)
+            boost = (
+                params.ghost_step_boost
+                if reason == "ghost_step"
+                else params.handover_boost
+            )
+            base_intensity = boost + params.queue_length_boost * max(
+                queue_length - 1, 0
+            )
         clamped_intensity = min(5.0, max(0.1, base_intensity))
         self.register_rivalry_conflict(actor, rival, intensity=clamped_intensity)
         self.update_relationship(
@@ -573,7 +607,9 @@ class WorldState:
             },
         )
 
-    def register_rivalry_conflict(self, agent_a: str, agent_b: str, *, intensity: float = 1.0) -> None:
+    def register_rivalry_conflict(
+        self, agent_a: str, agent_b: str, *, intensity: float = 1.0
+    ) -> None:
         """Record a rivalry-inducing conflict between two agents.
 
         Both ledgers are updated symmetrically so downstream consumers can
@@ -738,7 +774,9 @@ class WorldState:
         for agent_id in empty_agents:
             self._relationship_ledgers.pop(agent_id, None)
 
-    def _record_relationship_eviction(self, owner_id: str, other_id: str, reason: str) -> None:
+    def _record_relationship_eviction(
+        self, owner_id: str, other_id: str, reason: str
+    ) -> None:
         self._relationship_churn.record_eviction(
             tick=self.tick,
             owner_id=owner_id,
@@ -859,7 +897,9 @@ class WorldState:
             self._running_affordances.pop(object_id, None)
             self._sync_reservation(object_id)
 
-    def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
+    def _start_affordance(
+        self, agent_id: str, object_id: str, affordance_id: str
+    ) -> bool:
         if self.queue_manager.active_agent(object_id) != agent_id:
             return False
         if object_id in self._running_affordances:
@@ -890,7 +930,9 @@ class WorldState:
         )
         return True
 
-    def _apply_affordance_effects(self, agent_id: str, effects: Dict[str, float]) -> None:
+    def _apply_affordance_effects(
+        self, agent_id: str, effects: Dict[str, float]
+    ) -> None:
         snapshot = self.agents.get(agent_id)
         if snapshot is None:
             return
@@ -1036,8 +1078,7 @@ class WorldState:
                 else:
                     snapshot.wallet += wage_rate
                     snapshot.inventory["wages_earned"] = (
-                        snapshot.inventory.get("wages_earned", 0)
-                        + 1
+                        snapshot.inventory.get("wages_earned", 0) + 1
                     )
             else:
                 snapshot.on_shift = False
@@ -1180,7 +1221,9 @@ class WorldState:
         value = on_time / scheduled
         return max(0.0, min(1.0, value))
 
-    def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: Dict[str, Any]) -> None:
+    def _employment_idle_state(
+        self, snapshot: AgentSnapshot, ctx: Dict[str, Any]
+    ) -> None:
         if ctx["state"] != "pre_shift":
             ctx["state"] = "pre_shift"
             ctx["late_penalty_applied"] = False
@@ -1200,12 +1243,16 @@ class WorldState:
         snapshot.shift_state = "pre_shift"
         snapshot.on_shift = False
 
-    def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: Dict[str, Any]) -> None:
+    def _employment_prepare_state(
+        self, snapshot: AgentSnapshot, ctx: Dict[str, Any]
+    ) -> None:
         ctx["state"] = "await_start"
         snapshot.shift_state = "await_start"
         snapshot.on_shift = False
 
-    def _employment_begin_shift(self, ctx: Dict[str, Any], start: int, end: int) -> None:
+    def _employment_begin_shift(
+        self, ctx: Dict[str, Any], start: int, end: int
+    ) -> None:
         if ctx["shift_started_tick"] != start:
             ctx["shift_started_tick"] = start
             ctx["shift_end_tick"] = end
@@ -1281,10 +1328,10 @@ class WorldState:
         if state == "late":
             ctx["late_ticks"] += 1
             snapshot.late_ticks_today += 1
-            if (
-                not ctx["late_penalty_applied"]
-                and previous_state not in {"on_time", "late"}
-            ):
+            if not ctx["late_penalty_applied"] and previous_state not in {
+                "on_time",
+                "late",
+            }:
                 snapshot.wallet = max(0.0, snapshot.wallet - lateness_penalty)
                 ctx["late_penalty_applied"] = True
                 if not ctx["late_counter_recorded"]:
@@ -1326,7 +1373,9 @@ class WorldState:
 
         if state == "absent":
             if not ctx["absence_penalty_applied"]:
-                snapshot.wallet = max(0.0, snapshot.wallet - employment_cfg.absence_penalty)
+                snapshot.wallet = max(
+                    0.0, snapshot.wallet - employment_cfg.absence_penalty
+                )
                 ctx["absence_penalty_applied"] = True
             snapshot.wages_withheld += wage_rate
             if not ctx["absence_event_emitted"]:
@@ -1372,7 +1421,10 @@ class WorldState:
             ctx["wages_paid"] += wage_rate
         else:
             snapshot.on_shift = False
-            if previous_state in {"on_time", "late"} and state not in {"on_time", "late"}:
+            if previous_state in {"on_time", "late"} and state not in {
+                "on_time",
+                "late",
+            }:
                 if not ctx["departure_event_emitted"] and previous_state != "absent":
                     self._emit_event(
                         "shift_departed_early",
@@ -1402,8 +1454,8 @@ class WorldState:
         if ctx["absence_event_emitted"] or ctx["state"] == "absent":
             # absence already recorded when event emitted.
             pass
-        snapshot.attendance_ratio = (
-            sum(ctx["attendance_samples"]) / len(ctx["attendance_samples"])
+        snapshot.attendance_ratio = sum(ctx["attendance_samples"]) / len(
+            ctx["attendance_samples"]
         )
         ctx["shift_outcome_recorded"] = True
         ctx["state"] = "post_shift"
@@ -1567,7 +1619,9 @@ class WorldState:
 
         obj.stock["meals"] = max(0, obj.stock.get("meals", 0) - 1)
         snapshot.wallet -= meal_cost
-        snapshot.inventory["meals_consumed"] = snapshot.inventory.get("meals_consumed", 0) + 1
+        snapshot.inventory["meals_consumed"] = (
+            snapshot.inventory.get("meals_consumed", 0) + 1
+        )
 
         record = self._recent_meal_participants.get(object_id)
         if record and record.get("tick") == self.tick:
@@ -1632,5 +1686,7 @@ class WorldState:
             self._sync_reservation(object_id)
             self._running_affordances.pop(object_id, None)
             return
-        snapshot.inventory["meals_cooked"] = snapshot.inventory.get("meals_cooked", 0) + 1
+        snapshot.inventory["meals_cooked"] = (
+            snapshot.inventory.get("meals_cooked", 0) + 1
+        )
         obj.stock["meals"] = obj.stock.get("meals", 0) + 1

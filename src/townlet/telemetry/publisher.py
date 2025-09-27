@@ -1,7 +1,8 @@
 """Telemetry pipelines and console bridge."""
+
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List, Mapping, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Mapping
 
 from townlet.config import SimulationConfig
 from townlet.telemetry.narration import NarrationRateLimiter
@@ -31,7 +32,9 @@ class TelemetryPublisher:
         self._latest_economy_snapshot: Dict[str, object] = {}
         self._latest_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
         self._latest_relationship_updates: List[Dict[str, object]] = []
-        self._previous_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
+        self._previous_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = (
+            {}
+        )
         self._narration_limiter = NarrationRateLimiter(self.config.telemetry.narration)
         self._latest_narrations: List[Dict[str, object]] = []
         self._latest_anneal_status: Dict[str, object] | None = None
@@ -71,7 +74,9 @@ class TelemetryPublisher:
             "relationship_snapshot": self._copy_relationship_snapshot(
                 self._latest_relationship_snapshot
             ),
-            "relationship_updates": [dict(update) for update in self._latest_relationship_updates],
+            "relationship_updates": [
+                dict(update) for update in self._latest_relationship_updates
+            ],
             "narrations": [dict(entry) for entry in self._latest_narrations],
             "narration_state": self._narration_limiter.export_state(),
             "reward_breakdown": self.latest_reward_breakdown(),
@@ -83,7 +88,8 @@ class TelemetryPublisher:
             state["anneal_status"] = dict(self._latest_anneal_status)
         if self._latest_policy_snapshot:
             state["policy_snapshot"] = {
-                agent: dict(entry) for agent, entry in self._latest_policy_snapshot.items()
+                agent: dict(entry)
+                for agent, entry in self._latest_policy_snapshot.items()
             }
         if self._latest_relationship_overlay:
             state["relationship_overlay"] = {
@@ -128,7 +134,9 @@ class TelemetryPublisher:
             )
         updates_payload = payload.get("relationship_updates", [])
         if isinstance(updates_payload, list):
-            self._latest_relationship_updates = [dict(update) for update in updates_payload]
+            self._latest_relationship_updates = [
+                dict(update) for update in updates_payload
+            ]
         narrations_payload = payload.get("narrations", [])
         if isinstance(narrations_payload, list):
             self._latest_narrations = [dict(entry) for entry in narrations_payload]
@@ -177,7 +185,9 @@ class TelemetryPublisher:
 
         perturbations_payload = payload.get("perturbations")
         if isinstance(perturbations_payload, Mapping):
-            self._latest_perturbations = self._normalize_perturbations_payload(perturbations_payload)
+            self._latest_perturbations = self._normalize_perturbations_payload(
+                perturbations_payload
+            )
         else:
             self._latest_perturbations = {}
 
@@ -189,7 +199,9 @@ class TelemetryPublisher:
 
         migrations_payload = payload.get("snapshot_migrations")
         if isinstance(migrations_payload, list):
-            self._latest_snapshot_migrations = [str(item) for item in migrations_payload]
+            self._latest_snapshot_migrations = [
+                str(item) for item in migrations_payload
+            ]
         else:
             self._latest_snapshot_migrations = []
 
@@ -198,7 +210,11 @@ class TelemetryPublisher:
             history: Dict[str, List[float]] = {}
             for name, values in kpi_payload.items():
                 if isinstance(values, list):
-                    coerced = [float(value) for value in values if isinstance(value, (int, float))]
+                    coerced = [
+                        float(value)
+                        for value in values
+                        if isinstance(value, (int, float))
+                    ]
                     history[str(name)] = coerced
             if history:
                 self._kpi_history = history
@@ -323,9 +339,7 @@ class TelemetryPublisher:
 
         if stability_inputs is not None:
             self._latest_stability_inputs = {
-                "hunger_levels": dict(
-                    stability_inputs.get("hunger_levels", {}) or {}
-                ),
+                "hunger_levels": dict(stability_inputs.get("hunger_levels", {}) or {}),
                 "option_switch_counts": dict(
                     stability_inputs.get("option_switch_counts", {}) or {}
                 ),
@@ -338,7 +352,9 @@ class TelemetryPublisher:
             }
 
         if isinstance(perturbations, Mapping):
-            self._latest_perturbations = self._normalize_perturbations_payload(perturbations)
+            self._latest_perturbations = self._normalize_perturbations_payload(
+                perturbations
+            )
 
         if policy_identity is not None:
             self.update_policy_identity(policy_identity)
@@ -381,7 +397,9 @@ class TelemetryPublisher:
         result: Dict[str, object] = {}
         hunger = self._latest_stability_inputs.get("hunger_levels")
         if isinstance(hunger, dict):
-            result["hunger_levels"] = {str(agent): float(value) for agent, value in hunger.items()}
+            result["hunger_levels"] = {
+                str(agent): float(value) for agent, value in hunger.items()
+            }
         option_counts = self._latest_stability_inputs.get("option_switch_counts")
         if isinstance(option_counts, dict):
             result["option_switch_counts"] = {
@@ -411,11 +429,12 @@ class TelemetryPublisher:
         return {
             "active": {
                 event_id: dict(data)
-                for event_id, data in self._latest_perturbations.get("active", {}).items()
+                for event_id, data in self._latest_perturbations.get(
+                    "active", {}
+                ).items()
             },
             "pending": [
-                dict(entry)
-                for entry in self._latest_perturbations.get("pending", [])
+                dict(entry) for entry in self._latest_perturbations.get("pending", [])
             ],
             "cooldowns": {
                 "spec": dict(
@@ -465,7 +484,9 @@ class TelemetryPublisher:
             }
         pending_list: List[Dict[str, object]] = []
         if isinstance(pending, list):
-            pending_list = [dict(entry) for entry in pending if isinstance(entry, Mapping)]
+            pending_list = [
+                dict(entry) for entry in pending if isinstance(entry, Mapping)
+            ]
         spec_cd: Dict[str, int] = {}
         agent_cd: Dict[str, int] = {}
         if isinstance(cooldowns, Mapping):
@@ -490,7 +511,9 @@ class TelemetryPublisher:
         }
 
     def latest_policy_snapshot(self) -> Dict[str, Dict[str, object]]:
-        return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
+        return {
+            agent: dict(data) for agent, data in self._latest_policy_snapshot.items()
+        }
 
     def latest_anneal_status(self) -> Dict[str, object] | None:
         if self._latest_anneal_status is None:
@@ -605,9 +628,14 @@ class TelemetryPublisher:
                     )
                 else:
                     delta_trust = metrics["trust"] - prev_metrics.get("trust", 0.0)
-                    delta_fam = metrics["familiarity"] - prev_metrics.get("familiarity", 0.0)
+                    delta_fam = metrics["familiarity"] - prev_metrics.get(
+                        "familiarity", 0.0
+                    )
                     delta_riv = metrics["rivalry"] - prev_metrics.get("rivalry", 0.0)
-                    if any(abs(delta) > 1e-6 for delta in (delta_trust, delta_fam, delta_riv)):
+                    if any(
+                        abs(delta) > 1e-6
+                        for delta in (delta_trust, delta_fam, delta_riv)
+                    ):
                         updates.append(
                             {
                                 "owner": owner,

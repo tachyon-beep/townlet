@@ -1,4 +1,5 @@
 """Agent lifecycle enforcement (exits, spawns, cooldowns)."""
+
 from __future__ import annotations
 
 from typing import Dict
@@ -72,14 +73,12 @@ class LifecycleManager:
                     results[agent_id] = True
 
         # Process daily cap for remaining queue entries.
-        while (
-            world._employment_exit_queue
-            and (cfg.daily_exit_cap == 0 or world._employment_exits_today < cfg.daily_exit_cap)
+        while world._employment_exit_queue and (
+            cfg.daily_exit_cap == 0
+            or world._employment_exits_today < cfg.daily_exit_cap
         ):
             agent_id = world._employment_exit_queue[0]
-            if self._employment_execute_exit(
-                world, agent_id, tick, reason="daily_cap"
-            ):
+            if self._employment_execute_exit(world, agent_id, tick, reason="daily_cap"):
                 results[agent_id] = True
             else:
                 break

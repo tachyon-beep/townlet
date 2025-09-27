@@ -85,7 +85,9 @@ def test_auto_scheduling_respects_cooldowns() -> None:
     assert any(e.get("event") == "perturbation_price_spike" for e in first_events)
 
     scheduler.tick(world, 1)
-    assert not any(e.get("event") == "perturbation_price_spike" for e in world.drain_events())
+    assert not any(
+        e.get("event") == "perturbation_price_spike" for e in world.drain_events()
+    )
 
     scheduler.tick(world, 4)
     later_events = world.drain_events()

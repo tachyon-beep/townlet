@@ -1,4 +1,5 @@
 """Reward calculation guardrails and aggregation."""
+
 from __future__ import annotations
 
 from typing import Dict, Iterable
@@ -16,7 +17,9 @@ class RewardEngine:
         self._episode_totals: Dict[str, float] = {}
         self._latest_breakdown: Dict[str, Dict[str, float]] = {}
 
-    def compute(self, world: WorldState, terminated: Dict[str, bool]) -> Dict[str, float]:
+    def compute(
+        self, world: WorldState, terminated: Dict[str, bool]
+    ) -> Dict[str, float]:
         rewards: Dict[str, float] = {}
         clip_cfg = self.config.rewards.clip
         clip_value = clip_cfg.clip_per_tick
@@ -59,7 +62,9 @@ class RewardEngine:
             total += wage_value
             components["wage"] = wage_value
 
-            punctuality_value = self._compute_punctuality_bonus(agent_id, world, punctuality_bonus)
+            punctuality_value = self._compute_punctuality_bonus(
+                agent_id, world, punctuality_bonus
+            )
             total += punctuality_value
             components["punctuality"] = punctuality_value
 
@@ -68,7 +73,9 @@ class RewardEngine:
             if terminated.get(agent_id):
                 self._termination_block[agent_id] = current_tick
 
-            if terminated.get(agent_id) or self._is_blocked(agent_id, current_tick, block_window):
+            if terminated.get(agent_id) or self._is_blocked(
+                agent_id, current_tick, block_window
+            ):
                 if total > 0.0:
                     total = 0.0
 
@@ -90,7 +97,9 @@ class RewardEngine:
             self._episode_totals[agent_id] = cumulative
 
             rewards[agent_id] = total
-            components["clip_adjustment"] = guard_adjust + tick_clip_adjust + episode_clip_adjust
+            components["clip_adjustment"] = (
+                guard_adjust + tick_clip_adjust + episode_clip_adjust
+            )
             components["total"] = total
             breakdowns[agent_id] = components
 
@@ -205,7 +214,9 @@ class RewardEngine:
         punctuality = float(ctx.get("punctuality_bonus", 0.0))
         return bonus_rate * punctuality
 
-    def _reset_episode_totals(self, terminated: Dict[str, bool], world: WorldState) -> None:
+    def _reset_episode_totals(
+        self, terminated: Dict[str, bool], world: WorldState
+    ) -> None:
         for agent_id, is_terminated in terminated.items():
             if is_terminated:
                 self._episode_totals.pop(agent_id, None)

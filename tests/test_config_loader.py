@@ -1,9 +1,12 @@
+import sys
+import types
 from pathlib import Path
 
 import pytest
 import yaml
 
 from townlet.config import SimulationConfig, load_config
+from townlet.snapshots.migrations import clear_registry, migration_registry
 
 
 @pytest.fixture()
@@ -112,7 +115,9 @@ def test_observation_variant_guard(tmp_path: Path) -> None:
     target = tmp_path / "config.yaml"
     target.write_text(yaml.safe_dump(config_data))
 
-    with pytest.raises(ValueError, match="Input should be 'full', 'hybrid' or 'compact'"):
+    with pytest.raises(
+        ValueError, match="Input should be 'full', 'hybrid' or 'compact'"
+    ):
         load_config(target)
 
 
@@ -152,3 +157,75 @@ def test_observation_variant_compact_supported(tmp_path: Path) -> None:
 
     config = load_config(target)
     assert config.observation_variant == "compact"
+
+
+def test_snapshot_autosave_cadence_validation(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["snapshot"] = {
+        "autosave": {"cadence_ticks": 50, "retain": 3},
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="cadence_ticks"):
+        load_config(target)
+
+
+def test_snapshot_identity_overrides_take_precedence(poc_config: Path) -> None:
+    config = load_config(poc_config)
+    config_payload = config.model_dump()
+    config_payload["snapshot"] = {
+        **config_payload.get("snapshot", {}),
+        "identity": {
+            "policy_hash": "abcde" * 8,
+            "policy_artifact": "artifacts/policy.pt",
+            "observation_variant": "full",
+            "anneal_ratio": 0.75,
+        },
+    }
+    override = SimulationConfig.model_validate(config_payload)
+
+    identity = override.build_snapshot_identity(
+        policy_hash=None,
+        runtime_observation_variant="hybrid",
+        runtime_anneal_ratio=0.2,
+    )
+    assert identity["policy_hash"] == "abcde" * 8
+    assert identity["observation_variant"] == "full"
+    assert identity["anneal_ratio"] == pytest.approx(0.75)
+    assert identity["policy_artifact"] == "artifacts/policy.pt"
+
+
+def test_register_snapshot_migrations_from_config(poc_config: Path) -> None:
+    module_name = "tests.snapshot_fake_migration"
+    fake_module = types.ModuleType(module_name)
+
+    def migrate(state, config):
+        state.config_id = config.config_id
+        return state
+
+    fake_module.migrate = migrate
+    sys.modules[module_name] = fake_module
+
+    config = load_config(poc_config)
+    payload = config.model_dump()
+    payload["snapshot"] = {
+        **payload.get("snapshot", {}),
+        "migrations": {
+            "handlers": {"legacy-config": f"{module_name}:migrate"},
+            "auto_apply": True,
+        },
+    }
+    config_with_handler = SimulationConfig.model_validate(payload)
+
+    try:
+        clear_registry()
+        config_with_handler.register_snapshot_migrations()
+        path = migration_registry.find_path(
+            "legacy-config", config_with_handler.config_id
+        )
+        assert len(path) == 1
+    finally:
+        clear_registry()
+        sys.modules.pop(module_name, None)

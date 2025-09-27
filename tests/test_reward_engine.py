@@ -200,8 +200,10 @@ def test_wage_and_punctuality_bonus() -> None:
     engine = RewardEngine(config)
     reward = engine.compute(world, terminated={})["alice"]
     base = config.rewards.survival_tick  # needs all satisfied so only survival tick
-    expected = base + context["wages_paid"] + (
-        config.rewards.punctuality_bonus * context["punctuality_bonus"]
+    expected = (
+        base
+        + context["wages_paid"]
+        + (config.rewards.punctuality_bonus * context["punctuality_bonus"])
     )
     assert reward == pytest.approx(expected)
     breakdown = engine.latest_reward_breakdown()["alice"]

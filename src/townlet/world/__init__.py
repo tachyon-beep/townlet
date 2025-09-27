@@ -1,4 +1,5 @@
 """World modelling primitives."""
+
 from __future__ import annotations
 
 from .grid import AgentSnapshot, WorldState

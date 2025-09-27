@@ -19,7 +19,10 @@ from townlet.policy.replay import (
     frames_to_replay_sample,
     load_replay_sample,
 )
-from townlet.policy.replay_buffer import InMemoryReplayDataset, InMemoryReplayDatasetConfig
+from townlet.policy.replay_buffer import (
+    InMemoryReplayDataset,
+    InMemoryReplayDatasetConfig,
+)
 from townlet.policy.runner import TrainingHarness
 from townlet.world.grid import AgentSnapshot, WorldState
 
@@ -32,7 +35,9 @@ SCENARIO_CONFIGS = [
 ]
 
 GOLDEN_STATS_PATH = Path("docs/samples/rollout_scenario_stats.json")
-GOLDEN_STATS = json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
+GOLDEN_STATS = (
+    json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
+)
 
 
 REQUIRED_PPO_KEYS = {
@@ -92,7 +97,9 @@ def _validate_numeric(value: object) -> None:
 
 def _assert_ppo_log_schema(summary: dict[str, object], require_baseline: bool) -> None:
     missing_keys = REQUIRED_PPO_KEYS - summary.keys()
-    assert not missing_keys, f"Missing required PPO summary keys: {sorted(missing_keys)}"
+    assert (
+        not missing_keys
+    ), f"Missing required PPO summary keys: {sorted(missing_keys)}"
 
     for key in REQUIRED_PPO_NUMERIC_KEYS:
         _validate_numeric(summary[key])
@@ -102,7 +109,9 @@ def _assert_ppo_log_schema(summary: dict[str, object], require_baseline: bool) -
     seen_baseline = {key for key in summary if key.startswith("baseline_")}
     if require_baseline:
         missing_baseline = BASELINE_KEYS_REQUIRED - seen_baseline
-        assert not missing_baseline, f"Missing baseline keys: {sorted(missing_baseline)}"
+        assert (
+            not missing_baseline
+        ), f"Missing baseline keys: {sorted(missing_baseline)}"
         for key in BASELINE_KEYS_REQUIRED | (seen_baseline & BASELINE_KEYS_OPTIONAL):
             if key in summary:
                 _validate_numeric(summary[key])
@@ -130,11 +139,20 @@ def _load_expected_stats(config_path: Path) -> dict[str, dict[str, float]]:
     return stats
 
 
-def _aggregate_expected_metrics(sample_stats: dict[str, dict[str, float]]) -> dict[str, float]:
+def _aggregate_expected_metrics(
+    sample_stats: dict[str, dict[str, float]],
+) -> dict[str, float]:
     sample_count = float(len(sample_stats))
     if sample_count == 0:
-        return {"sample_count": 0.0, "reward_sum": 0.0, "reward_sum_mean": 0.0, "reward_mean": 0.0}
-    reward_sums = [float(stats.get("reward_sum", 0.0)) for stats in sample_stats.values()]
+        return {
+            "sample_count": 0.0,
+            "reward_sum": 0.0,
+            "reward_sum_mean": 0.0,
+            "reward_mean": 0.0,
+        }
+    reward_sums = [
+        float(stats.get("reward_sum", 0.0)) for stats in sample_stats.values()
+    ]
     reward_means = [
         float(stats.get("reward_mean", 0.0))
         for stats in sample_stats.values()
@@ -150,7 +168,9 @@ def _aggregate_expected_metrics(sample_stats: dict[str, dict[str, float]]) -> di
         "sample_count": sample_count,
         "reward_sum": float(sum(reward_sums)),
         "reward_sum_mean": float(sum(reward_sums) / sample_count),
-        "reward_mean": float(sum(reward_means) / len(reward_means)) if reward_means else 0.0,
+        "reward_mean": (
+            float(sum(reward_means) / len(reward_means)) if reward_means else 0.0
+        ),
     }
     if log_prob_means:
         aggregated["log_prob_mean"] = float(sum(log_prob_means) / len(log_prob_means))
@@ -206,7 +226,9 @@ def _make_sample(
     feature_names = obs["metadata"]["feature_names"]
     obs["metadata"]["rivalry_example"] = {
         "rivalry_max": float(obs["features"][feature_names.index("rivalry_max")]),
-        "rivalry_avoid_count": float(obs["features"][feature_names.index("rivalry_avoid_count")]),
+        "rivalry_avoid_count": float(
+            obs["features"][feature_names.index("rivalry_avoid_count")]
+        ),
     }
     obs["metadata"]["training_arrays"] = [
         "actions",
@@ -375,7 +397,9 @@ def test_replay_loader_value_length_mismatch(tmp_path: Path) -> None:
     sample_path, meta_path = _make_sample(tmp_path, 0.2, 0.3, "value_mismatch")
     broken_path = tmp_path / "replay_sample_value_mismatch.npz"
     with np.load(sample_path) as handle:
-        value_preds = np.concatenate([handle["value_preds"], np.array([0.0], dtype=np.float32)])
+        value_preds = np.concatenate(
+            [handle["value_preds"], np.array([0.0], dtype=np.float32)]
+        )
         np.savez(
             broken_path,
             map=handle["map"],
@@ -388,7 +412,6 @@ def test_replay_loader_value_length_mismatch(tmp_path: Path) -> None:
         )
     with pytest.raises(ValueError):
         load_replay_sample(broken_path, meta_path)
-
 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
@@ -420,7 +443,9 @@ def test_training_harness_run_ppo_on_capture(tmp_path: Path, config_path: Path) 
     metrics_path = capture_dir / "rollout_sample_metrics.json"
     assert metrics_path.exists(), "Capture metrics missing"
     metrics_data = json.loads(metrics_path.read_text())
-    assert set(metrics_data) == set(scenario_stats), "Captured samples differ from golden stats"
+    assert set(metrics_data) == set(
+        scenario_stats
+    ), "Captured samples differ from golden stats"
 
     for sample_name, expected_metrics in scenario_stats.items():
         observed_metrics = metrics_data.get(sample_name)
@@ -502,29 +527,29 @@ def test_training_harness_run_ppo_on_capture(tmp_path: Path, config_path: Path) 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_training_harness_run_ppo(tmp_path: Path) -> None:
-    sample_a = _make_sample(tmp_path, 0.2, 0.3, 'ppo_a')
-    sample_b = _make_sample(tmp_path, 0.5, 0.2, 'ppo_b')
+    sample_a = _make_sample(tmp_path, 0.2, 0.3, "ppo_a")
+    sample_b = _make_sample(tmp_path, 0.5, 0.2, "ppo_b")
     dataset_config = ReplayDatasetConfig(
         entries=[sample_a, sample_b],
         batch_size=2,
         shuffle=False,
     )
-    harness = TrainingHarness(load_config(Path('configs/examples/poc_hybrid.yaml')))
-    log_path = tmp_path / 'ppo_log.jsonl'
+    harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
+    log_path = tmp_path / "ppo_log.jsonl"
     summary = harness.run_ppo(dataset_config, epochs=2, log_path=log_path)
     _assert_ppo_log_schema(summary, require_baseline=False)
-    assert summary['epoch'] == 2.0
-    assert 'loss_total' in summary
-    assert summary['transitions'] == pytest.approx(4.0)
-    assert summary['data_mode'] == 'replay'
-    assert summary['cycle_id'] == pytest.approx(0.0)
-    assert summary['rollout_ticks'] == pytest.approx(0.0)
+    assert summary["epoch"] == 2.0
+    assert "loss_total" in summary
+    assert summary["transitions"] == pytest.approx(4.0)
+    assert summary["data_mode"] == "replay"
+    assert summary["cycle_id"] == pytest.approx(0.0)
+    assert summary["rollout_ticks"] == pytest.approx(0.0)
     lines = log_path.read_text().strip().splitlines()
     assert len(lines) == 2
     last = json.loads(lines[-1])
-    assert last['epoch'] == 2.0
-    assert 'loss_policy' in last
-    assert last['data_mode'] == 'replay'
+    assert last["epoch"] == 2.0
+    assert "loss_policy" in last
+    assert last["data_mode"] == "replay"
 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
@@ -572,7 +597,9 @@ def test_training_harness_log_sampling_and_rotation(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_training_harness_run_rollout_ppo(tmp_path: Path) -> None:
-    harness = TrainingHarness(load_config(Path("configs/scenarios/observation_baseline.yaml")))
+    harness = TrainingHarness(
+        load_config(Path("configs/scenarios/observation_baseline.yaml"))
+    )
     log_path = tmp_path / "rollout_ppo.jsonl"
     summary = harness.run_rollout_ppo(
         ticks=3,
@@ -646,7 +673,9 @@ def test_training_harness_ppo_conflict_telemetry(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_training_harness_run_rollout_ppo_multiple_cycles(tmp_path: Path) -> None:
-    harness = TrainingHarness(load_config(Path("configs/scenarios/observation_baseline.yaml")))
+    harness = TrainingHarness(
+        load_config(Path("configs/scenarios/observation_baseline.yaml"))
+    )
     summaries: list[dict[str, float]] = []
 
     for cycle in range(3):
@@ -686,7 +715,9 @@ def test_training_harness_run_rollout_ppo_multiple_cycles(tmp_path: Path) -> Non
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_training_harness_rollout_capture_and_train_cycles(tmp_path: Path) -> None:
-    harness = TrainingHarness(load_config(Path("configs/scenarios/observation_baseline.yaml")))
+    harness = TrainingHarness(
+        load_config(Path("configs/scenarios/observation_baseline.yaml"))
+    )
 
     baseline_counts: list[float] = []
     baseline_reward_sums: list[float] = []
@@ -801,7 +832,9 @@ def test_training_harness_streaming_log_offsets(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_training_harness_rollout_queue_conflict_metrics(tmp_path: Path) -> None:
-    harness = TrainingHarness(load_config(Path("configs/scenarios/queue_conflict.yaml")))
+    harness = TrainingHarness(
+        load_config(Path("configs/scenarios/queue_conflict.yaml"))
+    )
     log_path = tmp_path / "queue_conflict_log.jsonl"
     summary = harness.run_rollout_ppo(
         ticks=40,
@@ -832,7 +865,9 @@ def test_ppo_social_chat_drift(tmp_path: Path) -> None:
     dataset = InMemoryReplayDataset(
         InMemoryReplayDatasetConfig(entries=[sample], batch_size=1)
     )
-    dataset.baseline_metrics = sample.metadata.get("metrics", {}) | {"sample_count": 1.0}
+    dataset.baseline_metrics = sample.metadata.get("metrics", {}) | {
+        "sample_count": 1.0
+    }
     dataset.chat_success_count = 1.0
     dataset.chat_failure_count = 0.0
     dataset.chat_quality_mean = 0.8
@@ -883,7 +918,11 @@ def test_policy_runtime_collects_frames(tmp_path: Path) -> None:
     for _ in range(3):
         loop.step()
 
-    frames = [frame for frame in loop.policy.collect_trajectory() if frame["agent_id"] == "alice"]
+    frames = [
+        frame
+        for frame in loop.policy.collect_trajectory()
+        if frame["agent_id"] == "alice"
+    ]
     assert len(frames) == 3
     sample = frames_to_replay_sample(frames)
     assert sample.map.shape[0] == 3

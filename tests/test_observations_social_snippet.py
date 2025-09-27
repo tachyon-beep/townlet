@@ -72,7 +72,11 @@ def test_disable_aggregates_via_config(base_config: SimulationConfig) -> None:
     world = _build_world(config)
     batch = builder.build_batch(world, terminated={})
     features = batch["alice"]["features"]
-    agg_indices = [idx for name, idx in builder._feature_index.items() if name.startswith("social_") and "mean" in name]
+    agg_indices = [
+        idx
+        for name, idx in builder._feature_index.items()
+        if name.startswith("social_") and "mean" in name
+    ]
     for idx in agg_indices:
         assert idx >= features.shape[0]  # aggregates removed
 
