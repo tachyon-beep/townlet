@@ -129,6 +129,7 @@ rollback notes / thresholds).
 **Goal:** Finalise harness/CLI integration and promotion guardrails for BC ↔ PPO anneal.
 
 - **Task 5.5-S1** (Harness & CLI) — ✅ `TrainingHarness.run` supports `bc`/`anneal`; `scripts/run_training.py` exposes `--mode bc`/`--mode anneal` with manifest overrides, log directories, and guardrail exit codes.
+- **Task 5.5-S2** (Mixed Control) — ✅ `PolicyRuntime` now supports anneal ratio blending (config flag `training.anneal_enable_policy_blend`), provider hooks, and tests covering scripted/policy mixing.
 - **Task 5.5.b-S1** (Telemetry pipeline) — ✅ `PPO_TELEMETRY_VERSION` bumped to 1.2; logs now emit `anneal_*` metrics (BC accuracy, thresholds, drift flags). Watcher/summary CLIs consume the new fields.
 - **Task 5.5.b-S2** (Dashboard UX) — ✅ Observer UI adds an Anneal panel with BC gauges and drift alerts; guide updated.
 

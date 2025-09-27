@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import random
 import statistics
 import time
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
+
+from typing import Callable
 
 from townlet.config import PPOConfig, SimulationConfig
 from townlet.policy.bc import BCTrainer, BCTrajectoryDataset, load_bc_samples
@@ -90,6 +93,10 @@ class PolicyRuntime:
         self._tick: int = 0
         self._action_lookup: dict[str, int] = {}
         self._action_inverse: dict[int, str] = {}
+        self._anneal_ratio: float | None = None
+        self._anneal_blend_enabled: bool = False
+        self._policy_action_provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None] | None = None
+        self._anneal_rng = random.Random(8675309)
         self._policy_net: ConflictAwarePolicyNetwork | None = None
         self._policy_map_shape: tuple[int, int, int] | None = None
         self._policy_feature_dim: int | None = None
@@ -103,21 +110,44 @@ class PolicyRuntime:
             self._policy_hash = config_policy_hash
         self._anneal_ratio: float | None = None
 
+    def seed_anneal_rng(self, seed: int) -> None:
+        self._anneal_rng.seed(seed)
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            self._anneal_ratio = None
+        else:
+            self._anneal_ratio = max(0.0, min(1.0, float(ratio)))
+
+    def enable_anneal_blend(self, enabled: bool) -> None:
+        self._anneal_blend_enabled = bool(enabled)
+
+    def set_policy_action_provider(
+        self, provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None]
+    ) -> None:
+        self._policy_action_provider = provider
+
     def decide(self, world: WorldState, tick: int) -> dict[str, object]:
         """Return a primitive action per agent."""
         self._tick = tick
         actions: dict[str, object] = {}
         for agent_id in world.agents:
-            intent: AgentIntent = self.behavior.decide(world, agent_id)
-            if intent.kind == "wait":
+            scripted_intent: AgentIntent = self.behavior.decide(world, agent_id)
+            selected_intent = self._select_intent_with_blend(
+                world, agent_id, scripted_intent
+            )
+            if selected_intent.kind == "wait":
                 actions[agent_id] = {"kind": "wait"}
             else:
-                actions[agent_id] = {
-                    "kind": intent.kind,
-                    "object": intent.object_id,
-                    "affordance": intent.affordance_id,
-                    "blocked": intent.blocked,
+                action_dict: dict[str, object | None] = {
+                    "kind": selected_intent.kind,
+                    "object": selected_intent.object_id,
+                    "affordance": selected_intent.affordance_id,
+                    "blocked": selected_intent.blocked,
                 }
+                if selected_intent.position is not None:
+                    action_dict["position"] = selected_intent.position
+                actions[agent_id] = action_dict
             action_payload = actions[agent_id]
             try:
                 action_key = json.dumps(action_payload, sort_keys=True)
@@ -132,7 +162,7 @@ class PolicyRuntime:
             entry["action"] = action_payload
             entry["action_id"] = action_id
 
-            new_option = intent.kind
+            new_option = selected_intent.kind
             previous_option = self._last_option.get(agent_id)
             if new_option != "wait":
                 if (
@@ -204,6 +234,31 @@ class PolicyRuntime:
         self._trajectory.clear()
         self._last_option.clear()
         self._option_switch_counts.clear()
+
+    def _select_intent_with_blend(
+        self,
+        world: WorldState,
+        agent_id: str,
+        scripted: AgentIntent,
+    ) -> AgentIntent:
+        if not self._anneal_blend_enabled or not self._anneal_ratio:
+            return scripted
+        alt_intent: AgentIntent | None = None
+        if self._policy_action_provider is not None:
+            try:
+                alt_intent = self._policy_action_provider(world, agent_id, scripted)
+            except Exception:  # pragma: no cover - defensive provider behaviour
+                alt_intent = None
+        if alt_intent is None:
+            return scripted
+        ratio = float(self._anneal_ratio)
+        if ratio >= 1.0:
+            return alt_intent
+        if ratio <= 0.0:
+            return scripted
+        if self._anneal_rng.random() < ratio:
+            return alt_intent
+        return scripted
 
     def _annotate_with_policy_outputs(self, frame: dict[str, object]) -> None:
         if not torch_available():  # pragma: no cover - torch optional

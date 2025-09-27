@@ -59,6 +59,8 @@ class SimulationLoop:
         )
         self.observations = ObservationBuilder(config=self.config)
         self.policy = PolicyRuntime(config=self.config)
+        if self.config.training.anneal_enable_policy_blend:
+            self.policy.enable_anneal_blend(True)
         self.rewards = RewardEngine(config=self.config)
         self.telemetry = TelemetryPublisher(config=self.config)
         self.stability = StabilityMonitor(config=self.config)
@@ -67,6 +69,9 @@ class SimulationLoop:
     def reset(self) -> None:
         """Reset the simulation loop to its initial state."""
         self._build_components()
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        self.policy.set_anneal_ratio(ratio)
 
     # ------------------------------------------------------------------
     # Snapshot helpers

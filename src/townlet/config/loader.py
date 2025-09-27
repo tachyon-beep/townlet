@@ -628,6 +628,7 @@ class TrainingConfig(BaseModel):
     bc: BCTrainingSettings = BCTrainingSettings()
     anneal_schedule: list[AnnealStage] = Field(default_factory=list)
     anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
+    anneal_enable_policy_blend: bool = False
 
 
 class JobSpec(BaseModel):

@@ -9,6 +9,7 @@ training:
     batch_size: 64
     epochs: 5
   anneal_accuracy_threshold: 0.9
+  anneal_enable_policy_blend: false
   anneal_schedule:
     - cycle: 0
       mode: bc
@@ -28,6 +29,7 @@ training:
 
 - `bc_weight` indicates intended influence of BC phase (telemetry only; planning aid).
 - `anneal_accuracy_threshold` triggers rollback if BC accuracy drops below the threshold.
+- `anneal_enable_policy_blend`: set to `true` to allow runtime action blending based on the anneal ratio (defaults to false for safe rollout).
 
 ## Running the Schedule
 ```python
