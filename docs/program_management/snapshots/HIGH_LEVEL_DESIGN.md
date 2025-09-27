@@ -44,6 +44,9 @@ This is a one-page architecture map aligned to docs/program_management/snapshots
 
 - Telemetry & UI Gateway
   - Pub/sub (initial snapshot then diffs): agents, events, economy, weather/utilities. KPI streams. Policy inspector payloads.
+  - Transport abstraction (`config.telemetry.transport`): stdout (dev), file sink (JSONL), TCP socket. All payloads carry a `schema_version` header.
+  - Buffering & backpressure: configurable batch size/byte limits; overflow drops oldest entries and surfaces `dropped_messages` + alerts. Retry policy resets the transport on failure, logging `last_error`/ticks.
+  - Console & UI consume the same schema. `telemetry_snapshot.transport` exposes `connected`, `last_success_tick`, `last_failure_tick`, and `last_error` for operators.
   - Debug tooling: social graph explorer, event timelines, queue visualiser, AFI scoreboard.
 
 - Console & Auth

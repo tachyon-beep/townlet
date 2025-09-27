@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 import numpy as np
 from rich.console import Console
@@ -39,6 +39,27 @@ def render_snapshot(
         f"[bold]Tick:[/bold] {tick}",
         f"[bold]Refreshed:[/bold] {refreshed}",
     )
+    transport = snapshot.transport
+    status_text = (
+        "[green]CONNECTED[/green]"
+        if transport.connected
+        else "[bold red]DISCONNECTED[/bold red]"
+    )
+    header_table.add_row(
+        f"[bold]Transport:[/bold] {status_text}",
+        f"[bold]Dropped:[/bold] {transport.dropped_messages}",
+    )
+    last_success = transport.last_success_tick if transport.last_success_tick is not None else "—"
+    last_failure = transport.last_failure_tick if transport.last_failure_tick is not None else "—"
+    header_table.add_row(
+        f"[bold]Last success tick:[/bold] {last_success}",
+        f"[bold]Last failure tick:[/bold] {last_failure}",
+    )
+    if transport.last_error:
+        header_table.add_row(
+            "[bold]Last error:[/bold]",
+            str(transport.last_error),
+        )
     panels.append(Panel(header_table, title="Telemetry"))
 
     employment = snapshot.employment
@@ -100,7 +121,7 @@ def render_snapshot(
         rel_table.add_column("Evictions", justify="right")
         rel_table.add_column("Top Owners", justify="left")
         rel_table.add_column("Reasons", justify="left")
-        window_label = f"{relationships.window_start}–{relationships.window_end}"
+        window_label = f"{relationships.window_start}-{relationships.window_end}"
         owners_summary = _format_top_entries(relationships.per_owner)
         reasons_summary = _format_top_entries(relationships.per_reason)
         rel_table.add_row(
@@ -168,7 +189,7 @@ def render_snapshot(
         "Relationship Overlay shows top ties with trust/familiarity/rivalry deltas.",
         "KPI Panel tracks queue intensity, lateness, and late help with colour-coded trends.",
         "Relationships panel displays eviction churn; updates table lists recent tie changes.",
-        "Narrations panel shows the latest throttled conflict narrations (priority flagged with !).",
+        "Narrations panel lists throttled conflict narrations (! marks priority entries).",
     ]
     legend = Text("\n".join(legend_lines), style="dim")
     panels.append(Panel(legend, title="Legend"))
@@ -533,6 +554,6 @@ def _build_map_panel(
     subtitle = f"Focus: {agent_id}"
     return Panel(
         panel_text,
-        title=f"Local Map — {agent_id} ({window}×{window})",
+                title=f"Local Map - {agent_id} ({window}x{window})",
         subtitle=subtitle,
     )

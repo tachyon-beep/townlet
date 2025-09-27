@@ -25,6 +25,12 @@ Thank you for your interest in shaping Townlet. This guide summarises how we wor
 
 ## Testing Expectations
 
+
+- Run the telemetry transport and observer smoke suites when touching `src/townlet/telemetry` or `src/townlet_ui/`:
+  ```bash
+  pytest tests/test_telemetry_client.py tests/test_observer_ui_dashboard.py \
+         tests/test_telemetry_stream_smoke.py tests/test_telemetry_transport.py
+  ```
 - Unit tests for config validation, reward calculations, lifecycle gates.
 - Property-based/fuzz tests for queues, scheduler fairness, and economy invariants (see `docs/REQUIREMENTS.md`).
 - Golden tests for YAML schemas and telemetry payloads.

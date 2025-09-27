@@ -6,12 +6,14 @@ from .telemetry import (
     EmploymentMetrics,
     TelemetryClient,
     TelemetrySnapshot,
+    TransportStatus,
 )
 
 __all__ = [
     "AgentSummary",
+    "ConsoleCommandExecutor",
     "EmploymentMetrics",
     "TelemetryClient",
     "TelemetrySnapshot",
-    "ConsoleCommandExecutor",
+    "TransportStatus",
 ]

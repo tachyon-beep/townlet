@@ -17,6 +17,7 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
 - **WP-04 – Stability & Console Safeguards (Completed 2025-10-02):** stability monitor guardrails, perturbation scheduler, admin-gated console commands, telemetry/docs/tests updated.
 - **WP-05 – Snapshot & Config Identity (Completed 2025-10-03):** SnapshotConfig + migration registry, RNG/state identity, console diagnostics, autosave guardrails, regression coverage.
 
+- **WP-06 – Telemetry Publishing Hardening (Completed 2025-10-04):** transport abstraction (stdout/file/tcp) with buffered delivery + retry status, console/observer telemetry exposes transport health, smoke command + docs updated, regression suites cover transport buffer/backpressure/failure cases.
 ## In-Flight Work Packages
 1. **Observer UI Integration** (`docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md`)
    - Owner: DevEx/UX
@@ -36,7 +37,6 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
    - Status: Completed (BC dataset catalogued, acceptance smoke logged under `artifacts/m5/acceptance/`, ops & CI guardrails landed).
    - Next: proceed to Phase 5.5 planning (anneal promotion governance).
 
-5. **WP-06 Telemetry Publishing Hardening** (`docs/program_management/MILESTONE_ROADMAP.md`)
    - Owner: Platform/Observer UI
    - Status: Queued — begins next sprint after telemetry lint clean-up; planning workshop scheduled to scope transport wiring and KPI aggregation.
    - Next: lock transport decision, refresh telemetry contract tests, draft ops rollback plan.

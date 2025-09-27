@@ -45,6 +45,10 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     assert snapshot.agents
     assert snapshot.agents[0].agent_id
     assert isinstance(snapshot.narrations, list)
+    transport = snapshot.transport
+    assert isinstance(transport.connected, bool)
+    assert transport.dropped_messages >= 0
+    assert transport.last_success_tick is None or transport.last_success_tick >= 0
 
 
 def test_telemetry_client_warns_on_newer_schema(

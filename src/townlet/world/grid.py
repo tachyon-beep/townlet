@@ -127,6 +127,7 @@ class WorldState:
         init=False, default_factory=dict
     )
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
+    _rivalry_events: deque[dict[str, Any]] = field(init=False, default_factory=deque)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: dict[str, dict[str, Any]] = field(
         init=False, default_factory=dict
@@ -177,6 +178,7 @@ class WorldState:
             window_ticks=self._relationship_window_ticks,
             max_samples=8,
         )
+        self._rivalry_events = deque(maxlen=256)
         self._recent_meal_participants = {}
         self._chat_events = []
         self._load_affordance_definitions()
@@ -593,7 +595,9 @@ class WorldState:
                 queue_length - 1, 0
             )
         clamped_intensity = min(5.0, max(0.1, base_intensity))
-        self.register_rivalry_conflict(actor, rival, intensity=clamped_intensity)
+        self.register_rivalry_conflict(
+            actor, rival, intensity=clamped_intensity, reason=reason
+        )
         self.update_relationship(
             actor,
             rival,
@@ -609,7 +613,12 @@ class WorldState:
         )
 
     def register_rivalry_conflict(
-        self, agent_a: str, agent_b: str, *, intensity: float = 1.0
+        self,
+        agent_a: str,
+        agent_b: str,
+        *,
+        intensity: float = 1.0,
+        reason: str = "conflict",
     ) -> None:
         """Record a rivalry-inducing conflict between two agents.
 
@@ -627,6 +636,9 @@ class WorldState:
             agent_b,
             rivalry=0.1 * intensity,
             event="conflict",
+        )
+        self._record_rivalry_event(
+            agent_a=agent_a, agent_b=agent_b, intensity=intensity, reason=reason
         )
 
     def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
@@ -679,6 +691,28 @@ class WorldState:
         if ledger is None:
             return []
         return ledger.top_rivals(limit)
+
+    def consume_rivalry_events(self) -> list[dict[str, Any]]:
+        """Return rivalry events recorded since the last call."""
+
+        if not self._rivalry_events:
+            return []
+        events = list(self._rivalry_events)
+        self._rivalry_events.clear()
+        return events
+
+    def _record_rivalry_event(
+        self, *, agent_a: str, agent_b: str, intensity: float, reason: str
+    ) -> None:
+        self._rivalry_events.append(
+            {
+                "tick": int(self.tick),
+                "agent_a": agent_a,
+                "agent_b": agent_b,
+                "intensity": float(intensity),
+                "reason": reason,
+            }
+        )
 
     def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         ledger = self._rivalry_ledgers.get(agent_id)

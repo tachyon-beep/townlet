@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any
 
 SUPPORTED_SCHEMA_PREFIX = "0.8"
 
 
 @dataclass(frozen=True)
 class EmploymentMetrics:
-    pending: List[str]
+    pending: list[str]
     pending_count: int
     exits_today: int
     daily_exit_cap: int
@@ -92,7 +93,7 @@ class PolicyInspectorEntry:
     selected_action: str
     log_prob: float
     value_pred: float
-    top_actions: List[PolicyInspectorAction]
+    top_actions: list[PolicyInspectorAction]
 
 
 @dataclass(frozen=True)
@@ -112,21 +113,31 @@ class AnnealStatus:
 
 
 @dataclass(frozen=True)
+class TransportStatus:
+    connected: bool
+    dropped_messages: int
+    last_error: str | None
+    last_success_tick: int | None
+    last_failure_tick: int | None
+
+
+@dataclass(frozen=True)
 class TelemetrySnapshot:
     schema_version: str
-    schema_warning: Optional[str]
+    schema_warning: str | None
     employment: EmploymentMetrics
     conflict: ConflictMetrics
-    narrations: List[NarrationEntry]
+    narrations: list[NarrationEntry]
     narration_state: Mapping[str, Any]
-    relationships: Optional[RelationshipChurn]
+    relationships: RelationshipChurn | None
     relationship_snapshot: Mapping[str, Mapping[str, Mapping[str, float]]]
-    relationship_updates: List[RelationshipUpdate]
-    relationship_overlay: Mapping[str, List[RelationshipOverlayEntry]]
-    agents: List[AgentSummary]
-    anneal: Optional[AnnealStatus]
-    policy_inspector: List[PolicyInspectorEntry]
-    kpis: Mapping[str, List[float]]
+    relationship_updates: list[RelationshipUpdate]
+    relationship_overlay: Mapping[str, list[RelationshipOverlayEntry]]
+    agents: list[AgentSummary]
+    anneal: AnnealStatus | None
+    policy_inspector: list[PolicyInspectorEntry]
+    kpis: Mapping[str, list[float]]
+    transport: TransportStatus
     raw: Mapping[str, Any]
 
 
@@ -144,6 +155,20 @@ class TelemetryClient:
 
     def parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
         """Validate and convert a telemetry payload into dataclasses."""
+
+        def _maybe_int(value: object) -> int | None:
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                candidate = value.strip()
+                if not candidate:
+                    return None
+                try:
+                    return int(candidate)
+                except ValueError:
+                    return None
+            return None
+
         schema_version = str(payload.get("schema_version", ""))
         if not schema_version:
             raise SchemaMismatchError("Telemetry payload missing schema_version")
@@ -205,7 +230,7 @@ class TelemetryClient:
                 },
             )
 
-        relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
+        relationship_snapshot: dict[str, dict[str, dict[str, float]]] = {}
         if isinstance(relationship_snapshot_payload, Mapping):
             for owner, ties in relationship_snapshot_payload.items():
                 if not isinstance(ties, Mapping):
@@ -232,7 +257,7 @@ class TelemetryClient:
                     if isinstance(values, Mapping)
                 }
 
-        relationship_updates: List[RelationshipUpdate] = []
+        relationship_updates: list[RelationshipUpdate] = []
         if isinstance(relationship_updates_payload, list):
             for entry in relationship_updates_payload:
                 if not isinstance(entry, Mapping):
@@ -254,7 +279,7 @@ class TelemetryClient:
                     )
                 )
 
-        agents: List[AgentSummary] = []
+        agents: list[AgentSummary] = []
         for agent_id, info in jobs_payload.items():
             agents.append(
                 AgentSummary(
@@ -269,12 +294,12 @@ class TelemetryClient:
             )
 
         overlay_payload = payload.get("relationship_overlay")
-        relationship_overlay: Dict[str, List[RelationshipOverlayEntry]] = {}
+        relationship_overlay: dict[str, list[RelationshipOverlayEntry]] = {}
         if isinstance(overlay_payload, Mapping):
             for owner, ties in overlay_payload.items():
                 if not isinstance(ties, list):
                     continue
-                entries: List[RelationshipOverlayEntry] = []
+                entries: list[RelationshipOverlayEntry] = []
                 for tie in ties:
                     if not isinstance(tie, Mapping):
                         continue
@@ -291,7 +316,7 @@ class TelemetryClient:
                     )
                 relationship_overlay[str(owner)] = entries
 
-        narrations: List[NarrationEntry] = []
+        narrations: list[NarrationEntry] = []
         if isinstance(narrations_payload, list):
             for entry in narrations_payload:
                 if not isinstance(entry, Mapping):
@@ -370,7 +395,7 @@ class TelemetryClient:
             )
 
         kpi_payload = payload.get("kpi_history") or {}
-        kpi_history: Dict[str, List[float]] = {}
+        kpi_history: dict[str, list[float]] = {}
         if isinstance(kpi_payload, Mapping):
             for key, values in kpi_payload.items():
                 if isinstance(values, list):
@@ -378,14 +403,14 @@ class TelemetryClient:
                         float(v) for v in values if isinstance(v, (int, float))
                     ]
 
-        inspector_entries: List[PolicyInspectorEntry] = []
+        inspector_entries: list[PolicyInspectorEntry] = []
         policy_snapshot_payload = payload.get("policy_snapshot")
         if isinstance(policy_snapshot_payload, Mapping):
             for agent_id, entry in policy_snapshot_payload.items():
                 if not isinstance(entry, Mapping):
                     continue
                 top_actions_payload = entry.get("top_actions", [])
-                top_actions: List[PolicyInspectorAction] = []
+                top_actions: list[PolicyInspectorAction] = []
                 if isinstance(top_actions_payload, list):
                     for action_entry in top_actions_payload:
                         if not isinstance(action_entry, Mapping):
@@ -409,6 +434,21 @@ class TelemetryClient:
                     )
                 )
 
+        transport_payload = payload.get("transport")
+        if not isinstance(transport_payload, Mapping):
+            transport_payload = {}
+        transport = TransportStatus(
+            connected=bool(transport_payload.get("connected", False)),
+            dropped_messages=int(_maybe_int(transport_payload.get("dropped_messages")) or 0),
+            last_error=(
+                str(transport_payload.get("last_error")).strip()
+                if transport_payload.get("last_error") not in (None, "")
+                else None
+            ),
+            last_success_tick=_maybe_int(transport_payload.get("last_success_tick")),
+            last_failure_tick=_maybe_int(transport_payload.get("last_failure_tick")),
+        )
+
         return TelemetrySnapshot(
             schema_version=schema_version,
             schema_warning=schema_warning,
@@ -424,6 +464,7 @@ class TelemetryClient:
             anneal=anneal_status,
             policy_inspector=inspector_entries,
             kpis=kpi_history,
+            transport=transport,
             raw=payload,
         )
 
@@ -440,10 +481,13 @@ class TelemetryClient:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _check_schema(self, version: str) -> Optional[str]:
+    def _check_schema(self, version: str) -> str | None:
         if version.startswith(self.expected_schema_prefix):
             return None
-        message = f"Client supports schema prefix {self.expected_schema_prefix}, but shard reported {version}."
+        message = (
+            "Client supports schema prefix "
+            f"{self.expected_schema_prefix}, but shard reported {version}."
+        )
         if version.split(".")[0] != self.expected_schema_prefix.split(".")[0]:
             raise SchemaMismatchError(message)
         return message

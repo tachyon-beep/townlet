@@ -54,7 +54,7 @@ The current codebase already fulfils the PPO Phase 2–4 hardening and telemetry
 
 - **Cadence:** Two-week sprints with mid-sprint demos of guarded features (feature flags off in production until DoD met).
 - **Backlog Grooming:** Delivery Lead + squads refine WP tasks every Monday; blockers escalated same day.
-- **Quality Gates:** No work package closes without (a) unit/integration coverage for happy/sad paths, (b) documentation updates, (c) telemetry assertions when relevant.
+- **Quality Gates:** No work package closes without (a) unit/integration coverage for happy/sad paths, (b) documentation updates, (c) telemetry assertions when relevant. Telemetry surfaces must ship with the transport+observer smoke command (`pytest tests/test_telemetry_client.py tests/test_observer_ui_dashboard.py tests/test_telemetry_stream_smoke.py tests/test_telemetry_transport.py`).
 
 ## Dependency Management
 

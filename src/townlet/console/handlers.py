@@ -94,6 +94,7 @@ class TelemetryBridge:
                 "metrics": self._publisher.latest_stability_metrics(),
             },
             "perturbations": self._publisher.latest_perturbations(),
+            "transport": self._publisher.latest_transport_status(),
         }
 
 

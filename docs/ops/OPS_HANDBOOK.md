@@ -145,6 +145,21 @@
 - **Soak reference**: `artifacts/phase4/queue_conflict_soak/summary.md` provides the latest alternating
   replay↔rollout drift snapshot (12-cycle run); use it as a benchmark during incident reviews.
 
+## Telemetry Transport & Observer Workflow
+
+- `config.telemetry.transport` selects the stream destination. Supported types:
+  - `stdout`: development/debug. Payloads print to the shard stdout (NDJSON).
+  - `file`: append-only JSONL file (set `file_path`). Parents are created automatically.
+  - `tcp`: send to `host:port` (set `endpoint`). The transport retries on failure and surfaces status in the console snapshot.
+- Buffering defaults (`transport.buffer.*`) bound the in-memory backlog. If `max_buffer_bytes` is exceeded the oldest payloads drop; drops are reported via telemetry (`telemetry_snapshot.transport.dropped_messages`).
+- The console telemetry snapshot now includes a `transport` block exposing `connected`, `dropped_messages`, `last_success_tick`, `last_failure_tick`, and `last_error`. Use `telemetry_snapshot` in admin mode to inspect health.
+- Admin runbook for outages:
+  1. Check console snapshot (`telemetry_snapshot`) for `transport.connected` and `last_error`.
+  2. If disconnected, tail the shard logs for tracebacks; re-run with `transport.retry.max_attempts` >0 when using flaky TCP endpoints.
+  3. For persistent failure, switch config to `stdout` or `file` and rerun smoke test below while root-causing the external service.
+- Smoke command after transport changes: `pytest tests/test_telemetry_client.py tests/test_observer_ui_dashboard.py tests/test_telemetry_stream_smoke.py tests/test_telemetry_transport.py`.
+- Sample payload located at `docs/samples/telemetry_stream_sample.jsonl` demonstrates schema headers and transport metadata.
+
 ## Tooling & Logs
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`.
 - Audit logs live in `logs/console/*.jsonl`; include `cmd_id`, issuer, result.
