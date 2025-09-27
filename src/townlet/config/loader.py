@@ -7,7 +7,8 @@ checks such as observation variant validation and reward guardrails.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Literal
+from enum import Enum
+from typing import Annotated, Dict, Iterable, List, Literal, Mapping, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -196,9 +197,174 @@ class ObservationsConfig(BaseModel):
     social_snippet: SocialSnippetConfig = SocialSnippetConfig()
 
 
+class StarvationCanaryConfig(BaseModel):
+    window_ticks: int = Field(1000, ge=1, le=100_000)
+    max_incidents: int = Field(0, ge=0, le=10_000)
+    hunger_threshold: float = Field(0.05, ge=0.0, le=1.0)
+    min_duration_ticks: int = Field(30, ge=1, le=10_000)
+
+
+class RewardVarianceCanaryConfig(BaseModel):
+    window_ticks: int = Field(1000, ge=1, le=100_000)
+    max_variance: float = Field(0.25, ge=0.0)
+    min_samples: int = Field(20, ge=1, le=100_000)
+
+
+class OptionThrashCanaryConfig(BaseModel):
+    window_ticks: int = Field(600, ge=1, le=100_000)
+    max_switch_rate: float = Field(0.25, ge=0.0, le=10.0)
+    min_samples: int = Field(10, ge=1, le=100_000)
+
+
 class StabilityConfig(BaseModel):
     affordance_fail_threshold: int = Field(5, ge=0, le=100)
     lateness_threshold: int = Field(3, ge=0, le=100)
+    starvation: StarvationCanaryConfig = StarvationCanaryConfig()
+    reward_variance: RewardVarianceCanaryConfig = RewardVarianceCanaryConfig()
+    option_thrash: OptionThrashCanaryConfig = OptionThrashCanaryConfig()
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "affordance_fail_threshold": self.affordance_fail_threshold,
+            "lateness_threshold": self.lateness_threshold,
+            "starvation": self.starvation.model_dump(),
+            "reward_variance": self.reward_variance.model_dump(),
+            "option_thrash": self.option_thrash.model_dump(),
+        }
+
+
+class IntRange(BaseModel):
+    min: int = Field(ge=0)
+    max: int = Field(ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    def _coerce(cls, value: object) -> Dict[str, int]:
+        if isinstance(value, Mapping):
+            return {
+                "min": int(value.get("min", 0)),
+                "max": int(value.get("max", value.get("min", 0))),
+            }
+        if isinstance(value, (list, tuple)):
+            items = list(value)
+            if len(items) != 2:
+                raise ValueError("Range list must contain exactly two values")
+            return {"min": int(items[0]), "max": int(items[1])}
+        if isinstance(value, int):
+            return {"min": value, "max": value}
+        raise TypeError(f"Unsupported range value: {value!r}")
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> "IntRange":
+        if self.max < self.min:
+            raise ValueError("Range max must be >= min")
+        return self
+
+
+class FloatRange(BaseModel):
+    min: float
+    max: float
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    def _coerce(cls, value: object) -> Dict[str, float]:
+        if isinstance(value, Mapping):
+            lo = float(value.get("min", 0.0))
+            hi = float(value.get("max", value.get("min", 0.0)))
+            return {"min": lo, "max": hi}
+        if isinstance(value, (list, tuple)):
+            items = list(value)
+            if len(items) != 2:
+                raise ValueError("Float range list must contain exactly two values")
+            return {"min": float(items[0]), "max": float(items[1])}
+        if isinstance(value, (int, float)):
+            val = float(value)
+            return {"min": val, "max": val}
+        raise TypeError(f"Unsupported float range value: {value!r}")
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> "FloatRange":
+        if self.max < self.min:
+            raise ValueError("Float range max must be >= min")
+        return self
+
+
+class PerturbationKind(str, Enum):
+    PRICE_SPIKE = "price_spike"
+    BLACKOUT = "blackout"
+    OUTAGE = "outage"
+    ARRANGED_MEET = "arranged_meet"
+
+
+class BasePerturbationEventConfig(BaseModel):
+    kind: PerturbationKind
+    probability_per_day: float = Field(0.0, ge=0.0, alias="prob_per_day")
+    cooldown_ticks: int = Field(0, ge=0)
+    duration: IntRange = Field(default_factory=lambda: IntRange(min=0, max=0))
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @model_validator(mode="before")
+    def _normalise_duration(cls, values: Dict[str, object]) -> Dict[str, object]:
+        if "duration" not in values and "duration_min" in values:
+            values["duration"] = values["duration_min"]
+        return values
+
+
+class PriceSpikeEventConfig(BasePerturbationEventConfig):
+    kind: Literal[PerturbationKind.PRICE_SPIKE] = PerturbationKind.PRICE_SPIKE
+    magnitude: FloatRange = Field(default_factory=lambda: FloatRange(min=1.0, max=1.0))
+    targets: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    def _normalise_magnitude(cls, values: Dict[str, object]) -> Dict[str, object]:
+        if "magnitude" not in values and "magnitude_range" in values:
+            values["magnitude"] = values["magnitude_range"]
+        return values
+
+
+class BlackoutEventConfig(BasePerturbationEventConfig):
+    kind: Literal[PerturbationKind.BLACKOUT] = PerturbationKind.BLACKOUT
+    utility: Literal["power"] = "power"
+
+
+class OutageEventConfig(BasePerturbationEventConfig):
+    kind: Literal[PerturbationKind.OUTAGE] = PerturbationKind.OUTAGE
+    utility: Literal["water"] = "water"
+
+
+class ArrangedMeetEventConfig(BasePerturbationEventConfig):
+    kind: Literal[PerturbationKind.ARRANGED_MEET] = PerturbationKind.ARRANGED_MEET
+    target: str = Field(default="top_rivals")
+    location: str = Field(default="cafe")
+    max_participants: int = Field(2, ge=2)
+
+
+PerturbationEventConfig = Annotated[
+    PriceSpikeEventConfig
+    | BlackoutEventConfig
+    | OutageEventConfig
+    | ArrangedMeetEventConfig,
+    Field(discriminator="kind"),
+]
+
+
+class PerturbationSchedulerConfig(BaseModel):
+    max_concurrent_events: int = Field(1, ge=1)
+    global_cooldown_ticks: int = Field(0, ge=0)
+    per_agent_cooldown_ticks: int = Field(0, ge=0)
+    grace_window_ticks: int = Field(60, ge=0)
+    window_ticks: int = Field(1440, ge=1)
+    max_events_per_window: int = Field(1, ge=0)
+    events: Dict[str, PerturbationEventConfig] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    @property
+    def event_list(self) -> List[PerturbationEventConfig]:
+        return list(self.events.values())
 
 
 class AffordanceConfig(BaseModel):
@@ -324,6 +490,7 @@ class SimulationConfig(BaseModel):
     behavior: BehaviorConfig = BehaviorConfig()
     employment: EmploymentConfig = EmploymentConfig()
     telemetry: TelemetryConfig = TelemetryConfig()
+    perturbations: PerturbationSchedulerConfig = PerturbationSchedulerConfig()
 
     model_config = ConfigDict(extra="allow")
 

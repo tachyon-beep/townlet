@@ -95,9 +95,9 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - outputs per-agent totals plus component breakdown (survival, needs penalty, social, wage, punctuality, clip adjustment); telemetry consumer records the breakdown for ops/console.
 
 ### 2.9 Stability Monitor (`src/townlet/stability/monitor.py`)
-- aggregates KPIs (lateness, starvation, option switch rate, reward variance) over rolling windows; decides release promotions and rollbacks.
-- integration: subscribes to telemetry stream and snapshot metadata.
-- configuration: `stability.affordance_fail_threshold` caps per-tick affordance failures before triggering an alert alongside embedding reuse warnings.
+- aggregates lateness, starvation, option-switch rate, and reward variance over rolling windows to drive promotion and rollback decisions.
+- integration: subscribes to telemetry stream and snapshot metadata. Guardrail status is exposed via `TelemetryPublisher.latest_stability_alerts()` / `TelemetryPublisher.latest_stability_metrics()` for console snapshots and dashboards.
+- configuration: `stability.affordance_fail_threshold` caps per-tick affordance failures alongside embedding reuse warnings. Blocks `stability.starvation`, `stability.reward_variance`, and `stability.option_thrash` define window length, thresholds, and minimum sample counts for canaries.
 
 - publishes initial snapshot + diffs (agents, events, economy, utilities, metrics) over WebSocket (planned) or file sink.
 - enforces privacy mode (hashed IDs) and backpressure (aggregate diffs, drop events when overloaded).
@@ -125,7 +125,7 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 
 ### 2.11 Console & Auth (`src/townlet/console/`)
 - Typer CLI / REST service with viewer/admin modes, bearer tokens, and audit logging.
-- commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues, `employment_status`, `employment_exit <review|approve|defer>`.
+- commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues, `employment_status`, `employment_exit <review|approve|defer>`, and admin-only perturbation controls (`perturbation_queue`, `perturbation_trigger`, `perturbation_cancel`).
 - idempotency: `cmd_id` required for destructive operations; logs `cmd_id`, issuer, result.
 - event stream subscriber surfaces telemetry event batches for operator tooling.
 - `telemetry_snapshot` command returns per-agent job/economy payloads and employment queue metrics for planning and basket checks.
@@ -134,6 +134,17 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 - YAML configs validated via `SimulationConfig` (pydantic). New sections include `queue_fairness` and `embedding_allocator`.
 - snapshot payloads store world state, RNG seeds, policy hash, `config_id`, observation variant, anneal ratio.
 - migration: snapshot load rejects `config_id` mismatch unless migration defined.
+
+### 2.13 Perturbation Scheduler (`src/townlet/scheduler/perturbations.py`)
+- owns config-driven events (price spikes, outages, arranged meets) with per-spec
+  windows, magnitudes, cooldowns, and fairness buckets.
+- provides `schedule_manual` / `cancel_event` APIs for console-triggered actions;
+  viewer mode receives a `forbidden` response, while admin mode records audit
+  entries for each command.
+- emits `perturbation_started`, `perturbation_cancelled`, and
+  `perturbation_ended` telemetry events; `TelemetryPublisher` exposes the latest
+  `perturbations` block (active, pending, cooldowns) for console snapshots and
+  downstream dashboards.
 
 ## 3. End-to-End Sequences
 ### 3.1 Policy Step Sequence

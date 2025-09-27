@@ -99,6 +99,13 @@ class PolicyRuntime:
         self._policy_feature_dim: int | None = None
         self._policy_action_dim: int = 0
         self._latest_policy_snapshot: dict[str, dict[str, object]] = {}
+        self._last_option: dict[str, str] = {}
+        self._option_switch_counts: dict[str, int] = {}
+        self._policy_hash: str | None = None
+        config_policy_hash = getattr(self.config, "policy_hash", None)
+        if isinstance(config_policy_hash, str) and config_policy_hash:
+            self._policy_hash = config_policy_hash
+        self._anneal_ratio: float | None = None
 
     def decide(self, world: WorldState, tick: int) -> dict[str, object]:
         """Return a primitive action per agent."""
@@ -128,6 +135,20 @@ class PolicyRuntime:
             entry = self._transitions.setdefault(agent_id, {})
             entry["action"] = action_payload
             entry["action_id"] = action_id
+
+            new_option = intent.kind
+            previous_option = self._last_option.get(agent_id)
+            if new_option != "wait":
+                if (
+                    previous_option not in (None, "wait")
+                    and previous_option != new_option
+                ):
+                    self._option_switch_counts[agent_id] = (
+                        self._option_switch_counts.get(agent_id, 0) + 1
+                    )
+                self._last_option[agent_id] = new_option
+            else:
+                self._last_option[agent_id] = new_option
         return actions
 
     def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
@@ -136,6 +157,9 @@ class PolicyRuntime:
             entry = self._transitions.setdefault(agent_id, {})
             entry.setdefault("rewards", []).append(reward)
             entry.setdefault("dones", []).append(bool(terminated.get(agent_id, False)))
+            if terminated.get(agent_id, False):
+                self._last_option.pop(agent_id, None)
+                self._option_switch_counts.pop(agent_id, None)
 
     def flush_transitions(
         self, observations: dict[str, dict[str, object]]
@@ -170,11 +194,20 @@ class PolicyRuntime:
             self._trajectory.clear()
         return result
 
+    def consume_option_switch_counts(self) -> dict[str, int]:
+        """Return per-agent option switch counts accumulated since last call."""
+
+        counts = dict(self._option_switch_counts)
+        self._option_switch_counts.clear()
+        return counts
+
     def reset_state(self) -> None:
         """Reset transient buffers so snapshot loads don’t duplicate data."""
 
         self._transitions.clear()
         self._trajectory.clear()
+        self._last_option.clear()
+        self._option_switch_counts.clear()
 
     def _annotate_with_policy_outputs(self, frame: dict[str, object]) -> None:
         if not torch_available():  # pragma: no cover - torch optional
@@ -247,7 +280,7 @@ class PolicyRuntime:
                 top_actions.append(
                     {
                         "action": action_lookup.get(idx, str(idx)),
-                        "probability": float(probabilities[idx]),
+                        "probability": float(round(float(probabilities[idx]), 6)),
                     }
                 )
             selected_idx = frame.get("action_id")
@@ -255,14 +288,40 @@ class PolicyRuntime:
             snapshot[agent_id] = {
                 "tick": int(frame.get("tick", self._tick)),
                 "selected_action": selected_label,
-                "log_prob": float(frame.get("log_prob", 0.0)),
-                "value_pred": float(frame.get("value_pred", 0.0)),
+                "log_prob": float(round(float(frame.get("log_prob", 0.0)), 6)),
+                "value_pred": float(round(float(frame.get("value_pred", 0.0)), 6)),
                 "top_actions": top_actions,
             }
         self._latest_policy_snapshot = snapshot
 
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
         return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
+
+    # ------------------------------------------------------------------
+    # Policy metadata helpers
+    # ------------------------------------------------------------------
+
+    def active_policy_hash(self) -> str | None:
+        """Return the configured policy hash, if any."""
+
+        return self._policy_hash
+
+    def set_policy_hash(self, value: str | None) -> None:
+        """Set the policy hash after loading a checkpoint."""
+
+        self._policy_hash = value if value else None
+
+    def current_anneal_ratio(self) -> float | None:
+        """Return the latest anneal ratio (0..1) if tracking available."""
+
+        return self._anneal_ratio
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            self._anneal_ratio = None
+            return
+        clamped = max(0.0, min(1.0, float(ratio)))
+        self._anneal_ratio = clamped
 
     def _ensure_policy_network(
         self,
@@ -491,7 +550,9 @@ class TrainingHarness:
             key=lambda stage: stage.cycle,
         )
         if not schedule:
-            raise ValueError("anneal_schedule is empty; configure training.anneal_schedule in config")
+            raise ValueError(
+                "anneal_schedule is empty; configure training.anneal_schedule in config"
+            )
 
         if dataset_config is None and in_memory_dataset is None:
             replay_manifest = self.config.training.replay_manifest
@@ -513,6 +574,7 @@ class TrainingHarness:
 
         for stage in schedule:
             if stage.mode == "bc":
+                self.set_anneal_ratio(float(stage.bc_weight))
                 metrics = self.run_bc_training(manifest=bc_manifest)
                 accuracy = float(metrics.get("accuracy", 0.0))
                 stage_result: dict[str, object] = {
@@ -530,6 +592,7 @@ class TrainingHarness:
                     stage_result["rolled_back"] = True
                     break
             else:
+                self.set_anneal_ratio(0.0)
                 context: dict[str, object] = {
                     "cycle": float(stage.cycle),
                     "stage": stage.mode,

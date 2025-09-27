@@ -6,6 +6,8 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 """
 from __future__ import annotations
 
+import hashlib
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -24,6 +26,7 @@ from townlet.snapshots import (
     snapshot_from_world,
 )
 from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.utils import decode_rng_state
 from townlet.world.grid import WorldState
 
 
@@ -43,9 +46,15 @@ class SimulationLoop:
         self._build_components()
 
     def _build_components(self) -> None:
-        self.world = WorldState.from_config(self.config)
+        self._rng_world = random.Random(self._derive_seed("world"))
+        self._rng_events = random.Random(self._derive_seed("events"))
+        self._rng_policy = random.Random(self._derive_seed("policy"))
+        self.world = WorldState.from_config(self.config, rng=self._rng_world)
         self.lifecycle = LifecycleManager(config=self.config)
-        self.perturbations = PerturbationScheduler(config=self.config)
+        self.perturbations = PerturbationScheduler(
+            config=self.config,
+            rng=self._rng_events,
+        )
         self.observations = ObservationBuilder(config=self.config)
         self.policy = PolicyRuntime(config=self.config)
         self.rewards = RewardEngine(config=self.config)
@@ -64,12 +73,26 @@ class SimulationLoop:
         """Persist the current world relationships and tick to ``root``."""
 
         manager = SnapshotManager(root=root)
+        identity_payload = {
+            "config_id": self.config.config_id,
+            "policy_hash": self.policy.active_policy_hash(),
+            "observation_variant": self.config.observation_variant,
+            "anneal_ratio": self.policy.current_anneal_ratio(),
+        }
+        self.telemetry.update_policy_identity(identity_payload)
         state = snapshot_from_world(
             self.config,
             self.world,
             lifecycle=self.lifecycle,
             telemetry=self.telemetry,
             perturbations=self.perturbations,
+            stability=self.stability,
+            rng_streams={
+                "world": self._rng_world,
+                "events": self._rng_events,
+                "policy": self._rng_policy,
+            },
+            identity=identity_payload,
         )
         return manager.save(state)
 
@@ -87,7 +110,24 @@ class SimulationLoop:
         )
         apply_snapshot_to_telemetry(self.telemetry, state)
         self.perturbations.import_state(state.perturbations)
+        if state.stability:
+            self.stability.import_state(state.stability)
+        else:
+            self.stability.reset_state()
+        self.telemetry.record_stability_metrics(self.stability.latest_metrics())
         self.tick = state.tick
+        rng_streams = dict(state.rng_streams)
+        if state.rng_state and "world" not in rng_streams:
+            rng_streams["world"] = state.rng_state
+        if world_rng_str := rng_streams.get("world"):
+            world_state = decode_rng_state(world_rng_str)
+            self.world.set_rng_state(world_state)
+        if events_rng_str := rng_streams.get("events"):
+            events_state = decode_rng_state(events_rng_str)
+            self.perturbations.set_rng_state(events_state)
+        if policy_rng_str := rng_streams.get("policy"):
+            policy_state = decode_rng_state(policy_rng_str)
+            self._rng_policy.setstate(policy_state)
 
     def run(self, max_ticks: int | None = None) -> Iterable[TickArtifacts]:
         """Run the loop until `max_ticks` or indefinitely."""
@@ -115,6 +155,23 @@ class SimulationLoop:
         self.policy.flush_transitions(observations)
         policy_snapshot = self.policy.latest_policy_snapshot()
         events = self.world.drain_events()
+        option_switch_counts = self.policy.consume_option_switch_counts()
+        hunger_levels = {
+            agent_id: float(snapshot.needs.get("hunger", 1.0))
+            for agent_id, snapshot in self.world.agents.items()
+        }
+        stability_inputs = {
+            "hunger_levels": hunger_levels,
+            "option_switch_counts": option_switch_counts,
+            "reward_samples": dict(rewards),
+        }
+        perturbation_state = self.perturbations.latest_state()
+        policy_identity = {
+            "config_id": self.config.config_id,
+            "policy_hash": self.policy.active_policy_hash(),
+            "observation_variant": self.config.observation_variant,
+            "anneal_ratio": self.policy.current_anneal_ratio(),
+        }
         self.telemetry.publish_tick(
             tick=self.tick,
             world=self.world,
@@ -124,6 +181,9 @@ class SimulationLoop:
             policy_snapshot=policy_snapshot,
             kpi_history=True,
             reward_breakdown=reward_breakdown,
+            stability_inputs=stability_inputs,
+            perturbations=perturbation_state,
+            policy_identity=policy_identity,
         )
         self.stability.track(
             tick=self.tick,
@@ -134,5 +194,12 @@ class SimulationLoop:
             job_snapshot=self.telemetry.latest_job_snapshot(),
             events=self.telemetry.latest_events(),
             employment_metrics=self.telemetry.latest_employment_metrics(),
+            hunger_levels=hunger_levels,
+            option_switch_counts=option_switch_counts,
         )
+        self.telemetry.record_stability_metrics(self.stability.latest_metrics())
         return TickArtifacts(observations=observations, rewards=rewards)
+
+    def _derive_seed(self, stream: str) -> int:
+        digest = hashlib.sha256(f"{self.config.config_id}:{stream}".encode("utf-8"))
+        return int.from_bytes(digest.digest()[:8], "big")

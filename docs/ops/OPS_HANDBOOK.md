@@ -72,6 +72,12 @@
    - Verify `config_id` parity between release and shadow configs; observation variant must match (`SimulationConfig.require_observation_variant`).
    - Run `pytest` + linting (`ruff check src tests`, `mypy src`) and scenario smoke test `python scripts/run_simulation.py --tick-limit 1000`.
    - Confirm stability monitor KPIs meet thresholds for two consecutive windows: lateness ≤ baseline×2, starvation == 0, option-switch rate ≤ 25%.
+   - Inspect console `telemetry_snapshot` stability block.
+     `stability.alerts` must be empty when promoting and entries in
+     `stability.metrics.thresholds.*` must match the release config. Treat
+     `starvation_spike`, `reward_variance_spike`, and `option_thrash_detected`
+     as hard holds until mitigated (raise hunger availability, reset policy, or
+     widen clipping as described below).
 2. **Promotion**
    - Snapshot current release (`snapshots/release/<timestamp>.pkl`) and shadow candidate.
    - Flip release pointer to the candidate via console command `promote_policy <checkpoint>` (TBD implementation) or manual config swap.
@@ -83,9 +89,23 @@
 ## Incident Response
 - **Crash / Hang**: capture latest snapshot, collect stderr/stdout, restart shard with same config; open issue tagged `ops/crash` with timeline.
 - **Reward Explosion**: inspect `reward_clip_events`; if unbounded, pause training, raise guardrails by lowering `clip_per_tick` in config, and re-run smoke tests.
+- **Stability Alerts**:
+  - `starvation_spike`: verify hunger configs and recent perturbations; consider
+    rolling back or increasing food availability.
+  - `reward_variance_spike`: usually signals PPO drift—reset optimisers, revisit
+    clipping, and compare against baselines.
+  - `option_thrash_detected`: policies are flapping between options; clamp
+    scheduler noise, review option weights, and pause promotion until resolved.
 - **Queue Deadlock**: use console `debug queues` (TBD) to inspect reservations; confirm queue fairness cooldown is active; if not, toggle feature flag and log issue.
 - **Telemetry Backpressure**: check publisher backlog; if exceeds threshold, enable aggregation mode and archive raw stream for analysis.
 - **Employment Backlog**: monitor `employment_status`. If `pending_count` exceeds `queue_limit`, issue `employment_exit review`, approve or defer entries, and document decisions in ops log. Manual approvals emit `employment_exit_manual_request`; ensure lifecycle processes the exit next tick.
+- **Perturbation Control**: admin mode only. Use `perturbation_queue` to inspect
+  active/pending events, `perturbation_trigger` (admin) to enqueue specs (provide
+  `--targets`, optional `--starts_in`, `--magnitude`, `--location`), and
+  `perturbation_cancel <event_id>` to stop events. Each command is recorded in
+  `logs/console/*.jsonl` and emits `perturbation_started`,
+  `perturbation_cancelled`, and `perturbation_ended` telemetry entries for
+  observability.
 
 ## Queue-Conflict Troubleshooting
 - **Purpose**: ensure live or mixed-mode PPO runs maintain the conflict pressure captured in baselines.

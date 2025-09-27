@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import base64
-import pickle
 import random
 
 import pytest
@@ -18,7 +16,9 @@ from townlet.snapshots.state import (
 )
 from townlet.world.grid import AgentSnapshot, WorldState
 from townlet.telemetry.publisher import TelemetryPublisher
-from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.scheduler.perturbations import PerturbationScheduler, ScheduledPerturbation
+from townlet.config import PerturbationKind
+from townlet.utils import encode_rng_state
 
 
 @pytest.fixture(scope="module")
@@ -32,6 +32,13 @@ def sample_config() -> SimulationConfig:
 def test_snapshot_round_trip(tmp_path: Path, sample_config) -> None:
     random.seed(42)
     manager = SnapshotManager(root=tmp_path)
+    world_rng_encoded = encode_rng_state(random.getstate())
+    identity_payload = {
+        "config_id": sample_config.config_id,
+        "policy_hash": "deadbeef",
+        "observation_variant": sample_config.observation_variant,
+        "anneal_ratio": 0.5,
+    }
     state = SnapshotState(
         config_id=sample_config.config_id,
         tick=42,
@@ -94,7 +101,8 @@ def test_snapshot_round_trip(tmp_path: Path, sample_config) -> None:
             "exits_today": 2,
             "employment_day": 3,
         },
-        rng_state=base64.b64encode(pickle.dumps(random.getstate())).decode("ascii"),
+        rng_state=world_rng_encoded,
+        rng_streams={"world": world_rng_encoded},
         relationships={
             "alice": {
                 "bob": {"trust": 0.5, "familiarity": 0.2, "rivalry": 0.0},
@@ -104,6 +112,7 @@ def test_snapshot_round_trip(tmp_path: Path, sample_config) -> None:
                 "alice": {"trust": 0.4, "familiarity": 0.1, "rivalry": 0.0},
             },
         },
+        identity=identity_payload,
     )
     path = manager.save(state)
     loaded = manager.load(path, sample_config)
@@ -143,7 +152,10 @@ def test_snapshot_schema_version_mismatch(tmp_path: Path, sample_config) -> None
 
 def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: SimulationConfig) -> None:
     random.seed(1337)
-    world = WorldState.from_config(sample_config)
+    world_rng = random.Random(2024)
+    events_rng = random.Random(9090)
+    policy_rng = random.Random(7070)
+    world = WorldState.from_config(sample_config, rng=world_rng)
     world.tick = 77
     world.update_relationship("alice", "bob", trust=0.4, familiarity=0.2)
     world.update_relationship("alice", "carol", rivalry=0.3)
@@ -185,14 +197,41 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     telemetry._latest_events = [{"event": "test"}]
     telemetry.queue_console_command({"cmd": "foo"})
 
-    scheduler = PerturbationScheduler(sample_config)
-    scheduler.enqueue([{"event": "price_spike"}])
+    scheduler = PerturbationScheduler(sample_config, rng=events_rng)
+    scheduler.enqueue(
+        [
+            ScheduledPerturbation(
+                event_id="evt_test",
+                spec_name="price_spike",
+                kind=PerturbationKind.PRICE_SPIKE,
+                started_at=0,
+                ends_at=60,
+                payload={"magnitude": 1.2},
+                targets=["economy"],
+            )
+        ]
+    )
+
+    policy_identity = {
+        "config_id": sample_config.config_id,
+        "policy_hash": "snapshot-hash",
+        "observation_variant": sample_config.observation_variant,
+        "anneal_ratio": 0.2,
+    }
+
+    telemetry.update_policy_identity(policy_identity)
 
     state = snapshot_from_world(
         sample_config,
         world,
         telemetry=telemetry,
         perturbations=scheduler,
+        rng_streams={
+            "world": world.rng,
+            "events": scheduler.rng,
+            "policy": policy_rng,
+        },
+        identity=policy_identity,
     )
     baseline_rng_state = random.getstate()
 
@@ -217,6 +256,15 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     assert restored_world._employment_manual_exits == world._employment_manual_exits
     assert restored_world._employment_exits_today == world._employment_exits_today
     assert random.getstate() == baseline_rng_state
+    assert restored_world.get_rng_state() == world.get_rng_state()
+    assert "world" in state.rng_streams
+    assert "events" in state.rng_streams
+    assert "policy" in state.rng_streams
+    assert state.rng_streams["world"] == encode_rng_state(world.get_rng_state())
+    assert state.rng_streams["events"] == encode_rng_state(scheduler.rng_state())
+    assert state.rng_streams["policy"] == encode_rng_state(policy_rng.getstate())
+    assert state.identity == policy_identity
+    assert loaded.identity == state.identity
     assert state.perturbations == scheduler.export_state()
     assert restored_telemetry.export_state() == telemetry.export_state()
     assert restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()

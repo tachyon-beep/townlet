@@ -7,6 +7,7 @@ from typing import Dict, List, Protocol, TYPE_CHECKING
 if TYPE_CHECKING:
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
+    from townlet.scheduler.perturbations import PerturbationScheduler
 
 SUPPORTED_SCHEMA_PREFIX = "0.8"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
@@ -80,11 +81,20 @@ class TelemetryBridge:
             "policy_snapshot": self._publisher.latest_policy_snapshot(),
             "affordance_manifest": self._publisher.latest_affordance_manifest(),
             "reward_breakdown": self._publisher.latest_reward_breakdown(),
+            "stability": {
+                "alerts": self._publisher.latest_stability_alerts(),
+                "metrics": self._publisher.latest_stability_metrics(),
+            },
+            "perturbations": self._publisher.latest_perturbations(),
         }
 
 
 def create_console_router(
-    publisher: "TelemetryPublisher", world: "WorldState" | None = None
+    publisher: "TelemetryPublisher",
+    world: "WorldState" | None = None,
+    scheduler: "PerturbationScheduler" | None = None,
+    *,
+    mode: str = "viewer",
 ) -> ConsoleRouter:
     router = ConsoleRouter()
     bridge = TelemetryBridge(publisher)
@@ -121,9 +131,81 @@ def create_console_router(
             return {"deferred": success, "agent_id": agent_id}
         return {"error": "unknown_action", "action": action}
 
+    def perturbation_queue_handler(command: ConsoleCommand) -> object:
+        if scheduler is None:
+            return {"error": "unsupported"}
+        return scheduler.latest_state()
+
+    def perturbation_trigger_handler(command: ConsoleCommand) -> object:
+        if scheduler is None or world is None:
+            return {"error": "unsupported"}
+        if not command.args:
+            return {
+                "error": "usage",
+                "message": "perturbation_trigger <spec> [--starts_in ticks] [--duration ticks] [--targets a,b] [--magnitude value] [--location place]",
+            }
+        spec_name = str(command.args[0])
+        starts_in = int(command.kwargs.get("starts_in", 0))
+        duration_arg = command.kwargs.get("duration")
+        duration = int(duration_arg) if duration_arg is not None else None
+        targets_arg = command.kwargs.get("targets")
+        targets = None
+        if isinstance(targets_arg, str):
+            targets = [item.strip() for item in targets_arg.split(",") if item.strip()]
+        elif isinstance(targets_arg, (list, tuple)):
+            targets = [str(item) for item in targets_arg]
+        payload: Dict[str, object] = {}
+        if "magnitude" in command.kwargs:
+            try:
+                payload["magnitude"] = float(command.kwargs["magnitude"])
+            except (TypeError, ValueError):
+                return {"error": "invalid_args", "message": "magnitude must be numeric"}
+        if "location" in command.kwargs:
+            payload["location"] = str(command.kwargs["location"])
+        try:
+            event = scheduler.schedule_manual(
+                world,
+                spec_name=spec_name,
+                current_tick=world.tick,
+                starts_in=starts_in,
+                duration=duration,
+                targets=targets,
+                payload_overrides=payload or None,
+            )
+        except KeyError:
+            return {"error": "unknown_spec", "spec": spec_name}
+        except ValueError as exc:
+            return {"error": "invalid_args", "message": str(exc)}
+        return {"enqueued": True, "event": scheduler.serialize_event(event)}
+
+    def perturbation_cancel_handler(command: ConsoleCommand) -> object:
+        if scheduler is None or world is None:
+            return {"error": "unsupported"}
+        if not command.args:
+            return {
+                "error": "usage",
+                "message": "perturbation_cancel <event_id>",
+            }
+        event_id = str(command.args[0])
+        cancelled = scheduler.cancel_event(world, event_id)
+        return {"cancelled": cancelled, "event_id": event_id}
+
     router.register("telemetry_snapshot", telemetry_handler)
     router.register("employment_status", employment_status_handler)
     router.register("employment_exit", employment_exit_handler)
+    router.register("perturbation_queue", perturbation_queue_handler)
+    if mode == "admin":
+        router.register("perturbation_trigger", perturbation_trigger_handler)
+        router.register("perturbation_cancel", perturbation_cancel_handler)
+    else:
+        def _forbidden(_: ConsoleCommand) -> object:
+            return {
+                "error": "forbidden",
+                "message": "command requires admin mode",
+            }
+
+        router.register("perturbation_trigger", _forbidden)
+        router.register("perturbation_cancel", _forbidden)
     return router
 
 

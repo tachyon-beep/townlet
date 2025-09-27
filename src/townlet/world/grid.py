@@ -121,13 +121,22 @@ class WorldState:
     _chat_events: List[Dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
     _rng_state: Optional[Tuple[Any, ...]] = field(init=False, default=None)
+    _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
     _affordance_manifest_info: Dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: Dict[tuple[int, int], List[str]] = field(init=False, default_factory=dict)
 
     @classmethod
-    def from_config(cls, config: SimulationConfig) -> "WorldState":
+    def from_config(
+        cls,
+        config: SimulationConfig,
+        *,
+        rng: Optional[random.Random] = None,
+    ) -> "WorldState":
         """Bootstrap the initial world from config."""
-        return cls(config=config)
+
+        instance = cls(config=config)
+        instance.attach_rng(rng or random.Random())
+        return instance
 
     def __post_init__(self) -> None:
         self.queue_manager = QueueManager(config=self.config)
@@ -155,13 +164,34 @@ class WorldState:
         self._chat_events = []
         self._load_affordance_definitions()
         self._rng_seed = None
-        self._rng_state = random.getstate()
+        if self._rng is None:
+            self._rng = random.Random()
+        self._rng_state = self._rng.getstate()
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
         for operation in operations:
             # TODO(@townlet): Implement concrete console op handlers.
             _ = operation
+
+    def attach_rng(self, rng: random.Random) -> None:
+        """Attach a deterministic RNG used for world-level randomness."""
+
+        self._rng = rng
+        self._rng_state = rng.getstate()
+
+    @property
+    def rng(self) -> random.Random:
+        if self._rng is None:
+            self._rng = random.Random()
+        return self._rng
+
+    def get_rng_state(self) -> Tuple[Any, ...]:
+        return self.rng.getstate()
+
+    def set_rng_state(self, state: Tuple[Any, ...]) -> None:
+        self.rng.setstate(state)
+        self._rng_state = state
 
     def register_object(
         self,

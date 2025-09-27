@@ -1,9 +1,7 @@
 """Snapshot persistence scaffolding."""
 from __future__ import annotations
 
-import base64
 import json
-import pickle
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,13 +11,15 @@ from townlet.agents.models import Personality
 from townlet.config import SimulationConfig
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.utils import decode_rng_state, encode_rng, encode_rng_state
 from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 
 if TYPE_CHECKING:
     from townlet.telemetry.publisher import TelemetryPublisher
+    from townlet.stability.monitor import StabilityMonitor
 
 
-SNAPSHOT_SCHEMA_VERSION = "1.2"
+SNAPSHOT_SCHEMA_VERSION = "1.4"
 
 
 @dataclass
@@ -33,10 +33,13 @@ class SnapshotState:
     employment: Dict[str, object] = field(default_factory=dict)
     lifecycle: Dict[str, object] = field(default_factory=dict)
     rng_state: Optional[str] = None
+    rng_streams: Dict[str, str] = field(default_factory=dict)
     telemetry: Dict[str, object] = field(default_factory=dict)
     console_buffer: list[object] = field(default_factory=list)
     perturbations: Dict[str, object] = field(default_factory=dict)
     relationships: Dict[str, Dict[str, Dict[str, float]]] = field(default_factory=dict)
+    stability: Dict[str, object] = field(default_factory=dict)
+    identity: Dict[str, object] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -53,6 +56,7 @@ class SnapshotState:
             "employment": dict(self.employment),
             "lifecycle": dict(self.lifecycle),
             "rng_state": self.rng_state,
+            "rng_streams": dict(self.rng_streams),
             "telemetry": dict(self.telemetry),
             "console_buffer": list(self.console_buffer),
             "perturbations": dict(self.perturbations),
@@ -62,6 +66,8 @@ class SnapshotState:
                 }
                 for owner, edges in self.relationships.items()
             },
+            "stability": dict(self.stability),
+            "identity": dict(self.identity),
         }
 
     @classmethod
@@ -85,16 +91,28 @@ class SnapshotState:
         }
 
         queues_payload = payload.get("queues", {})
-        queues: Dict[str, object] = dict(queues_payload) if isinstance(queues_payload, Mapping) else {}
+        if isinstance(queues_payload, Mapping):
+            queues: Dict[str, object] = dict(queues_payload)
+        else:
+            queues = {}
 
         embeddings_payload = payload.get("embeddings", {})
-        embeddings: Dict[str, object] = dict(embeddings_payload) if isinstance(embeddings_payload, Mapping) else {}
+        if isinstance(embeddings_payload, Mapping):
+            embeddings: Dict[str, object] = dict(embeddings_payload)
+        else:
+            embeddings = {}
 
         employment_payload = payload.get("employment", {})
-        employment: Dict[str, object] = dict(employment_payload) if isinstance(employment_payload, Mapping) else {}
+        if isinstance(employment_payload, Mapping):
+            employment: Dict[str, object] = dict(employment_payload)
+        else:
+            employment = {}
 
         lifecycle_payload = payload.get("lifecycle", {})
-        lifecycle: Dict[str, object] = dict(lifecycle_payload) if isinstance(lifecycle_payload, Mapping) else {}
+        if isinstance(lifecycle_payload, Mapping):
+            lifecycle: Dict[str, object] = dict(lifecycle_payload)
+        else:
+            lifecycle = {}
 
         rng_state = payload.get("rng_state")
         rng_state_str: Optional[str]
@@ -103,18 +121,33 @@ class SnapshotState:
         else:
             rng_state_str = None
 
+        rng_streams_payload = payload.get("rng_streams", {})
+        if isinstance(rng_streams_payload, Mapping):
+            rng_streams: Dict[str, str] = {
+                str(name): str(data) for name, data in rng_streams_payload.items()
+                if isinstance(data, str)
+            }
+        else:
+            rng_streams = {}
+        if rng_state_str and "world" not in rng_streams:
+            rng_streams["world"] = rng_state_str
+
         telemetry_payload = payload.get("telemetry", {})
         telemetry: Dict[str, object] = (
             dict(telemetry_payload) if isinstance(telemetry_payload, Mapping) else {}
         )
 
         console_buffer_payload = payload.get("console_buffer", [])
-        console_buffer = list(console_buffer_payload) if isinstance(console_buffer_payload, list) else []
+        if isinstance(console_buffer_payload, list):
+            console_buffer = list(console_buffer_payload)
+        else:
+            console_buffer = []
 
         perturbations_payload = payload.get("perturbations", {})
-        perturbations: Dict[str, object] = (
-            dict(perturbations_payload) if isinstance(perturbations_payload, Mapping) else {}
-        )
+        if isinstance(perturbations_payload, Mapping):
+            perturbations: Dict[str, object] = dict(perturbations_payload)
+        else:
+            perturbations = {}
 
         if "relationships" not in payload:
             raise ValueError("Snapshot payload missing relationships field")
@@ -143,6 +176,17 @@ class SnapshotState:
                         "rivalry": 0.0,
                     }
             relationships[owner_id] = owner_edges
+        stability_payload = payload.get("stability", {})
+        stability: Dict[str, object] = (
+            dict(stability_payload) if isinstance(stability_payload, Mapping) else {}
+        )
+
+        identity_payload = payload.get("identity", {})
+        if isinstance(identity_payload, Mapping):
+            identity: Dict[str, object] = dict(identity_payload)
+        else:
+            identity = {"config_id": config_id}
+
         return cls(
             config_id=config_id,
             tick=tick,
@@ -153,10 +197,13 @@ class SnapshotState:
             employment=employment,
             lifecycle=lifecycle,
             rng_state=rng_state_str,
+            rng_streams=rng_streams,
             telemetry=telemetry,
             console_buffer=console_buffer,
             perturbations=perturbations,
             relationships=relationships,
+            stability=stability,
+            identity=identity,
         )
 
 
@@ -167,6 +214,9 @@ def snapshot_from_world(
     lifecycle: Optional[LifecycleManager] = None,
     telemetry: Optional["TelemetryPublisher"] = None,
     perturbations: Optional[PerturbationScheduler] = None,
+    stability: Optional["StabilityMonitor"] = None,
+    rng_streams: Optional[Mapping[str, random.Random]] = None,
+    identity: Optional[Mapping[str, object]] = None,
 ) -> SnapshotState:
     """Capture the current world state into a snapshot payload."""
 
@@ -214,10 +264,22 @@ def snapshot_from_world(
     if lifecycle is not None:
         lifecycle_payload = lifecycle.export_state()
 
-    world._rng_state = random.getstate()
-    rng_payload = None
-    if world._rng_state is not None:
-        rng_payload = base64.b64encode(pickle.dumps(world._rng_state)).decode("ascii")
+    encoded_rngs: Dict[str, str] = {}
+    if rng_streams:
+        for name, rng in rng_streams.items():
+            if rng is None:
+                continue
+            encoded_rngs[str(name)] = encode_rng(rng)
+    else:
+        if hasattr(world, "get_rng_state"):
+            try:
+                encoded_rngs["world"] = encode_rng_state(world.get_rng_state())
+            except Exception:  # pragma: no cover - defensive fallback
+                encoded_rngs["world"] = encode_rng_state(random.getstate())
+        else:
+            encoded_rngs["world"] = encode_rng_state(random.getstate())
+
+    rng_payload = encoded_rngs.get("world")
 
     telemetry_payload: Dict[str, object] = {}
     console_buffer: list[object] = []
@@ -229,6 +291,23 @@ def snapshot_from_world(
     if perturbations is not None:
         perturbations_payload = perturbations.export_state()
 
+    stability_payload = {}
+    if stability is not None:
+        stability_payload = stability.export_state()
+
+    identity_payload: Dict[str, object] = {
+        "config_id": config.config_id,
+        "observation_variant": getattr(config, "observation_variant", None),
+    }
+    if identity:
+        for key, value in identity.items():
+            identity_payload[key] = value
+    if identity_payload.get("observation_variant") is None:
+        try:
+            identity_payload["observation_variant"] = config.observation_variant
+        except AttributeError:
+            identity_payload.pop("observation_variant", None)
+
     return SnapshotState(
         config_id=config.config_id,
         tick=world.tick,
@@ -239,10 +318,13 @@ def snapshot_from_world(
         employment=employment_payload,
         lifecycle=lifecycle_payload,
         rng_state=rng_payload,
+        rng_streams=encoded_rngs,
         telemetry=telemetry_payload,
         console_buffer=console_buffer,
         perturbations=perturbations_payload,
         relationships=world.relationships_snapshot(),
+        stability=stability_payload,
+        identity=identity_payload,
     )
 
 
@@ -329,10 +411,13 @@ def apply_snapshot_to_world(
     if lifecycle is not None:
         lifecycle.import_state(snapshot.lifecycle)
 
-    if snapshot.rng_state:
-        state = pickle.loads(base64.b64decode(snapshot.rng_state.encode("ascii")))
-        random.setstate(state)
-        world._rng_state = state
+    rng_payload = snapshot.rng_streams.get("world") or snapshot.rng_state
+    if rng_payload:
+        state_tuple = decode_rng_state(rng_payload)
+        if hasattr(world, "set_rng_state"):
+            world.set_rng_state(state_tuple)
+        else:
+            random.setstate(state_tuple)
 
     world.load_relationship_snapshot(snapshot.relationships)
 
@@ -343,6 +428,11 @@ def apply_snapshot_to_telemetry(
 ) -> None:
     telemetry.import_state(snapshot.telemetry)
     telemetry.import_console_buffer(snapshot.console_buffer)
+    stability_metrics = snapshot.stability.get("latest_metrics")
+    if isinstance(stability_metrics, Mapping):
+        telemetry.record_stability_metrics(dict(stability_metrics))
+    if snapshot.identity:
+        telemetry.update_policy_identity(snapshot.identity)
 
 
 class SnapshotManager:

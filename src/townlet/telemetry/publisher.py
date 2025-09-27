@@ -44,6 +44,10 @@ class TelemetryPublisher:
         }
         self._latest_affordance_manifest: Dict[str, object] = {}
         self._latest_reward_breakdown: Dict[str, Dict[str, float]] = {}
+        self._latest_stability_inputs: Dict[str, object] = {}
+        self._latest_stability_metrics: Dict[str, object] = {}
+        self._latest_perturbations: Dict[str, object] = {}
+        self._latest_policy_identity: Dict[str, object] | None = None
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -70,6 +74,7 @@ class TelemetryPublisher:
             "narrations": [dict(entry) for entry in self._latest_narrations],
             "narration_state": self._narration_limiter.export_state(),
             "reward_breakdown": self.latest_reward_breakdown(),
+            "perturbations": self.latest_perturbations(),
         }
         if self._latest_affordance_manifest:
             state["affordance_manifest"] = dict(self._latest_affordance_manifest)
@@ -86,6 +91,8 @@ class TelemetryPublisher:
             }
         if any(self._kpi_history.values()):
             state["kpi_history"] = self.kpi_history()
+        if self._latest_policy_identity is not None:
+            state["policy_identity"] = dict(self._latest_policy_identity)
         return state
 
     def import_state(self, payload: Dict[str, object]) -> None:
@@ -111,8 +118,11 @@ class TelemetryPublisher:
         self._latest_events = list(payload.get("events", []))
         snapshot_payload = payload.get("relationship_snapshot") or {}
         if isinstance(snapshot_payload, dict):
-            self._latest_relationship_snapshot = self._copy_relationship_snapshot(snapshot_payload)
-            self._previous_relationship_snapshot = self._copy_relationship_snapshot(snapshot_payload)
+            snapshot_copy = self._copy_relationship_snapshot(snapshot_payload)
+            self._latest_relationship_snapshot = snapshot_copy
+            self._previous_relationship_snapshot = self._copy_relationship_snapshot(
+                snapshot_copy
+            )
         updates_payload = payload.get("relationship_updates", [])
         if isinstance(updates_payload, list):
             self._latest_relationship_updates = [dict(update) for update in updates_payload]
@@ -162,6 +172,28 @@ class TelemetryPublisher:
         else:
             self._latest_reward_breakdown = {}
 
+        perturbations_payload = payload.get("perturbations")
+        if isinstance(perturbations_payload, Mapping):
+            self._latest_perturbations = self._normalize_perturbations_payload(perturbations_payload)
+        else:
+            self._latest_perturbations = {}
+
+        policy_identity_payload = payload.get("policy_identity")
+        if isinstance(policy_identity_payload, Mapping):
+            self._latest_policy_identity = dict(policy_identity_payload)
+        else:
+            self._latest_policy_identity = None
+
+        kpi_payload = payload.get("kpi_history")
+        if isinstance(kpi_payload, Mapping):
+            history: Dict[str, List[float]] = {}
+            for name, values in kpi_payload.items():
+                if isinstance(values, list):
+                    coerced = [float(value) for value in values if isinstance(value, (int, float))]
+                    history[str(name)] = coerced
+            if history:
+                self._kpi_history = history
+
     def export_console_buffer(self) -> List[object]:
         return list(self._console_buffer)
 
@@ -179,6 +211,9 @@ class TelemetryPublisher:
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
         kpi_history: bool = False,
         reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
+        stability_inputs: Mapping[str, object] | None = None,
+        perturbations: Mapping[str, object] | None = None,
+        policy_identity: Mapping[str, object] | None = None,
     ) -> None:
         # TODO(@townlet): Stream to pub/sub, write KPIs.
         _ = observations, rewards
@@ -211,7 +246,14 @@ class TelemetryPublisher:
             relationship_snapshot
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
-        self._latest_embedding_metrics = world.embedding_allocator.metrics()
+        raw_embedding_metrics = world.embedding_allocator.metrics()
+        processed_embedding_metrics: Dict[str, object] = {}
+        for key, value in raw_embedding_metrics.items():
+            if isinstance(value, (int, float)):
+                processed_embedding_metrics[str(key)] = float(value)
+            else:
+                processed_embedding_metrics[str(key)] = value
+        self._latest_embedding_metrics = processed_embedding_metrics
         if events is not None:
             self._latest_events = list(events)
         else:
@@ -270,6 +312,28 @@ class TelemetryPublisher:
         if kpi_history:
             self._update_kpi_history(world)
 
+        if stability_inputs is not None:
+            self._latest_stability_inputs = {
+                "hunger_levels": dict(
+                    stability_inputs.get("hunger_levels", {}) or {}
+                ),
+                "option_switch_counts": dict(
+                    stability_inputs.get("option_switch_counts", {}) or {}
+                ),
+                "reward_samples": {
+                    agent: float(value)
+                    for agent, value in (
+                        (stability_inputs.get("reward_samples") or {}).items()
+                    )
+                },
+            }
+
+        if isinstance(perturbations, Mapping):
+            self._latest_perturbations = self._normalize_perturbations_payload(perturbations)
+
+        if policy_identity is not None:
+            self.update_policy_identity(policy_identity)
+
     def latest_queue_metrics(self) -> Dict[str, int] | None:
         """Expose the most recent queue-related telemetry counters."""
         if self._latest_queue_metrics is None:
@@ -300,6 +364,114 @@ class TelemetryPublisher:
         return {
             agent: dict(components)
             for agent, components in self._latest_reward_breakdown.items()
+        }
+
+    def latest_stability_inputs(self) -> Dict[str, object]:
+        if not self._latest_stability_inputs:
+            return {}
+        result: Dict[str, object] = {}
+        hunger = self._latest_stability_inputs.get("hunger_levels")
+        if isinstance(hunger, dict):
+            result["hunger_levels"] = {str(agent): float(value) for agent, value in hunger.items()}
+        option_counts = self._latest_stability_inputs.get("option_switch_counts")
+        if isinstance(option_counts, dict):
+            result["option_switch_counts"] = {
+                str(agent): int(value) for agent, value in option_counts.items()
+            }
+        reward_samples = self._latest_stability_inputs.get("reward_samples")
+        if isinstance(reward_samples, dict):
+            result["reward_samples"] = {
+                str(agent): float(value) for agent, value in reward_samples.items()
+            }
+        return result
+
+    def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
+        self._latest_stability_metrics = dict(metrics)
+
+    def latest_stability_metrics(self) -> Dict[str, object]:
+        return dict(self._latest_stability_metrics)
+
+    def latest_stability_alerts(self) -> List[str]:
+        metrics = self.latest_stability_metrics()
+        alerts = metrics.get("alerts")
+        if isinstance(alerts, list):
+            return [str(alert) for alert in alerts]
+        return []
+
+    def latest_perturbations(self) -> Dict[str, object]:
+        return {
+            "active": {
+                event_id: dict(data)
+                for event_id, data in self._latest_perturbations.get("active", {}).items()
+            },
+            "pending": [
+                dict(entry)
+                for entry in self._latest_perturbations.get("pending", [])
+            ],
+            "cooldowns": {
+                "spec": dict(
+                    self._latest_perturbations.get("cooldowns", {}).get("spec", {})
+                ),
+                "agents": dict(
+                    self._latest_perturbations.get("cooldowns", {}).get("agents", {})
+                ),
+            },
+        }
+
+    def update_policy_identity(self, identity: Mapping[str, object] | None) -> None:
+        if identity is None:
+            self._latest_policy_identity = None
+            return
+        payload = {
+            "config_id": identity.get("config_id", self.config.config_id),
+            "policy_hash": identity.get("policy_hash"),
+            "observation_variant": identity.get("observation_variant"),
+            "anneal_ratio": identity.get("anneal_ratio"),
+        }
+        self._latest_policy_identity = payload
+
+    def latest_policy_identity(self) -> Dict[str, object] | None:
+        if self._latest_policy_identity is None:
+            return None
+        return dict(self._latest_policy_identity)
+
+    def _normalize_perturbations_payload(
+        self, payload: Mapping[str, object]
+    ) -> Dict[str, object]:
+        active = payload.get("active", {})
+        pending = payload.get("pending", [])
+        cooldowns = payload.get("cooldowns", {})
+        active_map: Dict[str, Dict[str, object]] = {}
+        if isinstance(active, Mapping):
+            active_map = {
+                str(event_id): dict(entry)
+                for event_id, entry in active.items()
+                if isinstance(entry, Mapping)
+            }
+        pending_list: List[Dict[str, object]] = []
+        if isinstance(pending, list):
+            pending_list = [dict(entry) for entry in pending if isinstance(entry, Mapping)]
+        spec_cd: Dict[str, int] = {}
+        agent_cd: Dict[str, int] = {}
+        if isinstance(cooldowns, Mapping):
+            spec_payload = cooldowns.get("spec", {})
+            if isinstance(spec_payload, Mapping):
+                spec_cd = {
+                    str(name): int(expiry)
+                    for name, expiry in spec_payload.items()
+                    if isinstance(expiry, int)
+                }
+            agent_payload = cooldowns.get("agents", {})
+            if isinstance(agent_payload, Mapping):
+                agent_cd = {
+                    str(agent): int(expiry)
+                    for agent, expiry in agent_payload.items()
+                    if isinstance(expiry, int)
+                }
+        return {
+            "active": active_map,
+            "pending": pending_list,
+            "cooldowns": {"spec": spec_cd, "agents": agent_cd},
         }
 
     def latest_policy_snapshot(self) -> Dict[str, Dict[str, object]]:
@@ -588,7 +760,9 @@ class TelemetryPublisher:
         }
 
     def _update_kpi_history(self, world: "WorldState") -> None:
-        queue_sum = float(self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0))
+        queue_sum = float(
+            self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0)
+        )
         lateness_avg = 0.0
         agents = list(world.agents.values())
         if agents:

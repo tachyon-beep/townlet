@@ -227,3 +227,13 @@ Promotion protocol
 - Drop either outage or blackout in M4; keep one.
 - Only hybrid obs until perf demands otherwise.
 - Skip age‑out and automatic arranged_meet; keep console control only.
+
+## Appendix A — Snapshot Schema Changelog
+
+| Version | Status | Key changes |
+| --- | --- | --- |
+| v1.0 | Legacy | Initial scaffold: agents, objects, employment, basic queues. |
+| v1.1 | Legacy | Added relationship ledgers with trust/fam/rivalry tuples. |
+| v1.2 | Legacy | Captured queue manager, embedding allocator, employment/lifecycle, RNG. |
+| v1.3 | Legacy | Persisted telemetry buffers, perturbations, stability metrics, `config_id` gate. |
+| v1.4 | Current | Adds `policy_hash`/obs variant/anneal ratio identity block and multi-stream RNG states; migration metadata scaffold. |
