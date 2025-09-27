@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from townlet.config import SimulationConfig
+    from townlet.scheduler.perturbations import PerturbationScheduler
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
-    from townlet.scheduler.perturbations import PerturbationScheduler
-    from townlet.config import SimulationConfig
 
 from townlet.snapshots import SnapshotManager
 
@@ -52,15 +52,15 @@ class EventStream:
     """Simple subscriber that records the latest simulation events."""
 
     def __init__(self) -> None:
-        self._latest: List[dict[str, object]] = []
+        self._latest: list[dict[str, object]] = []
 
     def connect(self, publisher: "TelemetryPublisher") -> None:
         publisher.register_event_subscriber(self._record)
 
-    def _record(self, events: List[dict[str, object]]) -> None:
+    def _record(self, events: list[dict[str, object]]) -> None:
         self._latest = events
 
-    def latest(self) -> List[dict[str, object]]:
+    def latest(self) -> list[dict[str, object]]:
         return list(self._latest)
 
 
@@ -70,7 +70,7 @@ class TelemetryBridge:
     def __init__(self, publisher: "TelemetryPublisher") -> None:
         self._publisher = publisher
 
-    def snapshot(self) -> Dict[str, Dict[str, object]]:
+    def snapshot(self) -> dict[str, dict[str, object]]:
         version, warning = _schema_metadata(self._publisher)
         return {
             "schema_version": version,
@@ -195,7 +195,10 @@ def create_console_router(
         if not command.args:
             return {
                 "error": "usage",
-                "message": "perturbation_trigger <spec> [--starts_in ticks] [--duration ticks] [--targets a,b] [--magnitude value] [--location place]",
+                "message": (
+                    "perturbation_trigger <spec> [--starts_in ticks] [--duration ticks] "
+                    "[--targets a,b] [--magnitude value] [--location place]"
+                ),
             }
         spec_name = str(command.args[0])
         starts_in = int(command.kwargs.get("starts_in", 0))
@@ -207,7 +210,7 @@ def create_console_router(
             targets = [item.strip() for item in targets_arg.split(",") if item.strip()]
         elif isinstance(targets_arg, (list, tuple)):
             targets = [str(item) for item in targets_arg]
-        payload: Dict[str, object] = {}
+        payload: dict[str, object] = {}
         if "magnitude" in command.kwargs:
             try:
                 payload["magnitude"] = float(command.kwargs["magnitude"])

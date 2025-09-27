@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import random
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from townlet.config import SimulationConfig
 from townlet.lifecycle.manager import LifecycleManager

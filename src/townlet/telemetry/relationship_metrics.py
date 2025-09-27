@@ -8,8 +8,9 @@ operations dashboards.
 from __future__ import annotations
 
 from collections import Counter, deque
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Deque, Dict, Iterable, List, Optional
+from typing import Optional
 
 
 def _advance_window(
@@ -35,10 +36,10 @@ class RelationshipEvictionSample:
     window_start: int
     window_end: int
     total_evictions: int
-    per_owner: Dict[str, int]
-    per_reason: Dict[str, int]
+    per_owner: dict[str, int]
+    per_reason: dict[str, int]
 
-    def to_payload(self) -> Dict[str, object]:
+    def to_payload(self) -> dict[str, object]:
         """Serialise the sample into a telemetry-friendly payload."""
         return {
             "window_start": self.window_start,
@@ -67,7 +68,7 @@ class RelationshipChurnAccumulator:
         self._per_owner: Counter[str] = Counter()
         self._per_reason: Counter[str] = Counter()
         self._total = 0
-        self._history: Deque[RelationshipEvictionSample] = deque(maxlen=max_samples)
+        self._history: deque[RelationshipEvictionSample] = deque(maxlen=max_samples)
 
     def record_eviction(
         self,
@@ -123,7 +124,7 @@ class RelationshipChurnAccumulator:
         self._per_reason.clear()
         self._total = 0
 
-    def snapshot(self) -> Dict[str, object]:
+    def snapshot(self) -> dict[str, object]:
         """Return aggregates for the active window."""
         return {
             "window_start": self._window_start,
@@ -137,17 +138,17 @@ class RelationshipChurnAccumulator:
         """Return a snapshot of the recorded history."""
         return list(self._history)
 
-    def history_payload(self) -> List[Dict[str, object]]:
+    def history_payload(self) -> list[dict[str, object]]:
         """Convert history samples into telemetry payloads."""
         return [sample.to_payload() for sample in self._history]
 
-    def latest_payload(self) -> Dict[str, object]:
+    def latest_payload(self) -> dict[str, object]:
         """Return the live window payload for telemetry publishing."""
         payload = self.snapshot()
         payload["history"] = self.history_payload()
         return payload
 
-    def ingest_payload(self, payload: Dict[str, object]) -> None:
+    def ingest_payload(self, payload: dict[str, object]) -> None:
         """Restore the accumulator from an external payload.
 
         This helper allows soak harnesses to persist state across sessions.

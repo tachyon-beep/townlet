@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Dict
 
 from townlet.config import NarrationThrottleConfig
 
@@ -14,10 +13,10 @@ class NarrationRateLimiter:
     def __init__(self, config: NarrationThrottleConfig) -> None:
         self.config = config
         self._current_tick: int = 0
-        self._last_category_tick: Dict[str, int] = {}
+        self._last_category_tick: dict[str, int] = {}
         self._last_global_tick: int = -10_000
-        self._recent_entries: Dict[str, int] = {}
-        self._window_emissions: Deque[int] = deque()
+        self._recent_entries: dict[str, int] = {}
+        self._window_emissions: deque[int] = deque()
 
     def begin_tick(self, tick: int) -> None:
         self._current_tick = int(tick)
@@ -59,7 +58,7 @@ class NarrationRateLimiter:
         self._record_emission(category, key)
         return True
 
-    def export_state(self) -> Dict[str, object]:
+    def export_state(self) -> dict[str, object]:
         return {
             "last_category_tick": dict(self._last_category_tick),
             "last_global_tick": int(self._last_global_tick),
@@ -67,7 +66,7 @@ class NarrationRateLimiter:
             "window_emissions": list(self._window_emissions),
         }
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         last_category = payload.get("last_category_tick", {})
         if isinstance(last_category, dict):
             self._last_category_tick = {

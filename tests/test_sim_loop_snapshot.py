@@ -4,7 +4,6 @@ import json
 import random
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from townlet.config import SimulationConfig, load_config

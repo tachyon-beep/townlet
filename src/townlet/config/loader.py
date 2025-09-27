@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import importlib
 import re
+from collections.abc import Mapping
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Dict, Iterable, List, Literal, Mapping, Optional
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -72,7 +73,7 @@ class RewardClips(BaseModel):
 
 class RewardsConfig(BaseModel):
     needs_weights: NeedsWeights
-    decay_rates: Dict[str, float] = Field(
+    decay_rates: dict[str, float] = Field(
         default_factory=lambda: {
             "hunger": 0.01,
             "hygiene": 0.005,
@@ -240,7 +241,7 @@ class StabilityConfig(BaseModel):
     reward_variance: RewardVarianceCanaryConfig = RewardVarianceCanaryConfig()
     option_thrash: OptionThrashCanaryConfig = OptionThrashCanaryConfig()
 
-    def as_dict(self) -> Dict[str, object]:
+    def as_dict(self) -> dict[str, object]:
         return {
             "affordance_fail_threshold": self.affordance_fail_threshold,
             "lateness_threshold": self.lateness_threshold,
@@ -257,7 +258,7 @@ class IntRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _coerce(cls, value: object) -> Dict[str, int]:
+    def _coerce(cls, value: object) -> dict[str, int]:
         if isinstance(value, Mapping):
             return {
                 "min": int(value.get("min", 0)),
@@ -286,7 +287,7 @@ class FloatRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _coerce(cls, value: object) -> Dict[str, float]:
+    def _coerce(cls, value: object) -> dict[str, float]:
         if isinstance(value, Mapping):
             lo = float(value.get("min", 0.0))
             hi = float(value.get("max", value.get("min", 0.0)))
@@ -324,7 +325,7 @@ class BasePerturbationEventConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     @model_validator(mode="before")
-    def _normalise_duration(cls, values: Dict[str, object]) -> Dict[str, object]:
+    def _normalise_duration(cls, values: dict[str, object]) -> dict[str, object]:
         if "duration" not in values and "duration_min" in values:
             values["duration"] = values["duration_min"]
         return values
@@ -333,10 +334,10 @@ class BasePerturbationEventConfig(BaseModel):
 class PriceSpikeEventConfig(BasePerturbationEventConfig):
     kind: Literal[PerturbationKind.PRICE_SPIKE] = PerturbationKind.PRICE_SPIKE
     magnitude: FloatRange = Field(default_factory=lambda: FloatRange(min=1.0, max=1.0))
-    targets: List[str] = Field(default_factory=list)
+    targets: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
-    def _normalise_magnitude(cls, values: Dict[str, object]) -> Dict[str, object]:
+    def _normalise_magnitude(cls, values: dict[str, object]) -> dict[str, object]:
         if "magnitude" not in values and "magnitude_range" in values:
             values["magnitude"] = values["magnitude_range"]
         return values
@@ -375,12 +376,12 @@ class PerturbationSchedulerConfig(BaseModel):
     grace_window_ticks: int = Field(60, ge=0)
     window_ticks: int = Field(1440, ge=1)
     max_events_per_window: int = Field(1, ge=0)
-    events: Dict[str, PerturbationEventConfig] = Field(default_factory=dict)
+    events: dict[str, PerturbationEventConfig] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     @property
-    def event_list(self) -> List[PerturbationEventConfig]:
+    def event_list(self) -> list[PerturbationEventConfig]:
         return list(self.events.values())
 
 
@@ -432,11 +433,11 @@ class AnnealStage(BaseModel):
 
 class NarrationThrottleConfig(BaseModel):
     global_cooldown_ticks: int = Field(30, ge=0, le=10_000)
-    category_cooldown_ticks: Dict[str, int] = Field(default_factory=dict)
+    category_cooldown_ticks: dict[str, int] = Field(default_factory=dict)
     dedupe_window_ticks: int = Field(20, ge=0, le=10_000)
     global_window_ticks: int = Field(600, ge=1, le=10_000)
     global_window_limit: int = Field(10, ge=1, le=1_000)
-    priority_categories: List[str] = Field(default_factory=list)
+    priority_categories: list[str] = Field(default_factory=list)
 
     def get_category_cooldown(self, category: str) -> int:
         return int(
@@ -515,7 +516,7 @@ class SnapshotIdentityConfig(BaseModel):
 
 
 class SnapshotMigrationsConfig(BaseModel):
-    handlers: Dict[str, str] = Field(default_factory=dict)
+    handlers: dict[str, str] = Field(default_factory=dict)
     auto_apply: bool = False
     allow_minor: bool = False
 
@@ -550,7 +551,8 @@ class SnapshotConfig(BaseModel):
             and self.identity.observation_variant not in {"hybrid", "full", "compact"}
         ):
             raise ValueError(
-                "snapshot.identity.observation_variant must be one of ['hybrid', 'full', 'compact', 'infer']"
+                "snapshot.identity.observation_variant must be one of "
+                "['hybrid', 'full', 'compact', 'infer']"
             )
         return self
 
@@ -561,11 +563,11 @@ class TrainingConfig(BaseModel):
     rollout_auto_seed_agents: bool = False
     replay_manifest: Path | None = None
     social_reward_stage_override: SocialRewardStage | None = None
-    social_reward_schedule: List["SocialRewardScheduleEntry"] = Field(
+    social_reward_schedule: list["SocialRewardScheduleEntry"] = Field(
         default_factory=list
     )
     bc: BCTrainingSettings = BCTrainingSettings()
-    anneal_schedule: List[AnnealStage] = Field(default_factory=list)
+    anneal_schedule: list[AnnealStage] = Field(default_factory=list)
     anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
 
 
@@ -581,7 +583,7 @@ class SimulationConfig(BaseModel):
     config_id: str
     features: FeatureFlags
     rewards: RewardsConfig
-    economy: Dict[str, float] = Field(
+    economy: dict[str, float] = Field(
         default_factory=lambda: {
             "meal_cost": 0.4,
             "cook_energy_cost": 0.05,
@@ -591,7 +593,7 @@ class SimulationConfig(BaseModel):
             "stove_stock_replenish": 2,
         }
     )
-    jobs: Dict[str, JobSpec] = Field(
+    jobs: dict[str, JobSpec] = Field(
         default_factory=lambda: {
             "grocer": JobSpec(
                 start_tick=180,
@@ -662,7 +664,7 @@ class SimulationConfig(BaseModel):
         policy_hash: str | None,
         runtime_observation_variant: ObservationVariant | None,
         runtime_anneal_ratio: float | None,
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         identity_cfg = self.snapshot.identity
         resolved_variant: str | None
         if identity_cfg.observation_variant != "infer":
@@ -677,7 +679,7 @@ class SimulationConfig(BaseModel):
         else:
             resolved_anneal = runtime_anneal_ratio
 
-        payload: Dict[str, object] = {"config_id": self.config_id}
+        payload: dict[str, object] = {"config_id": self.config_id}
         if resolved_hash is not None:
             payload["policy_hash"] = resolved_hash
         artifact = identity_cfg.policy_artifact

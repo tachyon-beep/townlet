@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Mapping, Optional
+from typing import Optional
 
 from townlet.config import (
     ArrangedMeetEventConfig,
@@ -29,8 +30,8 @@ class ScheduledPerturbation:
     kind: PerturbationKind
     started_at: int
     ends_at: int
-    payload: Dict[str, object] = field(default_factory=dict)
-    targets: List[str] = field(default_factory=list)
+    payload: dict[str, object] = field(default_factory=dict)
+    targets: list[str] = field(default_factory=list)
 
 
 class PerturbationScheduler:
@@ -51,12 +52,12 @@ class PerturbationScheduler:
         else:
             ticks_per_day = 1440
         self._ticks_per_day = max(1, int(ticks_per_day))
-        self.specs: Dict[str, PerturbationEventConfig] = self.settings.events
-        self._pending: List[ScheduledPerturbation] = []
-        self._active: Dict[str, ScheduledPerturbation] = {}
-        self._event_cooldowns: Dict[str, int] = {}
-        self._agent_cooldowns: Dict[str, int] = {}
-        self._window_events: List[tuple[int, str]] = []
+        self.specs: dict[str, PerturbationEventConfig] = self.settings.events
+        self._pending: list[ScheduledPerturbation] = []
+        self._active: dict[str, ScheduledPerturbation] = {}
+        self._event_cooldowns: dict[str, int] = {}
+        self._agent_cooldowns: dict[str, int] = {}
+        self._window_events: list[tuple[int, str]] = []
         self._next_id: int = 1
 
     # ------------------------------------------------------------------
@@ -70,7 +71,7 @@ class PerturbationScheduler:
         self._maybe_schedule(world, current_tick)
 
     def _expire_active(self, current_tick: int, world: WorldState) -> None:
-        to_remove: List[str] = []
+        to_remove: list[str] = []
         for event_id, event in list(self._active.items()):
             if current_tick >= event.ends_at:
                 to_remove.append(event_id)
@@ -103,7 +104,7 @@ class PerturbationScheduler:
     def _drain_pending(self, world: WorldState, current_tick: int) -> None:
         if not self._pending:
             return
-        ready: List[ScheduledPerturbation] = []
+        ready: list[ScheduledPerturbation] = []
         for event in list(self._pending):
             if event.started_at <= current_tick:
                 ready.append(event)
@@ -145,8 +146,8 @@ class PerturbationScheduler:
         *,
         starts_in: int = 0,
         duration: int | None = None,
-        targets: Optional[List[str]] = None,
-        payload_overrides: Optional[Dict[str, object]] = None,
+        targets: Optional[list[str]] = None,
+        payload_overrides: Optional[dict[str, object]] = None,
     ) -> ScheduledPerturbation:
         spec = self.spec_for(spec_name)
         if spec is None:
@@ -322,8 +323,8 @@ class PerturbationScheduler:
         world: WorldState,
         *,
         duration_override: int | None = None,
-        targets_override: Optional[List[str]] = None,
-        payload_override: Optional[Dict[str, object]] = None,
+        targets_override: Optional[list[str]] = None,
+        payload_override: Optional[dict[str, object]] = None,
     ) -> Optional[ScheduledPerturbation]:
         duration_range = spec.duration
         if duration_override is not None:
@@ -333,8 +334,8 @@ class PerturbationScheduler:
             if duration_range.max > duration_range.min:
                 length = self._random.randint(duration_range.min, duration_range.max)
         ends_at = current_tick + max(length, 0)
-        payload: Dict[str, object] = dict(payload_override or {})
-        targets: List[str] = list(targets_override or [])
+        payload: dict[str, object] = dict(payload_override or {})
+        targets: list[str] = list(targets_override or [])
 
         if isinstance(spec, PriceSpikeEventConfig):
             if "magnitude" in payload:
@@ -376,7 +377,7 @@ class PerturbationScheduler:
         )
         return event
 
-    def _eligible_agents(self, world: WorldState, current_tick: int) -> List[str]:
+    def _eligible_agents(self, world: WorldState, current_tick: int) -> list[str]:
         blocked = {
             agent
             for agent, expiry in self._agent_cooldowns.items()
@@ -398,17 +399,17 @@ class PerturbationScheduler:
                 self._pending.append(converted)
 
     @property
-    def pending(self) -> List[ScheduledPerturbation]:
+    def pending(self) -> list[ScheduledPerturbation]:
         return list(self._pending)
 
     @property
-    def active(self) -> Dict[str, ScheduledPerturbation]:
+    def active(self) -> dict[str, ScheduledPerturbation]:
         return dict(self._active)
 
     # ------------------------------------------------------------------
     # State persistence helpers
     # ------------------------------------------------------------------
-    def export_state(self) -> Dict[str, object]:
+    def export_state(self) -> dict[str, object]:
         return {
             "pending": [self._serialize_event(event) for event in self._pending],
             "active": {
@@ -422,7 +423,7 @@ class PerturbationScheduler:
             "rng_state": encode_rng_state(self._random.getstate()),
         }
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         self._pending = [
             self._coerce_event(entry)
             for entry in payload.get("pending", [])
@@ -533,7 +534,7 @@ class PerturbationScheduler:
         )
 
     @staticmethod
-    def _serialize_event(event: ScheduledPerturbation) -> Dict[str, object]:
+    def _serialize_event(event: ScheduledPerturbation) -> dict[str, object]:
         return {
             "event_id": event.event_id,
             "spec_name": event.spec_name,
@@ -544,10 +545,10 @@ class PerturbationScheduler:
             "targets": list(event.targets),
         }
 
-    def serialize_event(self, event: ScheduledPerturbation) -> Dict[str, object]:
+    def serialize_event(self, event: ScheduledPerturbation) -> dict[str, object]:
         return self._serialize_event(event)
 
-    def latest_state(self) -> Dict[str, object]:
+    def latest_state(self) -> dict[str, object]:
         return {
             "active": {
                 event_id: self._serialize_event(event)

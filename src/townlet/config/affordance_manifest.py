@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Tuple
 
 import yaml
 
@@ -19,7 +19,7 @@ class ManifestObject:
 
     object_id: str
     object_type: str
-    stock: Dict[str, int]
+    stock: dict[str, int]
     position: tuple[int, int] | None = None
 
 
@@ -30,9 +30,9 @@ class ManifestAffordance:
     affordance_id: str
     object_type: str
     duration: int
-    effects: Dict[str, float]
-    preconditions: List[str]
-    hooks: Dict[str, List[str]]
+    effects: dict[str, float]
+    preconditions: list[str]
+    hooks: dict[str, list[str]]
 
 
 @dataclass(frozen=True)
@@ -41,8 +41,8 @@ class AffordanceManifest:
 
     path: Path
     checksum: str
-    objects: List[ManifestObject]
-    affordances: List[ManifestAffordance]
+    objects: list[ManifestObject]
+    affordances: list[ManifestAffordance]
 
     @property
     def object_count(self) -> int:
@@ -82,8 +82,8 @@ def load_affordance_manifest(path: Path) -> AffordanceManifest:
             f"Affordance manifest {path} must be a list of entries"
         )
 
-    objects: List[ManifestObject] = []
-    affordances: List[ManifestAffordance] = []
+    objects: list[ManifestObject] = []
+    affordances: list[ManifestAffordance] = []
     seen_ids: set[str] = set()
 
     for index, entry in enumerate(payload):
@@ -130,7 +130,7 @@ def _parse_object_entry(
         raise AffordanceManifestError(
             f"Entry {index} ({object_id}) in {path} has invalid 'stock' field"
         )
-    stock: Dict[str, int] = {}
+    stock: dict[str, int] = {}
     for key, value in stock_raw.items():
         if not isinstance(key, str):
             raise AffordanceManifestError(
@@ -185,7 +185,7 @@ def _parse_affordance_entry(
         raise AffordanceManifestError(
             f"Entry {index} ({affordance_id}) in {path} must define non-empty 'effects'"
         )
-    effects: Dict[str, float] = {}
+    effects: dict[str, float] = {}
     for name, value in effects_raw.items():
         if not isinstance(name, str):
             raise AffordanceManifestError(
@@ -208,7 +208,7 @@ def _parse_affordance_entry(
     )
 
     hooks_raw = entry.get("hooks", {})
-    hooks: Dict[str, List[str]] = {}
+    hooks: dict[str, list[str]] = {}
     if hooks_raw:
         if not isinstance(hooks_raw, Mapping):
             raise AffordanceManifestError(
@@ -267,7 +267,7 @@ def _parse_string_list(
     path: Path,
     index: int,
     entry_id: str,
-) -> List[str]:
+) -> list[str]:
     if value in (None, ""):
         return []
     if isinstance(value, str):
@@ -276,7 +276,7 @@ def _parse_string_list(
         raise AffordanceManifestError(
             f"Entry {index} ({entry_id}) in {path} has invalid '{field}' list"
         )
-    items: List[str] = []
+    items: list[str] = []
     for item in value:
         if not isinstance(item, str):
             raise AffordanceManifestError(

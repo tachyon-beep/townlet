@@ -323,4 +323,5 @@ def test_world_relationship_snapshot_round_trip(
     assert (
         restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()
     )
-    # Perturbation scheduler is external in this test; ensure state maintained via scheduler snapshot.
+    # Perturbation scheduler runs outside the manager in this test; ensure state
+    # persists via the scheduler snapshot payload.

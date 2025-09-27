@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Dict, Iterable, List, Optional, Set, Tuple
+from collections.abc import Iterable
+from typing import Optional
 
 from townlet.config import SimulationConfig
 
@@ -14,9 +15,9 @@ class StabilityMonitor:
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.latest_alert: str | None = None
-        self.latest_alerts: List[str] = []
-        self.last_queue_metrics: Optional[Dict[str, int]] = None
-        self.last_embedding_metrics: Optional[Dict[str, float]] = None
+        self.latest_alerts: list[str] = []
+        self.last_queue_metrics: Optional[dict[str, int]] = None
+        self.last_embedding_metrics: Optional[dict[str, float]] = None
         self.fail_threshold = config.stability.affordance_fail_threshold
         self.lateness_threshold = config.stability.lateness_threshold
         self._employment_enabled = config.employment.enforce_job_loop
@@ -25,14 +26,14 @@ class StabilityMonitor:
         self._reward_cfg = config.stability.reward_variance
         self._option_cfg = config.stability.option_thrash
 
-        self._starvation_streaks: Dict[str, int] = {}
-        self._starvation_active: Set[str] = set()
-        self._starvation_incidents: Deque[Tuple[int, str]] = deque()
+        self._starvation_streaks: dict[str, int] = {}
+        self._starvation_active: set[str] = set()
+        self._starvation_incidents: deque[tuple[int, str]] = deque()
 
-        self._reward_samples: Deque[Tuple[int, float]] = deque()
-        self._option_samples: Deque[Tuple[int, float]] = deque()
+        self._reward_samples: deque[tuple[int, float]] = deque()
+        self._option_samples: deque[tuple[int, float]] = deque()
 
-        self._latest_metrics: Dict[str, object] = {
+        self._latest_metrics: dict[str, object] = {
             "alerts": [],
             "thresholds": self._threshold_snapshot(),
         }
@@ -41,19 +42,19 @@ class StabilityMonitor:
         self,
         *,
         tick: int,
-        rewards: Dict[str, float],
-        terminated: Dict[str, bool],
-        queue_metrics: Dict[str, int] | None = None,
-        embedding_metrics: Dict[str, float] | None = None,
-        job_snapshot: Dict[str, Dict[str, object]] | None = None,
-        events: Iterable[Dict[str, object]] | None = None,
-        employment_metrics: Dict[str, object] | None = None,
-        hunger_levels: Dict[str, float] | None = None,
-        option_switch_counts: Dict[str, int] | None = None,
+        rewards: dict[str, float],
+        terminated: dict[str, bool],
+        queue_metrics: dict[str, int] | None = None,
+        embedding_metrics: dict[str, float] | None = None,
+        job_snapshot: dict[str, dict[str, object]] | None = None,
+        events: Iterable[dict[str, object]] | None = None,
+        employment_metrics: dict[str, object] | None = None,
+        hunger_levels: dict[str, float] | None = None,
+        option_switch_counts: dict[str, int] | None = None,
     ) -> None:
         self.last_queue_metrics = queue_metrics
         self.last_embedding_metrics = embedding_metrics
-        alerts: List[str] = []
+        alerts: list[str] = []
 
         if embedding_metrics and embedding_metrics.get("reuse_warning"):
             alerts.append("embedding_reuse_warning")
@@ -132,10 +133,10 @@ class StabilityMonitor:
             "thresholds": self._threshold_snapshot(),
         }
 
-    def latest_metrics(self) -> Dict[str, object]:
+    def latest_metrics(self) -> dict[str, object]:
         return dict(self._latest_metrics)
 
-    def export_state(self) -> Dict[str, object]:
+    def export_state(self) -> dict[str, object]:
         return {
             "starvation_streaks": dict(self._starvation_streaks),
             "starvation_active": list(self._starvation_active),
@@ -147,7 +148,7 @@ class StabilityMonitor:
             "latest_metrics": dict(self._latest_metrics),
         }
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         streaks = payload.get("starvation_streaks", {})
         if isinstance(streaks, dict):
             self._starvation_streaks = {
@@ -210,8 +211,8 @@ class StabilityMonitor:
         self,
         *,
         tick: int,
-        hunger_levels: Dict[str, float] | None,
-        terminated: Dict[str, bool],
+        hunger_levels: dict[str, float] | None,
+        terminated: dict[str, bool],
     ) -> int:
         cutoff = tick - self._starvation_cfg.window_ticks
         while self._starvation_incidents and self._starvation_incidents[0][0] <= cutoff:
@@ -245,8 +246,8 @@ class StabilityMonitor:
         self,
         *,
         tick: int,
-        rewards: Dict[str, float],
-    ) -> Tuple[float | None, float | None, int]:
+        rewards: dict[str, float],
+    ) -> tuple[float | None, float | None, int]:
         cutoff = tick - self._reward_cfg.window_ticks
         while self._reward_samples and self._reward_samples[0][0] <= cutoff:
             self._reward_samples.popleft()
@@ -265,7 +266,7 @@ class StabilityMonitor:
         variance = sum((value - mean) ** 2 for value in values) / sample_count
         return variance, mean, sample_count
 
-    def _threshold_snapshot(self) -> Dict[str, object]:
+    def _threshold_snapshot(self) -> dict[str, object]:
         return {
             "affordance_fail_threshold": self.fail_threshold,
             "lateness_threshold": self.lateness_threshold,
@@ -278,7 +279,7 @@ class StabilityMonitor:
         self,
         *,
         tick: int,
-        option_switch_counts: Dict[str, int] | None,
+        option_switch_counts: dict[str, int] | None,
         active_agent_count: int,
     ) -> float | None:
         cutoff = tick - self._option_cfg.window_ticks

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig
@@ -40,7 +41,7 @@ class SnapshotMigrationRegistry:
     """Maintains registered snapshot migrations keyed by config identifiers."""
 
     def __init__(self) -> None:
-        self._graph: Dict[str, Dict[str, MigrationEdge]] = {}
+        self._graph: dict[str, dict[str, MigrationEdge]] = {}
 
     def register(
         self, from_config: str, to_config: str, handler: MigrationHandler
@@ -56,13 +57,13 @@ class SnapshotMigrationRegistry:
     def _neighbours(self, node: str) -> Iterable[MigrationEdge]:
         return self._graph.get(node, {}).values()
 
-    def find_path(self, start: str, goal: str) -> List[MigrationEdge]:
+    def find_path(self, start: str, goal: str) -> list[MigrationEdge]:
         start = str(start)
         goal = str(goal)
         if start == goal:
             return []
         visited = {start}
-        queue: deque[Tuple[str, List[MigrationEdge]]] = deque([(start, [])])
+        queue: deque[tuple[str, list[MigrationEdge]]] = deque([(start, [])])
         while queue:
             node, path = queue.popleft()
             for edge in self._neighbours(node):
@@ -79,11 +80,11 @@ class SnapshotMigrationRegistry:
 
     def apply_path(
         self,
-        path: List[MigrationEdge],
+        path: list[MigrationEdge],
         state: "SnapshotState",
         config: "SimulationConfig",
-    ) -> Tuple["SnapshotState", List[str]]:
-        applied: List[str] = []
+    ) -> tuple["SnapshotState", list[str]]:
+        applied: list[str] = []
         current = state
         for edge in path:
             result = edge.handler(current, config)

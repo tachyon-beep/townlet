@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Mapping, Optional
+from typing import TYPE_CHECKING, Optional
 
 from townlet.agents.models import Personality
 from townlet.config import SimulationConfig
@@ -48,25 +49,25 @@ logger = logging.getLogger(__name__)
 class SnapshotState:
     config_id: str
     tick: int
-    agents: Dict[str, Dict[str, object]] = field(default_factory=dict)
-    objects: Dict[str, Dict[str, object]] = field(default_factory=dict)
-    queues: Dict[str, object] = field(default_factory=dict)
-    embeddings: Dict[str, object] = field(default_factory=dict)
-    employment: Dict[str, object] = field(default_factory=dict)
-    lifecycle: Dict[str, object] = field(default_factory=dict)
+    agents: dict[str, dict[str, object]] = field(default_factory=dict)
+    objects: dict[str, dict[str, object]] = field(default_factory=dict)
+    queues: dict[str, object] = field(default_factory=dict)
+    embeddings: dict[str, object] = field(default_factory=dict)
+    employment: dict[str, object] = field(default_factory=dict)
+    lifecycle: dict[str, object] = field(default_factory=dict)
     rng_state: Optional[str] = None
-    rng_streams: Dict[str, str] = field(default_factory=dict)
-    telemetry: Dict[str, object] = field(default_factory=dict)
+    rng_streams: dict[str, str] = field(default_factory=dict)
+    telemetry: dict[str, object] = field(default_factory=dict)
     console_buffer: list[object] = field(default_factory=list)
-    perturbations: Dict[str, object] = field(default_factory=dict)
-    relationships: Dict[str, Dict[str, Dict[str, float]]] = field(default_factory=dict)
-    stability: Dict[str, object] = field(default_factory=dict)
-    identity: Dict[str, object] = field(default_factory=dict)
-    migrations: Dict[str, object] = field(
+    perturbations: dict[str, object] = field(default_factory=dict)
+    relationships: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
+    stability: dict[str, object] = field(default_factory=dict)
+    identity: dict[str, object] = field(default_factory=dict)
+    migrations: dict[str, object] = field(
         default_factory=lambda: {"applied": [], "required": []}
     )
 
-    def as_dict(self) -> Dict[str, object]:
+    def as_dict(self) -> dict[str, object]:
         return {
             "config_id": self.config_id,
             "tick": self.tick,
@@ -103,38 +104,38 @@ class SnapshotState:
         agents_obj = payload.get("agents", {})
         if not isinstance(agents_obj, Mapping):
             raise ValueError("Snapshot agents field must be a mapping")
-        agents: Dict[str, Dict[str, object]] = {
+        agents: dict[str, dict[str, object]] = {
             str(agent_id): dict(data) for agent_id, data in agents_obj.items()
         }
 
         objects_obj = payload.get("objects", {})
         if not isinstance(objects_obj, Mapping):
             raise ValueError("Snapshot objects field must be a mapping")
-        objects: Dict[str, Dict[str, object]] = {
+        objects: dict[str, dict[str, object]] = {
             str(object_id): dict(data) for object_id, data in objects_obj.items()
         }
 
         queues_payload = payload.get("queues", {})
         if isinstance(queues_payload, Mapping):
-            queues: Dict[str, object] = dict(queues_payload)
+            queues: dict[str, object] = dict(queues_payload)
         else:
             queues = {}
 
         embeddings_payload = payload.get("embeddings", {})
         if isinstance(embeddings_payload, Mapping):
-            embeddings: Dict[str, object] = dict(embeddings_payload)
+            embeddings: dict[str, object] = dict(embeddings_payload)
         else:
             embeddings = {}
 
         employment_payload = payload.get("employment", {})
         if isinstance(employment_payload, Mapping):
-            employment: Dict[str, object] = dict(employment_payload)
+            employment: dict[str, object] = dict(employment_payload)
         else:
             employment = {}
 
         lifecycle_payload = payload.get("lifecycle", {})
         if isinstance(lifecycle_payload, Mapping):
-            lifecycle: Dict[str, object] = dict(lifecycle_payload)
+            lifecycle: dict[str, object] = dict(lifecycle_payload)
         else:
             lifecycle = {}
 
@@ -147,7 +148,7 @@ class SnapshotState:
 
         rng_streams_payload = payload.get("rng_streams", {})
         if isinstance(rng_streams_payload, Mapping):
-            rng_streams: Dict[str, str] = {
+            rng_streams: dict[str, str] = {
                 str(name): str(data)
                 for name, data in rng_streams_payload.items()
                 if isinstance(data, str)
@@ -158,7 +159,7 @@ class SnapshotState:
             rng_streams["world"] = rng_state_str
 
         telemetry_payload = payload.get("telemetry", {})
-        telemetry: Dict[str, object] = (
+        telemetry: dict[str, object] = (
             dict(telemetry_payload) if isinstance(telemetry_payload, Mapping) else {}
         )
 
@@ -170,7 +171,7 @@ class SnapshotState:
 
         perturbations_payload = payload.get("perturbations", {})
         if isinstance(perturbations_payload, Mapping):
-            perturbations: Dict[str, object] = dict(perturbations_payload)
+            perturbations: dict[str, object] = dict(perturbations_payload)
         else:
             perturbations = {}
 
@@ -179,12 +180,12 @@ class SnapshotState:
         relationships_obj = payload["relationships"]
         if not isinstance(relationships_obj, Mapping):
             raise ValueError("Snapshot relationships field must be a mapping")
-        relationships: Dict[str, Dict[str, Dict[str, float]]] = {}
+        relationships: dict[str, dict[str, dict[str, float]]] = {}
         for owner, edges in relationships_obj.items():
             if not isinstance(edges, Mapping):
                 raise ValueError("Relationship edges must be mappings")
             owner_id = str(owner)
-            owner_edges: Dict[str, Dict[str, float]] = {}
+            owner_edges: dict[str, dict[str, float]] = {}
             for other, values in edges.items():
                 if isinstance(values, Mapping):
                     owner_edges[str(other)] = {
@@ -202,19 +203,19 @@ class SnapshotState:
                     }
             relationships[owner_id] = owner_edges
         stability_payload = payload.get("stability", {})
-        stability: Dict[str, object] = (
+        stability: dict[str, object] = (
             dict(stability_payload) if isinstance(stability_payload, Mapping) else {}
         )
 
         identity_payload = payload.get("identity", {})
         if isinstance(identity_payload, Mapping):
-            identity: Dict[str, object] = dict(identity_payload)
+            identity: dict[str, object] = dict(identity_payload)
         else:
             identity = {"config_id": config_id}
 
         migrations_payload = payload.get("migrations", {})
         if isinstance(migrations_payload, Mapping):
-            migrations: Dict[str, object] = dict(migrations_payload)
+            migrations: dict[str, object] = dict(migrations_payload)
         else:
             migrations = {"applied": [], "required": []}
 
@@ -252,7 +253,7 @@ def snapshot_from_world(
 ) -> SnapshotState:
     """Capture the current world state into a snapshot payload."""
 
-    agents_payload: Dict[str, Dict[str, object]] = {}
+    agents_payload: dict[str, dict[str, object]] = {}
     for agent_id, snapshot in world.agents.items():
         agents_payload[agent_id] = {
             "position": list(snapshot.position),
@@ -276,7 +277,7 @@ def snapshot_from_world(
             "exit_pending": bool(snapshot.exit_pending),
         }
 
-    objects_payload: Dict[str, Dict[str, object]] = {}
+    objects_payload: dict[str, dict[str, object]] = {}
     for object_id, obj in world.objects.items():
         objects_payload[object_id] = {
             "object_type": obj.object_type,
@@ -292,11 +293,11 @@ def snapshot_from_world(
         "exits_today": world._employment_exits_today,
     }
 
-    lifecycle_payload: Dict[str, object] = {}
+    lifecycle_payload: dict[str, object] = {}
     if lifecycle is not None:
         lifecycle_payload = lifecycle.export_state()
 
-    encoded_rngs: Dict[str, str] = {}
+    encoded_rngs: dict[str, str] = {}
     if rng_streams:
         for name, rng in rng_streams.items():
             if rng is None:
@@ -313,7 +314,7 @@ def snapshot_from_world(
 
     rng_payload = encoded_rngs.get("world")
 
-    telemetry_payload: Dict[str, object] = {}
+    telemetry_payload: dict[str, object] = {}
     console_buffer: list[object] = []
     if telemetry is not None:
         telemetry_payload = telemetry.export_state()
@@ -327,7 +328,7 @@ def snapshot_from_world(
     if stability is not None:
         stability_payload = stability.export_state()
 
-    identity_payload: Dict[str, object] = {
+    identity_payload: dict[str, object] = {
         "config_id": config.config_id,
         "observation_variant": getattr(config, "observation_variant", None),
     }
@@ -532,7 +533,8 @@ class SnapshotManager:
             ):
                 if not allow_downgrade:
                     raise ValueError(
-                        "Snapshot schema version %s is newer than supported %s (enable snapshot.guardrails.allow_downgrade to override)"
+                        "Snapshot schema version %s is newer than supported %s "
+                        "(enable snapshot.guardrails.allow_downgrade to override)"
                         % (schema_version, SNAPSHOT_SCHEMA_VERSION)
                     )
             else:

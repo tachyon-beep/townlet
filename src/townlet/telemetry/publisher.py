@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from typing import TYPE_CHECKING
 
 from townlet.config import SimulationConfig
 from townlet.telemetry.narration import NarrationRateLimiter
@@ -17,41 +18,41 @@ class TelemetryPublisher:
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.schema_version = "0.8.0"
-        self._console_buffer: List[object] = []
-        self._latest_queue_metrics: Dict[str, int] | None = None
-        self._latest_embedding_metrics: Dict[str, float] | None = None
-        self._latest_events: List[Dict[str, object]] = []
-        self._event_subscribers: List[Callable[[List[Dict[str, object]]], None]] = []
-        self._latest_employment_metrics: Dict[str, object] = {}
-        self._latest_conflict_snapshot: Dict[str, object] = {
+        self._console_buffer: list[object] = []
+        self._latest_queue_metrics: dict[str, int] | None = None
+        self._latest_embedding_metrics: dict[str, float] | None = None
+        self._latest_events: list[dict[str, object]] = []
+        self._event_subscribers: list[Callable[[list[dict[str, object]]], None]] = []
+        self._latest_employment_metrics: dict[str, object] = {}
+        self._latest_conflict_snapshot: dict[str, object] = {
             "queues": {"cooldown_events": 0, "ghost_step_events": 0},
             "rivalry": {},
         }
-        self._latest_relationship_metrics: Dict[str, object] | None = None
-        self._latest_job_snapshot: Dict[str, object] = {}
-        self._latest_economy_snapshot: Dict[str, object] = {}
-        self._latest_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
-        self._latest_relationship_updates: List[Dict[str, object]] = []
-        self._previous_relationship_snapshot: Dict[str, Dict[str, Dict[str, float]]] = (
+        self._latest_relationship_metrics: dict[str, object] | None = None
+        self._latest_job_snapshot: dict[str, object] = {}
+        self._latest_economy_snapshot: dict[str, object] = {}
+        self._latest_relationship_snapshot: dict[str, dict[str, dict[str, float]]] = {}
+        self._latest_relationship_updates: list[dict[str, object]] = []
+        self._previous_relationship_snapshot: dict[str, dict[str, dict[str, float]]] = (
             {}
         )
         self._narration_limiter = NarrationRateLimiter(self.config.telemetry.narration)
-        self._latest_narrations: List[Dict[str, object]] = []
-        self._latest_anneal_status: Dict[str, object] | None = None
-        self._latest_relationship_overlay: Dict[str, List[Dict[str, object]]] = {}
-        self._latest_policy_snapshot: Dict[str, Dict[str, object]] = {}
-        self._kpi_history: Dict[str, List[float]] = {
+        self._latest_narrations: list[dict[str, object]] = []
+        self._latest_anneal_status: dict[str, object] | None = None
+        self._latest_relationship_overlay: dict[str, list[dict[str, object]]] = {}
+        self._latest_policy_snapshot: dict[str, dict[str, object]] = {}
+        self._kpi_history: dict[str, list[float]] = {
             "queue_conflict_intensity": [],
             "employment_lateness": [],
             "late_help_events": [],
         }
-        self._latest_affordance_manifest: Dict[str, object] = {}
-        self._latest_reward_breakdown: Dict[str, Dict[str, float]] = {}
-        self._latest_stability_inputs: Dict[str, object] = {}
-        self._latest_stability_metrics: Dict[str, object] = {}
-        self._latest_perturbations: Dict[str, object] = {}
-        self._latest_policy_identity: Dict[str, object] | None = None
-        self._latest_snapshot_migrations: List[str] = []
+        self._latest_affordance_manifest: dict[str, object] = {}
+        self._latest_reward_breakdown: dict[str, dict[str, float]] = {}
+        self._latest_stability_inputs: dict[str, object] = {}
+        self._latest_stability_metrics: dict[str, object] = {}
+        self._latest_perturbations: dict[str, object] = {}
+        self._latest_policy_identity: dict[str, object] | None = None
+        self._latest_snapshot_migrations: list[str] = []
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -61,8 +62,8 @@ class TelemetryPublisher:
         self._console_buffer.clear()
         return drained
 
-    def export_state(self) -> Dict[str, object]:
-        state: Dict[str, object] = {
+    def export_state(self) -> dict[str, object]:
+        state: dict[str, object] = {
             "queue_metrics": dict(self._latest_queue_metrics or {}),
             "embedding_metrics": dict(self._latest_embedding_metrics or {}),
             "conflict_snapshot": dict(self._latest_conflict_snapshot),
@@ -104,7 +105,7 @@ class TelemetryPublisher:
             state["snapshot_migrations"] = list(self._latest_snapshot_migrations)
         return state
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         self._latest_queue_metrics = payload.get("queue_metrics") or None
         if self._latest_queue_metrics is not None:
             self._latest_queue_metrics = dict(self._latest_queue_metrics)
@@ -207,7 +208,7 @@ class TelemetryPublisher:
 
         kpi_payload = payload.get("kpi_history")
         if isinstance(kpi_payload, Mapping):
-            history: Dict[str, List[float]] = {}
+            history: dict[str, list[float]] = {}
             for name, values in kpi_payload.items():
                 if isinstance(values, list):
                     coerced = [
@@ -219,7 +220,7 @@ class TelemetryPublisher:
             if history:
                 self._kpi_history = history
 
-    def export_console_buffer(self) -> List[object]:
+    def export_console_buffer(self) -> list[object]:
         return list(self._console_buffer)
 
     def import_console_buffer(self, buffer: Iterable[object]) -> None:
@@ -230,9 +231,9 @@ class TelemetryPublisher:
         *,
         tick: int,
         world: "WorldState",
-        observations: Dict[str, object],
-        rewards: Dict[str, float],
-        events: Iterable[Dict[str, object]] | None = None,
+        observations: dict[str, object],
+        rewards: dict[str, float],
+        events: Iterable[dict[str, object]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
         kpi_history: bool = False,
         reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
@@ -246,7 +247,7 @@ class TelemetryPublisher:
         self._latest_narrations = []
         queue_metrics = world.queue_manager.metrics()
         self._latest_queue_metrics = queue_metrics
-        rivalry_snapshot: Dict[str, object] = {}
+        rivalry_snapshot: dict[str, object] = {}
         rivalry_getter = getattr(world, "rivalry_snapshot", None)
         if callable(rivalry_getter):
             rivalry_snapshot = dict(rivalry_getter())
@@ -272,7 +273,7 @@ class TelemetryPublisher:
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
         raw_embedding_metrics = world.embedding_allocator.metrics()
-        processed_embedding_metrics: Dict[str, object] = {}
+        processed_embedding_metrics: dict[str, object] = {}
         for key, value in raw_embedding_metrics.items():
             if isinstance(value, (int, float)):
                 processed_embedding_metrics[str(key)] = float(value)
@@ -359,7 +360,7 @@ class TelemetryPublisher:
         if policy_identity is not None:
             self.update_policy_identity(policy_identity)
 
-    def latest_queue_metrics(self) -> Dict[str, int] | None:
+    def latest_queue_metrics(self) -> dict[str, int] | None:
         """Expose the most recent queue-related telemetry counters."""
         if self._latest_queue_metrics is None:
             return None
@@ -369,10 +370,10 @@ class TelemetryPublisher:
         """Record the latest anneal status payload for observer dashboards."""
         self._latest_anneal_status = dict(status) if status else None
 
-    def kpi_history(self) -> Dict[str, List[float]]:
+    def kpi_history(self) -> dict[str, list[float]]:
         return {key: list(values) for key, values in self._kpi_history.items()}
 
-    def latest_conflict_snapshot(self) -> Dict[str, object]:
+    def latest_conflict_snapshot(self) -> dict[str, object]:
         """Return the conflict-focused telemetry payload (queues + rivalry)."""
         snapshot = dict(self._latest_conflict_snapshot)
         queues = snapshot.get("queues")
@@ -380,21 +381,21 @@ class TelemetryPublisher:
             snapshot["queues"] = dict(queues)
         return snapshot
 
-    def latest_affordance_manifest(self) -> Dict[str, object]:
+    def latest_affordance_manifest(self) -> dict[str, object]:
         """Expose the most recent affordance manifest metadata."""
 
         return dict(self._latest_affordance_manifest)
 
-    def latest_reward_breakdown(self) -> Dict[str, Dict[str, float]]:
+    def latest_reward_breakdown(self) -> dict[str, dict[str, float]]:
         return {
             agent: dict(components)
             for agent, components in self._latest_reward_breakdown.items()
         }
 
-    def latest_stability_inputs(self) -> Dict[str, object]:
+    def latest_stability_inputs(self) -> dict[str, object]:
         if not self._latest_stability_inputs:
             return {}
-        result: Dict[str, object] = {}
+        result: dict[str, object] = {}
         hunger = self._latest_stability_inputs.get("hunger_levels")
         if isinstance(hunger, dict):
             result["hunger_levels"] = {
@@ -415,17 +416,17 @@ class TelemetryPublisher:
     def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
         self._latest_stability_metrics = dict(metrics)
 
-    def latest_stability_metrics(self) -> Dict[str, object]:
+    def latest_stability_metrics(self) -> dict[str, object]:
         return dict(self._latest_stability_metrics)
 
-    def latest_stability_alerts(self) -> List[str]:
+    def latest_stability_alerts(self) -> list[str]:
         metrics = self.latest_stability_metrics()
         alerts = metrics.get("alerts")
         if isinstance(alerts, list):
             return [str(alert) for alert in alerts]
         return []
 
-    def latest_perturbations(self) -> Dict[str, object]:
+    def latest_perturbations(self) -> dict[str, object]:
         return {
             "active": {
                 event_id: dict(data)
@@ -458,7 +459,7 @@ class TelemetryPublisher:
         }
         self._latest_policy_identity = payload
 
-    def latest_policy_identity(self) -> Dict[str, object] | None:
+    def latest_policy_identity(self) -> dict[str, object] | None:
         if self._latest_policy_identity is None:
             return None
         return dict(self._latest_policy_identity)
@@ -466,29 +467,29 @@ class TelemetryPublisher:
     def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
         self._latest_snapshot_migrations = [str(item) for item in applied]
 
-    def latest_snapshot_migrations(self) -> List[str]:
+    def latest_snapshot_migrations(self) -> list[str]:
         return list(self._latest_snapshot_migrations)
 
     def _normalize_perturbations_payload(
         self, payload: Mapping[str, object]
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         active = payload.get("active", {})
         pending = payload.get("pending", [])
         cooldowns = payload.get("cooldowns", {})
-        active_map: Dict[str, Dict[str, object]] = {}
+        active_map: dict[str, dict[str, object]] = {}
         if isinstance(active, Mapping):
             active_map = {
                 str(event_id): dict(entry)
                 for event_id, entry in active.items()
                 if isinstance(entry, Mapping)
             }
-        pending_list: List[Dict[str, object]] = []
+        pending_list: list[dict[str, object]] = []
         if isinstance(pending, list):
             pending_list = [
                 dict(entry) for entry in pending if isinstance(entry, Mapping)
             ]
-        spec_cd: Dict[str, int] = {}
-        agent_cd: Dict[str, int] = {}
+        spec_cd: dict[str, int] = {}
+        agent_cd: dict[str, int] = {}
         if isinstance(cooldowns, Mapping):
             spec_payload = cooldowns.get("spec", {})
             if isinstance(spec_payload, Mapping):
@@ -510,17 +511,17 @@ class TelemetryPublisher:
             "cooldowns": {"spec": spec_cd, "agents": agent_cd},
         }
 
-    def latest_policy_snapshot(self) -> Dict[str, Dict[str, object]]:
+    def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
         return {
             agent: dict(data) for agent, data in self._latest_policy_snapshot.items()
         }
 
-    def latest_anneal_status(self) -> Dict[str, object] | None:
+    def latest_anneal_status(self) -> dict[str, object] | None:
         if self._latest_anneal_status is None:
             return None
         return dict(self._latest_anneal_status)
 
-    def latest_relationship_metrics(self) -> Dict[str, object] | None:
+    def latest_relationship_metrics(self) -> dict[str, object] | None:
         """Expose relationship churn payload captured during publish."""
         if self._latest_relationship_metrics is None:
             return None
@@ -530,50 +531,50 @@ class TelemetryPublisher:
             payload["history"] = [dict(entry) for entry in history]
         return payload
 
-    def latest_relationship_snapshot(self) -> Dict[str, Dict[str, Dict[str, float]]]:
+    def latest_relationship_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
         return self._copy_relationship_snapshot(self._latest_relationship_snapshot)
 
-    def latest_relationship_updates(self) -> List[Dict[str, object]]:
+    def latest_relationship_updates(self) -> list[dict[str, object]]:
         return [dict(update) for update in self._latest_relationship_updates]
 
-    def update_relationship_metrics(self, payload: Dict[str, object]) -> None:
+    def update_relationship_metrics(self, payload: dict[str, object]) -> None:
         """Allow external callers to seed the latest relationship metrics."""
         self._latest_relationship_metrics = dict(payload)
 
-    def latest_relationship_overlay(self) -> Dict[str, List[Dict[str, object]]]:
+    def latest_relationship_overlay(self) -> dict[str, list[dict[str, object]]]:
         return {
             agent: [dict(item) for item in entries]
             for agent, entries in self._latest_relationship_overlay.items()
         }
 
-    def latest_narrations(self) -> List[Dict[str, object]]:
+    def latest_narrations(self) -> list[dict[str, object]]:
         """Expose narration entries emitted during the latest publish call."""
 
         return [dict(entry) for entry in self._latest_narrations]
 
-    def latest_embedding_metrics(self) -> Dict[str, float] | None:
+    def latest_embedding_metrics(self) -> dict[str, float] | None:
         """Expose embedding allocator counters."""
         if self._latest_embedding_metrics is None:
             return None
         return dict(self._latest_embedding_metrics)
 
-    def latest_events(self) -> Iterable[Dict[str, object]]:
+    def latest_events(self) -> Iterable[dict[str, object]]:
         """Return the most recent event batch."""
         return getattr(self, "_latest_events", [])
 
     def register_event_subscriber(
-        self, subscriber: Callable[[List[Dict[str, object]]], None]
+        self, subscriber: Callable[[list[dict[str, object]]], None]
     ) -> None:
         """Register a callback to receive each tick's event batch."""
         self._event_subscribers.append(subscriber)
 
-    def latest_job_snapshot(self) -> Dict[str, Dict[str, object]]:
+    def latest_job_snapshot(self) -> dict[str, dict[str, object]]:
         return getattr(self, "_latest_job_snapshot", {})
 
-    def latest_economy_snapshot(self) -> Dict[str, Dict[str, object]]:
+    def latest_economy_snapshot(self) -> dict[str, dict[str, object]]:
         return getattr(self, "_latest_economy_snapshot", {})
 
-    def latest_employment_metrics(self) -> Dict[str, object]:
+    def latest_employment_metrics(self) -> dict[str, object]:
         return dict(getattr(self, "_latest_employment_metrics", {}))
 
     def schema(self) -> str:
@@ -582,14 +583,14 @@ class TelemetryPublisher:
     def _capture_relationship_snapshot(
         self,
         world: "WorldState",
-    ) -> Dict[str, Dict[str, Dict[str, float]]]:
+    ) -> dict[str, dict[str, dict[str, float]]]:
         snapshot_getter = getattr(world, "relationships_snapshot", None)
         if not callable(snapshot_getter):
             return {}
         raw = snapshot_getter() or {}
         if not isinstance(raw, dict):
             return {}
-        normalised: Dict[str, Dict[str, Dict[str, float]]] = {}
+        normalised: dict[str, dict[str, dict[str, float]]] = {}
         for owner, ties in raw.items():
             if not isinstance(ties, dict):
                 continue
@@ -606,10 +607,10 @@ class TelemetryPublisher:
 
     def _compute_relationship_updates(
         self,
-        previous: Dict[str, Dict[str, Dict[str, float]]],
-        current: Dict[str, Dict[str, Dict[str, float]]],
-    ) -> List[Dict[str, object]]:
-        updates: List[Dict[str, object]] = []
+        previous: dict[str, dict[str, dict[str, float]]],
+        current: dict[str, dict[str, dict[str, float]]],
+    ) -> list[dict[str, object]]:
+        updates: list[dict[str, object]] = []
         for owner, ties in current.items():
             prev_ties = previous.get(owner, {})
             for other, metrics in ties.items():
@@ -688,9 +689,9 @@ class TelemetryPublisher:
                     )
         return updates
 
-    def _build_relationship_overlay(self) -> Dict[str, List[Dict[str, object]]]:
-        overlay: Dict[str, List[Dict[str, object]]] = {}
-        delta_map: Dict[tuple[str, str], Dict[str, float]] = {}
+    def _build_relationship_overlay(self) -> dict[str, list[dict[str, object]]]:
+        overlay: dict[str, list[dict[str, object]]] = {}
+        delta_map: dict[tuple[str, str], dict[str, float]] = {}
         for entry in self._latest_relationship_updates:
             owner = str(entry.get("owner", ""))
             other = str(entry.get("other", ""))
@@ -709,7 +710,7 @@ class TelemetryPublisher:
                 key=lambda item: item[1].get("trust", 0.0),
                 reverse=True,
             )
-            summaries: List[Dict[str, object]] = []
+            summaries: list[dict[str, object]] = []
             for other, metrics in ranked[:3]:
                 delta = delta_map.get((owner, other), {})
                 summaries.append(
@@ -730,7 +731,7 @@ class TelemetryPublisher:
 
     def _process_narrations(
         self,
-        events: Iterable[Dict[str, object]],
+        events: Iterable[dict[str, object]],
         tick: int,
     ) -> None:
         for event in events:
@@ -740,7 +741,7 @@ class TelemetryPublisher:
 
     def _handle_queue_conflict_narration(
         self,
-        event: Dict[str, object],
+        event: dict[str, object],
         tick: int,
     ) -> None:
         actor = str(event.get("actor", ""))
@@ -788,8 +789,8 @@ class TelemetryPublisher:
 
     @staticmethod
     def _copy_relationship_snapshot(
-        snapshot: Dict[str, Dict[str, Dict[str, float]]],
-    ) -> Dict[str, Dict[str, Dict[str, float]]]:
+        snapshot: dict[str, dict[str, dict[str, float]]],
+    ) -> dict[str, dict[str, dict[str, float]]]:
         return {
             owner: {
                 other: {
