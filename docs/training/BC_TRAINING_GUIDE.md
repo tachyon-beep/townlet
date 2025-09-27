@@ -29,6 +29,11 @@ metrics = trainer.fit(dataset)
 ```
 *(In-code helper to compute map shape forthcoming; use dataset shapes for now.)*
 
+Command-line usage:
+```bash
+python scripts/run_training.py configs/examples/poc_hybrid.yaml --mode bc --bc-manifest data/bc_datasets/manifests/idle_v1.json
+```
+
 ## Evaluation
 - `BCTrainer.evaluate(dataset)` returns accuracy over the dataset.
 - `evaluate_bc_policy(model, dataset)` can run standalone evaluations (returns accuracy & sample count).
@@ -39,7 +44,6 @@ metrics = trainer.fit(dataset)
 - Store evaluation JSON alongside manifests for drift tracking.
 
 ## TODO
-- Integrate BC trainer into main training harness/CLI.
 - Expose evaluation & telemetry commands.
 - Document anneal schedule once Phase 5.3 lands.
 - See `docs/training/ANNEAL_SCHEDULES.md` for anneal configuration guidance.

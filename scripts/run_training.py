@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from townlet.config import PPOConfig
@@ -19,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=["replay", "rollout", "mixed"],
+        choices=["replay", "rollout", "mixed", "bc", "anneal"],
         default=None,
         help="Override training mode (defaults to config.training.source).",
     )
@@ -73,6 +74,23 @@ def parse_args() -> argparse.Namespace:
         "--replay-streaming",
         action="store_true",
         help="Stream samples from disk instead of preloading.",
+    )
+    parser.add_argument(
+        "--bc-manifest",
+        type=Path,
+        default=None,
+        help="Override training.bc.manifest when running bc/anneal modes.",
+    )
+    parser.add_argument(
+        "--anneal-log-dir",
+        type=Path,
+        default=None,
+        help="Directory to store anneal_results.json (anneal mode).",
+    )
+    parser.add_argument(
+        "--anneal-exit-on-failure",
+        action="store_true",
+        help="Exit with status 1 if anneal guardrails fail (anneal mode).",
     )
     parser.add_argument(
         "--train-ppo",
@@ -232,6 +250,46 @@ def _apply_ppo_overrides(config, overrides: dict[str, object]) -> None:
     base = config.ppo or PPOConfig()
     config.ppo = base.model_copy(update=overrides)
 
+def _build_dataset_config_from_args(
+    args: argparse.Namespace,
+    default_manifest: Path | None,
+) -> ReplayDatasetConfig | None:
+    common_kwargs = dict(
+        batch_size=args.replay_batch_size,
+        shuffle=args.replay_shuffle,
+        seed=args.replay_seed,
+        drop_last=args.replay_drop_last,
+        streaming=args.replay_streaming,
+    )
+    if args.capture_dir is not None:
+        return ReplayDatasetConfig.from_capture_dir(
+            args.capture_dir, **common_kwargs
+        )
+    if args.replay_manifest is not None:
+        return ReplayDatasetConfig.from_manifest(
+            args.replay_manifest, **common_kwargs
+        )
+    if args.replay_sample is not None:
+        entries = [(args.replay_sample, args.replay_meta)]
+        return ReplayDatasetConfig(entries=entries, **common_kwargs)
+    if default_manifest is not None:
+        return ReplayDatasetConfig.from_manifest(default_manifest, **common_kwargs)
+    return None
+
+def _evaluate_anneal_results(results: list[dict[str, object]]) -> str:
+    status = "PASS"
+    for stage in results:
+        mode = stage.get("mode")
+        if mode == "bc" and not stage.get("passed", True):
+            return "FAIL"
+        if mode == "ppo" and (
+            bool(stage.get("anneal_loss_flag"))
+            or bool(stage.get("anneal_queue_flag"))
+            or bool(stage.get("anneal_intensity_flag"))
+        ):
+            status = "HOLD"
+    return status
+
 
 def main() -> None:
     args = parse_args()
@@ -243,10 +301,47 @@ def main() -> None:
         raise ValueError("Specify either --capture-dir or --replay-manifest, not both")
 
     mode = (args.mode or config.training.source).lower()
-    if mode not in {"replay", "rollout", "mixed"}:
+    valid_modes = {"replay", "rollout", "mixed", "bc", "anneal"}
+    if mode not in valid_modes:
         raise ValueError(f"Unsupported training mode '{mode}'")
 
-    if args.rollout_ticks is not None and args.rollout_ticks > 0 and args.mode is None and config.training.source == "replay":
+    if mode == "bc":
+        bc_manifest = args.bc_manifest or config.training.bc.manifest
+        if bc_manifest is None:
+            raise ValueError("BC mode requires --bc-manifest or config.training.bc.manifest")
+        metrics = harness.run_bc_training(manifest=bc_manifest)
+        print(json.dumps(metrics, indent=2))
+        return
+
+    if mode == "anneal":
+        bc_manifest = args.bc_manifest or config.training.bc.manifest
+        if bc_manifest is None:
+            raise ValueError("Anneal mode requires --bc-manifest or config.training.bc.manifest")
+        dataset_config = _build_dataset_config_from_args(
+            args, config.training.replay_manifest
+        )
+        if dataset_config is None:
+            raise ValueError(
+                "Anneal mode requires replay dataset via --capture-dir, --replay-manifest, --replay-sample, or config.training.replay_manifest"
+            )
+        results = harness.run_anneal(
+            dataset_config=dataset_config,
+            bc_manifest=bc_manifest,
+            log_dir=args.anneal_log_dir,
+        )
+        print(json.dumps(results, indent=2))
+        if args.anneal_exit_on_failure:
+            status = _evaluate_anneal_results(results)
+            if status != "PASS":
+                raise SystemExit(1)
+        return
+
+    if (
+        args.rollout_ticks is not None
+        and args.rollout_ticks > 0
+        and args.mode is None
+        and config.training.source == "replay"
+    ):
         mode = "rollout"
 
     train_ppo = bool(args.train_ppo or mode in {"rollout", "mixed"})

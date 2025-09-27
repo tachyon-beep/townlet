@@ -126,8 +126,9 @@ rollback notes / thresholds).
 **Status (2025-09-30 update):** Completed — acceptance smoke run (idle_v1) archived, ops playbooks updated, CI guardrails in place, and go/no-go decision recorded (see `docs/certificates/M5_BC_ANNEAL_ACCEPTANCE.md`).
 
 ### Phase 5.5 – Anneal Promotion Governance (In progress)
-**Goal:** Surface anneal health in telemetry/ops tooling and prepare promotion controls.
+**Goal:** Finalise harness/CLI integration and promotion guardrails for BC ↔ PPO anneal.
 
+- **Task 5.5-S1** (Harness & CLI) — ✅ `TrainingHarness.run` supports `bc`/`anneal`; `scripts/run_training.py` exposes `--mode bc`/`--mode anneal` with manifest overrides, log directories, and guardrail exit codes.
 - **Task 5.5.b-S1** (Telemetry pipeline) — ✅ `PPO_TELEMETRY_VERSION` bumped to 1.2; logs now emit `anneal_*` metrics (BC accuracy, thresholds, drift flags). Watcher/summary CLIs consume the new fields.
 - **Task 5.5.b-S2** (Dashboard UX) — ✅ Observer UI adds an Anneal panel with BC gauges and drift alerts; guide updated.
 

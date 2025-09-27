@@ -385,10 +385,31 @@ class TrainingHarness:
         self._apply_social_reward_stage(-1)
         self._anneal_context: dict[str, object] | None = None
         self._anneal_baselines: dict[str, dict[str, float]] = {}
+        self._anneal_ratio: float | None = None
 
     def run(self) -> None:
-        """Entry point for CLI training runs."""
-        raise NotImplementedError("Training harness not yet implemented")
+        """Entry point for CLI training runs based on config.training.source."""
+        mode = self.config.training.source
+        if mode == "bc":
+            self.run_bc_training()
+            return
+        if mode == "anneal":
+            self.run_anneal()
+            return
+        raise NotImplementedError(
+            "Training mode '%s' is not supported via run(); use scripts/run_training.py with --mode."
+            % mode
+        )
+
+    def current_anneal_ratio(self) -> float | None:
+        return self._anneal_ratio
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            self._anneal_ratio = None
+        else:
+            clamped = max(0.0, min(1.0, float(ratio)))
+            self._anneal_ratio = clamped
 
     def run_replay(
         self, sample_path: Path, meta_path: Path | None = None

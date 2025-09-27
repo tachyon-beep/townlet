@@ -23,7 +23,7 @@ SocialRewardStage = Literal["OFF", "C1", "C2", "C3"]
 LifecycleToggle = Literal["on", "off"]
 CuriosityToggle = Literal["phase_A", "off"]
 ConsoleMode = Literal["viewer", "admin"]
-TrainingSource = Literal["replay", "rollout", "mixed"]
+TrainingSource = Literal["replay", "rollout", "mixed", "bc", "anneal"]
 TelemetryTransportType = Literal["stdout", "file", "tcp"]
 
 
