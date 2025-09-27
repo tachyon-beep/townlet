@@ -1,7 +1,7 @@
 # Townlet — Requirements v1.3
 
 Source of truth: docs/program_management/snapshots/CONCEPTUAL_DESIGN.md (v1.3)
-Config identity: `config_id` must be included in logs, snapshots, and release metadata.
+Config identity: `config_id` must be included in logs, snapshots, and release metadata. Snapshots must persist an identity block with `config_id`, policy hash, observation variant, and anneal ratio so operators can validate provenance.
 
 ## 1. Feature Flags
 
@@ -24,13 +24,13 @@ features:
 
 Observation variant must be baked into `config_id` and the policy hash; candidates that change variant require a variant A/B eval gate before promotion.
 
-Migration: on `config_id` mismatch, reject snapshot load unless a migration step is declared and passes.
+Migration: on `config_id` mismatch, reject snapshot load unless a migration step is declared and passes. The snapshot migration registry is the source of truth for approved transformations; applied handler identifiers must be retained in snapshot metadata and surfaced through telemetry.
 
 ## 2. Time & Determinism
 
 - Tick: 250 ms real-time; 1,000 ticks = 1 in‑sim day.
 - Time dilation: {1×, 10×, 100×, pause}; hot-switchable.
-- Determinism: three RNG streams — `world`, `events`, `policy`; captured in snapshots. Document reseed policy on spawn/exit.
+- Determinism: three RNG streams — `world`, `events`, `policy`; each stream is captured in snapshots as a base64-encoded state. Document reseed policy on spawn/exit.
 
 ## 3. Observation Contract
 

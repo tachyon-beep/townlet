@@ -32,7 +32,7 @@ def main() -> None:
         wallet=1.0,
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
-    router = create_console_router(loop.telemetry, world)
+    router = create_console_router(loop.telemetry, world, config=config)
 
     # Advance the sim to populate telemetry snapshots.
     for _ in range(20):
@@ -49,7 +49,11 @@ def main() -> None:
 
         restored = SimulationLoop(config)
         restored.load_snapshot(snapshot_path)
-        restored_router = create_console_router(restored.telemetry, restored.world)
+        restored_router = create_console_router(
+            restored.telemetry,
+            restored.world,
+            config=config,
+        )
 
         print("=== restored telemetry_snapshot ===")
         print(

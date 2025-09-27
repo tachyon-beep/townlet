@@ -49,6 +49,7 @@
   - Task: Implement sample migration (e.g., add default anneal ratio for v1.3 snapshots) to validate pipeline.
   - Task: Write pytest coverage for success/failure paths, including multi-step migrations and registry miss scenarios.
   - Task: Document migration authoring in developer docs.
+- **Status (2025-10-02):** ✅ Registry shipped (`townlet.snapshots.migrations`), SnapshotManager auto-applies registered chains with telemetry logging, and new tests (`tests/test_snapshot_migrations.py`) cover success/missing-path scenarios. Authoring guidance appended to WP05 design note.
 
 ### Phase 5.4 — Console & Telemetry Tooling
 - **Step 5.4-S1: Snapshot Diagnostics Commands**
@@ -60,6 +61,7 @@
 - **Step 5.4-S3: Logging & Audit Trail**
   - Task: Log snapshot save/load events with config_id, policy hash, rng fingerprints, and migration outcomes.
   - Task: Consider storing audit entries under `logs/console/snapshot*.jsonl` for ops traceability.
+- **Status (2025-10-02):** ✅ Console commands (`snapshot_inspect`, `snapshot_validate`, admin-only `snapshot_migrate`) implemented with telemetry exposure for policy identity and migration history; ops handbook updated.
 
 ### Phase 5.5 — Testing, CI, and Docs
 - **Step 5.5-S1: Testing Matrix Expansion**

@@ -117,6 +117,7 @@ def test_snapshot_round_trip(tmp_path: Path, sample_config) -> None:
     path = manager.save(state)
     loaded = manager.load(path, sample_config)
     assert loaded == state
+    assert loaded.migrations == {"applied": [], "required": []}
 
 
 def test_snapshot_config_mismatch_raises(tmp_path: Path, sample_config) -> None:
@@ -265,6 +266,7 @@ def test_world_relationship_snapshot_round_trip(tmp_path: Path, sample_config: S
     assert state.rng_streams["policy"] == encode_rng_state(policy_rng.getstate())
     assert state.identity == policy_identity
     assert loaded.identity == state.identity
+    assert state.migrations == {"applied": [], "required": []}
     assert state.perturbations == scheduler.export_state()
     assert restored_telemetry.export_state() == telemetry.export_state()
     assert restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()

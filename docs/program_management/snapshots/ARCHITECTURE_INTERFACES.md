@@ -125,15 +125,15 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 
 ### 2.11 Console & Auth (`src/townlet/console/`)
 - Typer CLI / REST service with viewer/admin modes, bearer tokens, and audit logging.
-- commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues, `employment_status`, `employment_exit <review|approve|defer>`, and admin-only perturbation controls (`perturbation_queue`, `perturbation_trigger`, `perturbation_cancel`).
+- commands: spawn, teleport, setneed, force_chat, arrange_meet, price adjustments, promotion/rollback (TBD), debug queues, `employment_status`, `employment_exit <review|approve|defer>`, snapshot diagnostics (`snapshot_inspect`, `snapshot_validate`, admin-only `snapshot_migrate`), and admin-only perturbation controls (`perturbation_queue`, `perturbation_trigger`, `perturbation_cancel`).
 - idempotency: `cmd_id` required for destructive operations; logs `cmd_id`, issuer, result.
 - event stream subscriber surfaces telemetry event batches for operator tooling.
 - `telemetry_snapshot` command returns per-agent job/economy payloads and employment queue metrics for planning and basket checks.
 
 ### 2.12 Persistence & Config Service (`src/townlet/snapshots/`, `src/townlet/config/`)
 - YAML configs validated via `SimulationConfig` (pydantic). New sections include `queue_fairness` and `embedding_allocator`.
-- snapshot payloads store world state, RNG seeds, policy hash, `config_id`, observation variant, anneal ratio.
-- migration: snapshot load rejects `config_id` mismatch unless migration defined.
+- snapshot payloads store world state, RNG seeds (world/events/policy streams), policy hash, `config_id`, observation variant, anneal ratio, and retain applied migrations/identity metadata.
+- migration: snapshot load rejects `config_id` mismatch unless migration defined; the snapshot migration registry orchestrates chained migrations with applied handler IDs surfaced through telemetry and console responses.
 
 ### 2.13 Perturbation Scheduler (`src/townlet/scheduler/perturbations.py`)
 - owns config-driven events (price spikes, outages, arranged meets) with per-spec

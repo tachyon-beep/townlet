@@ -59,6 +59,9 @@
   - For long-form audits, redirect the state to JSON: `python scripts/telemetry_summary.py <log> --format json | jq '.narrations'`.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
+  - `snapshot_inspect <path>` — read snapshot metadata (schema version, tick, identity, migrations) without applying it.
+  - `snapshot_validate <path> [--strict]` — load snapshot against the active config; with `--strict` it refuses to auto-migrate and surfaces the mismatch.
+  - `snapshot_migrate <path> [--output <dir>]` *(admin only)* — apply registered migrations and optionally re-save the migrated snapshot to a directory.
 - The console warns when connecting to shards reporting a newer schema (e.g., `0.3.x`); upgrade the client before issuing mutating commands.
 - Employment commands:
   - `employment_status` — dumps employment KPIs (pending exits, exit cap usage, queue limit) and latest queue contents.

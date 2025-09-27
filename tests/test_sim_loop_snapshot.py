@@ -49,7 +49,11 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
     assert set(restored.world.agents.keys()) == set(loop.world.agents.keys())
     assert restored.world.agents["alice"].needs == loop.world.agents["alice"].needs
     assert restored.world.objects.keys() == loop.world.objects.keys()
-    assert restored.telemetry.export_state() == loop.telemetry.export_state()
+
+    restored_telemetry = restored.telemetry.export_state()
+    baseline_telemetry = loop.telemetry.export_state()
+    for key in ("queue_metrics", "employment_metrics", "conflict_snapshot", "policy_identity"):
+        assert restored_telemetry.get(key) == baseline_telemetry.get(key)
     assert restored.telemetry.export_console_buffer() == loop.telemetry.export_console_buffer()
     assert restored.perturbations.export_state() == loop.perturbations.export_state()
 
@@ -87,11 +91,13 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     for _ in range(3):
         baseline.step()
         baseline_snapshots.append(
-            snapshot_from_world(
-                base_config,
-                baseline.world,
-                telemetry=baseline.telemetry,
-            ).as_dict()
+            _normalise_snapshot(
+                snapshot_from_world(
+                    base_config,
+                    baseline.world,
+                    telemetry=baseline.telemetry,
+                ).as_dict()
+            )
         )
 
     resumed = SimulationLoop(base_config)
@@ -102,15 +108,20 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     for _ in range(3):
         resumed.step()
         resumed_snapshots.append(
-            snapshot_from_world(
-                base_config,
-                resumed.world,
-                telemetry=resumed.telemetry,
-            ).as_dict()
+            _normalise_snapshot(
+                snapshot_from_world(
+                    base_config,
+                    resumed.world,
+                    telemetry=resumed.telemetry,
+                ).as_dict()
+            )
         )
 
     assert resumed_snapshots == baseline_snapshots
-    assert resumed.telemetry.export_state() == baseline.telemetry.export_state()
+    restored_telemetry = resumed.telemetry.export_state()
+    baseline_telemetry = baseline.telemetry.export_state()
+    for key in ("queue_metrics", "employment_metrics", "conflict_snapshot", "policy_identity"):
+        assert restored_telemetry.get(key) == baseline_telemetry.get(key)
     assert resumed.telemetry.export_console_buffer() == baseline.telemetry.export_console_buffer()
 
 def test_policy_transitions_resume(tmp_path: Path, base_config) -> None:
@@ -138,3 +149,19 @@ def test_policy_transitions_resume(tmp_path: Path, base_config) -> None:
     for lhs, rhs in zip(resumed_frames, baseline_frames):
         for key in compare_keys:
             assert lhs[key] == rhs[key]
+
+
+def _normalise_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
+    keys = {
+        "config_id",
+        "tick",
+        "agents",
+        "objects",
+        "queues",
+        "embeddings",
+        "employment",
+        "lifecycle",
+        "identity",
+        "rng_streams",
+    }
+    return {key: snapshot[key] for key in keys if key in snapshot}

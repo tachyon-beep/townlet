@@ -48,6 +48,7 @@ class TelemetryPublisher:
         self._latest_stability_metrics: Dict[str, object] = {}
         self._latest_perturbations: Dict[str, object] = {}
         self._latest_policy_identity: Dict[str, object] | None = None
+        self._latest_snapshot_migrations: List[str] = []
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -93,6 +94,8 @@ class TelemetryPublisher:
             state["kpi_history"] = self.kpi_history()
         if self._latest_policy_identity is not None:
             state["policy_identity"] = dict(self._latest_policy_identity)
+        if self._latest_snapshot_migrations:
+            state["snapshot_migrations"] = list(self._latest_snapshot_migrations)
         return state
 
     def import_state(self, payload: Dict[str, object]) -> None:
@@ -183,6 +186,12 @@ class TelemetryPublisher:
             self._latest_policy_identity = dict(policy_identity_payload)
         else:
             self._latest_policy_identity = None
+
+        migrations_payload = payload.get("snapshot_migrations")
+        if isinstance(migrations_payload, list):
+            self._latest_snapshot_migrations = [str(item) for item in migrations_payload]
+        else:
+            self._latest_snapshot_migrations = []
 
         kpi_payload = payload.get("kpi_history")
         if isinstance(kpi_payload, Mapping):
@@ -434,6 +443,12 @@ class TelemetryPublisher:
         if self._latest_policy_identity is None:
             return None
         return dict(self._latest_policy_identity)
+
+    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
+        self._latest_snapshot_migrations = [str(item) for item in applied]
+
+    def latest_snapshot_migrations(self) -> List[str]:
+        return list(self._latest_snapshot_migrations)
 
     def _normalize_perturbations_payload(
         self, payload: Mapping[str, object]

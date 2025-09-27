@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 from townlet.config import (
@@ -9,6 +10,9 @@ from townlet.config import (
 )
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.snapshots import SnapshotManager
+from townlet.snapshots.migrations import clear_registry, register_migration
+from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import AgentSnapshot
 
 
@@ -24,7 +28,7 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
 
-    router = create_console_router(loop.telemetry, world, loop.perturbations)
+    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
 
     for _ in range(5):
         loop.step()
@@ -57,7 +61,7 @@ def test_employment_console_commands_manage_queue() -> None:
         wallet=1.0,
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
-    router = create_console_router(loop.telemetry, world, loop.perturbations)
+    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
 
     world._employment_enqueue_exit("alice", world.tick)
     review = router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={}))
@@ -86,7 +90,7 @@ def test_console_schema_warning_for_newer_version() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
     loop.telemetry.schema_version = "0.4.0"
-    router = create_console_router(loop.telemetry, loop.world, loop.perturbations)
+    router = create_console_router(loop.telemetry, loop.world, loop.perturbations, config=config)
 
     snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
     assert snapshot["schema_version"] == "0.4.0"
@@ -95,7 +99,13 @@ def test_console_schema_warning_for_newer_version() -> None:
 def test_console_perturbation_requires_admin_mode() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
-    viewer_router = create_console_router(loop.telemetry, loop.world, loop.perturbations, mode="viewer")
+    viewer_router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        mode="viewer",
+        config=config,
+    )
     result = viewer_router.dispatch(
         ConsoleCommand(name="perturbation_trigger", args=("price_spike",), kwargs={})
     )
@@ -117,7 +127,13 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
         }
     )
     loop = SimulationLoop(config)
-    router = create_console_router(loop.telemetry, loop.world, loop.perturbations, mode="admin")
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        mode="admin",
+        config=config,
+    )
 
     queue_before = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
     assert queue_before["active"] == {}
@@ -152,3 +168,78 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
     queue_after = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
     assert active_id not in queue_after["active"]
     assert "price_spike" in telemetry_state["cooldowns"]["spec"]
+
+
+def test_console_snapshot_commands(tmp_path: Path) -> None:
+    clear_registry()
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    router_viewer = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        config=config,
+    )
+    for _ in range(3):
+        loop.step()
+    snapshot_path = loop.save_snapshot(tmp_path)
+
+    inspect = router_viewer.dispatch(
+        ConsoleCommand(name="snapshot_inspect", args=(str(snapshot_path),), kwargs={})
+    )
+    assert inspect["config_id"] == config.config_id
+
+    validate = router_viewer.dispatch(
+        ConsoleCommand(name="snapshot_validate", args=(str(snapshot_path),), kwargs={})
+    )
+    assert validate["valid"] is True
+
+    legacy_state = SnapshotState(config_id="legacy", tick=5)
+    legacy_manager = SnapshotManager(tmp_path)
+    legacy_path = legacy_manager.save(legacy_state)
+
+    strict_failure = router_viewer.dispatch(
+        ConsoleCommand(
+            name="snapshot_validate",
+            args=(str(legacy_path),),
+            kwargs={"strict": True},
+        )
+    )
+    assert strict_failure["valid"] is False
+
+    register_migration(
+        "legacy",
+        config.config_id,
+        lambda state, cfg: replace(state, config_id=cfg.config_id),
+    )
+
+    router_admin = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        mode="admin",
+        config=config,
+    )
+
+    migrate_result = router_admin.dispatch(
+        ConsoleCommand(name="snapshot_migrate", args=(str(legacy_path),), kwargs={})
+    )
+    assert migrate_result["migrations_applied"]
+    assert loop.telemetry.latest_snapshot_migrations()
+
+    output_dir = tmp_path / "migrated"
+    migrate_output = router_admin.dispatch(
+        ConsoleCommand(
+            name="snapshot_migrate",
+            args=(str(legacy_path),),
+            kwargs={"output": str(output_dir)},
+        )
+    )
+    assert Path(migrate_output["output_path"]).exists()
+
+    forbidden = router_viewer.dispatch(
+        ConsoleCommand(name="snapshot_migrate", args=(str(snapshot_path),), kwargs={})
+    )
+    assert forbidden["error"] == "forbidden"
+
+    clear_registry()

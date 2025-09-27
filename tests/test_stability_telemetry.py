@@ -35,7 +35,7 @@ def test_stability_alerts_exposed_via_telemetry_snapshot(tmp_path: Path) -> None
     assert "thresholds" in metrics
     assert metrics["thresholds"]["starvation"]["max_incidents"] == 0
 
-    router = create_console_router(loop.telemetry, loop.world)
+    router = create_console_router(loop.telemetry, loop.world, config=config)
     snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
     stability_block = snapshot["stability"]
     assert "alerts" in stability_block and "metrics" in stability_block

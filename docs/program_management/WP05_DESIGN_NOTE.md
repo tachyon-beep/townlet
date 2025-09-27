@@ -7,6 +7,8 @@
 
 Non-goals: replace storage backend, add remote persistence, or design full policy promotion tooling (tracked separately).
 
+**Implementation status (2025-10-02):** Schema v1.4, multi-stream RNG capture, and policy identity telemetry are delivered (Phases 5.1–5.2). Configuration surface/migration registry work remains pending.
+
 ## 2. Schema Updates (v1.4)
 ### 2.1 Additions
 - `identity.policy_hash: str` — immutable digest representing the policy binary/checkpoint in use.
@@ -95,5 +97,11 @@ Errors propagate through console commands and telemetry; `SnapshotManager` conve
 4. Introduce migration registry with seed handler (e.g., fill anneal ratio defaults).
 5. Ship console/telemetry enhancements.
 6. Update docs (`OPS_HANDBOOK`, `WORK_PACKAGES`, release notes) and mark WP-05 milestones complete.
+
+### Authoring Snapshot Migrations (Current API)
+- Register migrations in `townlet.snapshots.migrations` via `register_migration(from_id, to_id, handler)`.
+- Handlers receive `(state, config)` and may mutate in-place or return a new `SnapshotState`; ensure `config_id` updates to the handler's target.
+- The registry resolves multi-step chains (BFS). Applied handler identifiers appear in `snapshot_state.migrations['applied']` and in telemetry (`snapshot_migrations`).
+- Tests can reset registry via `clear_registry()`.
 
 Risks: policy hash discovery may require coordination with training infra; schedule buffer for exposing hash from checkpoint loader. Ensure migrations are optional until registry populated to avoid blocking existing operations.

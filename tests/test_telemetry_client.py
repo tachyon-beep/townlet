@@ -29,14 +29,14 @@ def make_simulation(enforce_job_loop: bool = True) -> SimulationLoop:
 
 def test_telemetry_client_parses_console_snapshot() -> None:
     loop = make_simulation()
-    router = create_console_router(loop.telemetry, loop.world)
+    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
     for _ in range(5):
         loop.step()
 
     client = TelemetryClient()
     snapshot = client.from_console(router)
 
-    assert snapshot.schema_version.startswith("0.7")
+    assert snapshot.schema_version.startswith("0.8")
     assert snapshot.schema_warning is None
     assert snapshot.employment.pending_count >= 0
     assert snapshot.conflict.queue_cooldown_events >= 0
@@ -49,7 +49,7 @@ def test_telemetry_client_parses_console_snapshot() -> None:
 
 def test_telemetry_client_warns_on_newer_schema(monkeypatch: pytest.MonkeyPatch) -> None:
     loop = make_simulation()
-    router = create_console_router(loop.telemetry, loop.world)
+    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
     for _ in range(2):
         loop.step()
 

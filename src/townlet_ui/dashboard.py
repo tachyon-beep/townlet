@@ -420,7 +420,7 @@ def run_dashboard(
         )
         loop.world._assign_jobs_to_agents()  # type: ignore[attr-defined]
 
-    router = create_console_router(loop.telemetry, loop.world)
+    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
     client = TelemetryClient()
     console = Console()
     executor = ConsoleCommandExecutor(router)

@@ -21,7 +21,7 @@ config = load_config(Path("configs/examples/poc_hybrid.yaml"))
 config.employment.enforce_job_loop = True
 loop = SimulationLoop(config)
 world = loop.world
-router = create_console_router(loop.telemetry, world)
+router = create_console_router(loop.telemetry, world, config=config)
 
 # Step 1: Prime agents and advance sim.
 for _ in range(20):

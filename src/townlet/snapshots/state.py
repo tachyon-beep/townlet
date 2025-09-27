@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,6 +12,11 @@ from townlet.agents.models import Personality
 from townlet.config import SimulationConfig
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.snapshots.migrations import (
+    MigrationExecutionError,
+    MigrationNotFoundError,
+    migration_registry,
+)
 from townlet.utils import decode_rng_state, encode_rng, encode_rng_state
 from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 
@@ -20,6 +26,9 @@ if TYPE_CHECKING:
 
 
 SNAPSHOT_SCHEMA_VERSION = "1.4"
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,6 +49,9 @@ class SnapshotState:
     relationships: Dict[str, Dict[str, Dict[str, float]]] = field(default_factory=dict)
     stability: Dict[str, object] = field(default_factory=dict)
     identity: Dict[str, object] = field(default_factory=dict)
+    migrations: Dict[str, object] = field(
+        default_factory=lambda: {"applied": [], "required": []}
+    )
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -68,6 +80,7 @@ class SnapshotState:
             },
             "stability": dict(self.stability),
             "identity": dict(self.identity),
+            "migrations": dict(self.migrations),
         }
 
     @classmethod
@@ -187,6 +200,12 @@ class SnapshotState:
         else:
             identity = {"config_id": config_id}
 
+        migrations_payload = payload.get("migrations", {})
+        if isinstance(migrations_payload, Mapping):
+            migrations: Dict[str, object] = dict(migrations_payload)
+        else:
+            migrations = {"applied": [], "required": []}
+
         return cls(
             config_id=config_id,
             tick=tick,
@@ -204,6 +223,7 @@ class SnapshotState:
             relationships=relationships,
             stability=stability,
             identity=identity,
+            migrations=migrations,
         )
 
 
@@ -308,6 +328,8 @@ def snapshot_from_world(
         except AttributeError:
             identity_payload.pop("observation_variant", None)
 
+    migrations_payload = {"applied": [], "required": []}
+
     return SnapshotState(
         config_id=config.config_id,
         tick=world.tick,
@@ -325,6 +347,7 @@ def snapshot_from_world(
         relationships=world.relationships_snapshot(),
         stability=stability_payload,
         identity=identity_payload,
+        migrations=migrations_payload,
     )
 
 
@@ -433,6 +456,9 @@ def apply_snapshot_to_telemetry(
         telemetry.record_stability_metrics(dict(stability_metrics))
     if snapshot.identity:
         telemetry.update_policy_identity(snapshot.identity)
+    migrations_applied = snapshot.migrations.get("applied") if isinstance(snapshot.migrations, Mapping) else None
+    if migrations_applied:
+        telemetry.record_snapshot_migrations([str(item) for item in migrations_applied])
 
 
 class SnapshotManager:
@@ -451,7 +477,13 @@ class SnapshotManager:
         target.write_text(json.dumps(document, indent=2, sort_keys=True))
         return target
 
-    def load(self, path: Path, config: SimulationConfig) -> SnapshotState:
+    def load(
+        self,
+        path: Path,
+        config: SimulationConfig,
+        *,
+        allow_migration: bool = True,
+    ) -> SnapshotState:
         if not path.exists():
             raise FileNotFoundError(path)
         payload = json.loads(path.read_text())
@@ -465,8 +497,36 @@ class SnapshotManager:
             raise ValueError("Snapshot document missing state payload")
         state = SnapshotState.from_dict(state_payload)
         if state.config_id != config.config_id:
-            raise ValueError(
-                "Snapshot config_id mismatch: expected %s, got %s"
-                % (config.config_id, state.config_id)
-            )
+            if not allow_migration:
+                raise ValueError(
+                    "Snapshot config_id mismatch: expected %s, got %s"
+                    % (config.config_id, state.config_id)
+                )
+            try:
+                path = migration_registry.find_path(state.config_id, config.config_id)
+            except MigrationNotFoundError as exc:
+                raise ValueError(
+                    "Snapshot config_id mismatch: expected %s, got %s"
+                    % (config.config_id, state.config_id)
+                ) from exc
+            try:
+                state, applied = migration_registry.apply_path(path, state, config)
+            except MigrationExecutionError as exc:
+                raise ValueError("Snapshot migration failed") from exc
+            if state.config_id != config.config_id:
+                raise ValueError(
+                    "Snapshot migration chain did not reach target config_id %s (ended at %s)"
+                    % (config.config_id, state.config_id)
+                )
+            migrations_meta = state.migrations if isinstance(state.migrations, Mapping) else {}
+            applied_list = list(migrations_meta.get("applied", []))
+            applied_list.extend(applied)
+            state.migrations = {
+                "applied": applied_list,
+                "required": [],
+            }
+            logger.info("Applied snapshot migrations: %s", applied)
+        identity_meta = dict(state.identity)
+        identity_meta.setdefault("config_id", state.config_id)
+        state.identity = identity_meta
         return state

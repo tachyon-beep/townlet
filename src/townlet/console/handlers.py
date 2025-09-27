@@ -1,13 +1,18 @@
 """Console validation scaffolding."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
     from townlet.scheduler.perturbations import PerturbationScheduler
+    from townlet.config import SimulationConfig
+
+from townlet.snapshots import SnapshotManager
 
 SUPPORTED_SCHEMA_PREFIX = "0.8"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
@@ -79,6 +84,8 @@ class TelemetryBridge:
             "events": list(self._publisher.latest_events()),
             "anneal_status": self._publisher.latest_anneal_status(),
             "policy_snapshot": self._publisher.latest_policy_snapshot(),
+            "policy_identity": self._publisher.latest_policy_identity() or {},
+            "snapshot_migrations": self._publisher.latest_snapshot_migrations(),
             "affordance_manifest": self._publisher.latest_affordance_manifest(),
             "reward_breakdown": self._publisher.latest_reward_breakdown(),
             "stability": {
@@ -95,9 +102,49 @@ def create_console_router(
     scheduler: "PerturbationScheduler" | None = None,
     *,
     mode: str = "viewer",
+    config: "SimulationConfig" | None = None,
 ) -> ConsoleRouter:
     router = ConsoleRouter()
     bridge = TelemetryBridge(publisher)
+
+    def _forbidden(_: ConsoleCommand) -> object:
+        return {
+            "error": "forbidden",
+            "message": "command requires admin mode",
+        }
+
+    def _parse_snapshot_path(
+        command: ConsoleCommand, usage: str
+    ) -> tuple[Path | None, dict[str, object] | None]:
+        path_arg = command.kwargs.get("path")
+        if path_arg is None and command.args:
+            path_arg = command.args[0]
+        if path_arg is None:
+            return None, {"error": "usage", "message": usage}
+        try:
+            path = Path(str(path_arg)).expanduser()
+            path = path.resolve()
+        except Exception as exc:  # pragma: no cover - defensive
+            return None, {
+                "error": "invalid_path",
+                "message": str(exc),
+            }
+        if not path.exists():
+            return None, {"error": "not_found", "path": str(path)}
+        if path.is_dir():
+            return None, {
+                "error": "invalid_path",
+                "message": "snapshot path must reference a file",
+            }
+        return path, None
+
+    def _require_config() -> tuple["SimulationConfig" | None, dict[str, object] | None]:
+        if config is None:
+            return None, {
+                "error": "unsupported",
+                "message": "snapshot command requires simulation config",
+            }
+        return config, None
 
     def telemetry_handler(command: ConsoleCommand) -> object:
         return bridge.snapshot()
@@ -190,22 +237,104 @@ def create_console_router(
         cancelled = scheduler.cancel_event(world, event_id)
         return {"cancelled": cancelled, "event_id": event_id}
 
+    def snapshot_inspect_handler(command: ConsoleCommand) -> object:
+        path, error = _parse_snapshot_path(command, "snapshot_inspect <path>")
+        if error:
+            return error
+        try:
+            document = json.loads(path.read_text())
+        except Exception as exc:
+            return {"error": "read_failed", "message": str(exc), "path": str(path)}
+        state_payload = document.get("state")
+        if not isinstance(state_payload, dict):
+            state_payload = {}
+        return {
+            "path": str(path),
+            "schema_version": document.get("schema_version"),
+            "config_id": state_payload.get("config_id"),
+            "tick": state_payload.get("tick"),
+            "identity": state_payload.get("identity", {}),
+            "migrations": state_payload.get("migrations", {}),
+        }
+
+    def snapshot_validate_handler(command: ConsoleCommand) -> object:
+        path, error = _parse_snapshot_path(
+            command, "snapshot_validate <path> [--strict]"
+        )
+        if error:
+            return error
+        cfg, cfg_error = _require_config()
+        if cfg_error:
+            return cfg_error
+        manager = SnapshotManager(path.parent)
+        allow_migration = not bool(command.kwargs.get("strict", False))
+        try:
+            state = manager.load(path, cfg, allow_migration=allow_migration)
+        except ValueError as exc:
+            return {"valid": False, "error": str(exc), "path": str(path)}
+        return {
+            "valid": True,
+            "config_id": state.config_id,
+            "tick": state.tick,
+            "migrations_applied": list(state.migrations.get("applied", [])),
+        }
+
+    def snapshot_migrate_handler(command: ConsoleCommand) -> object:
+        path, error = _parse_snapshot_path(
+            command, "snapshot_migrate <path> [--output dir]"
+        )
+        if error:
+            return error
+        cfg, cfg_error = _require_config()
+        if cfg_error:
+            return cfg_error
+        manager = SnapshotManager(path.parent)
+        try:
+            state = manager.load(path, cfg, allow_migration=True)
+        except ValueError as exc:
+            return {
+                "error": "migration_failed",
+                "message": str(exc),
+                "path": str(path),
+            }
+        applied = list(state.migrations.get("applied", []))
+        publisher.record_snapshot_migrations(applied)
+        output_arg = command.kwargs.get("output")
+        saved_path: Path | None = None
+        if output_arg is not None:
+            output_dir = Path(str(output_arg)).expanduser()
+            if output_dir.suffix:
+                return {
+                    "error": "invalid_args",
+                    "message": "output must be a directory path",
+                }
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_manager = SnapshotManager(output_dir)
+            saved_path = out_manager.save(state)
+        result = {
+            "migrated": True,
+            "config_id": state.config_id,
+            "tick": state.tick,
+            "migrations_applied": applied,
+        }
+        if saved_path is not None:
+            result["output_path"] = str(saved_path)
+        return result
+
     router.register("telemetry_snapshot", telemetry_handler)
     router.register("employment_status", employment_status_handler)
     router.register("employment_exit", employment_exit_handler)
     router.register("perturbation_queue", perturbation_queue_handler)
+    router.register("snapshot_inspect", snapshot_inspect_handler)
+    router.register("snapshot_validate", snapshot_validate_handler)
     if mode == "admin":
         router.register("perturbation_trigger", perturbation_trigger_handler)
         router.register("perturbation_cancel", perturbation_cancel_handler)
+        router.register("snapshot_migrate", snapshot_migrate_handler)
     else:
-        def _forbidden(_: ConsoleCommand) -> object:
-            return {
-                "error": "forbidden",
-                "message": "command requires admin mode",
-            }
-
         router.register("perturbation_trigger", _forbidden)
         router.register("perturbation_cancel", _forbidden)
+        router.register("snapshot_migrate", _forbidden)
     return router
 
 
