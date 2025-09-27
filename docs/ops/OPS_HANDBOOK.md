@@ -68,7 +68,8 @@
     - `snapshot.autosave.cadence_ticks` enables periodic saves (minimum 100 ticks) with retention
       capped by `snapshot.autosave.retain`.
     - `snapshot.identity.policy_hash|policy_artifact|observation_variant|anneal_ratio` override
-      runtime values used in telemetry and saved payloads.
+      runtime values used in telemetry and saved payloads. Release snapshots must set
+      `policy_hash` explicitly so promotion gates can verify integrity.
     - `snapshot.migrations.handlers` auto-registers migration callables (`module:function`) that
       chain legacy `config_id` values to the current build; `auto_apply` toggles whether they run
       automatically.

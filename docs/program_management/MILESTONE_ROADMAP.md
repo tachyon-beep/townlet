@@ -4,6 +4,12 @@
 
 This roadmap tracks the sequencing across remediation and forward-looking Townlet milestones. See `PROJECT_PLAN.md` for detailed scopes, owners, and risk controls.
 
+## Status Snapshot (2025-10-03)
+
+- **Completed:** M1 Runtime Safety, M2 Operational Guardrails, M3 Continuity & Conflict Systems, M4 Social Foundations.
+- **In Progress:** M5 Behaviour Cloning & Anneal (Phase 5.4 complete; Phase 5.5 planning underway).
+- **Queued:** M6 Observer Experience & Policy Inspector, M7 Promotion & Release Governance, M8 Perturbations & Narrative Events, M9 Personality & Ops Polish.
+
 | Milestone | Theme | Key Deliverables | Dependencies | Exit Criteria |
 | --- | --- | --- | --- | --- |
 | M1 | Runtime Safety | Affordance manifest validation, observation variant gating, reward guardrails. | Existing simulator foundation. | Invalid manifests fail fast; observation variants contractually defined; reward guardrails enforced with tests. |

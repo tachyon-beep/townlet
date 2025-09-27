@@ -28,6 +28,11 @@ Thank you for your interest in shaping Townlet. This guide summarises how we wor
 - Unit tests for config validation, reward calculations, lifecycle gates.
 - Property-based/fuzz tests for queues, scheduler fairness, and economy invariants (see `docs/REQUIREMENTS.md`).
 - Golden tests for YAML schemas and telemetry payloads.
+- Run the snapshot regression subset when touching persistence or RNG surfaces:
+  ```bash
+  pytest tests/test_utils_rng.py tests/test_snapshot_manager.py \
+         tests/test_snapshot_migrations.py tests/test_sim_loop_snapshot.py
+  ```
 - Keep test data and fixtures under `tests/fixtures/` if needed.
 
 ## Communication

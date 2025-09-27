@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from math import cos, sin, tau
-from typing import TYPE_CHECKING, Dict, Iterable, List, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -25,7 +26,7 @@ class ObservationBuilder:
         self.variant: ObservationVariant = config.observation_variant
         self.hybrid_cfg = config.observations_config.hybrid
         # Precompute hybrid target landmarks (optional).
-        self._landmarks: List[str] = [
+        self._landmarks: list[str] = [
             "fridge",
             "stove",
             "bed",
@@ -70,7 +71,7 @@ class ObservationBuilder:
         ]
         base_feature_names.extend(path_hint_names)
 
-        self._landmark_slices: Dict[str, slice] = {}
+        self._landmark_slices: dict[str, slice] = {}
         if self.hybrid_cfg.include_targets:
             for landmark in self._landmarks:
                 start = len(base_feature_names)
@@ -96,7 +97,7 @@ class ObservationBuilder:
             self.social_cfg.embed_dim + 3
         )  # id embedding + trust/fam/rivalry
         self.full_channels = self.MAP_CHANNELS + ("path_dx", "path_dy")
-        social_feature_names: List[str] = []
+        social_feature_names: list[str] = []
         for slot_index in range(self._social_slots):
             for component_index in range(self._social_slot_dim):
                 social_feature_names.append(
@@ -130,10 +131,10 @@ class ObservationBuilder:
         )
 
     def build_batch(
-        self, world: "WorldState", terminated: Dict[str, bool]
-    ) -> Dict[str, Dict[str, np.ndarray]]:
+        self, world: "WorldState", terminated: dict[str, bool]
+    ) -> dict[str, dict[str, np.ndarray]]:
         """Return a mapping from agent_id to observation payloads."""
-        observations: Dict[str, Dict[str, np.ndarray]] = {}
+        observations: dict[str, dict[str, np.ndarray]] = {}
         snapshots = world.snapshot()
         for agent_id, snapshot in snapshots.items():
             slot = world.embedding_allocator.allocate(agent_id, world.tick)
@@ -148,7 +149,7 @@ class ObservationBuilder:
         self,
         features: np.ndarray,
         *,
-        context: Dict[str, object],
+        context: dict[str, object],
         slot: int,
         snapshot: "AgentSnapshot",
         world_tick: int,
@@ -278,7 +279,7 @@ class ObservationBuilder:
         world: "WorldState",
         snapshot: "AgentSnapshot",
         slot: int,
-    ) -> Dict[str, np.ndarray | Dict[str, object]]:
+    ) -> dict[str, np.ndarray | dict[str, object]]:
         if self.variant == "hybrid":
             return self._build_hybrid(world, snapshot, slot)
         if self.variant == "full":
@@ -294,8 +295,8 @@ class ObservationBuilder:
 
     def _map_from_view(
         self,
-        channels: Tuple[str, ...],
-        local_view: Dict[str, object],
+        channels: tuple[str, ...],
+        local_view: dict[str, object],
         window: int,
         center: int,
         snapshot: "AgentSnapshot",
@@ -335,7 +336,7 @@ class ObservationBuilder:
         world: "WorldState",
         snapshot: "AgentSnapshot",
         slot: int,
-    ) -> Dict[str, np.ndarray | Dict[str, object]]:
+    ) -> dict[str, np.ndarray | dict[str, object]]:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         local_view = world.local_view(snapshot.agent_id, radius)
@@ -388,7 +389,7 @@ class ObservationBuilder:
         world: "WorldState",
         snapshot: "AgentSnapshot",
         slot: int,
-    ) -> Dict[str, np.ndarray | Dict[str, object]]:
+    ) -> dict[str, np.ndarray | dict[str, object]]:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         local_view = world.local_view(snapshot.agent_id, radius)
@@ -441,7 +442,7 @@ class ObservationBuilder:
         world: "WorldState",
         snapshot: "AgentSnapshot",
         slot: int,
-    ) -> Dict[str, np.ndarray | Dict[str, object]]:
+    ) -> dict[str, np.ndarray | dict[str, object]]:
         features = np.zeros(len(self._feature_names), dtype=np.float32)
         context = world.agent_context(snapshot.agent_id)
         self._encode_common_features(
@@ -521,7 +522,7 @@ class ObservationBuilder:
         self,
         world: "WorldState",
         snapshot: "AgentSnapshot",
-    ) -> List[Dict[str, float]]:
+    ) -> list[dict[str, float]]:
         total_slots = self._social_slots
         if total_slots == 0:
             return []
@@ -539,7 +540,7 @@ class ObservationBuilder:
         )
 
         friends = friend_candidates[: self.social_cfg.top_friends]
-        rivals: List[Dict[str, float]] = []
+        rivals: list[dict[str, float]] = []
         for entry in rival_candidates:
             if entry in friends:
                 continue
@@ -547,7 +548,7 @@ class ObservationBuilder:
             if len(rivals) >= self.social_cfg.top_rivals:
                 break
 
-        slots: List[Dict[str, float]] = []
+        slots: list[dict[str, float]] = []
         for entry in friends + rivals:
             slots.append(self._encode_relationship(entry))
 
@@ -560,15 +561,15 @@ class ObservationBuilder:
         self,
         world: "WorldState",
         agent_id: str,
-    ) -> List[Dict[str, float]]:
+    ) -> list[dict[str, float]]:
         snapshot_getter = getattr(world, "relationships_snapshot", None)
-        relationships: Dict[str, Dict[str, float]] = {}
+        relationships: dict[str, dict[str, float]] = {}
         if callable(snapshot_getter):
             data = snapshot_getter()
             if isinstance(data, dict):
                 relationships = data.get(agent_id, {}) or {}
 
-        entries: List[Dict[str, float]] = []
+        entries: list[dict[str, float]] = []
         for other_id, metrics in relationships.items():
             if not isinstance(metrics, dict):
                 continue
@@ -622,7 +623,7 @@ class ObservationBuilder:
             )
             features[slice_] = values
 
-    def _encode_relationship(self, entry: Dict[str, float]) -> Dict[str, float]:
+    def _encode_relationship(self, entry: dict[str, float]) -> dict[str, float]:
         other_id = entry["other_id"]
         embedding = self._embed_agent_id(other_id)
         return {
@@ -633,7 +634,7 @@ class ObservationBuilder:
             "valid": True,
         }
 
-    def _empty_relationship_entry(self) -> Dict[str, float]:
+    def _empty_relationship_entry(self) -> dict[str, float]:
         return {
             "embedding": np.zeros(self.social_cfg.embed_dim, dtype=np.float32),
             "trust": 0.0,
@@ -654,7 +655,7 @@ class ObservationBuilder:
         self,
         trust_values: Iterable[float],
         rivalry_values: Iterable[float],
-    ) -> Tuple[float, float, float, float]:
+    ) -> tuple[float, float, float, float]:
         trust_list = list(trust_values)
         rivalry_list = list(rivalry_values)
         trust_mean = float(np.mean(trust_list)) if trust_list else 0.0

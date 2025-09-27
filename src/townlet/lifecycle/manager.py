@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Dict
-
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
 
 
 class LifecycleManager:
-    """Centralises lifecycle checks described in docs/program_management/snapshots/CONCEPTUAL_DESIGN.md#18."""
+    """Centralises lifecycle checks as outlined in the conceptual design snapshot."""
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.exits_today = 0
         self._employment_day = -1
 
-    def evaluate(self, world: WorldState, tick: int) -> Dict[str, bool]:
+    def evaluate(self, world: WorldState, tick: int) -> dict[str, bool]:
         """Return a map of agent_id -> terminated flag."""
-        terminated: Dict[str, bool] = {}
+        terminated: dict[str, bool] = {}
         if self.config.employment.enforce_job_loop:
             employment_terminated = self._evaluate_employment(world, tick)
             terminated.update(employment_terminated)
@@ -30,13 +28,13 @@ class LifecycleManager:
                 terminated.setdefault(agent_id, False)
         return terminated
 
-    def export_state(self) -> Dict[str, int]:
+    def export_state(self) -> dict[str, int]:
         return {
             "exits_today": int(self.exits_today),
             "employment_day": int(self._employment_day),
         }
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         self.exits_today = int(payload.get("exits_today", 0))
         self._employment_day = int(payload.get("employment_day", -1))
 
@@ -44,8 +42,8 @@ class LifecycleManager:
         self.exits_today = 0
         self._employment_day = -1
 
-    def _evaluate_employment(self, world: WorldState, tick: int) -> Dict[str, bool]:
-        results: Dict[str, bool] = {}
+    def _evaluate_employment(self, world: WorldState, tick: int) -> dict[str, bool]:
+        results: dict[str, bool] = {}
         cfg = self.config.employment
         day_index = tick // max(1, cfg.exit_review_window)
         if day_index != self._employment_day:

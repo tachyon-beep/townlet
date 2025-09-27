@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Iterator, Sequence
 
 from townlet.policy.replay import ReplayBatch, ReplaySample, build_batch
 

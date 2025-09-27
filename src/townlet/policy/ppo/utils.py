@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
 
 import torch
 
@@ -127,7 +126,7 @@ def policy_surrogate(
     old_log_probs: torch.Tensor,
     advantages: torch.Tensor,
     clip_param: float,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute PPO clipped policy loss and clip fraction."""
 
     if not (new_log_probs.shape == old_log_probs.shape == advantages.shape):

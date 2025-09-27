@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Optional
 
 import numpy as np
 import yaml
 
-REQUIRED_CONFLICT_FEATURES: Tuple[str, ...] = ("rivalry_max", "rivalry_avoid_count")
-STEP_ARRAY_FIELDS: Tuple[str, ...] = ("actions", "old_log_probs", "rewards", "dones")
-TRAINING_ARRAY_FIELDS: Tuple[str, ...] = STEP_ARRAY_FIELDS + ("value_preds",)
+REQUIRED_CONFLICT_FEATURES: tuple[str, ...] = ("rivalry_max", "rivalry_avoid_count")
+STEP_ARRAY_FIELDS: tuple[str, ...] = ("actions", "old_log_probs", "rewards", "dones")
+TRAINING_ARRAY_FIELDS: tuple[str, ...] = STEP_ARRAY_FIELDS + ("value_preds",)
 
 
 @dataclass
@@ -26,7 +27,7 @@ class ReplaySample:
     value_preds: np.ndarray
     rewards: np.ndarray
     dones: np.ndarray
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     def __post_init__(self) -> None:
         timesteps = None
@@ -87,17 +88,17 @@ class ReplaySample:
         self.metadata.setdefault("value_pred_steps", int(value_steps))
 
     @property
-    def feature_names(self) -> Optional[List[str]]:
+    def feature_names(self) -> Optional[list[str]]:
         names = self.metadata.get("feature_names")
         if isinstance(names, list):
             return list(names)
         return None
 
-    def conflict_stats(self) -> Dict[str, float]:
+    def conflict_stats(self) -> dict[str, float]:
         names = self.feature_names
         if not names:
             return {}
-        stats: Dict[str, float] = {}
+        stats: dict[str, float] = {}
         for key in REQUIRED_CONFLICT_FEATURES:
             if key in names:
                 index = names.index(key)
@@ -106,7 +107,7 @@ class ReplaySample:
         return stats
 
 
-def _ensure_conflict_features(metadata: Dict[str, Any]) -> None:
+def _ensure_conflict_features(metadata: dict[str, Any]) -> None:
     names = metadata.get("feature_names")
     if not isinstance(names, list):
         raise ValueError("Replay sample metadata missing feature_names list")
@@ -139,7 +140,7 @@ def load_replay_sample(
     rewards = payload["rewards"]
     dones = payload["dones"]
 
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
     resolved_meta = meta_path or sample_path.with_suffix(".json")
     if resolved_meta.exists():
         metadata = json.loads(resolved_meta.read_text())
@@ -167,14 +168,15 @@ class ReplayBatch:
     value_preds: np.ndarray
     rewards: np.ndarray
     dones: np.ndarray
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     def __post_init__(self) -> None:
         if self.maps.ndim == 4:
             self.maps = self.maps[:, np.newaxis, ...]
         elif self.maps.ndim != 5:
             raise ValueError(
-                "maps must have shape (batch, channels, height, width) or (batch, timesteps, channels, height, width)"
+                "maps must have shape (batch, channels, height, width) or "
+                "(batch, timesteps, channels, height, width)"
             )
 
         if self.features.ndim == 2:
@@ -225,11 +227,11 @@ class ReplayBatch:
                 "value_preds must have length matching timesteps or timesteps + 1 in batch"
             )
 
-    def conflict_stats(self) -> Dict[str, float]:
+    def conflict_stats(self) -> dict[str, float]:
         names = self.metadata.get("feature_names")
         if not isinstance(names, list):
             return {}
-        stats: Dict[str, float] = {}
+        stats: dict[str, float] = {}
         for key in REQUIRED_CONFLICT_FEATURES:
             if key in names:
                 idx = names.index(key)
@@ -277,13 +279,13 @@ def build_batch(samples: Sequence[ReplaySample]) -> ReplayBatch:
 class ReplayDatasetConfig:
     """Configuration for building replay datasets."""
 
-    entries: List[Tuple[Path, Optional[Path]]]
+    entries: list[tuple[Path, Optional[Path]]]
     batch_size: int = 1
     shuffle: bool = False
     seed: Optional[int] = None
     drop_last: bool = False
     streaming: bool = False
-    metrics_map: Optional[Dict[str, Dict[str, float]]] = None
+    metrics_map: Optional[dict[str, dict[str, float]]] = None
     label: Optional[str] = None
 
     @classmethod
@@ -354,7 +356,7 @@ def _resolve_manifest_path(path_spec: Path, base: Path) -> Path:
     return (base / path_spec).resolve()
 
 
-def _load_manifest(manifest_path: Path) -> List[Tuple[Path, Optional[Path]]]:
+def _load_manifest(manifest_path: Path) -> list[tuple[Path, Optional[Path]]]:
     if not manifest_path.exists():
         raise FileNotFoundError(manifest_path)
     data: Any
@@ -365,7 +367,7 @@ def _load_manifest(manifest_path: Path) -> List[Tuple[Path, Optional[Path]]]:
         data = yaml.safe_load(text)
     if not isinstance(data, list):
         raise ValueError("Replay manifest must be a list of entries")
-    entries: List[Tuple[Path, Optional[Path]]] = []
+    entries: list[tuple[Path, Optional[Path]]] = []
     base = manifest_path.parent
     for item in data:
         if isinstance(item, str):
@@ -401,7 +403,7 @@ class ReplayDataset:
         self._entries = config.entries
         self._rng = np.random.default_rng(config.seed) if config.shuffle else None
         self._streaming = config.streaming
-        self._cached_samples: Optional[List[ReplaySample]] = None
+        self._cached_samples: Optional[list[ReplaySample]] = None
         self.metrics_map = config.metrics_map or {}
         if self._streaming:
             first_sample = load_replay_sample(*self._entries[0])
@@ -497,7 +499,7 @@ class ReplayDataset:
         return sample
 
     def _ensure_sample_metrics(
-        self, sample: ReplaySample, entry: Tuple[Path, Optional[Path]]
+        self, sample: ReplaySample, entry: tuple[Path, Optional[Path]]
     ) -> None:
         existing = sample.metadata.get("metrics")
         if isinstance(existing, dict) and existing:
@@ -506,8 +508,8 @@ class ReplayDataset:
         if metrics is not None:
             sample.metadata["metrics"] = metrics
 
-    def _aggregate_metrics(self) -> Dict[str, float]:
-        metrics_sources: List[Dict[str, float]] = []
+    def _aggregate_metrics(self) -> dict[str, float]:
+        metrics_sources: list[dict[str, float]] = []
         if self.metrics_map:
             metrics_sources = [dict(values) for values in self.metrics_map.values()]
         elif self._cached_samples is not None:
@@ -519,8 +521,8 @@ class ReplayDataset:
         if not metrics_sources:
             return {}
 
-        totals: Dict[str, float] = {}
-        counts: Dict[str, int] = {}
+        totals: dict[str, float] = {}
+        counts: dict[str, int] = {}
         for metrics in metrics_sources:
             for key, value in metrics.items():
                 if not isinstance(value, (int, float)):
@@ -532,7 +534,7 @@ class ReplayDataset:
             return {}
 
         sample_count = float(len(metrics_sources))
-        aggregate: Dict[str, float] = {"sample_count": sample_count}
+        aggregate: dict[str, float] = {"sample_count": sample_count}
         for key, total in totals.items():
             occurrences = counts.get(key, 0)
             if occurrences == 0:
@@ -545,7 +547,7 @@ class ReplayDataset:
         return aggregate
 
 
-def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
+def frames_to_replay_sample(frames: Sequence[dict[str, Any]]) -> ReplaySample:
     """Convert collected trajectory frames into a replay sample."""
 
     if not frames:
@@ -564,12 +566,12 @@ def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
         if frames[0].get("action_lookup")
         else {}
     )
-    action_lookup: Dict[str, int]
+    action_lookup: dict[str, int]
     if raw_lookup and all(isinstance(key, int) for key in raw_lookup):
         action_lookup = {value: int(key) for key, value in raw_lookup.items()}
     else:
         action_lookup = raw_lookup
-    action_ids: List[int] = []
+    action_ids: list[int] = []
     for frame in frames:
         if frame.get("action_id") is not None:
             action_ids.append(int(frame["action_id"]))

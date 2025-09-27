@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from collections.abc import Iterable
 
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
@@ -13,14 +13,14 @@ class RewardEngine:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self._termination_block: Dict[str, int] = {}
-        self._episode_totals: Dict[str, float] = {}
-        self._latest_breakdown: Dict[str, Dict[str, float]] = {}
+        self._termination_block: dict[str, int] = {}
+        self._episode_totals: dict[str, float] = {}
+        self._latest_breakdown: dict[str, dict[str, float]] = {}
 
     def compute(
-        self, world: WorldState, terminated: Dict[str, bool]
-    ) -> Dict[str, float]:
-        rewards: Dict[str, float] = {}
+        self, world: WorldState, terminated: dict[str, bool]
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = {}
         clip_cfg = self.config.rewards.clip
         clip_value = clip_cfg.clip_per_tick
         block_window = int(clip_cfg.no_positive_within_death_ticks)
@@ -31,7 +31,7 @@ class RewardEngine:
         self._prune_termination_blocks(current_tick, block_window)
         self._reset_episode_totals(terminated, world)
 
-        social_rewards: Dict[str, float] = {}
+        social_rewards: dict[str, float] = {}
         chat_events = self._consume_chat_events(world)
         if self._social_rewards_enabled():
             social_rewards = self._compute_chat_rewards(world, chat_events)
@@ -39,10 +39,10 @@ class RewardEngine:
         wage_rate = float(self.config.rewards.wage_rate)
         punctuality_bonus = float(self.config.rewards.punctuality_bonus)
 
-        breakdowns: Dict[str, Dict[str, float]] = {}
+        breakdowns: dict[str, dict[str, float]] = {}
 
         for agent_id, snapshot in world.agents.items():
-            components: Dict[str, float] = {}
+            components: dict[str, float] = {}
             total = survival_tick
             components["survival"] = survival_tick
 
@@ -123,8 +123,8 @@ class RewardEngine:
         self,
         world: WorldState,
         events: Iterable[dict[str, object]],
-    ) -> Dict[str, float]:
-        rewards: Dict[str, float] = {}
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = {}
         social_cfg = self.config.rewards.social
         base = float(social_cfg.C1_chat_base)
         coeff_trust = float(social_cfg.C1_coeff_trust)
@@ -215,7 +215,7 @@ class RewardEngine:
         return bonus_rate * punctuality
 
     def _reset_episode_totals(
-        self, terminated: Dict[str, bool], world: WorldState
+        self, terminated: dict[str, bool], world: WorldState
     ) -> None:
         for agent_id, is_terminated in terminated.items():
             if is_terminated:
@@ -225,7 +225,7 @@ class RewardEngine:
         for agent_id in missing:
             self._episode_totals.pop(agent_id, None)
 
-    def latest_reward_breakdown(self) -> Dict[str, Dict[str, float]]:
+    def latest_reward_breakdown(self) -> dict[str, dict[str, float]]:
         return {
             agent: dict(components)
             for agent, components in self._latest_breakdown.items()

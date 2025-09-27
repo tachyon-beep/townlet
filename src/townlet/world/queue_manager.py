@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 from townlet.config import QueueFairnessConfig, SimulationConfig
 
@@ -28,15 +27,15 @@ class QueueManager:
 
     def __init__(self, config: SimulationConfig) -> None:
         self._settings: QueueFairnessConfig = config.queue_fairness
-        self._queues: Dict[str, List[QueueEntry]] = {}
-        self._active: Dict[str, str] = {}
-        self._cooldowns: Dict[Tuple[str, str], int] = {}
-        self._stall_counts: Dict[str, int] = {}
-        self._metrics: Dict[str, int] = {
+        self._queues: dict[str, list[QueueEntry]] = {}
+        self._active: dict[str, str] = {}
+        self._cooldowns: dict[tuple[str, str], int] = {}
+        self._stall_counts: dict[str, int] = {}
+        self._metrics: dict[str, int] = {
             "cooldown_events": 0,
             "ghost_step_events": 0,
         }
-        self._perf_metrics: Dict[str, int] = {
+        self._perf_metrics: dict[str, int] = {
             "request_ns": 0,
             "release_ns": 0,
             "assign_ns": 0,
@@ -134,15 +133,15 @@ class QueueManager:
         """Return the agent currently holding the reservation, if any."""
         return self._active.get(object_id)
 
-    def queue_snapshot(self, object_id: str) -> List[str]:
+    def queue_snapshot(self, object_id: str) -> list[str]:
         """Return the queue as an ordered list of agent IDs for debugging."""
         return [entry.agent_id for entry in self._queues.get(object_id, [])]
 
-    def metrics(self) -> Dict[str, int]:
+    def metrics(self) -> dict[str, int]:
         """Expose counters useful for telemetry."""
         return dict(self._metrics)
 
-    def performance_metrics(self) -> Dict[str, int]:
+    def performance_metrics(self) -> dict[str, int]:
         """Expose aggregated nanosecond timings and call counts."""
         return dict(self._perf_metrics)
 
@@ -150,7 +149,7 @@ class QueueManager:
         for key in self._perf_metrics:
             self._perf_metrics[key] = 0
 
-    def export_state(self) -> Dict[str, object]:
+    def export_state(self) -> dict[str, object]:
         """Serialise queue activity for snapshot persistence."""
 
         return {
@@ -173,7 +172,7 @@ class QueueManager:
             "stall_counts": dict(self._stall_counts),
         }
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         """Restore queue activity from persisted snapshot data."""
 
         active = payload.get("active", {})
@@ -185,10 +184,10 @@ class QueueManager:
             self._active = {}
 
         queues_payload = payload.get("queues", {})
-        queues: Dict[str, List[QueueEntry]] = {}
+        queues: dict[str, list[QueueEntry]] = {}
         if isinstance(queues_payload, dict):
             for object_id, entries in queues_payload.items():
-                object_entries: List[QueueEntry] = []
+                object_entries: list[QueueEntry] = []
                 for entry in entries or []:
                     agent_id = str(entry.get("agent_id"))
                     joined_tick = int(entry.get("joined_tick", 0))

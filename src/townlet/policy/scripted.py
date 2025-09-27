@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 from townlet.world.grid import WorldState
 
@@ -15,7 +14,7 @@ class ScriptedPolicy:
 
     def decide(
         self, world: WorldState, tick: int
-    ) -> Dict[str, dict]:  # pragma: no cover - interface
+    ) -> dict[str, dict]:  # pragma: no cover - interface
         raise NotImplementedError
 
     def describe(self) -> str:
@@ -32,7 +31,7 @@ class IdlePolicy(ScriptedPolicy):
 
     name: str = "idle"
 
-    def decide(self, world: WorldState, tick: int) -> Dict[str, dict]:
+    def decide(self, world: WorldState, tick: int) -> dict[str, dict]:
         return {agent_id: {"kind": "wait"} for agent_id in world.agents.keys()}
 
 
@@ -50,11 +49,11 @@ class ScriptedPolicyAdapter:
 
     def __init__(self, scripted_policy: ScriptedPolicy) -> None:
         self.scripted_policy = scripted_policy
-        self.last_actions: Dict[str, dict] = {}
-        self.last_rewards: Dict[str, float] = {}
-        self.last_terminated: Dict[str, bool] = {}
+        self.last_actions: dict[str, dict] = {}
+        self.last_rewards: dict[str, float] = {}
+        self.last_terminated: dict[str, bool] = {}
 
-    def decide(self, world: WorldState, tick: int) -> Dict[str, dict]:
+    def decide(self, world: WorldState, tick: int) -> dict[str, dict]:
         actions = self.scripted_policy.decide(world, tick)
         # Ensure every agent has an action (default wait)
         wait_action = {"kind": "wait"}
@@ -64,7 +63,7 @@ class ScriptedPolicyAdapter:
         }
         return self.last_actions
 
-    def post_step(self, rewards: Dict[str, float], terminated: Dict[str, bool]) -> None:
+    def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
         base_agents = self.last_actions.keys()
         self.last_rewards = {
             agent_id: float(rewards.get(agent_id, 0.0)) for agent_id in base_agents

@@ -69,7 +69,7 @@ The current codebase already fulfils the PPO Phase 2–4 hardening and telemetry
 | Hidden edge cases in legacy YAML manifests | Medium | High | Build dry-run CLI that validates all manifests before rollout; add CI gate. |
 | Observation encoder complexity slips schedule | Medium | Medium | Stage delivery: gate unsupported variants first, then implement encoders with golden tensor fixtures. |
 | Telemetry transport dependency delays WP-06 | Low | High | Preselect supported transport (e.g., stdout + file sink) as interim solution; fail fast if env vars missing. |
-| Snapshot persistence introduces regressions | Medium | High | Add deterministic replay tests and fuzzing harness before enabling in production. |
+| Snapshot persistence introduces regressions | Medium | High | Maintain deterministic replay tests and the snapshot regression subset (`pytest tests/test_utils_rng.py tests/test_snapshot_manager.py tests/test_snapshot_migrations.py tests/test_sim_loop_snapshot.py`) before enabling in production. |
 
 ## Communication Plan
 

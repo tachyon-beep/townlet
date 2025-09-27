@@ -7,8 +7,9 @@ These utilities intentionally stay decoupled from the world grid so we can unit
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Optional
 
 
 def _clamp(value: float, *, low: float, high: float) -> float:
@@ -39,7 +40,7 @@ class RivalryLedger:
     owner_id: str
     params: RivalryParameters = field(default_factory=RivalryParameters)
     eviction_hook: Optional[Callable[[str, str, str], None]] = None
-    _scores: Dict[str, float] = field(default_factory=dict)
+    _scores: dict[str, float] = field(default_factory=dict)
 
     def apply_conflict(self, other_id: str, *, intensity: float = 1.0) -> float:
         """Increase rivalry against `other_id` based on the conflict intensity."""
@@ -50,7 +51,7 @@ class RivalryLedger:
             high=self.params.max_value,
         )
         self._scores[other_id] = updated
-        evicted: List[str] = []
+        evicted: list[str] = []
         if self.params.max_edges > 0 and len(self._scores) > self.params.max_edges:
             # Drop weakest edges to keep the ledger bounded.
             weakest = sorted(
@@ -82,7 +83,7 @@ class RivalryLedger:
             else:
                 self._scores[other_id] = updated
 
-    def inject(self, pairs: Iterable[Tuple[str, float]]) -> None:
+    def inject(self, pairs: Iterable[tuple[str, float]]) -> None:
         """Seed rivalry scores from persisted state for round-tripping tests."""
         for other_id, value in pairs:
             self._scores[other_id] = _clamp(
@@ -98,7 +99,7 @@ class RivalryLedger:
         """Return True when rivalry exceeds the avoidance threshold."""
         return self._scores.get(other_id, 0.0) >= self.params.avoid_threshold
 
-    def top_rivals(self, limit: int) -> List[Tuple[str, float]]:
+    def top_rivals(self, limit: int) -> list[tuple[str, float]]:
         """Return the strongest rivalry edges sorted descending."""
         if limit <= 0:
             return []
@@ -109,16 +110,16 @@ class RivalryLedger:
         )
         return sorted_edges[:limit]
 
-    def encode_features(self, limit: int) -> List[float]:
+    def encode_features(self, limit: int) -> list[float]:
         """Encode rivalry magnitudes into a fixed-width list for observations."""
-        features: List[float] = []
+        features: list[float] = []
         for _, value in self.top_rivals(limit):
             features.append(value)
         while len(features) < limit:
             features.append(0.0)
         return features
 
-    def snapshot(self) -> Dict[str, float]:
+    def snapshot(self) -> dict[str, float]:
         """Return a copy of rivalry scores for telemetry serialization."""
         return dict(self._scores)
 

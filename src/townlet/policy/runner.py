@@ -11,9 +11,8 @@ from pathlib import Path
 import numpy as np
 
 from townlet.config import PPOConfig, SimulationConfig
-from townlet.policy.bc import BCTrainer
+from townlet.policy.bc import BCTrainer, BCTrajectoryDataset, load_bc_samples
 from townlet.policy.bc import BCTrainingConfig as BCTrainingParams
-from townlet.policy.bc import BCTrajectoryDataset, evaluate_bc_policy, load_bc_samples
 from townlet.policy.behavior import AgentIntent, BehaviorController, build_behavior
 from townlet.policy.models import (
     ConflictAwarePolicyConfig,

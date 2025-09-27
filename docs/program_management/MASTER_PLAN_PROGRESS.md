@@ -1,4 +1,4 @@
-# Project Progress Tracker (2025-09-30)
+# Project Progress Tracker (2025-10-03)
 
 Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progress against the milestone roadmap.
 
@@ -14,6 +14,8 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
 - PPO Integration Phase 4 (rollout capture→PPO bridge, queue-conflict telemetry, mixed-mode ops workflow, CI artefact uploads, soak harness drift analysis).
   - 2025-09-29 update: social telemetry metrics surfaced end-to-end (watcher/summary/ops docs); scenario soaks captured for queue_conflict, employment_punctuality, rivalry_decay, kitchen_breakfast, observation_baseline.
 - **Milestone M4 – Social Foundations (Completed 2025-09-30):** relationship persistence, social observation snippet, Phase C1 rewards, narration throttle, CI/ops governance.
+- **WP-04 – Stability & Console Safeguards (Completed 2025-10-02):** stability monitor guardrails, perturbation scheduler, admin-gated console commands, telemetry/docs/tests updated.
+- **WP-05 – Snapshot & Config Identity (Completed 2025-10-03):** SnapshotConfig + migration registry, RNG/state identity, console diagnostics, autosave guardrails, regression coverage.
 
 ## In-Flight Work Packages
 1. **Observer UI Integration** (`docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md`)
@@ -29,15 +31,15 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
    - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
    - Next: schedule periodic soak runs, wire results into ops review cadence.
 
-4. **WP-05 Snapshot & Config Identity** (`docs/program_management/WP05_IMPLEMENTATION_PLAN.md`)
-   - Owner: Core/Platform
-   - Status: In progress — Schema v1.4, multi-stream RNG, policy identity telemetry, migration registry + console diagnostics delivered; SnapshotConfig now wires storage/autosave/guardrails with regression coverage (2025-10-02).
-   - Next: enforce release-time policy hash requirements, finish rollout comms, and expand CI gating (Phase 5.5).
-
-5. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
+4. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
    - Owner: RL/Training
    - Status: Completed (BC dataset catalogued, acceptance smoke logged under `artifacts/m5/acceptance/`, ops & CI guardrails landed).
    - Next: proceed to Phase 5.5 planning (anneal promotion governance).
+
+5. **WP-06 Telemetry Publishing Hardening** (`docs/program_management/MILESTONE_ROADMAP.md`)
+   - Owner: Platform/Observer UI
+   - Status: Queued — begins next sprint after telemetry lint clean-up; planning workshop scheduled to scope transport wiring and KPI aggregation.
+   - Next: lock transport decision, refresh telemetry contract tests, draft ops rollback plan.
 
 ## Upcoming Milestones (see `PROJECT_PLAN.md` for detail)
 - **M4 – Social Foundations** (Completed 2025-09-30)

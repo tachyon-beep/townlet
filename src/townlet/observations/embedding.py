@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 from townlet.config import EmbeddingAllocatorConfig, SimulationConfig
 
@@ -20,12 +19,12 @@ class EmbeddingAllocator:
 
     def __init__(self, config: SimulationConfig) -> None:
         self._settings: EmbeddingAllocatorConfig = config.embedding_allocator
-        self._assignments: Dict[str, int] = {}
-        self._slot_state: Dict[int, _SlotState] = {
+        self._assignments: dict[str, int] = {}
+        self._slot_state: dict[int, _SlotState] = {
             slot: _SlotState() for slot in range(self._settings.max_slots)
         }
         self._available: set[int] = set(self._slot_state)
-        self._metrics: Dict[str, float] = {
+        self._metrics: dict[str, float] = {
             "allocations_total": 0,
             "forced_reuse_count": 0,
         }
@@ -59,7 +58,7 @@ class EmbeddingAllocator:
         """Return whether the allocator still tracks the agent."""
         return agent_id in self._assignments
 
-    def metrics(self) -> Dict[str, float]:
+    def metrics(self) -> dict[str, float]:
         """Expose allocation metrics for telemetry."""
         total = self._metrics["allocations_total"] or 1.0
         forced = self._metrics["forced_reuse_count"]
@@ -72,7 +71,7 @@ class EmbeddingAllocator:
             "reuse_warning": bool(warning_threshold and rate > warning_threshold),
         }
 
-    def export_state(self) -> Dict[str, object]:
+    def export_state(self) -> dict[str, object]:
         """Serialise allocator bookkeeping for snapshot persistence."""
 
         return {
@@ -84,7 +83,7 @@ class EmbeddingAllocator:
             "metrics": dict(self._metrics),
         }
 
-    def import_state(self, payload: Dict[str, object]) -> None:
+    def import_state(self, payload: dict[str, object]) -> None:
         """Restore allocator bookkeeping from snapshot data."""
 
         assignments = payload.get("assignments", {})

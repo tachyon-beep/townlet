@@ -12,8 +12,8 @@ from .relationship_modifiers import (
 __all__ = [
     "AgentState",
     "Personality",
-    "RelationshipEdge",
     "RelationshipDelta",
+    "RelationshipEdge",
     "RelationshipEvent",
     "apply_personality_modifiers",
 ]

@@ -96,7 +96,7 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 __all__ = [
-    "RelationshipEvent",
     "RelationshipDelta",
+    "RelationshipEvent",
     "apply_personality_modifiers",
 ]

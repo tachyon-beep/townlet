@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Sequence
 
 import numpy as np
 
@@ -48,9 +48,9 @@ class BCTrajectoryDataset(Dataset):  # type: ignore[misc]
     def __init__(self, samples: Sequence[ReplaySample]) -> None:
         if not torch_available():  # pragma: no cover - guard
             raise TorchNotAvailableError("PyTorch required for BC training")
-        maps: List[np.ndarray] = []
-        features: List[np.ndarray] = []
-        actions: List[int] = []
+        maps: list[np.ndarray] = []
+        features: list[np.ndarray] = []
+        actions: list[int] = []
         for sample in samples:
             for idx in range(sample.actions.shape[0]):
                 map_frame = sample.map[idx]
@@ -80,12 +80,12 @@ class BCTrajectoryDataset(Dataset):  # type: ignore[misc]
         return map_tensor, feature_tensor, action_tensor
 
 
-def load_bc_samples(manifest_path: Path) -> List[ReplaySample]:
+def load_bc_samples(manifest_path: Path) -> list[ReplaySample]:
     manifest_data = json.loads(manifest_path.read_text())
     manifest_dir = manifest_path.parent
     if not isinstance(manifest_data, list):
         raise ValueError("BC manifest must be a list")
-    samples: List[ReplaySample] = []
+    samples: list[ReplaySample] = []
     for entry in manifest_data:
         if not isinstance(entry, Mapping):
             continue

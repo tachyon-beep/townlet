@@ -12,11 +12,11 @@ from .bc import (
 from .runner import PolicyRuntime, TrainingHarness
 
 __all__ = [
-    "PolicyRuntime",
-    "TrainingHarness",
+    "BCTrainer",
     "BCTrainingConfig",
     "BCTrajectoryDataset",
-    "BCTrainer",
-    "load_bc_samples",
+    "PolicyRuntime",
+    "TrainingHarness",
     "evaluate_bc_policy",
+    "load_bc_samples",
 ]

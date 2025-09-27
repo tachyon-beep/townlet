@@ -24,6 +24,7 @@ LifecycleToggle = Literal["on", "off"]
 CuriosityToggle = Literal["phase_A", "off"]
 ConsoleMode = Literal["viewer", "admin"]
 TrainingSource = Literal["replay", "rollout", "mixed"]
+TelemetryTransportType = Literal["stdout", "file", "tcp"]
 
 
 class StageFlags(BaseModel):
@@ -445,8 +446,66 @@ class NarrationThrottleConfig(BaseModel):
         )
 
 
+class TelemetryRetryPolicy(BaseModel):
+    max_attempts: int = Field(default=3, ge=0, le=10)
+    backoff_seconds: float = Field(default=0.5, ge=0.0, le=30.0)
+
+
+class TelemetryBufferConfig(BaseModel):
+    max_batch_size: int = Field(default=32, ge=1, le=500)
+    max_buffer_bytes: int = Field(default=256_000, ge=1_024, le=16_777_216)
+    flush_interval_ticks: int = Field(default=1, ge=1, le=10_000)
+
+
+class TelemetryTransportConfig(BaseModel):
+    type: TelemetryTransportType = "stdout"
+    endpoint: str | None = None
+    file_path: Path | None = None
+    connect_timeout_seconds: float = Field(default=5.0, ge=0.0, le=60.0)
+    send_timeout_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    retry: TelemetryRetryPolicy = TelemetryRetryPolicy()
+    buffer: TelemetryBufferConfig = TelemetryBufferConfig()
+
+    @model_validator(mode="after")
+    def _validate_transport(self) -> "TelemetryTransportConfig":
+        transport_type = self.type
+        if transport_type == "stdout":
+            if self.endpoint:
+                raise ValueError(
+                    "telemetry.transport.endpoint is not supported for stdout transport"
+                )
+            if self.file_path is not None:
+                raise ValueError(
+                    "telemetry.transport.file_path must be omitted for stdout transport"
+                )
+        elif transport_type == "file":
+            if self.file_path is None:
+                raise ValueError(
+                    "telemetry.transport.file_path is required when type is 'file'"
+                )
+            if str(self.file_path).strip() == "":
+                raise ValueError(
+                    "telemetry.transport.file_path must not be blank"
+                )
+        elif transport_type == "tcp":
+            endpoint = (self.endpoint or "").strip()
+            if not endpoint:
+                raise ValueError(
+                    "telemetry.transport.endpoint is required when type is 'tcp'"
+                )
+            self.endpoint = endpoint
+            if self.file_path is not None:
+                raise ValueError(
+                    "telemetry.transport.file_path must be omitted for tcp transport"
+                )
+        else:  # pragma: no cover - defensive branch for Literal changes
+            raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
+        return self
+
+
 class TelemetryConfig(BaseModel):
     narration: NarrationThrottleConfig = NarrationThrottleConfig()
+    transport: TelemetryTransportConfig = TelemetryTransportConfig()
 
 
 class SnapshotStorageConfig(BaseModel):

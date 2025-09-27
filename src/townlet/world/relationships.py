@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, List, Tuple
+from collections.abc import Callable
+from dataclasses import dataclass
 
 
 def _clamp(value: float, *, low: float, high: float) -> float:
@@ -26,7 +26,7 @@ class RelationshipTie:
     familiarity: float = 0.0
     rivalry: float = 0.0
 
-    def as_dict(self) -> Dict[str, float]:
+    def as_dict(self) -> dict[str, float]:
         return {
             "trust": self.trust,
             "familiarity": self.familiarity,
@@ -50,7 +50,7 @@ class RelationshipLedger:
         self.params = params or RelationshipParameters()
         self.owner_id = owner_id
         self._eviction_hook: EvictionHook | None = eviction_hook
-        self._ties: Dict[str, RelationshipTie] = {}
+        self._ties: dict[str, RelationshipTie] = {}
 
     def apply_delta(
         self,
@@ -78,7 +78,7 @@ class RelationshipLedger:
     def decay(self) -> None:
         if not self._ties:
             return
-        removes: List[str] = []
+        removes: list[str] = []
         for other_id, tie in self._ties.items():
             tie.trust = _decay_value(tie.trust, self.params.trust_decay)
             tie.familiarity = _decay_value(
@@ -92,10 +92,10 @@ class RelationshipLedger:
         for other_id in removes:
             self._emit_eviction(other_id, reason="decay")
 
-    def snapshot(self) -> Dict[str, Dict[str, float]]:
+    def snapshot(self) -> dict[str, dict[str, float]]:
         return {other_id: tie.as_dict() for other_id, tie in self._ties.items()}
 
-    def inject(self, payload: Dict[str, Dict[str, float]]) -> None:
+    def inject(self, payload: dict[str, dict[str, float]]) -> None:
         self._ties.clear()
         for other_id, values in payload.items():
             tie = RelationshipTie(
@@ -112,7 +112,7 @@ class RelationshipLedger:
         self.owner_id = owner_id
         self._eviction_hook = hook
 
-    def top_friends(self, limit: int) -> List[Tuple[str, RelationshipTie]]:
+    def top_friends(self, limit: int) -> list[tuple[str, RelationshipTie]]:
         if limit <= 0:
             return []
         candidates = sorted(
@@ -122,7 +122,7 @@ class RelationshipLedger:
         )
         return candidates[:limit]
 
-    def top_rivals(self, limit: int) -> List[Tuple[str, RelationshipTie]]:
+    def top_rivals(self, limit: int) -> list[tuple[str, RelationshipTie]]:
         if limit <= 0:
             return []
         candidates = sorted(

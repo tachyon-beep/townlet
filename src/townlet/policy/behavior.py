@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Protocol
+from typing import Optional, Protocol
 
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
@@ -39,7 +39,7 @@ class ScriptedBehavior(BehaviorController):
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.thresholds = config.behavior
-        self.pending: Dict[str, Dict[str, str]] = {}
+        self.pending: dict[str, dict[str, str]] = {}
 
     def decide(self, world: WorldState, agent_id: str) -> AgentIntent:
         snapshot = world.agents.get(agent_id)

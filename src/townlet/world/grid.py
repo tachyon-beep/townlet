@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import random
 from collections import deque
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Any, Optional
 
 from townlet.agents.models import Personality
 from townlet.agents.relationship_modifiers import (
@@ -38,10 +39,10 @@ class AgentSnapshot:
 
     agent_id: str
     position: tuple[int, int]
-    needs: Dict[str, float]
+    needs: dict[str, float]
     wallet: float = 0.0
     personality: Personality = field(default_factory=_default_personality)
-    inventory: Dict[str, int] = field(default_factory=dict)
+    inventory: dict[str, int] = field(default_factory=dict)
     job_id: str | None = None
     on_shift: bool = False
     lateness_counter: int = 0
@@ -65,7 +66,7 @@ class InteractiveObject:
     object_id: str
     object_type: str
     occupied_by: str | None = None
-    stock: Dict[str, int] = field(default_factory=dict)
+    stock: dict[str, int] = field(default_factory=dict)
     position: tuple[int, int] | None = None
 
 
@@ -76,7 +77,7 @@ class RunningAffordance:
     agent_id: str
     affordance_id: str
     duration_remaining: int
-    effects: Dict[str, float]
+    effects: dict[str, float]
 
 
 @dataclass
@@ -86,9 +87,9 @@ class AffordanceSpec:
     affordance_id: str
     object_type: str
     duration: int
-    effects: Dict[str, float]
-    preconditions: List[str] = field(default_factory=list)
-    hooks: Dict[str, List[str]] = field(default_factory=dict)
+    effects: dict[str, float]
+    preconditions: list[str] = field(default_factory=list)
+    hooks: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -96,48 +97,48 @@ class WorldState:
     """Holds mutable world state for the simulation tick."""
 
     config: SimulationConfig
-    agents: Dict[str, AgentSnapshot] = field(default_factory=dict)
+    agents: dict[str, AgentSnapshot] = field(default_factory=dict)
     tick: int = 0
     queue_manager: QueueManager = field(init=False)
     embedding_allocator: EmbeddingAllocator = field(init=False)
-    _active_reservations: Dict[str, str] = field(init=False, default_factory=dict)
-    objects: Dict[str, InteractiveObject] = field(init=False, default_factory=dict)
-    affordances: Dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
-    _running_affordances: Dict[str, RunningAffordance] = field(
+    _active_reservations: dict[str, str] = field(init=False, default_factory=dict)
+    objects: dict[str, InteractiveObject] = field(init=False, default_factory=dict)
+    affordances: dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
+    _running_affordances: dict[str, RunningAffordance] = field(
         init=False, default_factory=dict
     )
-    _pending_events: Dict[int, List[Dict[str, Any]]] = field(
+    _pending_events: dict[int, list[dict[str, Any]]] = field(
         init=False, default_factory=dict
     )
-    store_stock: Dict[str, Dict[str, int]] = field(init=False, default_factory=dict)
-    _job_keys: List[str] = field(init=False, default_factory=list)
-    _employment_state: Dict[str, Dict[str, Any]] = field(
+    store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
+    _job_keys: list[str] = field(init=False, default_factory=list)
+    _employment_state: dict[str, dict[str, Any]] = field(
         init=False, default_factory=dict
     )
-    _employment_exit_queue: List[str] = field(init=False, default_factory=list)
+    _employment_exit_queue: list[str] = field(init=False, default_factory=list)
     _employment_exits_today: int = field(init=False, default=0)
-    _employment_exit_queue_timestamps: Dict[str, int] = field(
+    _employment_exit_queue_timestamps: dict[str, int] = field(
         init=False, default_factory=dict
     )
     _employment_manual_exits: set[str] = field(init=False, default_factory=set)
 
-    _rivalry_ledgers: Dict[str, RivalryLedger] = field(init=False, default_factory=dict)
-    _relationship_ledgers: Dict[str, RelationshipLedger] = field(
+    _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
+    _relationship_ledgers: dict[str, RelationshipLedger] = field(
         init=False, default_factory=dict
     )
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
     _relationship_window_ticks: int = 600
-    _recent_meal_participants: Dict[str, Dict[str, Any]] = field(
+    _recent_meal_participants: dict[str, dict[str, Any]] = field(
         init=False, default_factory=dict
     )
-    _chat_events: List[Dict[str, Any]] = field(init=False, default_factory=list)
+    _chat_events: list[dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
-    _rng_state: Optional[Tuple[Any, ...]] = field(init=False, default=None)
+    _rng_state: Optional[tuple[Any, ...]] = field(init=False, default=None)
     _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
-    _affordance_manifest_info: Dict[str, object] = field(
+    _affordance_manifest_info: dict[str, object] = field(
         init=False, default_factory=dict
     )
-    _objects_by_position: Dict[tuple[int, int], List[str]] = field(
+    _objects_by_position: dict[tuple[int, int], list[str]] = field(
         init=False, default_factory=dict
     )
 
@@ -202,10 +203,10 @@ class WorldState:
             self._rng = random.Random()
         return self._rng
 
-    def get_rng_state(self) -> Tuple[Any, ...]:
+    def get_rng_state(self) -> tuple[Any, ...]:
         return self.rng.getstate()
 
-    def set_rng_state(self, state: Tuple[Any, ...]) -> None:
+    def set_rng_state(self, state: tuple[Any, ...]) -> None:
         self.rng.setstate(state)
         self._rng_state = state
 
@@ -262,7 +263,7 @@ class WorldState:
         affordance_id: str,
         object_type: str,
         duration: int,
-        effects: Dict[str, float],
+        effects: dict[str, float],
         preconditions: Iterable[str] | None = None,
         hooks: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
@@ -276,7 +277,7 @@ class WorldState:
             hooks={key: list(values) for key, values in (hooks or {}).items()},
         )
 
-    def apply_actions(self, actions: Dict[str, Any]) -> None:
+    def apply_actions(self, actions: dict[str, Any]) -> None:
         """Apply agent actions for the current tick."""
         current_tick = self.tick
         for agent_id, action in actions.items():
@@ -410,7 +411,7 @@ class WorldState:
 
         self._apply_need_decay()
 
-    def snapshot(self) -> Dict[str, AgentSnapshot]:
+    def snapshot(self) -> dict[str, AgentSnapshot]:
         """Return a shallow copy of the agent dictionary for observers."""
         return dict(self.agents)
 
@@ -421,7 +422,7 @@ class WorldState:
         *,
         include_agents: bool = True,
         include_objects: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return local neighborhood information for observation builders."""
 
         snapshot = self.agents.get(agent_id)
@@ -435,25 +436,25 @@ class WorldState:
             }
 
         cx, cy = snapshot.position
-        agent_lookup: Dict[Tuple[int, int], List[str]] = {}
+        agent_lookup: dict[tuple[int, int], list[str]] = {}
         if include_agents:
             for other in self.agents.values():
                 position = other.position
                 agent_lookup.setdefault(position, []).append(other.agent_id)
 
-        object_lookup: Dict[Tuple[int, int], List[str]] = {}
+        object_lookup: dict[tuple[int, int], list[str]] = {}
         if include_objects:
             for position, object_ids in self._objects_by_position.items():
                 filtered = [obj_id for obj_id in object_ids if obj_id in self.objects]
                 if filtered:
                     object_lookup[position] = filtered
 
-        tiles: List[List[Dict[str, Any]]] = []
-        seen_agents: Dict[str, Dict[str, Any]] = {}
-        seen_objects: Dict[str, Dict[str, Any]] = {}
+        tiles: list[list[dict[str, Any]]] = []
+        seen_agents: dict[str, dict[str, Any]] = {}
+        seen_objects: dict[str, dict[str, Any]] = {}
 
         for dy in range(-radius, radius + 1):
-            row: List[Dict[str, Any]] = []
+            row: list[dict[str, Any]] = []
             for dx in range(-radius, radius + 1):
                 x = cx + dx
                 y = cy + dy
@@ -513,7 +514,7 @@ class WorldState:
             "objects": list(seen_objects.values()),
         }
 
-    def agent_context(self, agent_id: str) -> Dict[str, object]:
+    def agent_context(self, agent_id: str) -> dict[str, object]:
         """Return scalar context fields for the requested agent."""
 
         snapshot = self.agents.get(agent_id)
@@ -537,13 +538,13 @@ class WorldState:
         }
 
     @property
-    def active_reservations(self) -> Dict[str, str]:
+    def active_reservations(self) -> dict[str, str]:
         """Expose a copy of active reservations for diagnostics/tests."""
         return dict(self._active_reservations)
 
-    def drain_events(self) -> List[Dict[str, Any]]:
+    def drain_events(self) -> list[dict[str, Any]]:
         """Return all pending events accumulated up to the current tick."""
-        events: List[Dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
         for _, batch in sorted(self._pending_events.items()):
             events.extend(batch)
         self._pending_events.clear()
@@ -628,17 +629,17 @@ class WorldState:
             event="conflict",
         )
 
-    def rivalry_snapshot(self) -> Dict[str, Dict[str, float]]:
+    def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
-        snapshot: Dict[str, Dict[str, float]] = {}
+        snapshot: dict[str, dict[str, float]] = {}
         for agent_id, ledger in self._rivalry_ledgers.items():
             data = ledger.snapshot()
             if data:
                 snapshot[agent_id] = data
         return snapshot
 
-    def relationships_snapshot(self) -> Dict[str, Dict[str, Dict[str, float]]]:
-        snapshot: Dict[str, Dict[str, Dict[str, float]]] = {}
+    def relationships_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
+        snapshot: dict[str, dict[str, dict[str, float]]] = {}
         for agent_id, ledger in self._relationship_ledgers.items():
             data = ledger.snapshot()
             if data:
@@ -653,7 +654,7 @@ class WorldState:
             return None
         return ledger.tie_for(other_id)
 
-    def consume_chat_events(self) -> List[Dict[str, Any]]:
+    def consume_chat_events(self) -> list[dict[str, Any]]:
         """Return chat events staged for reward calculations and clear the buffer."""
 
         events = list(self._chat_events)
@@ -673,7 +674,7 @@ class WorldState:
             return False
         return ledger.should_avoid(other_id)
 
-    def rivalry_top(self, agent_id: str, limit: int) -> List[Tuple[str, float]]:
+    def rivalry_top(self, agent_id: str, limit: int) -> list[tuple[str, float]]:
         ledger = self._rivalry_ledgers.get(agent_id)
         if ledger is None:
             return []
@@ -754,7 +755,7 @@ class WorldState:
     def _decay_rivalry_ledgers(self) -> None:
         if not self._rivalry_ledgers:
             return
-        empty_agents: List[str] = []
+        empty_agents: list[str] = []
         for agent_id, ledger in self._rivalry_ledgers.items():
             ledger.decay(ticks=1)
             if not ledger.snapshot():
@@ -766,7 +767,7 @@ class WorldState:
     def _decay_relationship_ledgers(self) -> None:
         if not self._relationship_ledgers:
             return
-        empty_agents: List[str] = []
+        empty_agents: list[str] = []
         for agent_id, ledger in self._relationship_ledgers.items():
             ledger.decay()
             if not ledger.snapshot():
@@ -784,12 +785,12 @@ class WorldState:
             reason=reason,
         )
 
-    def relationship_metrics_snapshot(self) -> Dict[str, object]:
+    def relationship_metrics_snapshot(self) -> dict[str, object]:
         return self._relationship_churn.latest_payload()
 
     def load_relationship_snapshot(
         self,
-        snapshot: Dict[str, Dict[str, Dict[str, float]]],
+        snapshot: dict[str, dict[str, dict[str, float]]],
     ) -> None:
         """Restore relationship ledgers from persisted snapshot data."""
 
@@ -931,7 +932,7 @@ class WorldState:
         return True
 
     def _apply_affordance_effects(
-        self, agent_id: str, effects: Dict[str, float]
+        self, agent_id: str, effects: dict[str, float]
     ) -> None:
         snapshot = self.agents.get(agent_id)
         if snapshot is None:
@@ -943,7 +944,7 @@ class WorldState:
             elif key == "money":
                 snapshot.wallet += delta
 
-    def _emit_event(self, event: str, payload: Dict[str, Any]) -> None:
+    def _emit_event(self, event: str, payload: dict[str, Any]) -> None:
         events = self._pending_events.setdefault(self.tick, [])
         events.append({"event": event, "tick": self.tick, **payload})
 
@@ -994,7 +995,7 @@ class WorldState:
         }
         self._assign_jobs_to_agents()
 
-    def affordance_manifest_metadata(self) -> Dict[str, object]:
+    def affordance_manifest_metadata(self) -> dict[str, object]:
         """Expose manifest metadata (path, checksum, counts) for telemetry."""
 
         return dict(self._affordance_manifest_info)
@@ -1167,7 +1168,7 @@ class WorldState:
     # ------------------------------------------------------------------
     # Employment helpers
     # ------------------------------------------------------------------
-    def _employment_context_defaults(self) -> Dict[str, Any]:
+    def _employment_context_defaults(self) -> dict[str, Any]:
         window = max(1, self.config.employment.attendance_window)
         return {
             "state": "pre_shift",
@@ -1193,16 +1194,16 @@ class WorldState:
             "late_counter_recorded": False,
         }
 
-    def _get_employment_context(self, agent_id: str) -> Dict[str, Any]:
+    def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
         ctx = self._employment_state.get(agent_id)
         if ctx is None or ctx.get("attendance_samples") is None:
             ctx = self._employment_context_defaults()
             self._employment_state[agent_id] = ctx
         # Resize deque if window changed via config reload.
         window = max(1, self.config.employment.attendance_window)
-        samples: Deque[float] = ctx["attendance_samples"]
+        samples: deque[float] = ctx["attendance_samples"]
         if samples.maxlen != window:
-            new_samples: Deque[float] = deque(samples, maxlen=window)
+            new_samples: deque[float] = deque(samples, maxlen=window)
             ctx["attendance_samples"] = new_samples
         return ctx
 
@@ -1222,7 +1223,7 @@ class WorldState:
         return max(0.0, min(1.0, value))
 
     def _employment_idle_state(
-        self, snapshot: AgentSnapshot, ctx: Dict[str, Any]
+        self, snapshot: AgentSnapshot, ctx: dict[str, Any]
     ) -> None:
         if ctx["state"] != "pre_shift":
             ctx["state"] = "pre_shift"
@@ -1244,14 +1245,14 @@ class WorldState:
         snapshot.on_shift = False
 
     def _employment_prepare_state(
-        self, snapshot: AgentSnapshot, ctx: Dict[str, Any]
+        self, snapshot: AgentSnapshot, ctx: dict[str, Any]
     ) -> None:
         ctx["state"] = "await_start"
         snapshot.shift_state = "await_start"
         snapshot.on_shift = False
 
     def _employment_begin_shift(
-        self, ctx: Dict[str, Any], start: int, end: int
+        self, ctx: dict[str, Any], start: int, end: int
     ) -> None:
         if ctx["shift_started_tick"] != start:
             ctx["shift_started_tick"] = start
@@ -1275,7 +1276,7 @@ class WorldState:
     def _employment_determine_state(
         self,
         *,
-        ctx: Dict[str, Any],
+        ctx: dict[str, Any],
         tick: int,
         start: int,
         at_required_location: bool,
@@ -1310,7 +1311,7 @@ class WorldState:
         self,
         *,
         snapshot: AgentSnapshot,
-        ctx: Dict[str, Any],
+        ctx: dict[str, Any],
         state: str,
         at_required_location: bool,
         wage_rate: float,
@@ -1439,7 +1440,7 @@ class WorldState:
         self,
         *,
         snapshot: AgentSnapshot,
-        ctx: Dict[str, Any],
+        ctx: dict[str, Any],
         employment_cfg: EmploymentConfig,
         job_id: str | None,
     ) -> None:
@@ -1474,11 +1475,11 @@ class WorldState:
         snapshot.late_ticks_today = ctx["late_ticks"]
         ctx["late_ticks"] = 0
 
-    def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> List[str]:
+    def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
         job_id = snapshot.job_id
         if job_id is None:
             return []
-        coworkers: List[str] = []
+        coworkers: list[str] = []
         for other in self.agents.values():
             if other.agent_id == snapshot.agent_id or other.job_id != job_id:
                 continue
@@ -1521,7 +1522,7 @@ class WorldState:
         if snapshot is not None:
             snapshot.exit_pending = False
 
-    def employment_queue_snapshot(self) -> Dict[str, Any]:
+    def employment_queue_snapshot(self) -> dict[str, Any]:
         return {
             "pending": list(self._employment_exit_queue),
             "pending_count": len(self._employment_exit_queue),
@@ -1625,7 +1626,7 @@ class WorldState:
 
         record = self._recent_meal_participants.get(object_id)
         if record and record.get("tick") == self.tick:
-            participants: Set[str] = record["agents"]
+            participants: set[str] = record["agents"]
         else:
             participants = set()
             record = {"tick": self.tick, "agents": participants}

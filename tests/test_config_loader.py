@@ -229,3 +229,34 @@ def test_register_snapshot_migrations_from_config(poc_config: Path) -> None:
     finally:
         clear_registry()
         sys.modules.pop(module_name, None)
+
+
+def test_telemetry_transport_defaults(poc_config: Path) -> None:
+    config = load_config(poc_config)
+    transport = config.telemetry.transport
+    assert transport.type == "stdout"
+    assert transport.retry.max_attempts == 3
+    assert transport.buffer.max_batch_size == 32
+    assert transport.buffer.flush_interval_ticks == 1
+
+
+def test_telemetry_file_transport_requires_path(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["telemetry"]["transport"] = {"type": "file"}
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="file_path is required"):
+        load_config(target)
+
+
+def test_telemetry_tcp_transport_requires_endpoint(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["telemetry"]["transport"] = {"type": "tcp", "endpoint": "  "}
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="endpoint is required"):
+        load_config(target)
