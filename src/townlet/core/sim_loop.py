@@ -205,6 +205,7 @@ class SimulationLoop:
             employment_metrics=self.telemetry.latest_employment_metrics(),
             hunger_levels=hunger_levels,
             option_switch_counts=option_switch_counts,
+            rivalry_events=self.telemetry.latest_rivalry_events(),
         )
         self.telemetry.record_stability_metrics(self.stability.latest_metrics())
         return TickArtifacts(observations=observations, rewards=rewards)

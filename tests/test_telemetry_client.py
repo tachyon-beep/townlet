@@ -36,13 +36,18 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     client = TelemetryClient()
     snapshot = client.from_console(router)
 
-    assert snapshot.schema_version.startswith("0.8")
+    assert snapshot.schema_version.startswith("0.9")
     assert snapshot.schema_warning is None
     assert snapshot.employment.pending_count >= 0
     assert snapshot.conflict.queue_cooldown_events >= 0
     assert snapshot.conflict.queue_ghost_step_events >= 0
     assert snapshot.conflict.rivalry_agents >= 0
     assert snapshot.agents
+    assert snapshot.conflict.queue_rotation_events >= 0
+    assert isinstance(snapshot.conflict.queue_history, tuple)
+    assert isinstance(snapshot.conflict.rivalry_events, tuple)
+    assert isinstance(snapshot.stability.alerts, tuple)
+    assert isinstance(snapshot.stability.metrics, dict)
     assert snapshot.agents[0].agent_id
     assert isinstance(snapshot.narrations, list)
     transport = snapshot.transport

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-SUPPORTED_SCHEMA_PREFIX = "0.8"
+SUPPORTED_SCHEMA_PREFIX = "0.9"
 
 
 @dataclass(frozen=True)
@@ -20,10 +20,31 @@ class EmploymentMetrics:
 
 
 @dataclass(frozen=True)
+class QueueHistoryEntry:
+    tick: int
+    cooldown_delta: int
+    ghost_step_delta: int
+    rotation_delta: int
+    totals: Mapping[str, int]
+
+
+@dataclass(frozen=True)
+class RivalryEventEntry:
+    tick: int
+    agent_a: str
+    agent_b: str
+    intensity: float
+    reason: str
+
+
+@dataclass(frozen=True)
 class ConflictMetrics:
     queue_cooldown_events: int
     queue_ghost_step_events: int
+    queue_rotation_events: int
+    queue_history: tuple[QueueHistoryEntry, ...]
     rivalry_agents: int
+    rivalry_events: tuple[RivalryEventEntry, ...]
     raw: Mapping[str, Any]
 
 
@@ -122,6 +143,12 @@ class TransportStatus:
 
 
 @dataclass(frozen=True)
+class StabilitySnapshot:
+    alerts: tuple[str, ...]
+    metrics: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class TelemetrySnapshot:
     schema_version: str
     schema_warning: str | None
@@ -136,6 +163,7 @@ class TelemetrySnapshot:
     agents: list[AgentSummary]
     anneal: AnnealStatus | None
     policy_inspector: list[PolicyInspectorEntry]
+    stability: StabilitySnapshot
     kpis: Mapping[str, list[float]]
     transport: TransportStatus
     raw: Mapping[str, Any]
@@ -169,6 +197,10 @@ class TelemetryClient:
                     return None
             return None
 
+        def _coerce_int(value: object) -> int:
+            maybe = _maybe_int(value)
+            return maybe if maybe is not None else 0
+
         schema_version = str(payload.get("schema_version", ""))
         if not schema_version:
             raise SchemaMismatchError("Telemetry payload missing schema_version")
@@ -194,19 +226,67 @@ class TelemetryClient:
 
         queue_metrics = conflict_payload.get("queues", {})
         rivalry_metrics = conflict_payload.get("rivalry", {})
+        queue_history_payload = conflict_payload.get("queue_history", [])
+        rivalry_events_payload = conflict_payload.get("rivalry_events", [])
+
         queue_cooldowns = 0
         queue_ghost_steps = 0
+        queue_rotations = 0
         rivalry_agents = 0
+        queue_history: list[QueueHistoryEntry] = []
+        rivalry_events: list[RivalryEventEntry] = []
+
         if isinstance(queue_metrics, Mapping):
-            queue_cooldowns = int(queue_metrics.get("cooldown_events", 0))
-            queue_ghost_steps = int(queue_metrics.get("ghost_step_events", 0))
+            queue_cooldowns = _coerce_int(queue_metrics.get("cooldown_events"))
+            queue_ghost_steps = _coerce_int(queue_metrics.get("ghost_step_events"))
+            queue_rotations = _coerce_int(queue_metrics.get("rotation_events"))
         if isinstance(rivalry_metrics, Mapping):
             rivalry_agents = len(rivalry_metrics)
+
+        if isinstance(queue_history_payload, list):
+            for entry in queue_history_payload:
+                if not isinstance(entry, Mapping):
+                    continue
+                delta_payload = entry.get("delta")
+                if not isinstance(delta_payload, Mapping):
+                    delta_payload = {}
+                totals_payload = entry.get("totals")
+                if not isinstance(totals_payload, Mapping):
+                    totals_payload = {}
+                queue_history.append(
+                    QueueHistoryEntry(
+                        tick=_coerce_int(entry.get("tick")),
+                        cooldown_delta=_coerce_int(delta_payload.get("cooldown_events")),
+                        ghost_step_delta=_coerce_int(delta_payload.get("ghost_step_events")),
+                        rotation_delta=_coerce_int(delta_payload.get("rotation_events")),
+                        totals={
+                            str(key): _coerce_int(value)
+                            for key, value in totals_payload.items()
+                        },
+                    )
+                )
+
+        if isinstance(rivalry_events_payload, list):
+            for event in rivalry_events_payload:
+                if not isinstance(event, Mapping):
+                    continue
+                rivalry_events.append(
+                    RivalryEventEntry(
+                        tick=_coerce_int(event.get("tick")),
+                        agent_a=str(event.get("agent_a", "")),
+                        agent_b=str(event.get("agent_b", "")),
+                        intensity=float(event.get("intensity", 0.0)),
+                        reason=str(event.get("reason", "unknown")),
+                    )
+                )
 
         conflict = ConflictMetrics(
             queue_cooldown_events=queue_cooldowns,
             queue_ghost_step_events=queue_ghost_steps,
+            queue_rotation_events=queue_rotations,
+            queue_history=tuple(queue_history),
             rivalry_agents=rivalry_agents,
+            rivalry_events=tuple(rivalry_events),
             raw=conflict_payload,
         )
 
@@ -434,6 +514,23 @@ class TelemetryClient:
                     )
                 )
 
+        stability_payload = payload.get("stability")
+        stability_alerts: tuple[str, ...] = ()
+        stability_metrics: Mapping[str, Any] = {}
+        if isinstance(stability_payload, Mapping):
+            alerts_payload = stability_payload.get("alerts", [])
+            if isinstance(alerts_payload, list):
+                stability_alerts = tuple(
+                    str(alert)
+                    for alert in alerts_payload
+                    if alert is not None
+                )
+            metrics_payload = stability_payload.get("metrics")
+            if isinstance(metrics_payload, Mapping):
+                stability_metrics = dict(metrics_payload)
+
+        stability = StabilitySnapshot(alerts=stability_alerts, metrics=stability_metrics)
+
         transport_payload = payload.get("transport")
         if not isinstance(transport_payload, Mapping):
             transport_payload = {}
@@ -463,6 +560,7 @@ class TelemetryClient:
             agents=agents,
             anneal=anneal_status,
             policy_inspector=inspector_entries,
+            stability=stability,
             kpis=kpi_history,
             transport=transport,
             raw=payload,

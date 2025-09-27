@@ -34,6 +34,7 @@ class QueueManager:
         self._metrics: dict[str, int] = {
             "cooldown_events": 0,
             "ghost_step_events": 0,
+            "rotation_events": 0,
         }
         self._perf_metrics: dict[str, int] = {
             "request_ns": 0,
@@ -148,6 +149,15 @@ class QueueManager:
     def reset_performance_metrics(self) -> None:
         for key in self._perf_metrics:
             self._perf_metrics[key] = 0
+
+    def requeue_to_tail(self, object_id: str, agent_id: str, tick: int) -> None:
+        """Append `agent_id` to the end of the queue if not already present."""
+
+        queue = self._queues.setdefault(object_id, [])
+        if any(entry.agent_id == agent_id for entry in queue):
+            return
+        queue.append(QueueEntry(agent_id=agent_id, joined_tick=tick))
+        self._metrics["rotation_events"] += 1
 
     def export_state(self) -> dict[str, object]:
         """Serialise queue activity for snapshot persistence."""

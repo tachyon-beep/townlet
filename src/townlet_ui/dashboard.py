@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterable, Mapping
 
 import numpy as np
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -91,20 +91,75 @@ def render_snapshot(
 
     conflict = snapshot.conflict
     conflict_table = Table(title="Conflict Snapshot", expand=True)
-    conflict_table.add_column("Queue Cooldowns", justify="right")
+    conflict_table.add_column("Cooldowns", justify="right")
     conflict_table.add_column("Ghost Steps", justify="right")
+    conflict_table.add_column("Rotations", justify="right")
     conflict_table.add_column("Rivalry Agents", justify="right")
     conflict_table.add_row(
         str(conflict.queue_cooldown_events),
         str(conflict.queue_ghost_step_events),
+        str(conflict.queue_rotation_events),
         str(conflict.rivalry_agents),
     )
     conflict_border = (
         "magenta"
-        if conflict.queue_ghost_step_events or conflict.queue_cooldown_events
+        if (
+            conflict.queue_ghost_step_events
+            or conflict.queue_cooldown_events
+            or conflict.queue_rotation_events
+        )
         else "blue"
     )
-    panels.append(Panel(conflict_table, title="Conflict", border_style=conflict_border))
+    conflict_renderables = [conflict_table]
+
+    history_entries = list(conflict.queue_history[-5:])
+    if history_entries:
+        history_table = Table(title="Queue Fairness Δ (recent)", expand=True)
+        history_table.add_column("Tick", justify="right")
+        history_table.add_column("Cooldown Δ", justify="right")
+        history_table.add_column("Ghost Δ", justify="right")
+        history_table.add_column("Rotation Δ", justify="right")
+        for entry in reversed(history_entries):
+            history_table.add_row(
+                str(entry.tick),
+                str(entry.cooldown_delta),
+                str(entry.ghost_step_delta),
+                str(entry.rotation_delta),
+            )
+        conflict_renderables.append(history_table)
+
+    rivalry_events = list(conflict.rivalry_events[-5:])
+    if rivalry_events:
+        rivalry_table = Table(title="Recent Rivalry Events", expand=True)
+        rivalry_table.add_column("Tick", justify="right")
+        rivalry_table.add_column("Agent A")
+        rivalry_table.add_column("Agent B")
+        rivalry_table.add_column("Intensity", justify="right")
+        rivalry_table.add_column("Reason")
+        for event in reversed(rivalry_events):
+            rivalry_table.add_row(
+                str(event.tick),
+                event.agent_a or "—",
+                event.agent_b or "—",
+                f"{event.intensity:.2f}",
+                event.reason or "unknown",
+            )
+        conflict_renderables.append(rivalry_table)
+
+    if snapshot.stability.alerts:
+        alert_text = Text(
+            "Active alerts: " + ", ".join(snapshot.stability.alerts),
+            style="bold red",
+        )
+        conflict_renderables.append(alert_text)
+
+    panels.append(
+        Panel(
+            Group(*conflict_renderables),
+            title="Conflict",
+            border_style=conflict_border,
+        )
+    )
 
     panels.append(_build_anneal_panel(snapshot))
     panels.append(_build_policy_inspector_panel(snapshot))

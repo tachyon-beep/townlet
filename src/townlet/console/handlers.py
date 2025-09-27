@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 from townlet.snapshots import SnapshotManager
 
-SUPPORTED_SCHEMA_PREFIX = "0.8"
+SUPPORTED_SCHEMA_PREFIX = "0.9"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
 
 
@@ -54,7 +54,7 @@ class EventStream:
     def __init__(self) -> None:
         self._latest: list[dict[str, object]] = []
 
-    def connect(self, publisher: "TelemetryPublisher") -> None:
+    def connect(self, publisher: TelemetryPublisher) -> None:
         publisher.register_event_subscriber(self._record)
 
     def _record(self, events: list[dict[str, object]]) -> None:
@@ -67,7 +67,7 @@ class EventStream:
 class TelemetryBridge:
     """Provides access to the latest telemetry snapshots for console consumers."""
 
-    def __init__(self, publisher: "TelemetryPublisher") -> None:
+    def __init__(self, publisher: TelemetryPublisher) -> None:
         self._publisher = publisher
 
     def snapshot(self) -> dict[str, dict[str, object]]:
@@ -99,12 +99,12 @@ class TelemetryBridge:
 
 
 def create_console_router(
-    publisher: "TelemetryPublisher",
-    world: "WorldState" | None = None,
-    scheduler: "PerturbationScheduler" | None = None,
+    publisher: TelemetryPublisher,
+    world: WorldState | None = None,
+    scheduler: PerturbationScheduler | None = None,
     *,
     mode: str = "viewer",
-    config: "SimulationConfig" | None = None,
+    config: SimulationConfig | None = None,
 ) -> ConsoleRouter:
     router = ConsoleRouter()
     if config is not None:
@@ -142,7 +142,7 @@ def create_console_router(
             }
         return path, None
 
-    def _require_config() -> tuple["SimulationConfig" | None, dict[str, object] | None]:
+    def _require_config() -> tuple[SimulationConfig | None, dict[str, object] | None]:
         if config is None:
             return None, {
                 "error": "unsupported",
@@ -184,6 +184,119 @@ def create_console_router(
             success = world.employment_defer_exit(agent_id)
             return {"deferred": success, "agent_id": agent_id}
         return {"error": "unknown_action", "action": action}
+
+    def conflict_status_handler(command: ConsoleCommand) -> object:
+        version, warning = _schema_metadata(publisher)
+        try:
+            history_limit = int(command.kwargs.get("history", 10))
+        except (TypeError, ValueError):
+            history_limit = 10
+        try:
+            rivalry_limit = int(command.kwargs.get("rivalries", 10))
+        except (TypeError, ValueError):
+            rivalry_limit = 10
+        queue_history = publisher.latest_queue_history()
+        if history_limit > 0:
+            queue_history = queue_history[-history_limit:]
+        rivalry_events = publisher.latest_rivalry_events()
+        if rivalry_limit > 0:
+            rivalry_events = rivalry_events[-rivalry_limit:]
+        return {
+            "schema_version": version,
+            "schema_warning": warning,
+            "queue_metrics": publisher.latest_queue_metrics() or {},
+            "conflict": publisher.latest_conflict_snapshot(),
+            "history": queue_history,
+            "rivalry_events": rivalry_events,
+            "stability_alerts": publisher.latest_stability_alerts(),
+            "stability_metrics": publisher.latest_stability_metrics(),
+        }
+
+    def queue_inspect_handler(command: ConsoleCommand) -> object:
+        if world is None:
+            return {"error": "unsupported"}
+        if not command.args:
+            return {
+                "error": "usage",
+                "message": "queue_inspect <object_id>",
+            }
+        object_id = str(command.args[0])
+        state = world.queue_manager.export_state()
+        queues = state.get("queues", {})
+        entries = [
+            {
+                "agent_id": str(entry.get("agent_id", "")),
+                "joined_tick": int(entry.get("joined_tick", 0)),
+            }
+            for entry in queues.get(object_id, [])
+        ]
+        cooldowns = []
+        for item in state.get("cooldowns", []):
+            if str(item.get("object_id")) != object_id:
+                continue
+            expiry = int(item.get("expiry", 0))
+            cooldowns.append(
+                {
+                    "agent_id": str(item.get("agent_id", "")),
+                    "expiry_tick": expiry,
+                    "ticks_remaining": max(0, expiry - world.tick),
+                }
+            )
+        stall_counts = state.get("stall_counts", {})
+        return {
+            "object_id": object_id,
+            "tick": world.tick,
+            "active": world.queue_manager.active_agent(object_id),
+            "queue": entries,
+            "cooldowns": cooldowns,
+            "stall_count": int(stall_counts.get(object_id, 0)),
+            "metrics": publisher.latest_queue_metrics() or {},
+        }
+
+    def rivalry_dump_handler(command: ConsoleCommand) -> object:
+        if world is None:
+            return {"error": "unsupported"}
+        snapshot_getter = getattr(world, "rivalry_snapshot", None)
+        if not callable(snapshot_getter):
+            return {"error": "unsupported"}
+        ledger = snapshot_getter() or {}
+        try:
+            limit = int(command.kwargs.get("limit", 5))
+        except (TypeError, ValueError):
+            limit = 5
+        if command.args:
+            agent_id = str(command.args[0])
+            rivals = ledger.get(agent_id, {}) or {}
+            sorted_rivals = sorted(
+                ((other, float(value)) for other, value in rivals.items()),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            if limit > 0:
+                sorted_rivals = sorted_rivals[:limit]
+            return {
+                "agent_id": agent_id,
+                "rivals": [
+                    {"agent_id": other, "intensity": intensity}
+                    for other, intensity in sorted_rivals
+                ],
+            }
+        edges: list[tuple[str, str, float]] = []
+        for owner, rivals in ledger.items():
+            for other, value in (rivals or {}).items():
+                if owner >= other:
+                    continue
+                edges.append((owner, other, float(value)))
+        edges.sort(key=lambda item: item[2], reverse=True)
+        if limit > 0:
+            edges = edges[:limit]
+        return {
+            "pairs": [
+                {"agent_a": a, "agent_b": b, "intensity": intensity}
+                for a, b, intensity in edges
+            ],
+            "agent_count": len(ledger),
+        }
 
     def perturbation_queue_handler(command: ConsoleCommand) -> object:
         if scheduler is None:
@@ -344,6 +457,9 @@ def create_console_router(
             result["output_path"] = str(saved_path)
         return result
 
+    router.register("conflict_status", conflict_status_handler)
+    router.register("queue_inspect", queue_inspect_handler)
+    router.register("rivalry_dump", rivalry_dump_handler)
     router.register("telemetry_snapshot", telemetry_handler)
     router.register("employment_status", employment_status_handler)
     router.register("employment_exit", employment_exit_handler)
@@ -361,7 +477,7 @@ def create_console_router(
     return router
 
 
-def _schema_metadata(publisher: "TelemetryPublisher") -> tuple[str, str | None]:
+def _schema_metadata(publisher: TelemetryPublisher) -> tuple[str, str | None]:
     version = publisher.schema()
     warning = None
     if not version.startswith(SUPPORTED_SCHEMA_PREFIX):

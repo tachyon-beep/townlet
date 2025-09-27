@@ -369,6 +369,9 @@ class WorldState:
                 self.queue_manager.release(
                     object_id, occupant, current_tick, success=False
                 )
+                self.queue_manager.requeue_to_tail(
+                    object_id, occupant, current_tick
+                )
                 if rival is not None:
                     self._record_queue_conflict(
                         object_id=object_id,

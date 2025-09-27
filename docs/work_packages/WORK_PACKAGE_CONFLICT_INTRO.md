@@ -1,6 +1,9 @@
 # Conflict Intro (M2.5) Work Package
 
 ## Objective
+## Status (2025-10-05)
+All scoped deliverables are complete: queue fairness instrumentation, rivalry decay/avoidance, behaviour fallbacks, telemetry/console surfaces, docs/runbooks, and regression suites. The work package remains as reference for future extensions.
+
 Introduce basic conflict dynamics so interactive queues recover from friction, rivalry scaffolding is persisted and observable, and narrative hooks surface conflict beats without destabilising the employment/economy loops.
 
 ## Scope

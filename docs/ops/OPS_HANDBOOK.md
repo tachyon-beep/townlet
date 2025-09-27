@@ -134,6 +134,21 @@
   `perturbation_cancelled`, and `perturbation_ended` telemetry entries for
   observability.
 
+## Conflict & Rivalry Runbook
+- **Telemetry surfaces**: Use the observer dashboard conflict panel (rotations, queue deltas, latest rivalry events) alongside `conflict_status`, `queue_inspect`, and `rivalry_dump`. Expect `queue_history` entries with `tick`, `delta`, and `totals` keys—record tail snapshots during incidents.
+- **Baseline references**: `docs/ops/queue_conflict_baselines.md` lists expected ghost-step/rotation counts and intensity sums. Compare against new captures in `docs/samples/queue_conflict_snapshot.json` and `docs/samples/rivalry_decay_snapshot.json` when validating fixes.
+- **Alert interpretation**:
+  - `queue_fairness_pressure`: ghost-step or rotation deltas exceeded guardrail for the tick window—inspect cooldown configuration and queue occupancy.
+  - `rivalry_spike`: rivalry events at or above `avoid_threshold` in quick succession—use `rivalry_dump` for top edges and consider manual decay/reset.
+  - `option_thrash_detected`: policy switch counts spiking; coordinate with policy team before relaxing thresholds.
+- **Intervention steps**:
+  1. Reproduce the scenario with `python - <<'PY'` snippet in the baselines doc to gather a fresh telemetry snapshot.
+  2. Inspect queue state with `queue_inspect <object_id>` (look for repeated stall counts and cooldown backlogs).
+  3. Review rivalries via `rivalry_dump [agent_id] --limit 5`; if a single edge dominates, consider manual decay (`world.rivalry_ledgers[...] .decay(...)` via admin console) or widening `avoid_threshold` temporarily.
+  4. Adjust fairness knobs (`queue_fairness.cooldown_ticks`, `ghost_step_after`) only after confirming baseline drift. Document changes in ops logs.
+  5. For repeated spikes, freeze promotion, gather telemetry snapshots + console outputs, and escalate.
+- **Rollback guidance**: capture `telemetry_snapshot`, `conflict_status`, and watcher JSON. If conflict pressure stays out-of-band, revert to last known good config seed or disable scripted queues, then rerun smoke scenarios.
+
 ## Queue-Conflict Troubleshooting
 - **Purpose**: ensure live or mixed-mode PPO runs maintain the conflict pressure captured in baselines.
 - **Baselines**: reference `docs/ops/queue_conflict_baselines.md` for expected event counts and intensity sums. Queue-conflict mixed runs should stay within ±15% of the recorded intensity unless intentionally experimenting.
@@ -147,6 +162,7 @@
 
 ## Telemetry Transport & Observer Workflow
 
+- Observer telemetry emits schema version `0.9.x`; console and dashboard clients warn on newer majors but expect the new conflict history fields. Run `telemetry_snapshot` after upgrades to confirm the reported schema matches `0.9.x`.
 - `config.telemetry.transport` selects the stream destination. Supported types:
   - `stdout`: development/debug. Payloads print to the shard stdout (NDJSON).
   - `file`: append-only JSONL file (set `file_path`). Parents are created automatically.
@@ -159,6 +175,8 @@
   3. For persistent failure, switch config to `stdout` or `file` and rerun smoke test below while root-causing the external service.
 - Smoke command after transport changes: `pytest tests/test_telemetry_client.py tests/test_observer_ui_dashboard.py tests/test_telemetry_stream_smoke.py tests/test_telemetry_transport.py`.
 - Sample payload located at `docs/samples/telemetry_stream_sample.jsonl` demonstrates schema headers and transport metadata.
+- Console conflict tooling: `conflict_status [--history N --rivalries N]` surfaces queue deltas, rivalry events, and stability alerts; `queue_inspect <object_id>` dumps active/cooldown entries; `rivalry_dump [agent_id] [--limit N]` reports rivalry intensities for audit logs. Record these outputs during incident response.
+- Observer dashboard conflict panel highlights rotation counts and maintains a rolling table of fairness deltas plus latest rivalry events; include screenshots when drafting incident timelines.
 
 ## Tooling & Logs
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`.

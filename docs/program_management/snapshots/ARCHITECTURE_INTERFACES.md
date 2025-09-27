@@ -101,7 +101,8 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 
 - publishes initial snapshot + diffs (agents, events, economy, utilities, metrics) over WebSocket (planned) or file sink.
 - enforces privacy mode (hashed IDs) and backpressure (aggregate diffs, drop events when overloaded).
-- maintains semantic version string (`schema_version`, currently `0.3.0`) surfaced on every console/telemetry snapshot for consumer compatibility.
+- maintains semantic version string (`schema_version`, currently `0.9.0`) surfaced on every console/telemetry snapshot for consumer compatibility and fairness history consumers.
+- conflict payload publishes rolling `queue_history` and `rivalry_events` slices so observer dashboards and console tooling can trace fairness pressure.
 - captures queue manager, embedding allocator, and employment queue counters for ops dashboards.
 - emits per-tick lifecycle events (`affordance_start`, `affordance_finish`, `affordance_fail`, `employment_exit_pending`, `employment_exit_processed`) sourced from the world.
 - exposes per-agent job snapshots (job id, on-shift flag, shift state, attendance ratio, late ticks, wages withheld, wages earned, meals cooked/consumed, basket cost) plus global employment metrics (pending exits, exits today, queue limits) for planning.

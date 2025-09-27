@@ -72,3 +72,45 @@ def test_reward_variance_alert_exports_state() -> None:
     monitor_metrics = monitor.latest_metrics()
     assert restored_metrics["reward_variance"] == monitor_metrics["reward_variance"]
     assert "thresholds" in restored_metrics
+
+
+def test_queue_fairness_alerts_include_metrics() -> None:
+    monitor = make_monitor()
+    monitor.track(
+        tick=0,
+        rewards={},
+        terminated={"alice": False},
+        queue_metrics={"ghost_step_events": 6, "rotation_events": 6},
+        embedding_metrics={},
+        job_snapshot={},
+        events=[],
+        employment_metrics={},
+        hunger_levels={"alice": 0.5},
+        option_switch_counts={"alice": 0},
+    )
+    assert "queue_fairness_pressure" in monitor.latest_alerts
+    metrics = monitor.latest_metrics()
+    assert metrics["queue_totals"]["ghost_step_events"] == 6
+    assert metrics["queue_deltas"]["rotation_events"] == 6
+
+
+def test_rivalry_spike_alert_triggers_on_intensity() -> None:
+    monitor = make_monitor()
+    events = [
+        {"agent_a": "alice", "agent_b": "bob", "intensity": 0.7}
+        for _ in range(6)
+    ]
+    monitor.track(
+        tick=0,
+        rewards={},
+        terminated={"alice": False},
+        queue_metrics={},
+        embedding_metrics={},
+        job_snapshot={},
+        events=[],
+        employment_metrics={},
+        hunger_levels={"alice": 0.5},
+        option_switch_counts={"alice": 0},
+        rivalry_events=events,
+    )
+    assert "rivalry_spike" in monitor.latest_alerts

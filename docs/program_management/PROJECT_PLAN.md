@@ -20,7 +20,7 @@
 |-----------|-------------|---------------|-----------------------|
 | M1 – Runtime Safety | Week 2 | Affordance manifests validated; observation variants gated; reward guardrails enforced with tests. | WP-01, WP-02, WP-03 |
 | M2 – Operational Guardrails | Week 4 | Stability monitor thresholds active; console ops validated; telemetry publisher upgraded with schema versioning. | WP-04, WP-06 |
-| M3 – Continuity & Conflict Systems | Week 6 | Snapshot persistence functional; conflict/rivalry events flow into observations/rewards; observer UI smoke tests pass. | WP-05, WP-07 |
+| M3 – Continuity & Conflict Systems | Week 6 | Snapshot persistence functional; conflict/rivalry events flow into observations/rewards; observer UI smoke tests pass. (Status: on track; rivalry system delivered 2025-10-05.) | WP-05, WP-07 |
 
 ## Future Milestones (Beyond Remediation)
 

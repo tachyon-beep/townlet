@@ -11,6 +11,26 @@ Use these targets to configure `telemetry_watch.py --queue-events-min` and
 `--queue-intensity-min` thresholds. Set guardrails ~10–15% below the tabled values unless
 intentionally exploring lower conflict pressure.
 
+```bash
+python - <<'PY'
+from pathlib import Path
+from types import SimpleNamespace
+from townlet.config.loader import load_config
+from townlet.core.sim_loop import SimulationLoop
+from townlet.policy.scenario_utils import apply_scenario
+
+config = load_config(Path('configs/scenarios/queue_conflict.yaml'))
+loop = SimulationLoop(config)
+apply_scenario(loop, config.scenario)
+loop.telemetry._transport_client = SimpleNamespace(send=lambda payload: None, close=lambda: None)
+for _ in range(80):
+    loop.step()
+print(loop.telemetry.latest_conflict_snapshot()['queues'])
+PY
+```
+
+The snippet above reproduces the scenario snapshot placed under `docs/samples/queue_conflict_snapshot.json` and is useful when validating guardrail tweaks locally. A similar block with `rivalry_decay.yaml` refreshes `docs/samples/rivalry_decay_snapshot.json`.
+
 ## Social Interaction Baselines
 
 | Scenario | shared_meal_events (avg|min|max) | late_help_events | shift_takeover_events | chat_success/events | chat_failure_events | chat_quality_mean | Watcher Guidance |

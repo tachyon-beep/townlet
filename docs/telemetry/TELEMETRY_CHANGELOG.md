@@ -2,6 +2,7 @@
 
 | Version | Date | Summary | Consumer Actions |
 | --- | --- | --- | --- |
+| 0.9.0 | 2025-10-12 | Conflict snapshot adds queue history, rivalry events, and stability alert payload; console gains conflict inspection commands. | Upgrade clients to schema prefix 0.9, parse `conflict.queue_history`, `conflict.rivalry_events`, and `stability` blocks; use new console commands for ops runbooks. |
 | 0.8.1 | 2025-10-04 | Transport abstraction with buffered delivery, per-snapshot transport status, and observer telemetry smoke suite. | Update configs to set `telemetry.transport`, run admin smoke command (`pytest ...telemetry_transport.py`). |
 | 0.7.0 | 2025-09-30 | Added narration throttle payloads (`narrations`, `narration_state`) and queue-conflict narration entries guarded by config. | Update consumers to read optional narration payloads and persist narration state in snapshots. |
 | 0.6.0 | 2025-09-30 | Observer telemetry publishes relationship snapshots + per-tick updates; console schema bumped to 0.6.x and dashboard renders delta table. | Update UI clients to schema prefix 0.6, consume `relationship_snapshot`/`relationship_updates`, refresh dashboards and docs. |

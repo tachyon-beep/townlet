@@ -52,3 +52,41 @@ def test_ghost_step_trigger(queue_manager: QueueManager) -> None:
 
     assert fired is True
     assert queue_manager.metrics()["ghost_step_events"] == starting_events + 1
+
+
+def test_requeue_to_tail_rotates_agent(queue_manager: QueueManager) -> None:
+    queue_manager._settings.ghost_step_after = 1
+    assert queue_manager.request_access("shower", "alice", tick=0) is True
+    assert queue_manager.request_access("shower", "bob", tick=1) is False
+    assert queue_manager.request_access("shower", "carol", tick=2) is False
+
+    # Simulate ghost-step: release current occupant without success and rotate to tail
+    queue_manager.release("shower", "alice", tick=3, success=False)
+    queue_manager.requeue_to_tail("shower", "alice", tick=3)
+
+    queue = queue_manager.queue_snapshot("shower")
+    assert queue[-1] == "alice"
+    assert queue_manager.metrics()["rotation_events"] == 1
+    active = queue_manager.active_agent("shower")
+    assert active in {"bob", "carol"}
+
+    # Re-adding the same agent should not duplicate entries
+    queue_manager.requeue_to_tail("shower", "alice", tick=4)
+    assert queue_manager.metrics()["rotation_events"] == 1
+    queue = queue_manager.queue_snapshot("shower")
+    assert queue.count("alice") == 1
+
+def test_record_blocked_attempt_counts_and_triggers(queue_manager: QueueManager) -> None:
+    queue_manager._settings.ghost_step_after = 2
+    assert queue_manager.record_blocked_attempt("shower") is False
+    assert queue_manager.record_blocked_attempt("shower") is True
+    assert queue_manager.metrics()["ghost_step_events"] >= 1
+
+
+def test_cooldown_expiration_clears_entries(queue_manager: QueueManager) -> None:
+    queue_manager._settings.cooldown_ticks = 3
+    assert queue_manager.request_access("shower", "alice", tick=0)
+    queue_manager.release("shower", "alice", tick=0)
+    assert queue_manager.request_access("shower", "alice", tick=1) is False
+    queue_manager.on_tick(5)
+    assert queue_manager.request_access("shower", "alice", tick=6) is True

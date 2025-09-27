@@ -21,6 +21,7 @@ class StabilityMonitor:
         self.fail_threshold = config.stability.affordance_fail_threshold
         self.lateness_threshold = config.stability.lateness_threshold
         self._employment_enabled = config.employment.enforce_job_loop
+        self._fairness_alert_limit = 5
 
         self._starvation_cfg = config.stability.starvation
         self._reward_cfg = config.stability.reward_variance
@@ -51,10 +52,28 @@ class StabilityMonitor:
         employment_metrics: dict[str, object] | None = None,
         hunger_levels: dict[str, float] | None = None,
         option_switch_counts: dict[str, int] | None = None,
+        rivalry_events: Iterable[dict[str, object]] | None = None,
     ) -> None:
+        previous_queue_metrics = self.last_queue_metrics or {}
         self.last_queue_metrics = queue_metrics
         self.last_embedding_metrics = embedding_metrics
         alerts: list[str] = []
+
+        fairness_delta = {
+            "cooldown_events": 0,
+            "ghost_step_events": 0,
+            "rotation_events": 0,
+        }
+        if queue_metrics:
+            for key in fairness_delta:
+                new_value = int(queue_metrics.get(key, 0))
+                old_value = int(previous_queue_metrics.get(key, 0))
+                fairness_delta[key] = max(0, new_value - old_value)
+            if (
+                fairness_delta["ghost_step_events"] >= self._fairness_alert_limit
+                or fairness_delta["rotation_events"] >= self._fairness_alert_limit
+            ):
+                alerts.append("queue_fairness_pressure")
 
         if embedding_metrics and embedding_metrics.get("reuse_warning"):
             alerts.append("embedding_reuse_warning")
@@ -100,6 +119,16 @@ class StabilityMonitor:
             option_switch_counts=option_switch_counts,
             active_agent_count=len(hunger_levels or {}),
         )
+
+        rivalry_events_list = list(rivalry_events or [])
+        high_intensity = [
+            event
+            for event in rivalry_events_list
+            if float(event.get("intensity", 0.0))
+            >= self.config.conflict.rivalry.avoid_threshold
+        ]
+        if len(high_intensity) >= self._fairness_alert_limit:
+            alerts.append("rivalry_spike")
         if (
             option_rate is not None
             and option_rate > self._option_cfg.max_switch_rate
@@ -129,6 +158,9 @@ class StabilityMonitor:
             "reward_variance": reward_variance,
             "reward_mean": reward_mean,
             "reward_samples": reward_sample_count,
+            "queue_totals": dict(queue_metrics or {}),
+            "queue_deltas": fairness_delta,
+            "rivalry_events": rivalry_events_list,
             "alerts": list(alerts),
             "thresholds": self._threshold_snapshot(),
         }

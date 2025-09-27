@@ -53,6 +53,92 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     assert "thresholds" in result["stability"]["metrics"]
 
 
+
+def test_console_conflict_status_reports_history() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.setdefault(
+        "alice",
+        AgentSnapshot(
+            agent_id="alice",
+            position=(0, 0),
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            wallet=1.0,
+        ),
+    )
+    world.agents.setdefault(
+        "bob",
+        AgentSnapshot(
+            agent_id="bob",
+            position=(1, 0),
+            needs={"hunger": 0.6, "hygiene": 0.4, "energy": 0.5},
+            wallet=1.2,
+        ),
+    )
+    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    for _ in range(3):
+        loop.step()
+    world.register_rivalry_conflict("alice", "bob", intensity=1.2)
+    status = router.dispatch(ConsoleCommand(name="conflict_status", args=(), kwargs={}))
+    assert status["schema_version"] == loop.telemetry.schema()
+    assert "conflict" in status
+    assert isinstance(status.get("history"), list)
+    assert isinstance(status.get("rivalry_events"), list)
+    assert "stability_alerts" in status
+
+
+def test_console_queue_inspect_returns_queue_details() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    world = loop.world
+    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    queue_id = "test_object"
+    world.queue_manager.request_access(queue_id, "alice", tick=0)
+    world.queue_manager.request_access(queue_id, "bob", tick=1)
+    world.queue_manager.record_blocked_attempt(queue_id)
+    result = router.dispatch(
+        ConsoleCommand(name="queue_inspect", args=(queue_id,), kwargs={})
+    )
+    assert result["object_id"] == queue_id
+    assert result["queue"]
+    assert "metrics" in result
+    assert isinstance(result["cooldowns"], list)
+
+
+def test_console_rivalry_dump_reports_pairs() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.setdefault(
+        "alice",
+        AgentSnapshot(
+            agent_id="alice",
+            position=(0, 0),
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            wallet=1.0,
+        ),
+    )
+    world.agents.setdefault(
+        "bob",
+        AgentSnapshot(
+            agent_id="bob",
+            position=(1, 0),
+            needs={"hunger": 0.6, "hygiene": 0.4, "energy": 0.5},
+            wallet=1.2,
+        ),
+    )
+    world.register_rivalry_conflict("alice", "bob", intensity=2.0)
+    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    summary = router.dispatch(ConsoleCommand(name="rivalry_dump", args=(), kwargs={}))
+    assert summary["pairs"]
+    alice_view = router.dispatch(
+        ConsoleCommand(name="rivalry_dump", args=("alice",), kwargs={"limit": 1})
+    )
+    assert alice_view["rivals"]
+    assert alice_view["rivals"][0]["agent_id"] == "bob"
+
+
 def test_employment_console_commands_manage_queue() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = True

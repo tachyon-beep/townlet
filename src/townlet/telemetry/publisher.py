@@ -27,7 +27,7 @@ class TelemetryPublisher:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self.schema_version = "0.8.0"
+        self.schema_version = "0.9.0"
         self._console_buffer: list[object] = []
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
@@ -35,8 +35,10 @@ class TelemetryPublisher:
         self._event_subscribers: list[Callable[[list[dict[str, object]]], None]] = []
         self._latest_employment_metrics: dict[str, object] = {}
         self._latest_conflict_snapshot: dict[str, object] = {
-            "queues": {"cooldown_events": 0, "ghost_step_events": 0},
+            "queues": {"cooldown_events": 0, "ghost_step_events": 0, "rotation_events": 0},
+            "queue_history": [],
             "rivalry": {},
+            "rivalry_events": [],
         }
         self._latest_relationship_metrics: dict[str, object] | None = None
         self._latest_job_snapshot: dict[str, object] = {}
@@ -63,6 +65,8 @@ class TelemetryPublisher:
         self._latest_perturbations: dict[str, object] = {}
         self._latest_policy_identity: dict[str, object] | None = None
         self._latest_snapshot_migrations: list[str] = []
+        self._queue_fairness_history: list[dict[str, object]] = []
+        self._rivalry_event_history: list[dict[str, object]] = []
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -134,6 +138,8 @@ class TelemetryPublisher:
             state["snapshot_migrations"] = list(self._latest_snapshot_migrations)
         state["transport_status"] = dict(self._transport_status)
         state["transport_buffer_pending"] = len(self._transport_buffer)
+        state["queue_history"] = list(self._queue_fairness_history)
+        state["rivalry_events"] = list(self._rivalry_event_history)
         return state
 
     def import_state(self, payload: dict[str, object]) -> None:
@@ -270,6 +276,36 @@ class TelemetryPublisher:
         if isinstance(pending, int) and pending > 0:
             self._transport_status["dropped_messages"] += int(pending)
         self._transport_buffer.clear()
+
+        history_payload = payload.get("queue_history")
+        if isinstance(history_payload, list):
+            self._queue_fairness_history = [
+                {
+                    "tick": int(item.get("tick", 0)),
+                    "delta": dict(item.get("delta", {})),
+                    "totals": dict(item.get("totals", {})),
+                }
+                for item in history_payload
+                if isinstance(item, Mapping)
+            ]
+        else:
+            self._queue_fairness_history = []
+
+        rivalry_payload = payload.get("rivalry_events")
+        if isinstance(rivalry_payload, list):
+            self._rivalry_event_history = [
+                {
+                    "tick": int(item.get("tick", 0)),
+                    "agent_a": str(item.get("agent_a", "")),
+                    "agent_b": str(item.get("agent_b", "")),
+                    "intensity": float(item.get("intensity", 0.0)),
+                    "reason": str(item.get("reason", "unknown")),
+                }
+                for item in rivalry_payload
+                if isinstance(item, Mapping)
+            ]
+        else:
+            self._rivalry_event_history = []
 
     def export_console_buffer(self) -> list[object]:
         return list(self._console_buffer)
@@ -461,15 +497,60 @@ class TelemetryPublisher:
         _ = observations, rewards
         self._narration_limiter.begin_tick(int(tick))
         self._latest_narrations = []
+        previous_queue_metrics = dict(self._latest_queue_metrics or {})
         queue_metrics = world.queue_manager.metrics()
         self._latest_queue_metrics = queue_metrics
+        fairness_delta = {
+            "cooldown_events": max(
+                0,
+                int(queue_metrics.get("cooldown_events", 0))
+                - int(previous_queue_metrics.get("cooldown_events", 0)),
+            ),
+            "ghost_step_events": max(
+                0,
+                int(queue_metrics.get("ghost_step_events", 0))
+                - int(previous_queue_metrics.get("ghost_step_events", 0)),
+            ),
+            "rotation_events": max(
+                0,
+                int(queue_metrics.get("rotation_events", 0))
+                - int(previous_queue_metrics.get("rotation_events", 0)),
+            ),
+        }
         rivalry_snapshot: dict[str, object] = {}
         rivalry_getter = getattr(world, "rivalry_snapshot", None)
         if callable(rivalry_getter):
             rivalry_snapshot = dict(rivalry_getter())
+        self._queue_fairness_history.append(
+            {
+                "tick": int(tick),
+                "delta": fairness_delta,
+                "totals": dict(queue_metrics),
+            }
+        )
+        if len(self._queue_fairness_history) > 120:
+            self._queue_fairness_history.pop(0)
+
+        consume_rivalry_events = getattr(world, "consume_rivalry_events", None)
+        if callable(consume_rivalry_events):
+            new_events = consume_rivalry_events() or []
+            for event in new_events:
+                payload = {
+                    "tick": int(event.get("tick", tick)),
+                    "agent_a": str(event.get("agent_a", "")),
+                    "agent_b": str(event.get("agent_b", "")),
+                    "intensity": float(event.get("intensity", 0.0)),
+                    "reason": str(event.get("reason", "unknown")),
+                }
+                self._rivalry_event_history.append(payload)
+            if len(self._rivalry_event_history) > 120:
+                self._rivalry_event_history = self._rivalry_event_history[-120:]
+
         self._latest_conflict_snapshot = {
             "queues": dict(queue_metrics),
+            "queue_history": list(self._queue_fairness_history[-20:]),
             "rivalry": rivalry_snapshot,
+            "rivalry_events": list(self._rivalry_event_history[-20:]),
         }
         relationship_metrics_getter = getattr(
             world, "relationship_metrics_snapshot", None
@@ -553,6 +634,12 @@ class TelemetryPublisher:
             self._latest_affordance_manifest = {}
         if kpi_history:
             self._update_kpi_history(world)
+            self._kpi_history.setdefault("queue_rotation_events", []).append(
+                fairness_delta["rotation_events"]
+            )
+            self._kpi_history.setdefault("queue_ghost_step_events", []).append(
+                fairness_delta["ghost_step_events"]
+            )
 
         if stability_inputs is not None:
             self._latest_stability_inputs = {
@@ -585,6 +672,16 @@ class TelemetryPublisher:
             return None
         return dict(self._latest_queue_metrics)
 
+    def latest_queue_history(self) -> list[dict[str, object]]:
+        if not self._queue_fairness_history:
+            return []
+        return [dict(entry) for entry in self._queue_fairness_history[-50:]]
+
+    def latest_rivalry_events(self) -> list[dict[str, object]]:
+        if not self._rivalry_event_history:
+            return []
+        return [dict(entry) for entry in self._rivalry_event_history[-50:]]
+
     def update_anneal_status(self, status: Mapping[str, object] | None) -> None:
         """Record the latest anneal status payload for observer dashboards."""
         self._latest_anneal_status = dict(status) if status else None
@@ -594,10 +691,35 @@ class TelemetryPublisher:
 
     def latest_conflict_snapshot(self) -> dict[str, object]:
         """Return the conflict-focused telemetry payload (queues + rivalry)."""
+
         snapshot = dict(self._latest_conflict_snapshot)
         queues = snapshot.get("queues")
         if isinstance(queues, dict):
             snapshot["queues"] = dict(queues)
+        history = snapshot.get("queue_history")
+        if isinstance(history, list):
+            snapshot["queue_history"] = [
+                {
+                    "tick": int(entry.get("tick", 0)),
+                    "delta": dict(entry.get("delta", {})),
+                    "totals": dict(entry.get("totals", {})),
+                }
+                for entry in history
+                if isinstance(entry, Mapping)
+            ]
+        events = snapshot.get("rivalry_events")
+        if isinstance(events, list):
+            snapshot["rivalry_events"] = [
+                {
+                    "tick": int(entry.get("tick", 0)),
+                    "agent_a": str(entry.get("agent_a", "")),
+                    "agent_b": str(entry.get("agent_b", "")),
+                    "intensity": float(entry.get("intensity", 0.0)),
+                    "reason": str(entry.get("reason", "unknown")),
+                }
+                for entry in events
+                if isinstance(entry, Mapping)
+            ]
         return snapshot
 
     def latest_affordance_manifest(self) -> dict[str, object]:

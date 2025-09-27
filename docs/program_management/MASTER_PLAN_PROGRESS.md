@@ -18,21 +18,18 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
 - **WP-05 – Snapshot & Config Identity (Completed 2025-10-03):** SnapshotConfig + migration registry, RNG/state identity, console diagnostics, autosave guardrails, regression coverage.
 
 - **WP-06 – Telemetry Publishing Hardening (Completed 2025-10-04):** transport abstraction (stdout/file/tcp) with buffered delivery + retry status, console/observer telemetry exposes transport health, smoke command + docs updated, regression suites cover transport buffer/backpressure/failure cases.
+- **WP-07 – Conflict & Rivalry Systems (Completed 2025-10-05):** queue fairness counters, rivalry decay/avoidance, telemetry snapshots (queue history + rivalry events), scenario baselines, console runbook, and regression suites shipped.
 ## In-Flight Work Packages
 1. **Observer UI Integration** (`docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md`)
    - Owner: DevEx/UX
    - Status: In progress (telemetry client + dashboard shipped; narration panel delivered).
    - Next: usability capture, legend toggles, concurrency executor polish, documentation refresh.
-2. **Conflict Intro (M2.5)** (`docs/work_packages/WORK_PACKAGE_CONFLICT_INTRO.md`)
-   - Owner: Systems/Gameplay
-   - Status: In progress (queue fairness + rivalry scaffolding underway).
-   - Next: ghost-step telemetry, rivalry decay tuning, ops troubleshooting guide.
-3. **PPO Telemetry Monitoring** (`docs/work_packages/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
+2. **PPO Telemetry Monitoring** (`docs/work_packages/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
    - Owner: RL/Training
    - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
    - Next: schedule periodic soak runs, wire results into ops review cadence.
 
-4. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
+3. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
    - Owner: RL/Training
    - Status: Completed (BC dataset catalogued, acceptance smoke logged under `artifacts/m5/acceptance/`, ops & CI guardrails landed).
    - Next: proceed to Phase 5.5 planning (anneal promotion governance).
