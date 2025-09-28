@@ -165,6 +165,8 @@ class SimulationLoop:
         self.world.tick = self.tick
         console_ops = self.telemetry.drain_console_buffer()
         self.world.apply_console(console_ops)
+        console_results = self.world.consume_console_results()
+        self.telemetry.record_console_results(console_results)
         self.perturbations.tick(self.world, current_tick=self.tick)
         actions = self.policy.decide(self.world, self.tick)
         self.world.apply_actions(actions)
@@ -179,6 +181,7 @@ class SimulationLoop:
         observations = self.observations.build_batch(self.world, terminated)
         self.policy.flush_transitions(observations)
         policy_snapshot = self.policy.latest_policy_snapshot()
+        possessed_agents = self.policy.possessed_agents()
         events = self.world.drain_events()
         option_switch_counts = self.policy.consume_option_switch_counts()
         hunger_levels = {
@@ -208,6 +211,7 @@ class SimulationLoop:
             stability_inputs=stability_inputs,
             perturbations=perturbation_state,
             policy_identity=policy_identity,
+            possessed_agents=possessed_agents,
         )
         self.stability.track(
             tick=self.tick,

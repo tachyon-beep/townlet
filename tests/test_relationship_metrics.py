@@ -9,7 +9,7 @@ from townlet.telemetry.relationship_metrics import (
     RelationshipChurnAccumulator,
     RelationshipEvictionSample,
 )
-from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
+from townlet.world.grid import AgentSnapshot, WorldState
 
 
 def test_record_eviction_tracks_counts() -> None:
@@ -148,13 +148,19 @@ def test_shared_meal_updates_relationship() -> None:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=5.0,
     )
-    world.objects["fridge_1"] = InteractiveObject(
-        object_id="fridge_1", object_type="fridge", stock={"meals": 5}
-    )
+    world.objects["fridge_1"].stock["meals"] = 5
+    world.store_stock["fridge_1"] = world.objects["fridge_1"].stock
 
     world.tick = 10
-    world._handle_eat_meal_start("alice", "fridge_1")
-    world._handle_eat_meal_start("bob", "fridge_1")
+    assert world.queue_manager.request_access("fridge_1", "alice", world.tick) is True
+    assert world._start_affordance("alice", "fridge_1", "eat_meal") is True
+    world._running_affordances["fridge_1"].duration_remaining = 0
+    world.resolve_affordances(world.tick)
+
+    assert world.queue_manager.request_access("fridge_1", "bob", world.tick) is True
+    assert world._start_affordance("bob", "fridge_1", "eat_meal") is True
+    world._running_affordances["fridge_1"].duration_remaining = 0
+    world.resolve_affordances(world.tick)
 
     snapshot = world.relationships_snapshot()
     assert snapshot["alice"]["bob"]["trust"] > 0.0

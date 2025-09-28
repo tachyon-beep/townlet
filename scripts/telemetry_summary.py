@@ -76,6 +76,15 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
         "chat_success_events": [float(rec.get("chat_success_events", 0.0)) for rec in records],
         "chat_failure_events": [float(rec.get("chat_failure_events", 0.0)) for rec in records],
         "chat_quality_mean": [float(rec.get("chat_quality_mean", 0.0)) for rec in records],
+        "utility_outage_events": [
+            float(rec.get("utility_outage_events", 0.0)) for rec in records
+        ],
+        "shower_complete_events": [
+            float(rec.get("shower_complete_events", 0.0)) for rec in records
+        ],
+        "sleep_complete_events": [
+            float(rec.get("sleep_complete_events", 0.0)) for rec in records
+        ],
     }
     anneal_records = [rec for rec in records if rec.get("anneal_stage")]
     summary = {
@@ -99,6 +108,9 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "chat_success_events": metrics["chat_success_events"][-1],
             "chat_failure_events": metrics["chat_failure_events"][-1],
             "chat_quality_mean": metrics["chat_quality_mean"][-1],
+            "utility_outage_events": metrics["utility_outage_events"][-1],
+            "shower_complete_events": metrics["shower_complete_events"][-1],
+            "sleep_complete_events": metrics["sleep_complete_events"][-1],
         },
         "extremes": {
             "loss_total": {
@@ -124,6 +136,18 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "chat_quality_mean": {
                 "min": min(metrics["chat_quality_mean"]),
                 "max": max(metrics["chat_quality_mean"]),
+            },
+            "utility_outage_events": {
+                "min": min(metrics["utility_outage_events"]),
+                "max": max(metrics["utility_outage_events"]),
+            },
+            "shower_complete_events": {
+                "min": min(metrics["shower_complete_events"]),
+                "max": max(metrics["shower_complete_events"]),
+            },
+            "sleep_complete_events": {
+                "min": min(metrics["sleep_complete_events"]),
+                "max": max(metrics["sleep_complete_events"]),
             },
         },
     }
@@ -191,6 +215,13 @@ def render_text(summary: dict[str, object]) -> str:
             chat_s=latest["chat_success_events"],
             chat_f=latest["chat_failure_events"],
             chat_q=latest["chat_quality_mean"],
+        )
+    )
+    lines.append(
+        "Hygiene & rest: utility_outages={outages:.1f}, showers={showers:.1f}, sleeps={sleeps:.1f}".format(
+            outages=latest["utility_outage_events"],
+            showers=latest["shower_complete_events"],
+            sleeps=latest["sleep_complete_events"],
         )
     )
     extremes = summary["extremes"]
@@ -269,6 +300,9 @@ def render_markdown(summary: dict[str, object]) -> str:
         f"| queue_conflict_events | {summary['extremes']['queue_conflict_events']['min']:.1f} | {summary['extremes']['queue_conflict_events']['max']:.1f} |",
         f"| shared_meal_events | {summary['extremes']['shared_meal_events']['min']:.1f} | {summary['extremes']['shared_meal_events']['max']:.1f} |",
         f"| chat_quality_mean | {summary['extremes']['chat_quality_mean']['min']:.3f} | {summary['extremes']['chat_quality_mean']['max']:.3f} |",
+        f"| utility_outage_events | {summary['extremes']['utility_outage_events']['min']:.1f} | {summary['extremes']['utility_outage_events']['max']:.1f} |",
+        f"| shower_complete_events | {summary['extremes']['shower_complete_events']['min']:.1f} | {summary['extremes']['shower_complete_events']['max']:.1f} |",
+        f"| sleep_complete_events | {summary['extremes']['sleep_complete_events']['min']:.1f} | {summary['extremes']['sleep_complete_events']['max']:.1f} |",
         ]
     )
     drift = summary.get("baseline_drift")

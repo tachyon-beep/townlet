@@ -48,6 +48,12 @@ OPTIONAL_TEXT_KEYS = {
     "anneal_dataset",
 }
 
+OPTIONAL_EVENT_KEYS = {
+    "utility_outage_events",
+    "shower_complete_events",
+    "sleep_complete_events",
+}
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Watch PPO telemetry logs for regressions")
@@ -124,6 +130,24 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Fail if chat_quality_mean falls below this value",
+    )
+    parser.add_argument(
+        "--utility-outage-max",
+        type=float,
+        default=None,
+        help="Fail if utility_outage_events exceeds this value",
+    )
+    parser.add_argument(
+        "--shower-complete-min",
+        type=float,
+        default=None,
+        help="Fail if shower_complete_events falls below this value",
+    )
+    parser.add_argument(
+        "--sleep-complete-min",
+        type=float,
+        default=None,
+        help="Fail if sleep_complete_events falls below this value",
     )
     parser.add_argument(
         "--anneal-bc-min",
@@ -207,6 +231,8 @@ def stream_records(path: Path, follow: bool, interval: float) -> Iterator[dict[s
             for key in OPTIONAL_TEXT_KEYS:
                 if key in payload:
                     record[key] = str(payload[key])
+            for key in OPTIONAL_EVENT_KEYS:
+                record[key] = float(payload.get(key, 0.0) or 0.0)
             yield record
 
 
@@ -262,6 +288,21 @@ def check_thresholds(record: dict[str, object], args: argparse.Namespace) -> Non
         if record["chat_quality_mean"] < args.chat_quality_min:
             raise SystemExit(
                 f"Epoch {epoch}: chat_quality_mean {record['chat_quality_mean']:.3f} below threshold {args.chat_quality_min}"
+            )
+    if args.utility_outage_max is not None and is_rollout:
+        if record.get("utility_outage_events", 0.0) > args.utility_outage_max:
+            raise SystemExit(
+                f"Epoch {epoch}: utility_outage_events {record['utility_outage_events']:.1f} exceeds threshold {args.utility_outage_max}"
+            )
+    if args.shower_complete_min is not None and is_rollout:
+        if record.get("shower_complete_events", 0.0) < args.shower_complete_min:
+            raise SystemExit(
+                f"Epoch {epoch}: shower_complete_events {record['shower_complete_events']:.1f} below threshold {args.shower_complete_min}"
+            )
+    if args.sleep_complete_min is not None and is_rollout:
+        if record.get("sleep_complete_events", 0.0) < args.sleep_complete_min:
+            raise SystemExit(
+                f"Epoch {epoch}: sleep_complete_events {record['sleep_complete_events']:.1f} below threshold {args.sleep_complete_min}"
             )
 
     anneal_stage = record.get("anneal_stage")
@@ -324,6 +365,9 @@ def main(args: list[str] | None = None) -> None:
                     f"chat_success={record['chat_success_events']:.1f}, "
                     f"chat_failure={record['chat_failure_events']:.1f}, "
                     f"chat_quality_mean={record['chat_quality_mean']:.3f}, "
+                    f"utility_outages={record.get('utility_outage_events', 0.0):.1f}, "
+                    f"shower_complete={record.get('shower_complete_events', 0.0):.1f}, "
+                    f"sleep_complete={record.get('sleep_complete_events', 0.0):.1f}, "
                     f"offset={record['log_stream_offset']:.0f}"
                 )
     except SystemExit:

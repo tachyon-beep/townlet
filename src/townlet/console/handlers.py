@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Mapping, Protocol
 
 if TYPE_CHECKING:
     from townlet.config import SimulationConfig
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from townlet.scheduler.perturbations import PerturbationScheduler
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
+    from townlet.lifecycle.manager import LifecycleManager
 
 from townlet.snapshots import SnapshotManager
 from townlet.stability.promotion import PromotionManager
@@ -85,6 +86,8 @@ class TelemetryBridge:
             "relationship_snapshot": self._publisher.latest_relationship_snapshot(),
             "relationship_updates": self._publisher.latest_relationship_updates(),
             "events": list(self._publisher.latest_events()),
+            "narrations": self._publisher.latest_narrations(),
+            "narration_state": self._publisher.latest_narration_state(),
             "anneal_status": self._publisher.latest_anneal_status(),
             "policy_snapshot": self._publisher.latest_policy_snapshot(),
             "policy_identity": self._publisher.latest_policy_identity() or {},
@@ -100,6 +103,8 @@ class TelemetryBridge:
             },
             "perturbations": self._publisher.latest_perturbations(),
             "transport": self._publisher.latest_transport_status(),
+            "console_results": self._publisher.latest_console_results(),
+            "possessed_agents": self._publisher.latest_possessed_agents(),
         }
 
 
@@ -112,6 +117,7 @@ def create_console_router(
     policy: PolicyRuntime | None = None,
     mode: str = "viewer",
     config: SimulationConfig | None = None,
+    lifecycle: "LifecycleManager" | None = None,
 ) -> ConsoleRouter:
     router = ConsoleRouter()
     if config is not None:
@@ -237,6 +243,129 @@ def create_console_router(
             success = world.employment_defer_exit(agent_id)
             return {"deferred": success, "agent_id": agent_id}
         return {"error": "unknown_action", "action": action}
+
+    def possess_handler(command: ConsoleCommand) -> object:
+        if policy is None:
+            return {"error": "unsupported"}
+        payload = command.kwargs.get("payload")
+        agent_id: str | None = None
+        action = command.kwargs.get("action") if isinstance(command.kwargs.get("action"), str) else None
+        if isinstance(payload, Mapping):
+            candidate = payload.get("agent_id")
+            if isinstance(candidate, str):
+                agent_id = candidate
+            if isinstance(payload.get("action"), str):
+                action = payload["action"]
+        if agent_id is None and command.args:
+            first = command.args[0]
+            if isinstance(first, str):
+                agent_id = first
+        if agent_id is None or not agent_id:
+            return {
+                "error": "usage",
+                "message": "possess requires agent_id",
+            }
+        if world is not None and agent_id not in world.agents:
+            return {"error": "not_found", "agent_id": agent_id}
+        verb = str(action or "acquire").lower()
+        if verb not in {"acquire", "release"}:
+            return {
+                "error": "invalid_args",
+                "message": "action must be 'acquire' or 'release'",
+            }
+        if verb == "acquire":
+            if not policy.acquire_possession(agent_id):
+                return {
+                    "error": "conflict",
+                    "message": "agent already possessed",
+                    "agent_id": agent_id,
+                }
+            possessed = True
+        else:
+            if not policy.release_possession(agent_id):
+                return {
+                    "error": "invalid_args",
+                    "message": "agent not currently possessed",
+                    "agent_id": agent_id,
+                }
+            possessed = False
+        return {
+            "agent_id": agent_id,
+            "possessed": possessed,
+            "possessed_agents": policy.possessed_agents(),
+        }
+
+    def kill_handler(command: ConsoleCommand) -> object:
+        if world is None:
+            return {"error": "unsupported"}
+        payload = command.kwargs.get("payload")
+        agent_id: str | None = None
+        reason: str | None = None
+        if isinstance(payload, Mapping):
+            candidate = payload.get("agent_id")
+            if isinstance(candidate, str):
+                agent_id = candidate
+            if isinstance(payload.get("reason"), str):
+                reason = payload["reason"]
+        if agent_id is None and command.args:
+            first = command.args[0]
+            if isinstance(first, str):
+                agent_id = first
+        if agent_id is None or not agent_id:
+            return {
+                "error": "usage",
+                "message": "kill requires agent_id",
+            }
+        if not world.kill_agent(agent_id, reason=reason):
+            return {"error": "not_found", "agent_id": agent_id}
+        return {
+            "agent_id": agent_id,
+            "killed": True,
+            "reason": reason,
+        }
+
+    def toggle_mortality_handler(command: ConsoleCommand) -> object:
+        if lifecycle is None:
+            return {"error": "unsupported"}
+        payload = command.kwargs.get("payload")
+        value = command.kwargs.get("enabled") if isinstance(command.kwargs.get("enabled"), bool) else None
+        if isinstance(payload, Mapping) and "enabled" in payload:
+            candidate = payload.get("enabled")
+            if isinstance(candidate, bool):
+                value = candidate
+        if value is None:
+            return {
+                "error": "usage",
+                "message": "toggle_mortality requires enabled bool",
+            }
+        lifecycle.set_mortality_enabled(bool(value))
+        return {"enabled": lifecycle.mortality_enabled}
+
+    def set_exit_cap_handler(command: ConsoleCommand) -> object:
+        if world is None:
+            return {"error": "unsupported"}
+        payload = command.kwargs.get("payload")
+        cap_value = command.kwargs.get("daily_exit_cap") if isinstance(command.kwargs.get("daily_exit_cap"), int) else None
+        if isinstance(payload, Mapping) and "daily_exit_cap" in payload:
+            candidate = payload.get("daily_exit_cap")
+            if isinstance(candidate, int):
+                cap_value = candidate
+        if cap_value is None:
+            return {
+                "error": "usage",
+                "message": "set_exit_cap requires daily_exit_cap integer",
+            }
+        if cap_value < 0:
+            return {
+                "error": "invalid_args",
+                "message": "daily_exit_cap must be >= 0",
+            }
+        world.config.employment.daily_exit_cap = cap_value
+        metrics = world.employment_queue_snapshot()
+        return {
+            "daily_exit_cap": cap_value,
+            "metrics": metrics,
+        }
 
     def conflict_status_handler(command: ConsoleCommand) -> object:
         version, warning = _schema_metadata(publisher)
@@ -412,6 +541,54 @@ def create_console_router(
         _apply_release_metadata(snapshot.get("current_release"))
         return _attach_metadata({"rolled_back": True, "promotion": snapshot}, command)
 
+    def arrange_meet_handler(command: ConsoleCommand) -> object:
+        if scheduler is None or world is None:
+            return {"error": "unsupported"}
+        payload = command.kwargs.get("payload")
+        if payload is None and command.args:
+            payload = command.args[0]
+        if not isinstance(payload, Mapping):
+            return {"error": "invalid_args", "message": "payload must be a mapping"}
+        spec = payload.get("spec")
+        if not isinstance(spec, str) or not spec:
+            return {"error": "invalid_args", "message": "spec is required"}
+        agents = payload.get("agents")
+        if not isinstance(agents, list) or not agents:
+            return {"error": "invalid_args", "message": "agents list required"}
+        agent_ids = [str(agent) for agent in agents]
+        missing = [agent for agent in agent_ids if agent not in world.agents]
+        if missing:
+            return {
+                "error": "not_found",
+                "message": "agents missing",
+                "agents": missing,
+            }
+        starts_in = int(payload.get("starts_in", 0) or 0)
+        duration = payload.get("duration")
+        duration_int = int(duration) if duration is not None else None
+        overrides = dict(payload.get("payload", {})) if isinstance(payload.get("payload"), Mapping) else None
+        try:
+            event = scheduler.schedule_manual(
+                world,
+                spec_name=spec,
+                current_tick=world.tick,
+                starts_in=starts_in,
+                duration=duration_int,
+                targets=agent_ids,
+                payload_overrides=overrides,
+            )
+        except KeyError:
+            return {"error": "unknown_spec", "spec": spec}
+        except ValueError as exc:
+            return {"error": "invalid_args", "message": str(exc)}
+        return {
+            "event_id": event.event_id,
+            "spec": spec,
+            "starts_at": event.started_at,
+            "ends_at": event.ends_at,
+            "targets": agent_ids,
+        }
+
     def perturbation_queue_handler(command: ConsoleCommand) -> object:
         if scheduler is None:
             return {"error": "unsupported"}
@@ -578,16 +755,25 @@ def create_console_router(
     router.register("employment_status", employment_status_handler)
     router.register("employment_exit", employment_exit_handler)
     router.register("promotion_status", promotion_status_handler)
+    router.register("arrange_meet", arrange_meet_handler)
     router.register("perturbation_queue", perturbation_queue_handler)
     router.register("snapshot_inspect", snapshot_inspect_handler)
     router.register("snapshot_validate", snapshot_validate_handler)
     if mode == "admin":
+        router.register("possess", possess_handler)
+        router.register("kill", kill_handler)
+        router.register("toggle_mortality", toggle_mortality_handler)
+        router.register("set_exit_cap", set_exit_cap_handler)
         router.register("perturbation_trigger", perturbation_trigger_handler)
         router.register("perturbation_cancel", perturbation_cancel_handler)
         router.register("snapshot_migrate", snapshot_migrate_handler)
         router.register("promote_policy", promote_policy_handler)
         router.register("rollback_policy", rollback_policy_handler)
     else:
+        router.register("possess", _forbidden)
+        router.register("kill", _forbidden)
+        router.register("toggle_mortality", _forbidden)
+        router.register("set_exit_cap", _forbidden)
         router.register("perturbation_trigger", _forbidden)
         router.register("perturbation_cancel", _forbidden)
         router.register("snapshot_migrate", _forbidden)

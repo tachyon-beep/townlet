@@ -12,7 +12,7 @@
   2. `python scripts/run_training.py configs/scenarios/queue_conflict.yaml --mode mixed --replay-manifest tmp/ops_run/rollout_sample_manifest.json --rollout-ticks 40 --epochs 1 --ppo-log tmp/ops_run/ppo_mixed.jsonl`
   3. `head -n 1 docs/samples/ppo_conflict_telemetry.jsonl > tmp/ops_run/baseline.json`
   4. `python scripts/validate_ppo_telemetry.py tmp/ops_run/ppo_mixed.jsonl --baseline tmp/ops_run/baseline.json`
-  5. `python scripts/telemetry_watch.py tmp/ops_run/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --queue-events-min 30 --queue-intensity-min 45 --shared-meal-min 1 --late-help-min 0 --shift-takeover-max 2 --chat-quality-min 0.5 --json > tmp/ops_run/watch.jsonl`
+  5. `python scripts/telemetry_watch.py tmp/ops_run/ppo_mixed.jsonl --kl-threshold 0.5 --grad-threshold 5 --entropy-threshold -0.2 --reward-corr-threshold -0.5 --queue-events-min 30 --queue-intensity-min 45 --shared-meal-min 1 --late-help-min 0 --shift-takeover-max 2 --chat-quality-min 0.5 --utility-outage-max 0 --shower-complete-min 1 --sleep-complete-min 1 --json > tmp/ops_run/watch.jsonl`
   6. `python scripts/telemetry_summary.py tmp/ops_run/ppo_mixed.jsonl --format markdown > tmp/ops_run/summary.md`
   Attach `tmp/ops_run/{ppo_mixed.jsonl,watch.jsonl,summary.md}` to the ops log for audit.
 - Behaviour cloning / anneal workflow:
@@ -127,6 +127,7 @@
     scheduler noise, review option weights, and pause promotion until resolved.
 - **Queue Deadlock**: use console `debug queues` (TBD) to inspect reservations; confirm queue fairness cooldown is active; if not, toggle feature flag and log issue.
 - **Telemetry Backpressure**: check publisher backlog; if exceeds threshold, enable aggregation mode and archive raw stream for analysis.
+- **Hygiene & Rest Signals**: `telemetry_snapshot` now emits `shower_power_outage`, `shower_complete`, and `sleep_complete` events. Dashboards surface these via narration categories `utility_outage`, `shower_complete`, and `sleep_complete`—treat outages as priority alerts and log downstream actions (resetting utilities, reallocating beds) in the ops journal.
 - **Employment Backlog**: monitor `employment_status`. If `pending_count` exceeds `queue_limit`, issue `employment_exit review`, approve or defer entries, and document decisions in ops log. Manual approvals emit `employment_exit_manual_request`; ensure lifecycle processes the exit next tick.
 - **Perturbation Control**: admin mode only. Use `perturbation_queue` to inspect
   active/pending events, `perturbation_trigger` (admin) to enqueue specs (provide
@@ -154,8 +155,8 @@
 ## Queue-Conflict Troubleshooting
 - **Purpose**: ensure live or mixed-mode PPO runs maintain the conflict pressure captured in baselines.
 - **Baselines**: reference `docs/ops/queue_conflict_baselines.md` for expected event counts and intensity sums. Queue-conflict mixed runs should stay within ±15% of the recorded intensity unless intentionally experimenting.
-- **Validation**: run `telemetry_watch.py` with `--json` to capture alerts; set `--queue-events-min`, `--queue-intensity-min`, and social thresholds using the scenario table in `docs/ops/queue_conflict_baselines.md` (e.g., `--late-help-min 1` for employment punctuality). Keep the JSONL artefact with the training log.
-- **Summary review**: use `telemetry_summary.py --format markdown` to produce a one-page digest; store under `artifacts/m7/rollouts/<date>-<scenario>.md` alongside the promotion history excerpt.
+- **Validation**: run `telemetry_watch.py` with `--json` to capture alerts; set `--queue-events-min`, `--queue-intensity-min`, social thresholds, and the new hygiene/rest guards (`--utility-outage-max`, `--shower-complete-min`, `--sleep-complete-min`) using the scenario table in `docs/ops/queue_conflict_baselines.md` (e.g., `--late-help-min 1` for punctuality, `--utility-outage-max 0` for baseline runs). Keep the JSONL artefact with the training log.
+- **Summary review**: use `telemetry_summary.py --format markdown` to produce a one-page digest (queue/social + hygiene/rest counters); store under `artifacts/m7/rollouts/<date>-<scenario>.md` alongside the promotion history excerpt.
 - **Drift response**: if event counts or intensity drop below thresholds, pause promotion, rerun capture to confirm reproducibility, and notify the training lead. Investigate agent availability (missing scenario agents are the usual culprit) and rerun with `--rollout-auto-seed-agents` only as a temporary workaround.
 - **CI guardrail**: GitHub Actions uploads `tmp/ci_phase4/{ppo_mixed.jsonl,summary.md,watch.jsonl}` for each run; inspect these artefacts when investigating regressions.
 - **Canonical captures**: reference `artifacts/phase4/` for the latest checked-in mixed-mode logs, watch outputs, and summaries per scenario.
@@ -193,7 +194,7 @@
 - Promotion history is appended automatically to `logs/promotion_history.jsonl`; copy the relevant lines into the release ticket after each promote/rollback.
 - PPO telemetry tooling:
   - `python scripts/validate_ppo_telemetry.py <log> --relative`
-- `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--queue-events-min INT] [--queue-intensity-min FLOAT] [--shared-meal-min INT] [--late-help-min INT] [--shift-takeover-max INT] [--chat-quality-min FLOAT] [--json]`
+- `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--queue-events-min INT] [--queue-intensity-min FLOAT] [--shared-meal-min INT] [--late-help-min INT] [--shift-takeover-max INT] [--chat-quality-min FLOAT] [--utility-outage-max INT] [--shower-complete-min INT] [--sleep-complete-min INT] [--json]`
 - `python scripts/telemetry_summary.py <log> --format markdown`
 - `python scripts/audit_bc_datasets.py --versions data/bc_datasets/versions.json`
 - `python scripts/run_anneal_rehearsal.py --exit-on-failure`
@@ -206,3 +207,8 @@
 - Confirm narration throttle and privacy mode toggles respond instantly.
 - Review KPIs vs. charter targets (self-sufficiency ≥70%, tenure ≥3 days, relationship coverage ≥60%).
 - Prepare fallback config with perturbations disabled in case of instability.
+- Check `telemetry_snapshot.console_results` and tail `logs/console/commands.jsonl`
+  to verify the last command’s outcome and audit record.
+- For relationship interventions (`force_chat`), confirm returned `speaker_tie` /
+  `listener_tie` values reflect the expected trust/familiarity deltas and
+  appear in `relationships` telemetry blocks.

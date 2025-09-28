@@ -25,6 +25,13 @@ else:
 MAP_AGENT_CHAR = "A"
 MAP_CENTER_CHAR = "S"
 
+NARRATION_CATEGORY_STYLES: dict[str, tuple[str, str]] = {
+    "utility_outage": ("Utility Outage", "bold red"),
+    "shower_complete": ("Shower Complete", "cyan"),
+    "sleep_complete": ("Sleep Complete", "green"),
+    "queue_conflict": ("Queue Conflict", "magenta"),
+}
+
 
 def render_snapshot(
     snapshot: TelemetrySnapshot, tick: int, refreshed: str
@@ -275,9 +282,14 @@ def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
         table.add_column("!", justify="center")
         for entry in narrations[:5]:
             priority_flag = "[bold red]![/bold red]" if entry.priority else ""
+            label, style = NARRATION_CATEGORY_STYLES.get(
+                entry.category,
+                (entry.category, "white"),
+            )
+            category_text = f"[{style}]{label}[/]"
             table.add_row(
                 str(entry.tick),
-                entry.category,
+                category_text,
                 entry.message,
                 priority_flag,
             )

@@ -13,6 +13,7 @@ class LifecycleManager:
         self.config = config
         self.exits_today = 0
         self._employment_day = -1
+        self.mortality_enabled = True
 
     def evaluate(self, world: WorldState, tick: int) -> dict[str, bool]:
         """Return a map of agent_id -> terminated flag."""
@@ -22,11 +23,14 @@ class LifecycleManager:
             terminated.update(employment_terminated)
         for agent_id, snapshot in world.agents.items():
             hunger = snapshot.needs.get("hunger", 0.0)
-            if hunger <= 0.03:
+            if self.mortality_enabled and hunger <= 0.03:
                 terminated[agent_id] = True
             else:
                 terminated.setdefault(agent_id, False)
         return terminated
+
+    def set_mortality_enabled(self, enabled: bool) -> None:
+        self.mortality_enabled = bool(enabled)
 
     def export_state(self) -> dict[str, int]:
         return {

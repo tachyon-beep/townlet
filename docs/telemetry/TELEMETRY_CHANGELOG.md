@@ -2,6 +2,7 @@
 
 | Version | Date | Summary | Consumer Actions |
 | --- | --- | --- | --- |
+| 0.9.1 | 2025-10-12 | PPO telemetry tooling records hygiene/rest metrics (`utility_outage_events`, `shower_complete_events`, `sleep_complete_events`) and exposes watcher thresholds. | Upgrade `telemetry_watch.py`/`telemetry_summary.py`; configure new flags for hygiene outages and completion rates. |
 | 0.9.0 | 2025-10-12 | Conflict snapshot adds queue history, rivalry events, and stability alert payload; console gains conflict inspection commands. | Upgrade clients to schema prefix 0.9, parse `conflict.queue_history`, `conflict.rivalry_events`, and `stability` blocks; use new console commands for ops runbooks. |
 | 0.8.1 | 2025-10-04 | Transport abstraction with buffered delivery, per-snapshot transport status, and observer telemetry smoke suite. | Update configs to set `telemetry.transport`, run admin smoke command (`pytest ...telemetry_transport.py`). |
 | 0.7.0 | 2025-09-30 | Added narration throttle payloads (`narrations`, `narration_state`) and queue-conflict narration entries guarded by config. | Update consumers to read optional narration payloads and persist narration state in snapshots. |
@@ -21,7 +22,7 @@ Compatibility Matrix:
 | Smoke Harness (`run_employment_smoke.py`) | ≥0.2.0 | Emits metrics payload compatible with `scripts/telemetry_check.py`. |
 | Telemetry Validator (`scripts/telemetry_check.py`) | ≥0.3.0 | Validates employment and conflict payloads; extend with future schema entries. |
 | PPO Telemetry Validator (`scripts/validate_ppo_telemetry.py`) | telemetry_version == 1 | Checks NDJSON schema, baseline drift, and conflict aggregates. |
-| PPO Telemetry Watch (`scripts/telemetry_watch.py`) | telemetry_version == 1 | Tails NDJSON logs and alerts on KL/loss/gradient thresholds. |
+| PPO Telemetry Watch (`scripts/telemetry_watch.py`) | telemetry_version == 1 | Tails NDJSON logs and alerts on KL/loss/gradient thresholds plus queue/social/hygiene counters. |
 | Training harness replay | ≥0.3.0 | `scripts/run_training.py --replay-manifest` verifies conflict batches before PPO integration. |
 | Replay tooling | ≥0.3.0 | `scripts/run_replay.py` validates observation conflict features and telemetry samples. |
 

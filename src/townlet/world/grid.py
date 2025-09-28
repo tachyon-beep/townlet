@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import random
-from collections import deque
+import logging
+import os
+from collections import OrderedDict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from townlet.agents.models import Personality
 from townlet.agents.relationship_modifiers import (
@@ -20,11 +22,65 @@ from townlet.config.affordance_manifest import (
     AffordanceManifestError,
     load_affordance_manifest,
 )
+from townlet.console.command import (
+    ConsoleCommandEnvelope,
+    ConsoleCommandError,
+    ConsoleCommandResult,
+)
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.queue_manager import QueueManager
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
+from townlet.world.hooks import load_modules as load_hook_modules
+
+
+logger = logging.getLogger(__name__)
+
+_CONSOLE_HISTORY_LIMIT = 512
+_CONSOLE_RESULT_BUFFER_LIMIT = 256
+
+
+class HookRegistry:
+    """Registers named affordance hooks and returns handlers on demand."""
+
+    def __init__(self) -> None:
+        self._handlers: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
+
+    def register(
+        self, name: str, handler: Callable[[dict[str, Any]], None]
+    ) -> None:
+        if not isinstance(name, str) or not name:
+            raise ValueError("Hook name must be a non-empty string")
+        if not callable(handler):
+            raise TypeError("Hook handler must be callable")
+        self._handlers.setdefault(name, []).append(handler)
+
+    def handlers_for(self, name: str) -> tuple[Callable[[dict[str, Any]], None], ...]:
+        return tuple(self._handlers.get(name, ()))
+
+    def clear(self, name: str | None = None) -> None:
+        if name is None:
+            self._handlers.clear()
+            return
+        self._handlers.pop(name, None)
+
+
+class _ConsoleHandlerEntry:
+    """Metadata for registered console handlers."""
+
+    __slots__ = ("handler", "mode", "require_cmd_id")
+
+    def __init__(
+        self,
+        handler: Callable[[ConsoleCommandEnvelope], ConsoleCommandResult],
+        *,
+        mode: str = "viewer",
+        require_cmd_id: bool = False,
+    ) -> None:
+        self.handler = handler
+        self.mode = mode
+        self.require_cmd_id = require_cmd_id
 
 
 def _default_personality() -> Personality:
@@ -142,6 +198,16 @@ class WorldState:
     _objects_by_position: dict[tuple[int, int], list[str]] = field(
         init=False, default_factory=dict
     )
+    _console_handlers: dict[str, _ConsoleHandlerEntry] = field(
+        init=False, default_factory=dict
+    )
+    _console_cmd_history: OrderedDict[str, ConsoleCommandResult] = field(
+        init=False, default_factory=OrderedDict
+    )
+    _console_result_buffer: deque[ConsoleCommandResult] = field(
+        init=False, default_factory=deque
+    )
+    _hook_registry: HookRegistry = field(init=False, repr=False)
 
     @classmethod
     def from_config(
@@ -186,12 +252,111 @@ class WorldState:
         if self._rng is None:
             self._rng = random.Random()
         self._rng_state = self._rng.getstate()
+        self._console_handlers = {}
+        self._console_cmd_history = OrderedDict()
+        self._console_result_buffer = deque(maxlen=_CONSOLE_RESULT_BUFFER_LIMIT)
+        self._register_default_console_handlers()
+        self._hook_registry = HookRegistry()
+        modules = ["townlet.world.hooks.default"]
+        extra = os.environ.get("TOWNLET_AFFORDANCE_HOOK_MODULES")
+        if extra:
+            modules.extend(
+                module.strip() for module in extra.split(",") if module.strip()
+            )
+        load_hook_modules(self, modules)
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
         for operation in operations:
-            # TODO(@townlet): Implement concrete console op handlers.
-            _ = operation
+            try:
+                envelope = ConsoleCommandEnvelope.from_payload(operation)
+            except ConsoleCommandError as exc:
+                fallback_envelope = ConsoleCommandEnvelope(
+                    name=str(getattr(operation, "name", "unknown") or "unknown"),
+                    args=[],
+                    kwargs={},
+                    cmd_id=getattr(operation, "cmd_id", None)
+                    if isinstance(getattr(operation, "cmd_id", None), str)
+                    else None,
+                    issuer=None,
+                )
+                result = ConsoleCommandResult.from_error(
+                    fallback_envelope,
+                    exc.code,
+                    exc.message,
+                    details=exc.details or {},
+                    tick=self.tick,
+                )
+                logger.warning("Rejected console command: %s", exc)
+                self._record_console_result(result)
+                continue
+            except Exception:  # pragma: no cover - defensive
+                logger.exception("Failed to normalise console command payload: %r", operation)
+                continue
+
+            handler_entry = self._console_handlers.get(envelope.name)
+            if handler_entry is None:
+                self._record_console_result(
+                    ConsoleCommandResult.from_error(
+                        envelope,
+                        "unsupported",
+                        f"Unknown console command '{envelope.name}'",
+                        tick=self.tick,
+                    )
+                )
+                continue
+
+            if handler_entry.mode == "admin" and envelope.mode != "admin":
+                self._record_console_result(
+                    ConsoleCommandResult.from_error(
+                        envelope,
+                        "forbidden",
+                        "Command requires admin mode",
+                        tick=self.tick,
+                    )
+                )
+                continue
+
+            if handler_entry.require_cmd_id and not envelope.cmd_id:
+                self._record_console_result(
+                    ConsoleCommandResult.from_error(
+                        envelope,
+                        "usage",
+                        "Command requires cmd_id for idempotency",
+                        tick=self.tick,
+                    )
+                )
+                continue
+
+            if envelope.cmd_id and envelope.cmd_id in self._console_cmd_history:
+                cached = self._console_cmd_history[envelope.cmd_id].clone()
+                cached.tick = self.tick
+                self._record_console_result(cached)
+                continue
+
+            try:
+                result = handler_entry.handler(envelope)
+            except ConsoleCommandError as exc:
+                result = ConsoleCommandResult.from_error(
+                    envelope,
+                    exc.code,
+                    exc.message,
+                    details=exc.details or {},
+                    tick=self.tick,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Console command '%s' failed", envelope.name)
+                result = ConsoleCommandResult.from_error(
+                    envelope,
+                    "internal",
+                    "Internal error while executing command",
+                    details={"exception": str(exc)},
+                    tick=self.tick,
+                )
+
+            if result.tick is None:
+                result.tick = self.tick
+            self._record_console_result(result)
 
     def attach_rng(self, rng: random.Random) -> None:
         """Attach a deterministic RNG used for world-level randomness."""
@@ -211,6 +376,548 @@ class WorldState:
     def set_rng_state(self, state: tuple[Any, ...]) -> None:
         self.rng.setstate(state)
         self._rng_state = state
+
+    # ------------------------------------------------------------------
+    # Console dispatcher helpers
+    # ------------------------------------------------------------------
+
+    def register_console_handler(
+        self,
+        name: str,
+        handler: Callable[[ConsoleCommandEnvelope], ConsoleCommandResult],
+        *,
+        mode: str = "viewer",
+        require_cmd_id: bool = False,
+    ) -> None:
+        """Register a console handler for queued commands."""
+
+        self._console_handlers[name] = _ConsoleHandlerEntry(
+            handler, mode=mode, require_cmd_id=require_cmd_id
+        )
+
+    def register_affordance_hook(
+        self, name: str, handler: Callable[[dict[str, Any]], None]
+    ) -> None:
+        """Register a callable invoked when a manifest hook fires."""
+
+        self._hook_registry.register(name, handler)
+
+    def clear_affordance_hooks(self, name: str | None = None) -> None:
+        """Clear registered affordance hooks (used primarily for tests)."""
+
+        self._hook_registry.clear(name)
+
+    def consume_console_results(self) -> list[ConsoleCommandResult]:
+        """Return and clear buffered console results."""
+
+        results = list(self._console_result_buffer)
+        self._console_result_buffer.clear()
+        return results
+
+    def _record_console_result(self, result: ConsoleCommandResult) -> None:
+        if result.cmd_id:
+            self._console_cmd_history[result.cmd_id] = result.clone()
+            while len(self._console_cmd_history) > _CONSOLE_HISTORY_LIMIT:
+                self._console_cmd_history.popitem(last=False)
+        self._console_result_buffer.append(result)
+
+    def _dispatch_affordance_hooks(
+        self,
+        stage: str,
+        hook_names: Iterable[str],
+        *,
+        agent_id: str,
+        object_id: str,
+        spec: AffordanceSpec | None,
+        extra: Mapping[str, Any] | None = None,
+    ) -> bool:
+        if not hook_names or spec is None:
+            return True
+        continue_execution = True
+        for hook_name in hook_names:
+            handlers = self._hook_registry.handlers_for(hook_name)
+            if not handlers:
+                continue
+            base_context = {
+                "stage": stage,
+                "hook": hook_name,
+                "tick": self.tick,
+                "agent_id": agent_id,
+                "object_id": object_id,
+                "affordance_id": spec.affordance_id,
+                "world": self,
+                "spec": spec,
+            }
+            if extra:
+                base_context.update(extra)
+            for handler in handlers:
+                context = dict(base_context)
+                try:
+                    handler(context)
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception("Affordance hook '%s' failed", hook_name)
+                    continue_execution = False
+                    continue
+                if context.get("cancel"):
+                    continue_execution = False
+        return continue_execution
+
+    def _register_default_console_handlers(self) -> None:
+        self.register_console_handler(
+            "noop", self._console_noop_handler, mode="viewer", require_cmd_id=False
+        )
+        self.register_console_handler(
+            "employment_status",
+            self._console_employment_status,
+            mode="viewer",
+            require_cmd_id=False,
+        )
+        self.register_console_handler(
+            "employment_exit",
+            self._console_employment_exit,
+            mode="admin",
+            require_cmd_id=True,
+        )
+        self.register_console_handler(
+            "spawn",
+            self._console_spawn_agent,
+            mode="admin",
+            require_cmd_id=True,
+        )
+        self.register_console_handler(
+            "teleport",
+            self._console_teleport_agent,
+            mode="admin",
+            require_cmd_id=True,
+        )
+        self.register_console_handler(
+            "setneed",
+            self._console_set_need,
+            mode="admin",
+            require_cmd_id=True,
+        )
+        self.register_console_handler(
+            "price",
+            self._console_set_price,
+            mode="admin",
+            require_cmd_id=True,
+        )
+        self.register_console_handler(
+            "force_chat",
+            self._console_force_chat,
+            mode="admin",
+            require_cmd_id=True,
+        )
+        self.register_console_handler(
+            "set_rel",
+            self._console_set_relationship,
+            mode="admin",
+            require_cmd_id=True,
+        )
+
+    def _console_noop_handler(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
+        return ConsoleCommandResult.ok(envelope, {}, tick=self.tick)
+
+    def _console_employment_status(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        metrics = self.employment_queue_snapshot()
+        payload = {
+            "metrics": metrics,
+            "pending_agents": list(metrics.get("pending", [])),
+        }
+        return ConsoleCommandResult.ok(envelope, payload, tick=self.tick)
+
+    def _console_employment_exit(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        if not envelope.args:
+            raise ConsoleCommandError(
+                "usage", "employment_exit <review|approve|defer> [agent_id]"
+            )
+        action = str(envelope.args[0])
+        if action == "review":
+            return ConsoleCommandResult.ok(
+                envelope, self.employment_queue_snapshot(), tick=self.tick
+            )
+        if len(envelope.args) < 2:
+            raise ConsoleCommandError(
+                "usage", "employment_exit <approve|defer> <agent_id>"
+            )
+        agent_id = str(envelope.args[1])
+        if action == "approve":
+            success = self.employment_request_manual_exit(agent_id, tick=self.tick)
+            return ConsoleCommandResult.ok(
+                envelope,
+                {"approved": bool(success), "agent_id": agent_id},
+                tick=self.tick,
+            )
+        if action == "defer":
+            success = self.employment_defer_exit(agent_id)
+            return ConsoleCommandResult.ok(
+                envelope,
+                {"deferred": bool(success), "agent_id": agent_id},
+                tick=self.tick,
+            )
+        raise ConsoleCommandError(
+            "usage", "Unknown employment_exit action", details={"action": action}
+        )
+
+    def _assign_job_if_missing(self, snapshot: AgentSnapshot) -> None:
+        if snapshot.job_id is None and self._job_keys:
+            snapshot.job_id = self._job_keys[len(self.agents) % len(self._job_keys)]
+
+    def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
+        ctx = self._get_employment_context(snapshot.agent_id)
+        ctx.update(self._employment_context_defaults())
+        self._employment_state[snapshot.agent_id] = ctx
+        self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
+
+    def _console_spawn_agent(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        payload = envelope.kwargs.get("payload")
+        if payload is None:
+            payload = {key: value for key, value in zip(["agent_id", "position"], envelope.args)}
+        if not isinstance(payload, Mapping):
+            raise ConsoleCommandError(
+                "invalid_args", "spawn payload must be a mapping"
+            )
+        agent_id = payload.get("agent_id")
+        if not isinstance(agent_id, str) or not agent_id:
+            raise ConsoleCommandError("invalid_args", "spawn requires agent_id")
+        if agent_id in self.agents:
+            raise ConsoleCommandError(
+                "conflict", "agent already exists", details={"agent_id": agent_id}
+            )
+        position = payload.get("position")
+        if not isinstance(position, (list, tuple)) or len(position) != 2:
+            raise ConsoleCommandError(
+                "invalid_args", "position must be [x, y]"
+            )
+        try:
+            x, y = int(position[0]), int(position[1])
+        except (TypeError, ValueError):
+            raise ConsoleCommandError("invalid_args", "position must be integers")
+        if not self._is_position_walkable((x, y)):
+            raise ConsoleCommandError(
+                "invalid_args",
+                "position not walkable",
+                details={"position": [x, y]},
+            )
+        needs = payload.get("needs") or {}
+        if not isinstance(needs, Mapping):
+            raise ConsoleCommandError("invalid_args", "needs must be a mapping")
+        hunger = float(needs.get("hunger", 0.5))
+        hygiene = float(needs.get("hygiene", 0.5))
+        energy = float(needs.get("energy", 0.5))
+        wallet = float(payload.get("wallet", 0.0))
+        snapshot = AgentSnapshot(
+            agent_id=agent_id,
+            position=(x, y),
+            needs={"hunger": hunger, "hygiene": hygiene, "energy": energy},
+            wallet=wallet,
+        )
+        self.agents[agent_id] = snapshot
+        job_override = payload.get("job_id")
+        if isinstance(job_override, str):
+            snapshot.job_id = job_override
+        self._assign_job_if_missing(snapshot)
+        self._sync_agent_spawn(snapshot)
+        result_payload = {
+            "agent_id": agent_id,
+            "position": [x, y],
+            "job_id": snapshot.job_id,
+        }
+        return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
+
+    def _console_teleport_agent(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        payload = envelope.kwargs.get("payload")
+        if payload is None:
+            payload = {key: value for key, value in zip(["agent_id", "position"], envelope.args)}
+        if not isinstance(payload, Mapping):
+            raise ConsoleCommandError(
+                "invalid_args", "teleport payload must be a mapping"
+            )
+        agent_id = payload.get("agent_id")
+        if not isinstance(agent_id, str) or not agent_id:
+            raise ConsoleCommandError("invalid_args", "teleport requires agent_id")
+        snapshot = self.agents.get(agent_id)
+        if snapshot is None:
+            raise ConsoleCommandError(
+                "not_found", "agent not found", details={"agent_id": agent_id}
+            )
+        position = payload.get("position")
+        if not isinstance(position, (list, tuple)) or len(position) != 2:
+            raise ConsoleCommandError(
+                "invalid_args", "position must be [x, y]"
+            )
+        try:
+            x, y = int(position[0]), int(position[1])
+        except (TypeError, ValueError):
+            raise ConsoleCommandError("invalid_args", "position must be integers")
+        if not self._is_position_walkable((x, y)):
+            raise ConsoleCommandError(
+                "invalid_args",
+                "position not walkable",
+                details={"position": [x, y]},
+            )
+        self._release_queue_membership(snapshot.agent_id)
+        snapshot.position = (x, y)
+        self._sync_reservation_for_agent(snapshot.agent_id)
+        return ConsoleCommandResult.ok(
+            envelope, {"agent_id": agent_id, "position": [x, y]}, tick=self.tick
+        )
+
+    def _release_queue_membership(self, agent_id: str) -> None:
+        self.queue_manager.remove_agent(agent_id, self.tick)
+        for object_id, occupant in list(self._active_reservations.items()):
+            if occupant == agent_id:
+                self._sync_reservation(object_id)
+
+    def _sync_reservation_for_agent(self, agent_id: str) -> None:
+        for object_id, occupant in list(self._active_reservations.items()):
+            if occupant == agent_id:
+                self._sync_reservation(object_id)
+
+    def _is_position_walkable(self, position: tuple[int, int]) -> bool:
+        if any(agent.position == position for agent in self.agents.values()):
+            return False
+        if position in self._objects_by_position:
+            return False
+        return True
+
+    def kill_agent(self, agent_id: str, *, reason: str | None = None) -> bool:
+        snapshot = self.agents.pop(agent_id, None)
+        if snapshot is None:
+            return False
+        self._release_queue_membership(agent_id)
+        self.embedding_allocator.release(agent_id, self.tick)
+        self._employment_state.pop(agent_id, None)
+        self._employment_remove_from_queue(agent_id)
+        self._recent_meal_participants = {
+            key: value
+            for key, value in self._recent_meal_participants.items()
+            if agent_id not in value.get("agents", set())
+        }
+        self._emit_event(
+            "agent_killed",
+            {
+                "agent_id": agent_id,
+                "reason": reason,
+                "tick": self.tick,
+            },
+        )
+        return True
+
+    def _console_set_need(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        payload = envelope.kwargs.get("payload")
+        if payload is None:
+            payload = {key: value for key, value in zip(["agent_id", "needs"], envelope.args)}
+        if not isinstance(payload, Mapping):
+            raise ConsoleCommandError("invalid_args", "setneed payload must be a mapping")
+        agent_id = payload.get("agent_id")
+        if not isinstance(agent_id, str) or not agent_id:
+            raise ConsoleCommandError("invalid_args", "setneed requires agent_id")
+        snapshot = self.agents.get(agent_id)
+        if snapshot is None:
+            raise ConsoleCommandError(
+                "not_found", "agent not found", details={"agent_id": agent_id}
+            )
+        needs_payload = payload.get("needs")
+        if not isinstance(needs_payload, Mapping):
+            raise ConsoleCommandError(
+                "invalid_args", "needs must be a mapping of need names to values"
+            )
+        updated: dict[str, float] = {}
+        for key, value in needs_payload.items():
+            if key not in snapshot.needs:
+                raise ConsoleCommandError(
+                    "invalid_args",
+                    "unknown need",
+                    details={"need": key},
+                )
+            try:
+                float_value = float(value)
+            except (TypeError, ValueError):
+                raise ConsoleCommandError(
+                    "invalid_args", "need values must be numeric", details={"need": key}
+                )
+            clamped = max(0.0, min(1.0, float_value))
+            snapshot.needs[key] = clamped
+            updated[key] = clamped
+        return ConsoleCommandResult.ok(
+            envelope,
+            {"agent_id": agent_id, "needs": updated},
+            tick=self.tick,
+        )
+
+    def _console_set_price(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        payload = envelope.kwargs.get("payload")
+        if payload is None:
+            payload = {key: value for key, value in zip(["key", "value"], envelope.args)}
+        if not isinstance(payload, Mapping):
+            raise ConsoleCommandError("invalid_args", "price payload must be a mapping")
+        key = payload.get("key")
+        if not isinstance(key, str) or not key:
+            raise ConsoleCommandError("invalid_args", "price requires key")
+        if key not in self.config.economy:
+            raise ConsoleCommandError(
+                "not_found", "unknown economy key", details={"key": key}
+            )
+        value = payload.get("value")
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            raise ConsoleCommandError(
+                "invalid_args", "value must be numeric", details={"key": key}
+            )
+        self.config.economy[key] = numeric_value
+        if key in {"meal_cost", "cook_energy_cost", "cook_hygiene_cost", "ingredients_cost"}:
+            self._update_basket_metrics()
+        result_payload = {"key": key, "value": numeric_value}
+        return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
+
+    def _console_force_chat(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        payload = envelope.kwargs.get("payload")
+        if payload is None:
+            payload = {
+                key: value
+                for key, value in zip(["speaker", "listener", "quality"], envelope.args)
+            }
+        if not isinstance(payload, Mapping):
+            raise ConsoleCommandError(
+                "invalid_args", "force_chat payload must be a mapping"
+            )
+        speaker = payload.get("speaker")
+        listener = payload.get("listener")
+        if not isinstance(speaker, str) or not isinstance(listener, str):
+            raise ConsoleCommandError(
+                "invalid_args", "force_chat requires speaker and listener"
+            )
+        if speaker == listener:
+            raise ConsoleCommandError(
+                "invalid_args", "speaker and listener must differ"
+            )
+        if speaker not in self.agents:
+            raise ConsoleCommandError(
+                "not_found", "speaker not found", details={"agent_id": speaker}
+            )
+        if listener not in self.agents:
+            raise ConsoleCommandError(
+                "not_found", "listener not found", details={"agent_id": listener}
+            )
+        quality = payload.get("quality", 1.0)
+        try:
+            quality_value = float(quality)
+        except (TypeError, ValueError):
+            raise ConsoleCommandError(
+                "invalid_args", "quality must be numeric", details={"quality": quality}
+            )
+        clipped = max(0.0, min(1.0, quality_value))
+        self.record_chat_success(speaker, listener, clipped)
+        tie_forward = self.relationship_tie(speaker, listener)
+        tie_reverse = self.relationship_tie(listener, speaker)
+        result_payload = {
+            "speaker": speaker,
+            "listener": listener,
+            "quality": clipped,
+            "speaker_tie": tie_forward.as_dict() if tie_forward else {},
+            "listener_tie": tie_reverse.as_dict() if tie_reverse else {},
+        }
+        return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
+
+    def _console_set_relationship(
+        self, envelope: ConsoleCommandEnvelope
+    ) -> ConsoleCommandResult:
+        payload = envelope.kwargs.get("payload")
+        if payload is None:
+            payload = {
+                key: value
+                for key, value in zip(
+                    ["agent_a", "agent_b", "trust", "familiarity", "rivalry"],
+                    envelope.args,
+                )
+            }
+        if not isinstance(payload, Mapping):
+            raise ConsoleCommandError("invalid_args", "set_rel payload must be a mapping")
+        agent_a = payload.get("agent_a")
+        agent_b = payload.get("agent_b")
+        if not isinstance(agent_a, str) or not isinstance(agent_b, str):
+            raise ConsoleCommandError(
+                "invalid_args", "set_rel requires agent_a and agent_b"
+            )
+        if agent_a == agent_b:
+            raise ConsoleCommandError(
+                "invalid_args", "agent_a and agent_b must differ"
+            )
+        if agent_a not in self.agents:
+            raise ConsoleCommandError(
+                "not_found", "agent_a not found", details={"agent_id": agent_a}
+            )
+        if agent_b not in self.agents:
+            raise ConsoleCommandError(
+                "not_found", "agent_b not found", details={"agent_id": agent_b}
+            )
+        target_trust = payload.get("trust")
+        target_fam = payload.get("familiarity")
+        target_rivalry = payload.get("rivalry")
+        if (
+            target_trust is None
+            and target_fam is None
+            and target_rivalry is None
+        ):
+            raise ConsoleCommandError(
+                "invalid_args", "set_rel requires at least one of trust/familiarity/rivalry"
+            )
+        forward = self._get_relationship_ledger(agent_a).tie_for(agent_b)
+        reverse = self._get_relationship_ledger(agent_b).tie_for(agent_a)
+        current_forward = forward.as_dict() if forward else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
+        current_reverse = reverse.as_dict() if reverse else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
+
+        def _compute_delta(target: object, current: float, *, clamp_low: float, clamp_high: float) -> float:
+            if target is None:
+                return 0.0
+            try:
+                coerced = float(target)
+            except (TypeError, ValueError):
+                raise ConsoleCommandError(
+                    "invalid_args",
+                    "relationship values must be numeric",
+                )
+            coerced = max(clamp_low, min(clamp_high, coerced))
+            return coerced - current
+
+        delta_trust = _compute_delta(target_trust, current_forward["trust"], clamp_low=-1.0, clamp_high=1.0)
+        delta_fam = _compute_delta(target_fam, current_forward["familiarity"], clamp_low=-1.0, clamp_high=1.0)
+        delta_rivalry = _compute_delta(target_rivalry, current_forward["rivalry"], clamp_low=0.0, clamp_high=1.0)
+
+        self.update_relationship(
+            agent_a,
+            agent_b,
+            trust=delta_trust,
+            familiarity=delta_fam,
+            rivalry=delta_rivalry,
+            event="console_override",
+        )
+        # ensure symmetry (update_relationship already symmetric)
+        forward_tie = self.relationship_tie(agent_a, agent_b)
+        reverse_tie = self.relationship_tie(agent_b, agent_a)
+        result_payload = {
+            "agent_a": agent_a,
+            "agent_b": agent_b,
+            "agent_a_tie": forward_tie.as_dict() if forward_tie else {},
+            "agent_b_tie": reverse_tie.as_dict() if reverse_tie else {},
+        }
+        return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
 
     def register_object(
         self,
@@ -235,7 +942,10 @@ class WorldState:
         if object_type == "stove":
             obj.stock["raw_ingredients"] = 3
         if object_type == "bed":
-            obj.stock["sleep_slots"] = 1
+            obj.stock["sleep_slots"] = obj.stock.get("sleep_slots", 1)
+            obj.stock.setdefault("sleep_capacity", obj.stock["sleep_slots"])
+        if object_type == "shower":
+            obj.stock.setdefault("power_on", 1)
         self.objects[object_id] = obj
         self.store_stock[object_id] = obj.stock
         if obj.position is not None:
@@ -317,6 +1027,15 @@ class WorldState:
                 running = self._running_affordances.pop(object_id, None)
                 if running is not None and success:
                     self._apply_affordance_effects(running.agent_id, running.effects)
+                    spec = self.affordances.get(running.affordance_id)
+                    self._dispatch_affordance_hooks(
+                        "after",
+                        spec.hooks.get("after", ()) if spec else (),
+                        agent_id=running.agent_id,
+                        object_id=object_id,
+                        spec=spec,
+                        extra={"effects": dict(running.effects)},
+                    )
                     self._emit_event(
                         "affordance_finish",
                         {
@@ -333,7 +1052,17 @@ class WorldState:
                 )
                 self._sync_reservation(object_id)
                 if not success:
+                    spec: AffordanceSpec | None = None
                     if running is not None:
+                        spec = self.affordances.get(running.affordance_id)
+                        self._dispatch_affordance_hooks(
+                            "fail",
+                            spec.hooks.get("fail", ()) if spec else (),
+                            agent_id=agent_id,
+                            object_id=object_id,
+                            spec=spec,
+                            extra={"reason": action.get("reason")},
+                        )
                         self._emit_event(
                             "affordance_fail",
                             {
@@ -391,6 +1120,15 @@ class WorldState:
                 self._apply_affordance_effects(running.agent_id, running.effects)
                 self._running_affordances.pop(object_id, None)
                 waiting = self.queue_manager.queue_snapshot(object_id)
+                spec = self.affordances.get(running.affordance_id)
+                self._dispatch_affordance_hooks(
+                    "after",
+                    spec.hooks.get("after", ()) if spec else (),
+                    agent_id=running.agent_id,
+                    object_id=object_id,
+                    spec=spec,
+                    extra={"effects": dict(running.effects)},
+                )
                 self.queue_manager.release(
                     object_id, running.agent_id, current_tick, success=True
                 )
@@ -930,9 +1668,20 @@ class WorldState:
     def _handle_blocked(self, object_id: str, tick: int) -> None:
         if self.queue_manager.record_blocked_attempt(object_id):
             occupant = self.queue_manager.active_agent(object_id)
+            running = self._running_affordances.pop(object_id, None)
+            spec: AffordanceSpec | None = None
+            if running is not None:
+                spec = self.affordances.get(running.affordance_id)
+                self._dispatch_affordance_hooks(
+                    "fail",
+                    spec.hooks.get("fail", ()) if spec else (),
+                    agent_id=running.agent_id,
+                    object_id=object_id,
+                    spec=spec,
+                    extra={"reason": "ghost_step"},
+                )
             if occupant is not None:
                 self.queue_manager.release(object_id, occupant, tick, success=False)
-            self._running_affordances.pop(object_id, None)
             self._sync_reservation(object_id)
 
     def _start_affordance(
@@ -956,7 +1705,21 @@ class WorldState:
             effects=spec.effects,
         )
         obj.occupied_by = agent_id
-        self._handle_affordance_economy_start(agent_id, object_id, spec)
+        continue_start = self._dispatch_affordance_hooks(
+            "before",
+            spec.hooks.get("before", ()),
+            agent_id=agent_id,
+            object_id=object_id,
+            spec=spec,
+        )
+        if not continue_start:
+            self._running_affordances.pop(object_id, None)
+            if obj.occupied_by == agent_id:
+                obj.occupied_by = None
+            if self.queue_manager.active_agent(object_id) == agent_id:
+                self.queue_manager.release(object_id, agent_id, self.tick, success=False)
+                self._sync_reservation(object_id)
+            return False
         self._emit_event(
             "affordance_start",
             {
@@ -1625,106 +2388,3 @@ class WorldState:
                         "amount": restock_amount,
                     },
                 )
-
-    def _handle_affordance_economy_start(
-        self, agent_id: str, object_id: str, spec: AffordanceSpec
-    ) -> None:
-        if spec.affordance_id == "eat_meal":
-            self._handle_eat_meal_start(agent_id, object_id)
-        elif spec.affordance_id == "cook_meal":
-            self._handle_cook_meal_start(agent_id, object_id)
-
-    def _handle_eat_meal_start(self, agent_id: str, object_id: str) -> None:
-        snapshot = self.agents.get(agent_id)
-        obj = self.objects.get(object_id)
-        if snapshot is None or obj is None:
-            return
-        meal_cost = self.config.economy.get("meal_cost", 0.4)
-        if obj.stock.get("meals", 0) <= 0 or snapshot.wallet < meal_cost:
-            self._emit_event(
-                "affordance_fail",
-                {
-                    "agent_id": agent_id,
-                    "object_id": object_id,
-                    "affordance_id": "eat_meal",
-                    "reason": "insufficient_stock",
-                },
-            )
-            self.queue_manager.release(object_id, agent_id, self.tick, success=False)
-            self._sync_reservation(object_id)
-            self._running_affordances.pop(object_id, None)
-            return
-
-        obj.stock["meals"] = max(0, obj.stock.get("meals", 0) - 1)
-        snapshot.wallet -= meal_cost
-        snapshot.inventory["meals_consumed"] = (
-            snapshot.inventory.get("meals_consumed", 0) + 1
-        )
-
-        record = self._recent_meal_participants.get(object_id)
-        if record and record.get("tick") == self.tick:
-            participants: set[str] = record["agents"]
-        else:
-            participants = set()
-            record = {"tick": self.tick, "agents": participants}
-            self._recent_meal_participants[object_id] = record
-
-        for other_id in participants:
-            self.update_relationship(
-                agent_id,
-                other_id,
-                trust=0.1,
-                familiarity=0.25,
-                event="shared_meal",
-            )
-        participants.add(agent_id)
-        self._emit_event(
-            "shared_meal",
-            {
-                "agents": sorted(participants),
-                "object_id": object_id,
-            },
-        )
-
-    def _handle_cook_meal_start(self, agent_id: str, object_id: str) -> None:
-        snapshot = self.agents.get(agent_id)
-        obj = self.objects.get(object_id)
-        if snapshot is None or obj is None:
-            return
-        cost = self.config.economy.get("ingredients_cost", 0.15)
-        if snapshot.wallet < cost:
-            self._emit_event(
-                "affordance_fail",
-                {
-                    "agent_id": agent_id,
-                    "object_id": object_id,
-                    "affordance_id": "cook_meal",
-                    "reason": "insufficient_funds",
-                },
-            )
-            self.queue_manager.release(object_id, agent_id, self.tick, success=False)
-            self._sync_reservation(object_id)
-            self._running_affordances.pop(object_id, None)
-            return
-
-        snapshot.wallet -= cost
-        obj.stock["raw_ingredients"] = obj.stock.get("raw_ingredients", 0) - 1
-        if obj.stock["raw_ingredients"] < 0:
-            obj.stock["raw_ingredients"] = 0
-            self._emit_event(
-                "affordance_fail",
-                {
-                    "agent_id": agent_id,
-                    "object_id": object_id,
-                    "affordance_id": "cook_meal",
-                    "reason": "no_ingredients",
-                },
-            )
-            self.queue_manager.release(object_id, agent_id, self.tick, success=False)
-            self._sync_reservation(object_id)
-            self._running_affordances.pop(object_id, None)
-            return
-        snapshot.inventory["meals_cooked"] = (
-            snapshot.inventory.get("meals_cooked", 0) + 1
-        )
-        obj.stock["meals"] = obj.stock.get("meals", 0) + 1

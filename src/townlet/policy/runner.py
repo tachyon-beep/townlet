@@ -105,6 +105,7 @@ class PolicyRuntime:
         self._last_option: dict[str, str] = {}
         self._option_switch_counts: dict[str, int] = {}
         self._policy_hash: str | None = None
+        self._possessed_agents: set[str] = set()
         config_policy_hash = getattr(self.config, "policy_hash", None)
         if isinstance(config_policy_hash, str) and config_policy_hash:
             self._policy_hash = config_policy_hash
@@ -132,6 +133,9 @@ class PolicyRuntime:
         self._tick = tick
         actions: dict[str, object] = {}
         for agent_id in world.agents:
+            if agent_id in self._possessed_agents:
+                actions[agent_id] = {"kind": "wait"}
+                continue
             scripted_intent: AgentIntent = self.behavior.decide(world, agent_id)
             selected_intent = self._select_intent_with_blend(
                 world, agent_id, scripted_intent
@@ -226,6 +230,24 @@ class PolicyRuntime:
         counts = dict(self._option_switch_counts)
         self._option_switch_counts.clear()
         return counts
+
+    def acquire_possession(self, agent_id: str) -> bool:
+        if agent_id in self._possessed_agents:
+            return False
+        self._possessed_agents.add(agent_id)
+        return True
+
+    def release_possession(self, agent_id: str) -> bool:
+        if agent_id not in self._possessed_agents:
+            return False
+        self._possessed_agents.discard(agent_id)
+        return True
+
+    def is_possessed(self, agent_id: str) -> bool:
+        return agent_id in self._possessed_agents
+
+    def possessed_agents(self) -> list[str]:
+        return sorted(self._possessed_agents)
 
     def reset_state(self) -> None:
         """Reset transient buffers so snapshot loads don’t duplicate data."""

@@ -37,6 +37,7 @@ def main() -> None:
         world,
         promotion=loop.promotion,
         policy=loop.policy,
+        lifecycle=loop.lifecycle,
         config=config,
     )
 
@@ -91,6 +92,34 @@ def main() -> None:
 
     print("=== employment_status ===")
     print(router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={})))
+
+    print("=== latest console_results ===")
+    print(loop.telemetry.latest_console_results())
+
+    audit_path = Path("logs/console/commands.jsonl")
+    if audit_path.exists():
+        print("=== console audit tail ===")
+        print(audit_path.read_text().splitlines()[-1])
+    else:
+        print("(console audit log not found; create logs/console directory)")
+
+    print("=== force_chat agent_0->agent_1 ===")
+    loop.telemetry.queue_console_command(
+        {
+            "name": "force_chat",
+            "mode": "admin",
+            "cmd_id": "chat-demo",
+            "kwargs": {
+                "payload": {
+                    "speaker": "agent_0",
+                    "listener": "agent_1",
+                    "quality": 0.75,
+                }
+            },
+        }
+    )
+    loop.step()
+    print(loop.telemetry.latest_console_results()[-1])
 
 
 if __name__ == "__main__":

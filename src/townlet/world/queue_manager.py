@@ -159,6 +159,20 @@ class QueueManager:
         queue.append(QueueEntry(agent_id=agent_id, joined_tick=tick))
         self._metrics["rotation_events"] += 1
 
+    def remove_agent(self, agent_id: str, tick: int) -> None:
+        """Remove `agent_id` from all queues and active reservations."""
+
+        for object_id, current in list(self._active.items()):
+            if current == agent_id:
+                self.release(object_id, agent_id, tick, success=False)
+
+        for object_id, entries in list(self._queues.items()):
+            filtered = [entry for entry in entries if entry.agent_id != agent_id]
+            if len(filtered) != len(entries):
+                self._queues[object_id] = filtered
+            if not filtered:
+                self._queues.pop(object_id, None)
+
     def export_state(self) -> dict[str, object]:
         """Serialise queue activity for snapshot persistence."""
 

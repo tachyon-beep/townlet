@@ -11,6 +11,8 @@ Use these targets to configure `telemetry_watch.py --queue-events-min` and
 `--queue-intensity-min` thresholds. Set guardrails ~10–15% below the tabled values unless
 intentionally exploring lower conflict pressure.
 
+Monitor hygiene/rest counters alongside these baselines. For steady-state runs use `--utility-outage-max 0` (unless intentionally toggling utilities) and require at least one shower/sleep completion per window (`--shower-complete-min`, `--sleep-complete-min`). Adjust per scenario once additional hygiene affordances are introduced.
+
 ```bash
 python - <<'PY'
 from pathlib import Path

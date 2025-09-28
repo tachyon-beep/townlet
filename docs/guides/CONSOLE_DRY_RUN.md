@@ -34,6 +34,34 @@ print(router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), k
 print(router.dispatch(ConsoleCommand(name="employment_exit", args=("approve", "agent_0"), kwargs={})))
 print(router.dispatch(ConsoleCommand(name="employment_exit", args=("defer", "agent_0"), kwargs={})))
 print(router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={})))
+
+print("=== latest console_results ===")
+print(loop.telemetry.latest_console_results())
+
+print("=== console audit tail ===")
+audit_path = Path("logs/console/commands.jsonl")
+if audit_path.exists():
+    print(audit_path.read_text().splitlines()[-1])
+else:
+    print("(console audit log not found; ensure log directory exists)")
+
+print("=== force_chat agent_0->agent_1 ===")
+loop.telemetry.queue_console_command(
+    {
+        "name": "force_chat",
+        "mode": "admin",
+        "cmd_id": "chat-demo",
+        "kwargs": {
+            "payload": {
+                "speaker": "agent_0",
+                "listener": "agent_1",
+                "quality": 0.75,
+            }
+        },
+    }
+)
+loop.step()
+print(loop.telemetry.latest_console_results()[-1])
 ```
 
 ## Checklist
@@ -42,6 +70,9 @@ print(router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={
 - [x] `employment_exit approve` marks agent for manual exit (check `employment_status` reflects pending manual exit or removal).
 - [x] `employment_exit defer` clears queue entry.
 - [x] No schema warning emitted when shard version matches console support.
+- [x] `console_results` reports command outcomes for the latest tick.
+- [x] `logs/console/commands.jsonl` appended an entry matching the last command `cmd_id`.
+- [x] `force_chat` response shows updated relationship ties for both agents.
 
 ## Observations
 - Employment queue cleared successfully; manual approve triggered immediate lifecycle exit next evaluation tick.

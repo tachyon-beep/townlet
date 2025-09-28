@@ -2,6 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from townlet.config import (
+    ArrangedMeetEventConfig,
     FloatRange,
     IntRange,
     PerturbationSchedulerConfig,
@@ -276,6 +277,76 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
     )
     assert active_id not in queue_after["active"]
     assert "price_spike" in telemetry_state["cooldowns"]["spec"]
+
+
+def test_console_arrange_meet_schedules_event() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.perturbations.events["meetup"] = ArrangedMeetEventConfig(
+        target="agents",
+        location="cafe",
+        max_participants=4,
+    )
+    loop = SimulationLoop(config)
+    world = loop.world
+    for idx in range(2):
+        world.agents[f"agent_{idx}"] = AgentSnapshot(
+            agent_id=f"agent_{idx}",
+            position=(idx, 0),
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            wallet=1.0,
+        )
+    router = create_console_router(
+        loop.telemetry,
+        world,
+        loop.perturbations,
+        policy=loop.policy,
+        mode="admin",
+        config=config,
+    )
+    command = ConsoleCommand(
+        name="arrange_meet",
+        args=(),
+        kwargs={
+            "payload": {
+                "spec": "meetup",
+                "agents": ["agent_0", "agent_1"],
+                "starts_in": 0,
+                "duration": 20,
+            }
+        },
+    )
+    result = router.dispatch(command)
+    assert "event_id" in result
+    state = loop.perturbations.latest_state()
+    assert result["event_id"] in state.get("active", {}) or any(
+        entry["event_id"] == result["event_id"] for entry in state.get("pending", [])
+    )
+
+
+def test_console_arrange_meet_unknown_spec_returns_error() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    loop.world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+        wallet=1.0,
+    )
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        policy=loop.policy,
+        mode="admin",
+        config=config,
+    )
+    command = ConsoleCommand(
+        name="arrange_meet",
+        args=(),
+        kwargs={"payload": {"spec": "unknown", "agents": ["alice"]}},
+    )
+    result = router.dispatch(command)
+    assert result["error"] == "unknown_spec"
 
 
 def test_console_snapshot_commands(tmp_path: Path) -> None:

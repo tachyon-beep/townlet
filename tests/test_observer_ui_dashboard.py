@@ -81,9 +81,98 @@ def test_build_map_panel_produces_table() -> None:
         loop.step()
     snapshot = TelemetryClient().from_console(router)
     obs_batch = loop.observations.build_batch(loop.world, terminated={})
-    panel = _build_map_panel(loop, snapshot, obs_batch, focus_agent=None)
+    panel = _build_map_panel(snapshot, obs_batch, focus_agent=None)
     assert panel is not None
     assert "Local Map" in (panel.title or "")
+
+
+def test_narration_panel_shows_styled_categories() -> None:
+    loop = make_loop()
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    world = loop.world
+    telemetry = loop.telemetry
+
+    from townlet.world.grid import AgentSnapshot
+
+    shower = world.objects["shower_1"]
+    shower.stock["power_on"] = 0
+    world.store_stock["shower_1"] = shower.stock
+
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(1, 1),
+        needs={"hygiene": 0.1, "energy": 0.5},
+        wallet=5.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(0, 0),
+        needs={"hunger": 0.5, "energy": 0.2},
+        wallet=1.0,
+    )
+
+    telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=[],
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+    )
+
+    world.apply_console([])
+    world.consume_console_results()
+
+    events: list[dict[str, object]] = []
+
+    # Outage attempt
+    granted = world.queue_manager.request_access("shower_1", "alice", world.tick)
+    assert granted is True
+    world._sync_reservation("shower_1")
+    assert world._start_affordance("alice", "shower_1", "use_shower") is False
+    events.extend(world.drain_events())
+
+    # Successful sleep
+    granted = world.queue_manager.request_access("bed_1", "bob", world.tick)
+    assert granted is True
+    world._sync_reservation("bed_1")
+    assert world._start_affordance("bob", "bed_1", "rest_sleep") is True
+    running = world._running_affordances["bed_1"]
+    running.duration_remaining = 0
+    world.resolve_affordances(world.tick)
+    events.extend(world.drain_events())
+
+    telemetry.publish_tick(
+        tick=loop.tick + 1,
+        world=world,
+        observations={},
+        rewards={},
+        events=events,
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+    )
+
+    snapshot = TelemetryClient().from_console(router)
+    assert snapshot.narrations, "Expected narrations to be populated"
+    panels = list(render_snapshot(snapshot, tick=loop.tick + 1, refreshed="00:00:00"))
+    narration_panel = next(panel for panel in panels if (panel.title or "").startswith("Narrations"))
+    from rich.console import Console
+
+    console = Console(record=True, width=120)
+    console.print(narration_panel)
+    rendered = console.export_text()
+    assert "Utility Outage" in rendered
 
 
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
