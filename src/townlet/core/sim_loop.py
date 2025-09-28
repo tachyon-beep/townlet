@@ -65,7 +65,8 @@ class SimulationLoop:
         self.rewards = RewardEngine(config=self.config)
         self.telemetry = TelemetryPublisher(config=self.config)
         self.stability = StabilityMonitor(config=self.config)
-        self.promotion = PromotionManager(config=self.config)
+        log_path = Path("logs/promotion_history.jsonl")
+        self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
 
     def reset(self) -> None:
@@ -228,5 +229,5 @@ class SimulationLoop:
         return TickArtifacts(observations=observations, rewards=rewards)
 
     def _derive_seed(self, stream: str) -> int:
-        digest = hashlib.sha256(f"{self.config.config_id}:{stream}".encode("utf-8"))
+        digest = hashlib.sha256(f"{self.config.config_id}:{stream}".encode())
         return int.from_bytes(digest.digest()[:8], "big")

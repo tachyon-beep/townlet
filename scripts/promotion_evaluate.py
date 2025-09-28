@@ -30,7 +30,11 @@ def evaluate(summary_path: Path, watch_path: Path | None = None) -> tuple[str, l
 
     ppo_loss = summary.get("ppo_loss_total")
     loss_baseline = summary.get("ppo_loss_baseline")
-    if isinstance(ppo_loss, (int, float)) and isinstance(loss_baseline, (int, float)) and loss_baseline != 0:
+    if (
+        isinstance(ppo_loss, (int, float))
+        and isinstance(loss_baseline, (int, float))
+        and loss_baseline != 0
+    ):
         deviation = abs(float(ppo_loss) - float(loss_baseline)) / abs(float(loss_baseline))
         if deviation > LOSS_TOLERANCE:
             reasons.append(

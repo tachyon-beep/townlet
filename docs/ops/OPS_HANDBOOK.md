@@ -28,10 +28,12 @@
   6. Update `data/bc_datasets/versions.json` when publishing new datasets (increment id, capture
      manifest + checksum, mark superseded entries `deprecated`).
   7. Evaluate promotion gates using `docs/ops/ANNEAL_PROMOTION_GATES.md` (BC accuracy ≥0.90 rolling mean, queue/social metrics ±15 % bands, telemetry thresholds). Flag “hold” and initiate rollback if any gate is breached.
+  8. Run the automated drill (`python scripts/promotion_drill.py --config <config> --output artifacts/m7/drill`) to capture promotion/rollback artefacts for the release bundle.
   8. Monthly: `python scripts/audit_bc_datasets.py --versions data/bc_datasets/versions.json --exit-on-failure`.
   9. Monthly: `python scripts/run_anneal_rehearsal.py --exit-on-failure` (captures updated summary under `artifacts/m5/acceptance/summary_<timestamp>.json`).
   10. Pre-release bundle: include dataset manifest/checksums + audit report, anneal rehearsal artefacts, telemetry summary markdown, and dashboard screenshots.
   11. If `run_anneal_rehearsal.py` returns `HOLD`, freeze promotion, capture watcher output (`telemetry_watch.py --anneal-bc-min 0.9`) and escalate for dataset refresh or drift investigation. `FAIL` indicates BC gate regression and requires rollback.
+  12. Review the promotion history log (`logs/promotion_history.jsonl`) for recent promote/rollback events and checkpoint metadata before cut-over.
   Dataset checksum helper:
   ```bash
   python - <<'PY'

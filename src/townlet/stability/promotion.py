@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections import deque
-from typing import Any, Mapping
+from collections.abc import Mapping
+from pathlib import Path
 
 from townlet.config import SimulationConfig
 
@@ -11,9 +13,10 @@ from townlet.config import SimulationConfig
 class PromotionManager:
     """Tracks promotion readiness and release/shadow state."""
 
-    def __init__(self, config: SimulationConfig) -> None:
+    def __init__(self, config: SimulationConfig, log_path: Path | None = None) -> None:
         self.config = config
         self._required_passes = config.stability.promotion.required_passes
+        self._log_path = log_path
         self._state = "monitoring"
         self._pass_streak = 0
         self._candidate_ready = False
@@ -73,6 +76,7 @@ class PromotionManager:
         self._candidate_ready = False
         self._candidate_ready_tick = None
         self._pass_streak = 0
+        self._log_event(record)
 
     def register_rollback(
         self,
@@ -91,6 +95,10 @@ class PromotionManager:
         if metadata is not None:
             self._current_release.update(dict(metadata))
         self._state = "monitoring"
+        self._candidate_ready = False
+        self._candidate_ready_tick = None
+        self._pass_streak = 0
+        self._log_event(record)
         self._candidate_ready = False
         self._candidate_ready_tick = None
         self._pass_streak = 0
@@ -149,6 +157,18 @@ class PromotionManager:
         self._last_evaluated_tick = None
         self._history.clear()
         self._candidate_metadata = None
+
+    def _log_event(self, record: Mapping[str, object]) -> None:
+        if self._log_path is None:
+            return
+        try:
+            self._log_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._log_path.open("a", encoding="utf-8") as handle:
+                payload = dict(record)
+                payload["state"] = self.snapshot()
+                handle.write(json.dumps(payload) + "\n")
+        except Exception:  # pragma: no cover - logging best effort
+            return
 
     # ------------------------------------------------------------------
     # Convenience accessors

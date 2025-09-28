@@ -1,13 +1,14 @@
 from pathlib import Path
+import json
 
 from townlet.config import load_config
 from townlet.stability.promotion import PromotionManager
 
 
-def make_manager() -> PromotionManager:
+def make_manager(log_path: Path | None = None) -> PromotionManager:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.stability.promotion.required_passes = 2
-    return PromotionManager(config)
+    return PromotionManager(config, log_path=log_path)
 
 
 def promotion_metrics(pass_streak: int, required: int, ready: bool, last_result: str | None = None, last_tick: int | None = None) -> dict[str, object]:
@@ -59,3 +60,16 @@ def test_mark_promoted_and_rollback() -> None:
     history = manager.snapshot()["history"]
     assert history[-2]["event"] == "promoted"
     assert history[-1]["event"] == "rollback"
+
+
+def test_promotion_log_written(tmp_path: Path) -> None:
+    log_file = tmp_path / "promotion.jsonl"
+    manager = make_manager(log_file)
+    manager.mark_promoted(tick=5, metadata={"policy_hash": "abc"})
+    manager.register_rollback(tick=6, metadata={"reason": "test"})
+    lines = log_file.read_text().splitlines()
+    assert len(lines) == 2
+    first = json.loads(lines[0])
+    assert first["event"] == "promoted"
+    second = json.loads(lines[1])
+    assert second["event"] == "rollback"

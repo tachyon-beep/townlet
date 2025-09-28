@@ -93,7 +93,9 @@ class TelemetryBridge:
             "stability": {
                 "alerts": self._publisher.latest_stability_alerts(),
                 "metrics": self._publisher.latest_stability_metrics(),
-                "promotion_state": getattr(self._publisher, "latest_promotion_state", lambda: None)(),
+                "promotion_state": getattr(
+                    self._publisher, "latest_promotion_state", lambda: None
+                )(),
             },
             "perturbations": self._publisher.latest_perturbations(),
             "transport": self._publisher.latest_transport_status(),
@@ -328,12 +330,21 @@ def create_console_router(
         if promotion is None:
             return _attach_metadata({"error": "unsupported"}, command)
         if not promotion.candidate_ready:
-            return _attach_metadata({"error": "promotion_not_ready", "promotion": promotion.snapshot()}, command)
+            return _attach_metadata(
+                {"error": "promotion_not_ready", "promotion": promotion.snapshot()},
+                command,
+            )
         checkpoint_arg = command.kwargs.get("checkpoint")
         if checkpoint_arg is None and command.args:
             checkpoint_arg = command.args[0]
         if checkpoint_arg is None:
-            return _attach_metadata({"error": "usage", "message": "promote_policy <checkpoint> [--policy-hash HASH]"}, command)
+            return _attach_metadata(
+                {
+                    "error": "usage",
+                    "message": "promote_policy <checkpoint> [--policy-hash HASH]",
+                },
+                command,
+            )
         try:
             checkpoint_path = Path(str(checkpoint_arg)).expanduser().resolve()
         except Exception as exc:  # pragma: no cover - defensive

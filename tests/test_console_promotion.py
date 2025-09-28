@@ -55,7 +55,9 @@ def test_promote_and_rollback_commands(admin_router: tuple[SimulationLoop, objec
     )
     assert promote_response["cmd_id"] == "42"
     assert promote_response["promoted"] is True
-    assert promote_response["promotion"]["state"] == "promoted"
+    promoted_state = promote_response["promotion"]
+    assert promoted_state["state"] == "promoted"
+    assert promoted_state["current_release"]["policy_hash"] == "abc123"
 
     rollback_response = router.dispatch(
         ConsoleCommand(
@@ -65,7 +67,9 @@ def test_promote_and_rollback_commands(admin_router: tuple[SimulationLoop, objec
         )
     )
     assert rollback_response["rolled_back"] is True
-    assert rollback_response["promotion"]["state"] == "monitoring"
+    rolled_back_state = rollback_response["promotion"]
+    assert rolled_back_state["state"] == "monitoring"
+    assert rolled_back_state["current_release"].get("reason") == "canary_trigger"
 
 
 @pytest.fixture()
