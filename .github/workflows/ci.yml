@@ -89,6 +89,10 @@ jobs:
           print(summary)
           PY
 
+      - name: Promotion gate evaluation
+        run: |
+          python scripts/promotion_evaluate.py --summary tmp/ci_phase5/summary.json
+
       - name: Upload BC/anneal artifacts
         if: always()
         uses: actions/upload-artifact@v4

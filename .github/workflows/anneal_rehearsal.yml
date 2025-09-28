@@ -28,6 +28,10 @@ jobs:
         run: |
           echo "### Anneal Rehearsal Summary" >> $GITHUB_STEP_SUMMARY
           cat artifacts/m5/acceptance/summary_nightly.json >> $GITHUB_STEP_SUMMARY
+      - name: Evaluate promotion gate
+        if: always()
+        run: |
+          python scripts/promotion_evaluate.py --summary artifacts/m5/acceptance/summary_nightly.json >> $GITHUB_STEP_SUMMARY
       - name: Upload artefacts
         if: always()
         uses: actions/upload-artifact@v4

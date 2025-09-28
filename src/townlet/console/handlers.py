@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from townlet.world.grid import WorldState
 
 from townlet.snapshots import SnapshotManager
+from townlet.stability.promotion import PromotionManager
 
 SUPPORTED_SCHEMA_PREFIX = "0.9"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
@@ -92,6 +93,7 @@ class TelemetryBridge:
             "stability": {
                 "alerts": self._publisher.latest_stability_alerts(),
                 "metrics": self._publisher.latest_stability_metrics(),
+                "promotion_state": getattr(self._publisher, "latest_promotion_state", lambda: None)(),
             },
             "perturbations": self._publisher.latest_perturbations(),
             "transport": self._publisher.latest_transport_status(),
@@ -102,6 +104,7 @@ def create_console_router(
     publisher: TelemetryPublisher,
     world: WorldState | None = None,
     scheduler: PerturbationScheduler | None = None,
+    promotion: PromotionManager | None = None,
     *,
     mode: str = "viewer",
     config: SimulationConfig | None = None,
@@ -116,6 +119,23 @@ def create_console_router(
             "error": "forbidden",
             "message": "command requires admin mode",
         }
+
+    def _attach_metadata(result: dict[str, object], command: ConsoleCommand) -> dict[str, object]:
+        cmd_id = command.kwargs.get("cmd_id")
+        if cmd_id is not None:
+            result["cmd_id"] = cmd_id
+        issuer = command.kwargs.get("issuer")
+        if issuer is not None:
+            result["issuer"] = issuer
+        return result
+
+    def _refresh_promotion_metrics() -> None:
+        if promotion is None:
+            return
+        metrics = publisher.latest_stability_metrics()
+        base = dict(metrics) if isinstance(metrics, dict) else {}
+        base["promotion_state"] = promotion.snapshot()
+        publisher.record_stability_metrics(base)
 
     def _parse_snapshot_path(
         command: ConsoleCommand, usage: str
@@ -298,6 +318,54 @@ def create_console_router(
             "agent_count": len(ledger),
         }
 
+    def promotion_status_handler(command: ConsoleCommand) -> object:
+        if promotion is None:
+            return _attach_metadata({"error": "unsupported"}, command)
+        result = {"promotion": promotion.snapshot()}
+        return _attach_metadata(result, command)
+
+    def promote_policy_handler(command: ConsoleCommand) -> object:
+        if promotion is None:
+            return _attach_metadata({"error": "unsupported"}, command)
+        if not promotion.candidate_ready:
+            return _attach_metadata({"error": "promotion_not_ready", "promotion": promotion.snapshot()}, command)
+        checkpoint_arg = command.kwargs.get("checkpoint")
+        if checkpoint_arg is None and command.args:
+            checkpoint_arg = command.args[0]
+        if checkpoint_arg is None:
+            return _attach_metadata({"error": "usage", "message": "promote_policy <checkpoint> [--policy-hash HASH]"}, command)
+        try:
+            checkpoint_path = Path(str(checkpoint_arg)).expanduser().resolve()
+        except Exception as exc:  # pragma: no cover - defensive
+            return _attach_metadata({"error": "invalid_path", "message": str(exc)}, command)
+        metadata: dict[str, object] = {"checkpoint": str(checkpoint_path)}
+        policy_hash = command.kwargs.get("policy_hash")
+        if policy_hash is not None:
+            metadata["policy_hash"] = str(policy_hash)
+        promotion.set_candidate_metadata(metadata)
+        promotion.mark_promoted(tick=getattr(world, "tick", 0), metadata=metadata)
+        _refresh_promotion_metrics()
+        return _attach_metadata({"promoted": True, "promotion": promotion.snapshot()}, command)
+
+    def rollback_policy_handler(command: ConsoleCommand) -> object:
+        if promotion is None:
+            return _attach_metadata({"error": "unsupported"}, command)
+        metadata: dict[str, object] = {}
+        checkpoint_arg = command.kwargs.get("checkpoint")
+        if checkpoint_arg is not None:
+            try:
+                checkpoint_path = Path(str(checkpoint_arg)).expanduser().resolve()
+                metadata["checkpoint"] = str(checkpoint_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                return _attach_metadata({"error": "invalid_path", "message": str(exc)}, command)
+        reason = command.kwargs.get("reason")
+        if reason is not None:
+            metadata["reason"] = str(reason)
+        promotion.register_rollback(tick=getattr(world, "tick", 0), metadata=metadata)
+        promotion.set_candidate_metadata(None)
+        _refresh_promotion_metrics()
+        return _attach_metadata({"rolled_back": True, "promotion": promotion.snapshot()}, command)
+
     def perturbation_queue_handler(command: ConsoleCommand) -> object:
         if scheduler is None:
             return {"error": "unsupported"}
@@ -463,6 +531,7 @@ def create_console_router(
     router.register("telemetry_snapshot", telemetry_handler)
     router.register("employment_status", employment_status_handler)
     router.register("employment_exit", employment_exit_handler)
+    router.register("promotion_status", promotion_status_handler)
     router.register("perturbation_queue", perturbation_queue_handler)
     router.register("snapshot_inspect", snapshot_inspect_handler)
     router.register("snapshot_validate", snapshot_validate_handler)
@@ -470,10 +539,14 @@ def create_console_router(
         router.register("perturbation_trigger", perturbation_trigger_handler)
         router.register("perturbation_cancel", perturbation_cancel_handler)
         router.register("snapshot_migrate", snapshot_migrate_handler)
+        router.register("promote_policy", promote_policy_handler)
+        router.register("rollback_policy", rollback_policy_handler)
     else:
         router.register("perturbation_trigger", _forbidden)
         router.register("perturbation_cancel", _forbidden)
         router.register("snapshot_migrate", _forbidden)
+        router.register("promote_policy", _forbidden)
+        router.register("rollback_policy", _forbidden)
     return router
 
 

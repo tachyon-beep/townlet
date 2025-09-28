@@ -32,7 +32,7 @@ def main() -> None:
         wallet=1.0,
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
-    router = create_console_router(loop.telemetry, world, config=config)
+    router = create_console_router(loop.telemetry, world, promotion=loop.promotion, config=config)
 
     # Advance the sim to populate telemetry snapshots.
     for _ in range(20):

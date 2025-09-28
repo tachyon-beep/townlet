@@ -760,6 +760,15 @@ class TelemetryPublisher:
     def latest_stability_metrics(self) -> dict[str, object]:
         return dict(self._latest_stability_metrics)
 
+    def latest_promotion_state(self) -> dict[str, object] | None:
+        metrics = self._latest_stability_metrics
+        promotion_state = metrics.get("promotion_state") if isinstance(metrics, dict) else None
+        if promotion_state is None:
+            return None
+        if isinstance(promotion_state, Mapping):
+            return dict(promotion_state)
+        return None
+
     def latest_stability_alerts(self) -> list[str]:
         metrics = self.latest_stability_metrics()
         alerts = metrics.get("alerts")
