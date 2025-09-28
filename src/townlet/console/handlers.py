@@ -105,6 +105,7 @@ class TelemetryBridge:
             "transport": self._publisher.latest_transport_status(),
             "console_results": self._publisher.latest_console_results(),
             "possessed_agents": self._publisher.latest_possessed_agents(),
+            "precondition_failures": self._publisher.latest_precondition_failures(),
         }
 
 

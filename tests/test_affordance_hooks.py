@@ -116,8 +116,12 @@ def test_shower_requires_power() -> None:
     assert world._start_affordance("alice", "shower_1", "use_shower") is False
 
     events = world.drain_events()
+    precondition_event = next(
+        e for e in events if e["event"] == "affordance_precondition_fail"
+    )
+    assert precondition_event["condition"] == "power_on == true"
     fail_event = next(e for e in events if e["event"] == "affordance_fail")
-    assert fail_event["reason"] == "power_off"
+    assert fail_event["reason"] == "precondition_failed"
     assert any(e["event"] == "shower_power_outage" for e in events)
     assert world.queue_manager.active_agent("shower_1") is None
 

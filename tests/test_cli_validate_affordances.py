@@ -47,6 +47,24 @@ def test_validate_affordances_cli_failure(tmp_path: Path) -> None:
     assert "invalid" in result.stderr.lower()
 
 
+def test_validate_affordances_cli_bad_precondition(tmp_path: Path) -> None:
+    manifest = tmp_path / "bad_precond.yaml"
+    manifest.write_text(
+        """
+- id: tricky
+  object_type: bench
+  duration: 3
+  effects:
+    energy: 0.1
+  preconds:
+    - "do_something()"
+"""
+    )
+    result = _run(str(manifest))
+    assert result.returncode != 0
+    assert "precondition" in result.stderr.lower()
+
+
 def test_validate_affordances_cli_directory(tmp_path: Path) -> None:
     good = tmp_path / "good.yaml"
     good.write_text(

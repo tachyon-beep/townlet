@@ -16,6 +16,10 @@ from townlet.config.affordance_manifest import (
     AffordanceManifestError,
     load_affordance_manifest,
 )
+from townlet.world.preconditions import (
+    PreconditionSyntaxError,
+    compile_preconditions,
+)
 
 DEFAULT_SEARCH_ROOT = Path("configs/affordances")
 
@@ -69,11 +73,21 @@ def discover_manifests(inputs: Iterable[str]) -> List[Path]:
 
 def validate_manifest(path: Path) -> AffordanceManifest:
     try:
-        return load_affordance_manifest(path)
+        manifest = load_affordance_manifest(path)
     except FileNotFoundError as exc:
         raise RuntimeError(f"Manifest not found: {path}") from exc
     except AffordanceManifestError as exc:
         raise RuntimeError(f"Manifest {path} invalid: {exc}") from exc
+    for affordance in manifest.affordances:
+        try:
+            compile_preconditions(affordance.preconditions)
+        except PreconditionSyntaxError as exc:
+            raise RuntimeError(
+                "Manifest "
+                f"{path} invalid: affordance '{affordance.affordance_id}' preconditions "
+                f"failed to compile ({exc})"
+            ) from exc
+    return manifest
 
 
 def main() -> int:

@@ -33,6 +33,12 @@ from townlet.world.queue_manager import QueueManager
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
 from townlet.world.hooks import load_modules as load_hook_modules
+from townlet.world.preconditions import (
+    CompiledPrecondition,
+    PreconditionSyntaxError,
+    compile_preconditions,
+    evaluate_preconditions,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -146,6 +152,10 @@ class AffordanceSpec:
     effects: dict[str, float]
     preconditions: list[str] = field(default_factory=list)
     hooks: dict[str, list[str]] = field(default_factory=dict)
+    compiled_preconditions: tuple[CompiledPrecondition, ...] = field(
+        default_factory=tuple,
+        repr=False,
+    )
 
 
 @dataclass
@@ -461,6 +471,97 @@ class WorldState:
                 if context.get("cancel"):
                     continue_execution = False
         return continue_execution
+
+    def _build_precondition_context(
+        self,
+        *,
+        agent_id: str,
+        object_id: str,
+        spec: AffordanceSpec,
+    ) -> dict[str, Any]:
+        agent = self.agents.get(agent_id)
+        obj = self.objects.get(object_id)
+        queue_snapshot = self.queue_manager.queue_snapshot(object_id)
+        active_reservation = self.queue_manager.active_agent(object_id)
+        observations_cfg = getattr(self.config, "observations_config", None)
+        if observations_cfg is not None:
+            hybrid_cfg = getattr(observations_cfg, "hybrid", None)
+            ticks_per_day = getattr(hybrid_cfg, "time_ticks_per_day", 1440)
+        else:
+            ticks_per_day = 1440
+        ticks_per_day = max(1, int(ticks_per_day))
+        day = self.tick // ticks_per_day
+
+        agent_context: dict[str, Any] = {}
+        needs: dict[str, float] = {}
+        inventory: dict[str, int] = {}
+        if agent is not None:
+            needs = {key: float(value) for key, value in agent.needs.items()}
+            inventory = {key: int(value) for key, value in agent.inventory.items()}
+            agent_context = {
+                "agent_id": agent.agent_id,
+                "position": list(agent.position),
+                "wallet": float(agent.wallet),
+                "job_id": agent.job_id,
+                "on_shift": bool(agent.on_shift),
+                "needs": needs,
+                "inventory": inventory,
+                "lateness_counter": int(agent.lateness_counter),
+                "attendance_ratio": float(agent.attendance_ratio),
+                "wages_withheld": float(agent.wages_withheld),
+                "shift_state": agent.shift_state,
+            }
+
+        stock: dict[str, Any] = {}
+        object_context: dict[str, Any] = {}
+        if obj is not None:
+            stock = {key: value for key, value in obj.stock.items()}
+            position = list(obj.position) if obj.position is not None else None
+            occupied_by = obj.occupied_by
+            object_context = {
+                "object_id": obj.object_id,
+                "object_type": obj.object_type,
+                "position": position,
+                "occupied_by": occupied_by,
+                "stock": stock,
+            }
+        else:
+            occupied_by = None
+
+        queue_list = list(queue_snapshot) if queue_snapshot else []
+        context: dict[str, Any] = {
+            "affordance_id": spec.affordance_id,
+            "agent": agent_context,
+            "object": object_context,
+            "world": {
+                "tick": int(self.tick),
+                "day": int(day),
+            },
+            "needs": needs,
+            "inventory": inventory,
+            "wallet": agent_context.get("wallet"),
+            "queue": queue_list,
+            "queue_length": len(queue_list),
+            "reservation_active": active_reservation is not None,
+            "reservation_holder": active_reservation,
+            "occupied": bool(occupied_by and occupied_by != agent_id),
+            "power_on": bool(stock.get("power_on", 0)) if stock else None,
+            "meal_available": bool(stock.get("meals", 0)) if stock else None,
+            "stock": stock,
+        }
+        return context
+
+    def _snapshot_precondition_context(self, context: Mapping[str, Any]) -> dict[str, Any]:
+        def _clone(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {str(key): _clone(val) for key, val in value.items()}
+            if isinstance(value, list):
+                return [_clone(item) for item in value]
+            if isinstance(value, tuple):
+                return [_clone(item) for item in value]
+            return value
+
+        return {str(key): _clone(val) for key, val in context.items()}
 
     def _register_default_console_handlers(self) -> None:
         self.register_console_handler(
@@ -980,13 +1081,22 @@ class WorldState:
         hooks: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
         """Register an affordance available in the world."""
+        raw_preconditions = list(preconditions or [])
+        try:
+            compiled = compile_preconditions(raw_preconditions)
+        except PreconditionSyntaxError as exc:  # pragma: no cover - defensive
+            raise RuntimeError(
+                f"Failed to compile preconditions for affordance '{affordance_id}': {exc}"
+            ) from exc
+
         self.affordances[affordance_id] = AffordanceSpec(
             affordance_id=affordance_id,
             object_type=object_type,
             duration=duration,
             effects=dict(effects),
-            preconditions=list(preconditions or []),
+            preconditions=raw_preconditions,
             hooks={key: list(values) for key, values in (hooks or {}).items()},
+            compiled_preconditions=compiled,
         )
 
     def apply_actions(self, actions: dict[str, Any]) -> None:
@@ -1697,6 +1807,57 @@ class WorldState:
             return False
         if spec.object_type != obj.object_type:
             return False
+
+        if spec.compiled_preconditions:
+            context = self._build_precondition_context(
+                agent_id=agent_id,
+                object_id=object_id,
+                spec=spec,
+            )
+            ok, failed = evaluate_preconditions(
+                spec.compiled_preconditions,
+                context,
+            )
+            if not ok:
+                context_snapshot = self._snapshot_precondition_context(context)
+                payload = {
+                    "agent_id": agent_id,
+                    "object_id": object_id,
+                    "affordance_id": affordance_id,
+                    "condition": failed.source if failed else None,
+                    "context": context_snapshot,
+                }
+                logger.debug(
+                    "Precondition failed for affordance '%s' (agent=%s, object=%s, condition=%s)",
+                    affordance_id,
+                    agent_id,
+                    object_id,
+                    payload["condition"],
+                )
+                self._dispatch_affordance_hooks(
+                    "fail",
+                    spec.hooks.get("fail", ()),
+                    agent_id=agent_id,
+                    object_id=object_id,
+                    spec=spec,
+                    extra={
+                        "reason": "precondition_failed",
+                        "condition": payload["condition"],
+                        "context": context_snapshot,
+                    },
+                )
+                self._emit_event("affordance_precondition_fail", payload)
+                self._emit_event(
+                    "affordance_fail",
+                    {
+                        **payload,
+                        "reason": "precondition_failed",
+                    },
+                )
+                if self.queue_manager.active_agent(object_id) == agent_id:
+                    self.queue_manager.release(object_id, agent_id, self.tick, success=False)
+                    self._sync_reservation(object_id)
+                return False
 
         self._running_affordances[object_id] = RunningAffordance(
             agent_id=agent_id,

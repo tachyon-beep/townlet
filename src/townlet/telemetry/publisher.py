@@ -71,6 +71,7 @@ class TelemetryPublisher:
         self._queue_fairness_history: list[dict[str, object]] = []
         self._rivalry_event_history: list[dict[str, object]] = []
         self._latest_possessed_agents: list[str] = []
+        self._latest_precondition_failures: list[dict[str, object]] = []
         self._console_results_batch: list[dict[str, Any]] = []
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._console_audit_path = Path("logs/console/commands.jsonl")
@@ -149,6 +150,10 @@ class TelemetryPublisher:
         state["rivalry_events"] = list(self._rivalry_event_history)
         state["console_results"] = list(self._console_results_batch)
         state["possessed_agents"] = list(self._latest_possessed_agents)
+        if self._latest_precondition_failures:
+            state["precondition_failures"] = [
+                dict(entry) for entry in self._latest_precondition_failures
+            ]
         return state
 
     def import_state(self, payload: dict[str, object]) -> None:
@@ -328,6 +333,15 @@ class TelemetryPublisher:
             self._latest_possessed_agents = [str(agent) for agent in possessed_payload]
         else:
             self._latest_possessed_agents = []
+        failures_payload = payload.get("precondition_failures")
+        if isinstance(failures_payload, list):
+            self._latest_precondition_failures = [
+                dict(entry)
+                for entry in failures_payload
+                if isinstance(entry, Mapping)
+            ]
+        else:
+            self._latest_precondition_failures = []
 
     def export_console_buffer(self) -> list[object]:
         return list(self._console_buffer)
@@ -357,6 +371,9 @@ class TelemetryPublisher:
 
     def latest_possessed_agents(self) -> list[str]:
         return list(self._latest_possessed_agents)
+
+    def latest_precondition_failures(self) -> list[dict[str, object]]:
+        return [dict(entry) for entry in self._latest_precondition_failures]
 
     def latest_transport_status(self) -> dict[str, object]:
         """Return transport health and backlog counters for observability."""
@@ -627,6 +644,12 @@ class TelemetryPublisher:
             self._latest_events = list(events)
         else:
             self._latest_events = []
+        self._latest_precondition_failures = [
+            dict(event)
+            for event in self._latest_events
+            if isinstance(event, Mapping)
+            and str(event.get("event")) == "affordance_precondition_fail"
+        ]
         self._process_narrations(self._latest_events, int(tick))
         for subscriber in self._event_subscribers:
             subscriber(list(self._latest_events))
