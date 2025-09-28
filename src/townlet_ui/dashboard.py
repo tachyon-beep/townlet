@@ -5,9 +5,10 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -15,6 +16,11 @@ from rich.text import Text
 from townlet.console.handlers import ConsoleCommand
 from townlet_ui.commands import ConsoleCommandExecutor
 from townlet_ui.telemetry import TelemetryClient, TelemetrySnapshot
+
+if TYPE_CHECKING:
+    from townlet.core.sim_loop import SimulationLoop
+else:
+    SimulationLoop = Any  # type: ignore[assignment]
 
 MAP_AGENT_CHAR = "A"
 MAP_CENTER_CHAR = "S"
@@ -110,7 +116,7 @@ def render_snapshot(
         )
         else "blue"
     )
-    conflict_renderables = [conflict_table]
+    conflict_renderables: list[RenderableType] = [conflict_table]
 
     history_entries = list(conflict.queue_history[-5:])
     if history_entries:
@@ -504,7 +510,7 @@ def _humanize_kpi(key: str) -> str:
 
 
 def run_dashboard(
-    loop,
+    loop: SimulationLoop,
     *,
     refresh_interval: float = 1.0,
     max_ticks: int = 0,
@@ -524,7 +530,9 @@ def run_dashboard(
             needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
             wallet=1.0,
         )
-        loop.world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+        assign_jobs = getattr(loop.world, "_assign_jobs_to_agents", None)
+        if callable(assign_jobs):
+            assign_jobs()
 
     router = create_console_router(loop.telemetry, loop.world, config=loop.config)
     client = TelemetryClient()
@@ -552,7 +560,7 @@ def run_dashboard(
                 console.print(panel)
             obs_batch = loop.observations.build_batch(loop.world, terminated={})
             map_panel = _build_map_panel(
-                loop, snapshot, obs_batch, focus_agent, show_coords=show_coords
+                snapshot, obs_batch, focus_agent, show_coords=show_coords
             )
             if map_panel is not None:
                 console.print(map_panel)
@@ -565,9 +573,8 @@ def run_dashboard(
 
 
 def _build_map_panel(
-    loop,
     snapshot: TelemetrySnapshot,
-    obs_batch: dict[str, dict[str, np.ndarray]],
+    obs_batch: Mapping[str, dict[str, np.ndarray]],
     focus_agent: str | None,
     show_coords: bool = False,
 ) -> Panel | None:
@@ -609,6 +616,6 @@ def _build_map_panel(
     subtitle = f"Focus: {agent_id}"
     return Panel(
         panel_text,
-                title=f"Local Map - {agent_id} ({window}x{window})",
+        title=f"Local Map - {agent_id} ({window}x{window})",
         subtitle=subtitle,
     )

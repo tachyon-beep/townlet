@@ -63,7 +63,7 @@ def test_telemetry_publisher_flushes_payload(monkeypatch: pytest.MonkeyPatch) ->
 
     assert sent, "expected payload to be flushed via capture transport"
     payload = json.loads(sent[-1].decode("utf-8"))
-    assert payload.get("schema_version", "").startswith("0.8")
+    assert payload.get("schema_version", "").startswith("0.9")
     assert payload.get("tick") == loop.tick
 
 

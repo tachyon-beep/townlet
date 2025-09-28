@@ -1,4 +1,4 @@
-# Project Progress Tracker (2025-10-03)
+# Project Progress Tracker (2025-10-06)
 
 Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progress against the milestone roadmap.
 
@@ -19,28 +19,20 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
 
 - **WP-06 – Telemetry Publishing Hardening (Completed 2025-10-04):** transport abstraction (stdout/file/tcp) with buffered delivery + retry status, console/observer telemetry exposes transport health, smoke command + docs updated, regression suites cover transport buffer/backpressure/failure cases.
 - **WP-07 – Conflict & Rivalry Systems (Completed 2025-10-05):** queue fairness counters, rivalry decay/avoidance, telemetry snapshots (queue history + rivalry events), scenario baselines, console runbook, and regression suites shipped.
+- **Milestone M5 – Behaviour Cloning & Anneal (Completed 2025-10-06):** dataset capture, BC/anneal harness, release bundle archived at `artifacts/m5/release_bundle/`.
 ## In-Flight Work Packages
 1. **Observer UI Integration** (`docs/work_packages/WORK_PACKAGE_OBSERVER_UI.md`)
    - Owner: DevEx/UX
-   - Status: In progress (telemetry client + dashboard shipped; narration panel delivered).
-   - Next: usability capture, legend toggles, concurrency executor polish, documentation refresh.
+   - Status: In progress — Phases 6A–6H verified on 2025-10-06 (observer UI & policy inspector). Audio toggle pending design; remaining tasks: implement toggle + documentation once approved.
+   - Next: schedule audio-toggle implementation (Phase 6E) and UI usability capture work.
 2. **PPO Telemetry Monitoring** (`docs/work_packages/WORK_PACKAGE_PPO_PHASES_2_4.md` follow-up)
    - Owner: RL/Training
    - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
    - Next: schedule periodic soak runs, wire results into ops review cadence.
 
-3. **M5 Behaviour Cloning Phase 5.4** (`docs/program_management/M5_BEHAVIOUR_CLONING_EXECUTION.md`)
-   - Owner: RL/Training
-   - Status: Completed (BC dataset catalogued, acceptance smoke logged under `artifacts/m5/acceptance/`, ops & CI guardrails landed).
-   - Next: proceed to Phase 5.5 planning (anneal promotion governance).
-
-   - Owner: Platform/Observer UI
-   - Status: Queued — begins next sprint after telemetry lint clean-up; planning workshop scheduled to scope transport wiring and KPI aggregation.
-   - Next: lock transport decision, refresh telemetry contract tests, draft ops rollback plan.
-
 ## Upcoming Milestones (see `PROJECT_PLAN.md` for detail)
 - **M4 – Social Foundations** (Completed 2025-09-30)
-- **M5 – Behaviour Cloning & Anneal**: trajectory capture, BC harness, mixed scripted→learned control with rollback guard.
+- **M5 – Behaviour Cloning & Anneal** (Completed 2025-10-06)
 - **M6 – Observer Experience & Policy Inspector**: dashboard overlays, policy inspector, audio toggles, KPI panels.
 - **M7 – Promotion & Release Governance**: automated promotion gate, golden rollouts, rollback drills.
 - **M8 – Perturbations & Narrative Events**: scheduler fairness buckets, lifecycle vignettes, perturbation telemetry.

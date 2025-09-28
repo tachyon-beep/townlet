@@ -1,9 +1,9 @@
-# M5 Behaviour Cloning & Anneal – Acceptance Report (Draft)
+# M5 Behaviour Cloning & Anneal – Acceptance Report
 
 ## Overview
 - **Milestone:** M5 – Behaviour Cloning & Anneal
-- **Phase:** 5.4 – End-to-End Validation & Ops Readiness
-- **Status:** In progress (draft report prepared pending completion of remaining tasks).
+- **Phase:** 5.5 – Promotion Governance & Close-out
+- **Status:** Complete (2025-10-06)
 - **Acting Project Director:** Townlet Delivery Lead (self-review authority).
 
 ## Scope Covered
@@ -25,6 +25,11 @@
 - **Acceptance smoke artefacts** archived under `artifacts/m5/acceptance/`:
   - `logs/anneal_results.json`
   - `summary_idle_v1.json`
+  - `summary_idle_v1_rehearsal.json`
+  - `logs/anneal_watcher_output.jsonl`
+- **Release bundle** collected under `artifacts/m5/release_bundle/`:
+  - `playbooks/` (`ANNEAL_PROMOTION_GATES.md`, `ANNEAL_TRAINING_PLAN.md`, `OPS_HANDBOOK.md`)
+  - `outputs/` (anneal results, summaries, watcher capture)
 - **Regression suites** (`tests/test_bc_trainer.py`, `tests/test_training_anneal.py`,
   `tests/test_curate_trajectories.py`, `tests/test_capture_scripted_cli.py`,
   `tests/test_bc_capture_prototype.py`) pass in 1.8 s wall-clock locally.
@@ -42,8 +47,7 @@
 - **Future documentation drift:** Embed BC/anneal updates in onboarding to keep ops guides synced.
 
 ## Follow-up Actions
-1. Update `MASTER_PLAN_PROGRESS.md` and `docs/program_management/MILESTONE_ROADMAP.md` to mark Phase 5.4 complete.
-2. Transition to Phase 5.5 planning (M5 post-anneal metrics and promotion prep).
-3. Schedule first periodic dataset audit (monthly) to keep `versions.json` authoritative.
+1. Hand off release bundle to operations archive (ticket M5-OPS-ACQ-01).
+2. Schedule first monthly dataset audit to monitor drift (owner: Ops).
 
-*Prepared 2025-09-30. Update upon completion of Phase 5.4 tasks.*
+*Prepared 2025-09-30, updated 2025-10-06 for milestone close-out.*

@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections import Counter, deque
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Optional
 
 
 def _advance_window(
@@ -76,7 +75,7 @@ class RelationshipChurnAccumulator:
         tick: int,
         owner_id: str,
         evicted_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Record an eviction event for churn tracking.
 

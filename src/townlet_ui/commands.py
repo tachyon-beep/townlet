@@ -19,7 +19,7 @@ class ConsoleCommandExecutor:
         if not hasattr(router, "dispatch"):
             raise TypeError("Router must expose a dispatch method")
         self._router = router
-        self._queue: "queue.Queue[ConsoleCommand | None]" = queue.Queue()
+        self._queue: queue.Queue[ConsoleCommand | None] = queue.Queue()
         self._thread = threading.Thread(target=self._worker, daemon=daemon)
         self._thread.start()
 

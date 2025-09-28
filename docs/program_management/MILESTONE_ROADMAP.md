@@ -4,11 +4,11 @@
 
 This roadmap tracks the sequencing across remediation and forward-looking Townlet milestones. See `PROJECT_PLAN.md` for detailed scopes, owners, and risk controls.
 
-## Status Snapshot (2025-10-03)
+## Status Snapshot (2025-10-06)
 
-- **Completed:** M1 Runtime Safety, M2 Operational Guardrails, M3 Continuity & Conflict Systems, M4 Social Foundations.
-- **In Progress:** M5 Behaviour Cloning & Anneal (Phase 5.4 complete; Phase 5.5 planning underway).
-- **Queued:** M6 Observer Experience & Policy Inspector, M7 Promotion & Release Governance, M8 Perturbations & Narrative Events, M9 Personality & Ops Polish.
+- **Completed:** M1 Runtime Safety, M2 Operational Guardrails, M3 Continuity & Conflict Systems, M4 Social Foundations, M5 Behaviour Cloning & Anneal.
+- **In Progress:** M6 Observer Experience & Policy Inspector (Phases 6A–6H verified (observer UI & policy inspector). Audio toggle remains deferred; Phase 6E implementation pending.).
+- **Queued:** M7 Promotion & Release Governance, M8 Perturbations & Narrative Events, M9 Personality & Ops Polish.
 
 | Milestone | Theme | Key Deliverables | Dependencies | Exit Criteria |
 | --- | --- | --- | --- | --- |

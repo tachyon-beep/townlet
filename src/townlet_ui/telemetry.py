@@ -4,7 +4,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
+
+
+def _maybe_float(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    maybe = _maybe_float(value)
+    return maybe if maybe is not None else default
+
 
 SUPPORTED_SCHEMA_PREFIX = "0.9"
 
@@ -427,51 +439,17 @@ class TelemetryClient:
         if isinstance(anneal_payload, Mapping) and anneal_payload:
             anneal_status = AnnealStatus(
                 stage=str(anneal_payload.get("anneal_stage", "")),
-                cycle=(
-                    float(anneal_payload.get("anneal_cycle", 0.0))
-                    if isinstance(anneal_payload.get("anneal_cycle"), (int, float))
-                    else None
-                ),
+                cycle=_maybe_float(anneal_payload.get("anneal_cycle")),
                 dataset=str(anneal_payload.get("anneal_dataset", "")),
-                bc_accuracy=(
-                    float(anneal_payload.get("anneal_bc_accuracy"))
-                    if isinstance(
-                        anneal_payload.get("anneal_bc_accuracy"), (int, float)
-                    )
-                    else None
-                ),
-                bc_threshold=(
-                    float(anneal_payload.get("anneal_bc_threshold"))
-                    if isinstance(
-                        anneal_payload.get("anneal_bc_threshold"), (int, float)
-                    )
-                    else None
-                ),
+                bc_accuracy=_maybe_float(anneal_payload.get("anneal_bc_accuracy")),
+                bc_threshold=_maybe_float(anneal_payload.get("anneal_bc_threshold")),
                 bc_passed=bool(anneal_payload.get("anneal_bc_passed", False)),
                 loss_flag=bool(anneal_payload.get("anneal_loss_flag", False)),
                 queue_flag=bool(anneal_payload.get("anneal_queue_flag", False)),
                 intensity_flag=bool(anneal_payload.get("anneal_intensity_flag", False)),
-                loss_baseline=(
-                    float(anneal_payload.get("anneal_loss_baseline"))
-                    if isinstance(
-                        anneal_payload.get("anneal_loss_baseline"), (int, float)
-                    )
-                    else None
-                ),
-                queue_baseline=(
-                    float(anneal_payload.get("anneal_queue_baseline"))
-                    if isinstance(
-                        anneal_payload.get("anneal_queue_baseline"), (int, float)
-                    )
-                    else None
-                ),
-                intensity_baseline=(
-                    float(anneal_payload.get("anneal_intensity_baseline"))
-                    if isinstance(
-                        anneal_payload.get("anneal_intensity_baseline"), (int, float)
-                    )
-                    else None
-                ),
+                loss_baseline=_maybe_float(anneal_payload.get("anneal_loss_baseline")),
+                queue_baseline=_maybe_float(anneal_payload.get("anneal_queue_baseline")),
+                intensity_baseline=_maybe_float(anneal_payload.get("anneal_intensity_baseline")),
             )
 
         kpi_payload = payload.get("kpi_history") or {}
@@ -496,7 +474,7 @@ class TelemetryClient:
                         if not isinstance(action_entry, Mapping):
                             continue
                         action_label = str(action_entry.get("action", ""))
-                        probability = float(action_entry.get("probability", 0.0))
+                        probability = _coerce_float(action_entry.get("probability"), 0.0)
                         top_actions.append(
                             PolicyInspectorAction(
                                 action=action_label,
@@ -508,8 +486,8 @@ class TelemetryClient:
                         agent_id=str(agent_id),
                         tick=int(entry.get("tick", 0)),
                         selected_action=str(entry.get("selected_action", "")),
-                        log_prob=float(entry.get("log_prob", 0.0)),
-                        value_pred=float(entry.get("value_pred", 0.0)),
+                        log_prob=_coerce_float(entry.get("log_prob"), 0.0),
+                        value_pred=_coerce_float(entry.get("value_pred"), 0.0),
                         top_actions=top_actions,
                     )
                 )
@@ -563,7 +541,7 @@ class TelemetryClient:
             stability=stability,
             kpis=kpi_history,
             transport=transport,
-            raw=payload,
+            raw=dict(payload),
         )
 
     def from_console(self, router: Any) -> TelemetrySnapshot:
@@ -599,7 +577,7 @@ class TelemetryClient:
             raise SchemaMismatchError(
                 f"Telemetry payload missing expected section '{key}'"
             )
-        return value
+        return cast(Mapping[str, Any], value)
 
 
 def _console_command(name: str) -> Any:

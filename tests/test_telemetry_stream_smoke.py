@@ -46,6 +46,6 @@ def test_file_transport_stream_smoke(tmp_path: Path) -> None:
     payload = json.loads(lines[-1])
     snapshot = TelemetryClient().parse_snapshot(payload)
 
-    assert snapshot.schema_version.startswith("0.8")
+    assert snapshot.schema_version.startswith("0.9")
     assert snapshot.transport.last_success_tick is None or snapshot.transport.last_success_tick >= 1
     assert snapshot.transport.dropped_messages == 0
