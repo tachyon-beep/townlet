@@ -1,9 +1,9 @@
 # Phase 5.5 Risk & Issue Log
 
-## Open Questions
-1. Should anneal promotion gates be enforced in real time (dashboard) or only via scripted audits?
-2. What triggers observer UI to fetch updated telemetry when anneal rehearsals run headless (consider notifications or poll interval tuning)?
-3. Do future BC datasets require version pinning per promotion (config override vs dynamic manifest)?
+## Close-Out Notes
+- Promotion gates will be enforced via nightly scripted runs; dashboard panel is informational (watcher fails trigger HOLD/FAIL).
+- Observer dashboard refresh remains manual; ops to capture screenshots post rehearsal (notification backlog logged for M6).
+- BC manifests are pinned per promotion (`training.bc.manifest` and release checklist).
 
 ## Risks (Carry into Steering Review)
 - **R1 (Low)**: Nightly anneal workflow may increase CI runtime; monitor first weekly run and adjust schedule if queue contention appears.

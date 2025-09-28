@@ -40,3 +40,11 @@ Use this checklist before enabling or rolling out the conflict/rivalry system in
 ## Sign-off
 - [ ] Attach telemetry snapshot, console outputs, and pytest logs to release ticket.
 - [ ] Gain approval from Systems/Gameplay owner and Ops lead.
+
+## Behaviour Cloning & Anneal Promotion
+- [ ] Verify BC manifest (`data/bc_datasets/manifests/...`) and checksums before release.
+- [ ] Run `python scripts/run_training.py <config> --mode bc --bc-manifest <manifest>`; archive metrics output.
+- [ ] Run `python scripts/run_training.py <config> --mode anneal --bc-manifest <manifest> --anneal-log-dir <dir> --anneal-exit-on-failure`.
+- [ ] Review `anneal_results.json`; use `scripts/telemetry_summary.py --format markdown` for summary and `scripts/telemetry_watch.py --anneal-bc-min 0.9 --anneal-loss-max 0.1 --anneal-queue-min ...` for drift checks.
+- [ ] Capture dashboard screenshot of anneal panel + attach watcher JSON to release ticket.
+- [ ] If status != PASS, halt promotion, log remediation, and rerun with adjusted config.

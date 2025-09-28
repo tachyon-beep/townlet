@@ -160,6 +160,13 @@
 - **Soak reference**: `artifacts/phase4/queue_conflict_soak/summary.md` provides the latest alternating
   replay↔rollout drift snapshot (12-cycle run); use it as a benchmark during incident reviews.
 
+### Behaviour Cloning & Anneal Runbook
+- Run behaviour cloning via `python scripts/run_training.py <config> --mode bc --bc-manifest <manifest>`; capture metrics JSON for records.
+- Execute anneal rehearsal: `python scripts/run_training.py <config> --mode anneal --bc-manifest <manifest> --anneal-log-dir <dir> --anneal-exit-on-failure`. Archive `anneal_results.json` and watcher outputs.
+- Telemetry checks: `scripts/telemetry_watch.py <ppo_log.jsonl> --anneal-bc-min 0.9 --anneal-loss-max 0.1 --anneal-queue-min … --anneal-intensity-min …`; summary via `scripts/telemetry_summary.py <anneal_results.json> --format markdown`.
+- Ops decisions: PASS when BC accuracy ≥ threshold and no drift flags; HOLD when watcher raises `anneal_*_flag`; FAIL when BC gate fails (rollback or dataset refresh required).
+- Promotion bundle: dataset manifest/checksums, BC metrics JSON, anneal_results.json, telemetry summary markdown, dashboard screenshot.
+
 ## Telemetry Transport & Observer Workflow
 
 - Observer telemetry emits schema version `0.9.x`; console and dashboard clients warn on newer majors but expect the new conflict history fields. Run `telemetry_snapshot` after upgrades to confirm the reported schema matches `0.9.x`.

@@ -42,8 +42,7 @@ python scripts/run_training.py configs/examples/poc_hybrid.yaml --mode bc --bc-m
 ## Telemetry / Ops
 - Emit evaluation metrics (accuracy, reward_sum) into ops dashboards (Phase 5.2-T5).
 - Store evaluation JSON alongside manifests for drift tracking.
+- Use `scripts/telemetry_summary.py <anneal_results.json> --format markdown` and `scripts/telemetry_watch.py --anneal-bc-min 0.9 --anneal-loss-max 0.1 --anneal-queue-min ...` to monitor anneal health.
 
 ## TODO
-- Expose evaluation & telemetry commands.
-- Document anneal schedule once Phase 5.3 lands.
 - See `docs/training/ANNEAL_SCHEDULES.md` for anneal configuration guidance.
