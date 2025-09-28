@@ -124,3 +124,71 @@ jobs:
 
       - name: Rollout scenario tests
         run: pytest tests/test_rollout_capture.py
+
+      - name: Capture rollout goldens
+        run: |
+          python scripts/capture_rollout_suite.py configs/scenarios/kitchen_breakfast.yaml configs/scenarios/queue_conflict.yaml configs/scenarios/employment_punctuality.yaml configs/scenarios/rivalry_decay.yaml configs/scenarios/observation_baseline.yaml --output-root tmp/rollout_goldens --compress
+
+      - name: Verify rollout goldens drift
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('tmp/rollout_goldens')
+          golden_path = Path('docs/samples/rollout_scenario_stats.json')
+          golden = json.loads(golden_path.read_text())
+
+          rel_tolerance = 0.02
+          abs_tolerance = 1e-6
+          failures: list[str] = []
+
+          for scenario_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+              scenario = scenario_dir.name
+              metrics_file = scenario_dir / 'rollout_sample_metrics.json'
+              current = json.loads(metrics_file.read_text())
+              expected = golden.get(scenario)
+              if expected is None:
+                  failures.append(f'scenario {scenario} missing in golden metrics')
+                  continue
+              for sample, sample_metrics in current.items():
+                  expected_metrics = expected.get(sample)
+                  if expected_metrics is None:
+                      failures.append(f'{scenario}:{sample} missing in golden metrics')
+                      continue
+                  for key, value in sample_metrics.items():
+                      exp_value = expected_metrics.get(key)
+                      if exp_value is None:
+                          failures.append(f'{scenario}:{sample}:{key} missing in golden metrics')
+                          continue
+                      if isinstance(value, (int, float)) and isinstance(exp_value, (int, float)):
+                          diff = abs(float(value) - float(exp_value))
+                          denom = max(abs(float(exp_value)), 1.0)
+                          if diff > abs_tolerance and diff / denom > rel_tolerance:
+                              failures.append(
+                                  f'{scenario}:{sample}:{key} drift {value} vs {exp_value}'
+                              )
+                      else:
+                          if value != exp_value:
+                              failures.append(
+                                  f'{scenario}:{sample}:{key} mismatch {value} vs {exp_value}'
+                              )
+              missing_samples = set(expected.keys()) - set(current.keys())
+              for missing in missing_samples:
+                  failures.append(f'{scenario}:{missing} missing in capture output')
+
+          if failures:
+              print('Rollout metric drift detected:')
+              for item in failures:
+                  print(f' - {item}')
+              raise SystemExit(1)
+          print('Rollout metrics match goldens within tolerance.')
+          PY
+
+      - name: Upload rollout goldens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollout-golden-metrics
+          path: tmp/rollout_goldens
+          if-no-files-found: error

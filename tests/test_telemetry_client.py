@@ -29,7 +29,7 @@ def make_simulation(enforce_job_loop: bool = True) -> SimulationLoop:
 
 def test_telemetry_client_parses_console_snapshot() -> None:
     loop = make_simulation()
-    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
     for _ in range(5):
         loop.step()
 
@@ -60,7 +60,7 @@ def test_telemetry_client_warns_on_newer_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     loop = make_simulation()
-    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
     for _ in range(2):
         loop.step()
 

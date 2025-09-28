@@ -29,7 +29,7 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
 
     router = create_console_router(
-        loop.telemetry, world, loop.perturbations, config=config
+        loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
     )
 
     for _ in range(5):
@@ -76,7 +76,7 @@ def test_console_conflict_status_reports_history() -> None:
             wallet=1.2,
         ),
     )
-    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    router = create_console_router(loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config)
     for _ in range(3):
         loop.step()
     world.register_rivalry_conflict("alice", "bob", intensity=1.2)
@@ -92,7 +92,7 @@ def test_console_queue_inspect_returns_queue_details() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
     world = loop.world
-    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    router = create_console_router(loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config)
     queue_id = "test_object"
     world.queue_manager.request_access(queue_id, "alice", tick=0)
     world.queue_manager.request_access(queue_id, "bob", tick=1)
@@ -129,7 +129,7 @@ def test_console_rivalry_dump_reports_pairs() -> None:
         ),
     )
     world.register_rivalry_conflict("alice", "bob", intensity=2.0)
-    router = create_console_router(loop.telemetry, world, loop.perturbations, config=config)
+    router = create_console_router(loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config)
     summary = router.dispatch(ConsoleCommand(name="rivalry_dump", args=(), kwargs={}))
     assert summary["pairs"]
     alice_view = router.dispatch(
@@ -152,7 +152,7 @@ def test_employment_console_commands_manage_queue() -> None:
     )
     world._assign_jobs_to_agents()  # type: ignore[attr-defined]
     router = create_console_router(
-        loop.telemetry, world, loop.perturbations, config=config
+        loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
     )
 
     world._employment_enqueue_exit("alice", world.tick)
@@ -187,7 +187,7 @@ def test_console_schema_warning_for_newer_version() -> None:
     loop = SimulationLoop(config)
     loop.telemetry.schema_version = "0.4.0"
     router = create_console_router(
-        loop.telemetry, loop.world, loop.perturbations, config=config
+        loop.telemetry, loop.world, loop.perturbations, policy=loop.policy, config=config
     )
 
     snapshot = router.dispatch(
@@ -204,6 +204,7 @@ def test_console_perturbation_requires_admin_mode() -> None:
         loop.telemetry,
         loop.world,
         loop.perturbations,
+        policy=loop.policy,
         mode="viewer",
         config=config,
     )
@@ -231,6 +232,7 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
         loop.telemetry,
         loop.world,
         loop.perturbations,
+        policy=loop.policy,
         mode="admin",
         config=config,
     )
@@ -284,6 +286,7 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
         loop.telemetry,
         loop.world,
         loop.perturbations,
+        policy=loop.policy,
         config=config,
     )
     for _ in range(3):
@@ -323,6 +326,7 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
         loop.telemetry,
         loop.world,
         loop.perturbations,
+        policy=loop.policy,
         mode="admin",
         config=config,
     )

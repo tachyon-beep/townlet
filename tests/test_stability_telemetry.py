@@ -36,7 +36,7 @@ def test_stability_alerts_exposed_via_telemetry_snapshot(tmp_path: Path) -> None
     assert "promotion_state" in metrics
     assert metrics["thresholds"]["starvation"]["max_incidents"] == 0
 
-    router = create_console_router(loop.telemetry, loop.world, config=config)
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=config)
     snapshot = router.dispatch(
         ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})
     )

@@ -162,8 +162,8 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 
 ### 3.3 Promotion & Rollback (Ops Flow)
 1. Shadow policy hits KPI thresholds twice → stability monitor raises promotion candidate.
-2. Ops issues `promote_policy <checkpoint>` via console (TBD) or manual config swap; release pointer updates.
-3. Monitor telemetry for two windows; if canaries fire (lateness spike, starvation, option-switch spike), issue `rollback_policy --to <snapshot>`; otherwise log success.
+2. Ops issues `promote_policy <checkpoint> [--policy-hash HASH]` via admin console; the release pointer updates and the action is logged to `logs/promotion_history.jsonl`.
+3. Monitor telemetry for two windows; if canaries fire (lateness spike, starvation, option-switch spike), issue `rollback_policy [--checkpoint PATH] [--reason TEXT]`; otherwise log success and archive the promotion log excerpt.
 
 ### 3.4 Perturbation Event
 1. Scheduler tick inspects config-defined event rates and fairness buckets.
@@ -201,13 +201,13 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 | --- | --- | --- |
 | Unit (`pytest`) | config loader (queue fairness, embedding allocator), reward clipping, console command validation | Partial (loader covered) |
 | Integration | PettingZoo env step, lifecycle exit→spawn, telemetry diff formatting | TODO |
-| Scenario | Queue contention, perturbation fairness, promotion/rollback dry run | TODO |
+| Scenario | Queue contention, perturbation fairness, promotion/rollback dry run | Complete — see `scripts/promotion_drill.py` and `tests/test_promotion_cli.py::test_promotion_drill`. |
 | Chaos | Telemetry backpressure, agent removal, utility outages | TODO |
 
 ## 7. Sequencing Checklist
 1. Implement queue manager and embedding allocator to honour new config sections.
 2. Flesh out observation tensors and integrate embedding allocator cooldown logging.
-3. Wire promotion/rollback console commands and telemetry metrics.
+3. Wire promotion/rollback console commands and telemetry metrics. *(Completed via promotion registry & console handlers.)*
 4. Build integration test harness for policy step → reward → telemetry pipeline.
 5. Stand up telemetry transport prototype (WebSocket) for demo readiness.
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
@@ -32,7 +33,7 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/capture_rollout.py",
             str(config_path),
             "--output",

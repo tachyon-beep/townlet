@@ -1,18 +1,27 @@
 # Rollout→PPO Checklist
 
 ## Capture
-1. Run scenario capture:
+1. Preferred multi-scenario sweep (keeps metrics aligned with CI):
    ```bash
-   python scripts/capture_rollout.py configs/scenarios/<scenario>.yaml \
-     --output captures/<scenario> --compress
+   python scripts/capture_rollout_suite.py \
+     configs/scenarios/kitchen_breakfast.yaml \
+     configs/scenarios/queue_conflict.yaml \
+     configs/scenarios/employment_punctuality.yaml \
+     configs/scenarios/rivalry_decay.yaml \
+     configs/scenarios/observation_baseline.yaml \
+     --output-root tmp/rollout_refresh --compress
    ```
-2. Verify artefacts:
+2. Inspect the per-scenario folders under `tmp/rollout_refresh/<scenario>/` and confirm:
    - `rollout_sample_manifest.json`
    - `rollout_sample_metrics.json`
    - `rollout_sample_*.npz/json`
-   - Alternatively, use `python scripts/run_training.py <config> --rollout-ticks N --rollout-save-dir tmp/<scenario>`
-     (add `--rollout-auto-seed-agents` for quick smoke captures)
-     (new `RolloutBuffer` scaffolding; produces the same manifest/metrics format).
+3. Single-scenario spot captures remain available while iterating:
+   ```bash
+   python scripts/capture_rollout.py configs/scenarios/<scenario>.yaml      --output captures/<scenario> --compress
+   ```
+   Add `--auto-seed-agents` for smoke captures without scripted agents, or
+   use `python scripts/run_training.py <config> --rollout-ticks N --rollout-save-dir tmp/<scenario>`
+   when you need the `RolloutBuffer` scaffolding.
 
 ## Train PPO
 1. Execute training with captured data:
@@ -31,22 +40,24 @@
      `--ppo-log-max-entries` to cap file size (creates suffixes like `.1`, `.2`).
 
 ## Regression
-1. Update golden stats if scenario behaviour intentionally changes:
+1. Merge refreshed metrics into the golden JSON (dry-run first to review changes):
    ```bash
-   python scripts/capture_rollout_suite.py \
-     configs/scenarios/*.yaml --output-root tmp_suite --compress
-   python scripts/merge_rollout_metrics.py tmp_suite --dry-run
-   python scripts/merge_rollout_metrics.py tmp_suite
+   python scripts/merge_rollout_metrics.py tmp/rollout_refresh --dry-run
+   python scripts/merge_rollout_metrics.py tmp/rollout_refresh
    ```
 2. Run regression tests:
    ```bash
    pytest tests/test_rollout_capture.py
    pytest tests/test_training_replay.py -k capture
    ```
-   (The PPO capture test parameterises across all scripted scenarios and validates
-   baseline metrics against the golden stats; see
-   `docs/rollout/ROLLOUT_CAPTURE_GUIDE.md#refreshing-golden-metrics` for the update
-   procedure.)
+   The capture test parameterises across all scripted scenarios and validates
+   against `docs/samples/rollout_scenario_stats.json`.
+3. CI mirrors this workflow via the **Capture rollout goldens** step. The
+   follow-on drift check fails when any metric diverges by more than 2% (or
+   an absolute 1e-6). The captured metrics are uploaded as the
+   `rollout-golden-metrics` artifact—download it when reviewing discrepancies.
+4. Treat an unexpected drift as a hold: investigate the scenario change, revert
+   the behaviour, or intentionally refresh the golden metrics after sign-off.
 
 ## Notes
 - Scenario captures are deterministic (torch seeding handled in `PolicyRuntime`).

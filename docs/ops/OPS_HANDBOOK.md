@@ -109,10 +109,10 @@
      widen clipping as described below).
 2. **Promotion**
    - Snapshot current release (`snapshots/release/<timestamp>.pkl`) and shadow candidate.
-   - Flip release pointer to the candidate via console command `promote_policy <checkpoint>` (TBD implementation) or manual config swap.
-   - Monitor telemetry UI; ensure canaries stay green for two windows; log promotion in `ops/rollouts.md`.
+   - Flip the release pointer with `promote_policy <checkpoint> [--policy-hash HASH]`; the console updates telemetry and appends to `logs/promotion_history.jsonl`. Manual config swaps remain a fallback.
+   - Monitor telemetry UI; ensure canaries stay green for two windows; capture the console response and confirm the entry in `logs/promotion_history.jsonl`.
 3. **Rollback**
-   - On canary breach, issue `rollback_policy --to <snapshot>` (TBD) or restore previous checkpoint manually.
+   - On canary breach, issue `rollback_policy [--checkpoint PATH] [--reason TEXT]` to restore the prior release (defaults to the pre-promotion pointer if no checkpoint is provided).
    - Re-enable shadow training; file incident note referencing telemetry graphs and logs.
 
 ## Incident Response
@@ -155,7 +155,7 @@
 - **Purpose**: ensure live or mixed-mode PPO runs maintain the conflict pressure captured in baselines.
 - **Baselines**: reference `docs/ops/queue_conflict_baselines.md` for expected event counts and intensity sums. Queue-conflict mixed runs should stay within ±15% of the recorded intensity unless intentionally experimenting.
 - **Validation**: run `telemetry_watch.py` with `--json` to capture alerts; set `--queue-events-min`, `--queue-intensity-min`, and social thresholds using the scenario table in `docs/ops/queue_conflict_baselines.md` (e.g., `--late-help-min 1` for employment punctuality). Keep the JSONL artefact with the training log.
-- **Summary review**: use `telemetry_summary.py --format markdown` to produce a one-page digest; file under `ops/rollouts/<date>-<scenario>.md`.
+- **Summary review**: use `telemetry_summary.py --format markdown` to produce a one-page digest; store under `artifacts/m7/rollouts/<date>-<scenario>.md` alongside the promotion history excerpt.
 - **Drift response**: if event counts or intensity drop below thresholds, pause promotion, rerun capture to confirm reproducibility, and notify the training lead. Investigate agent availability (missing scenario agents are the usual culprit) and rerun with `--rollout-auto-seed-agents` only as a temporary workaround.
 - **CI guardrail**: GitHub Actions uploads `tmp/ci_phase4/{ppo_mixed.jsonl,summary.md,watch.jsonl}` for each run; inspect these artefacts when investigating regressions.
 - **Canonical captures**: reference `artifacts/phase4/` for the latest checked-in mixed-mode logs, watch outputs, and summaries per scenario.
@@ -190,7 +190,7 @@
 ## Tooling & Logs
 - Metrics dashboard (TBD) pulls from telemetry diff stream; ensure schema version matches `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md`.
 - Audit logs live in `logs/console/*.jsonl`; include `cmd_id`, issuer, result.
-- Promotion history tracked in `ops/rollouts.md`; append entry per promotion or rollback.
+- Promotion history is appended automatically to `logs/promotion_history.jsonl`; copy the relevant lines into the release ticket after each promote/rollback.
 - PPO telemetry tooling:
   - `python scripts/validate_ppo_telemetry.py <log> --relative`
 - `python scripts/telemetry_watch.py <log> --follow --kl-threshold 0.2 --grad-threshold 5.0 --entropy-threshold -0.2 --reward-corr-threshold -0.5 [--queue-events-min INT] [--queue-intensity-min FLOAT] [--shared-meal-min INT] [--late-help-min INT] [--shift-takeover-max INT] [--chat-quality-min FLOAT] [--json]`

@@ -36,7 +36,7 @@ def make_loop() -> SimulationLoop:
 
 def test_render_snapshot_produces_panels() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
     for _ in range(3):
         loop.step()
     loop.world.update_relationship(
@@ -76,7 +76,7 @@ def test_run_dashboard_advances_loop(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_build_map_panel_produces_table() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
     for _ in range(2):
         loop.step()
     snapshot = TelemetryClient().from_console(router)
@@ -89,7 +89,7 @@ def test_build_map_panel_produces_table() -> None:
 @pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_policy_inspector_snapshot_contains_entries() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, config=loop.config)
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
     for _ in range(2):
         loop.step()
     snapshot = TelemetryClient().from_console(router)

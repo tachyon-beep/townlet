@@ -10,12 +10,14 @@ from townlet.core.sim_loop import SimulationLoop
 @pytest.fixture()
 def admin_router() -> tuple[SimulationLoop, object]:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.policy_hash = "release_v0"
     loop = SimulationLoop(config)
     router = create_console_router(
         loop.telemetry,
         loop.world,
         promotion=loop.promotion,
         scheduler=loop.perturbations,
+        policy=loop.policy,
         mode="admin",
         config=config,
     )
@@ -38,7 +40,7 @@ def make_ready(loop: SimulationLoop) -> None:
 
 
 def test_promotion_status_command(admin_router: tuple[SimulationLoop, object]) -> None:
-    loop, router = admin_router
+    _loop, router = admin_router
     response = router.dispatch(ConsoleCommand(name="promotion_status", args=(), kwargs={}))
     assert "promotion" in response
 
@@ -58,6 +60,9 @@ def test_promote_and_rollback_commands(admin_router: tuple[SimulationLoop, objec
     promoted_state = promote_response["promotion"]
     assert promoted_state["state"] == "promoted"
     assert promoted_state["current_release"]["policy_hash"] == "abc123"
+    assert loop.policy.active_policy_hash() == "abc123"
+    identity = loop.telemetry.latest_policy_identity()
+    assert identity and identity.get("policy_hash") == "abc123"
 
     rollback_response = router.dispatch(
         ConsoleCommand(
@@ -70,17 +75,22 @@ def test_promote_and_rollback_commands(admin_router: tuple[SimulationLoop, objec
     rolled_back_state = rollback_response["promotion"]
     assert rolled_back_state["state"] == "monitoring"
     assert rolled_back_state["current_release"].get("reason") == "canary_trigger"
+    assert loop.policy.active_policy_hash() == "release_v0"
+    identity_after = loop.telemetry.latest_policy_identity()
+    assert identity_after and identity_after.get("policy_hash") == "release_v0"
 
 
 @pytest.fixture()
 def viewer_router() -> object:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.policy_hash = "release_v0"
     loop = SimulationLoop(config)
     return create_console_router(
         loop.telemetry,
         loop.world,
         promotion=loop.promotion,
         scheduler=loop.perturbations,
+        policy=loop.policy,
         mode="viewer",
         config=config,
     )

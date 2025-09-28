@@ -36,6 +36,7 @@ def run_drill(config_path: Path, output_dir: Path, checkpoint: Path) -> dict[str
         loop.world,
         promotion=loop.promotion,
         scheduler=loop.perturbations,
+        policy=loop.policy,
         mode="admin",
         config=config,
     )

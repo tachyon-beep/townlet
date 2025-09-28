@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from townlet.config import SimulationConfig
+    from townlet.policy.runner import PolicyRuntime
     from townlet.scheduler.perturbations import PerturbationScheduler
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
@@ -108,6 +109,7 @@ def create_console_router(
     scheduler: PerturbationScheduler | None = None,
     promotion: PromotionManager | None = None,
     *,
+    policy: PolicyRuntime | None = None,
     mode: str = "viewer",
     config: SimulationConfig | None = None,
 ) -> ConsoleRouter:
@@ -138,6 +140,35 @@ def create_console_router(
         base = dict(metrics) if isinstance(metrics, dict) else {}
         base["promotion_state"] = promotion.snapshot()
         publisher.record_stability_metrics(base)
+
+    def _apply_release_metadata(metadata: object) -> None:
+        if policy is None and config is None:
+            return
+        metadata_dict: dict[str, object] = {}
+        if isinstance(metadata, dict):
+            metadata_dict = metadata
+        policy_hash_value = metadata_dict.get("policy_hash")
+        active_hash: str | None = None
+        anneal_ratio: float | None = None
+        if policy is not None:
+            if policy_hash_value is not None:
+                policy.set_policy_hash(str(policy_hash_value))
+            else:
+                policy.set_policy_hash(None)
+            active_hash = policy.active_policy_hash()
+            try:
+                anneal_ratio = policy.current_anneal_ratio()
+            except Exception:  # pragma: no cover - defensive
+                anneal_ratio = None
+        elif policy_hash_value is not None:
+            active_hash = str(policy_hash_value)
+        if config is not None:
+            identity = config.build_snapshot_identity(
+                policy_hash=active_hash,
+                runtime_observation_variant=config.observation_variant,
+                runtime_anneal_ratio=anneal_ratio,
+            )
+            publisher.update_policy_identity(identity)
 
     def _parse_snapshot_path(
         command: ConsoleCommand, usage: str
@@ -355,8 +386,10 @@ def create_console_router(
             metadata["policy_hash"] = str(policy_hash)
         promotion.set_candidate_metadata(metadata)
         promotion.mark_promoted(tick=getattr(world, "tick", 0), metadata=metadata)
+        snapshot = promotion.snapshot()
         _refresh_promotion_metrics()
-        return _attach_metadata({"promoted": True, "promotion": promotion.snapshot()}, command)
+        _apply_release_metadata(snapshot.get("current_release"))
+        return _attach_metadata({"promoted": True, "promotion": snapshot}, command)
 
     def rollback_policy_handler(command: ConsoleCommand) -> object:
         if promotion is None:
@@ -374,8 +407,10 @@ def create_console_router(
             metadata["reason"] = str(reason)
         promotion.register_rollback(tick=getattr(world, "tick", 0), metadata=metadata)
         promotion.set_candidate_metadata(None)
+        snapshot = promotion.snapshot()
         _refresh_promotion_metrics()
-        return _attach_metadata({"rolled_back": True, "promotion": promotion.snapshot()}, command)
+        _apply_release_metadata(snapshot.get("current_release"))
+        return _attach_metadata({"rolled_back": True, "promotion": snapshot}, command)
 
     def perturbation_queue_handler(command: ConsoleCommand) -> object:
         if scheduler is None:

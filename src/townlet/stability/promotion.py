@@ -24,10 +24,13 @@ class PromotionManager:
         self._last_result: str | None = None
         self._last_evaluated_tick: int | None = None
         self._history: deque[dict[str, object]] = deque(maxlen=50)
-        self._current_release: dict[str, object] = {
-            "policy_hash": getattr(config, "policy_hash", None),
-            "config_id": config.config_id,
-        }
+        self._initial_release: dict[str, object] = self._normalise_release(
+            {
+                "policy_hash": getattr(config, "policy_hash", None),
+                "config_id": config.config_id,
+            }
+        )
+        self._current_release: dict[str, object] = dict(self._initial_release)
         self._candidate_metadata: dict[str, object] | None = None
 
     # ------------------------------------------------------------------
@@ -64,14 +67,16 @@ class PromotionManager:
     ) -> None:
         """Record a promotion event and update release metadata."""
 
+        release_metadata = self._normalise_release(metadata)
         record = {
             "event": "promoted",
             "tick": tick,
             "metadata": dict(metadata) if metadata is not None else {},
+            "previous_release": dict(self._current_release),
+            "release": dict(release_metadata),
         }
         self._history.append(record)
-        if metadata is not None:
-            self._current_release = dict(metadata)
+        self._current_release = release_metadata
         self._state = "promoted"
         self._candidate_ready = False
         self._candidate_ready_tick = None
@@ -86,22 +91,21 @@ class PromotionManager:
     ) -> None:
         """Record a rollback event and return to monitoring state."""
 
+        target_release = self._resolve_rollback_target(metadata)
         record = {
             "event": "rollback",
             "tick": tick,
             "metadata": dict(metadata) if metadata is not None else {},
+            "previous_release": dict(self._current_release),
+            "release": dict(target_release),
         }
         self._history.append(record)
-        if metadata is not None:
-            self._current_release.update(dict(metadata))
+        self._current_release = target_release
         self._state = "monitoring"
         self._candidate_ready = False
         self._candidate_ready_tick = None
         self._pass_streak = 0
         self._log_event(record)
-        self._candidate_ready = False
-        self._candidate_ready_tick = None
-        self._pass_streak = 0
 
     def set_candidate_metadata(self, metadata: Mapping[str, object] | None) -> None:
         self._candidate_metadata = dict(metadata) if metadata is not None else None
@@ -116,6 +120,7 @@ class PromotionManager:
             "last_result": self._last_result,
             "last_evaluated_tick": self._last_evaluated_tick,
             "current_release": dict(self._current_release),
+            "initial_release": dict(self._initial_release),
             "candidate": dict(self._candidate_metadata)
             if self._candidate_metadata is not None
             else None,
@@ -136,9 +141,16 @@ class PromotionManager:
         self._last_result = str(last_result) if last_result is not None else None
         last_tick = payload.get("last_evaluated_tick")
         self._last_evaluated_tick = int(last_tick) if last_tick is not None else None
+        initial_release = payload.get("initial_release")
+        if isinstance(initial_release, Mapping):
+            self._initial_release = dict(initial_release)
+        else:
+            self._initial_release = self._normalise_release(None)
         current_release = payload.get("current_release")
         if isinstance(current_release, Mapping):
             self._current_release = dict(current_release)
+        else:
+            self._current_release = dict(self._initial_release)
         candidate = payload.get("candidate")
         self._candidate_metadata = dict(candidate) if isinstance(candidate, Mapping) else None
         history = payload.get("history", [])
@@ -157,6 +169,7 @@ class PromotionManager:
         self._last_evaluated_tick = None
         self._history.clear()
         self._candidate_metadata = None
+        self._current_release = dict(self._initial_release)
 
     def _log_event(self, record: Mapping[str, object]) -> None:
         if self._log_path is None:
@@ -169,6 +182,44 @@ class PromotionManager:
                 handle.write(json.dumps(payload) + "\n")
         except Exception:  # pragma: no cover - logging best effort
             return
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _normalise_release(
+        self, metadata: Mapping[str, object] | None
+    ) -> dict[str, object]:
+        base: dict[str, object] = {"config_id": self.config.config_id}
+        if metadata is None:
+            return {k: v for k, v in base.items() if v is not None}
+        for key, value in metadata.items():
+            if value is None:
+                continue
+            base[str(key)] = value
+        return {k: v for k, v in base.items() if v is not None}
+
+    def _resolve_rollback_target(
+        self, metadata: Mapping[str, object] | None
+    ) -> dict[str, object]:
+        base = self._latest_promoted_release() or dict(self._initial_release)
+        if metadata is None:
+            return base
+        for key, value in metadata.items():
+            if value is None:
+                continue
+            base[str(key)] = value
+        if "config_id" not in base:
+            base["config_id"] = self.config.config_id
+        return base
+
+    def _latest_promoted_release(self) -> dict[str, object] | None:
+        for entry in reversed(self._history):
+            if entry.get("event") != "promoted":
+                continue
+            previous = entry.get("previous_release")
+            if isinstance(previous, Mapping):
+                return dict(previous)
+        return dict(self._initial_release)
 
     # ------------------------------------------------------------------
     # Convenience accessors

@@ -534,7 +534,13 @@ def run_dashboard(
         if callable(assign_jobs):
             assign_jobs()
 
-    router = create_console_router(loop.telemetry, loop.world, promotion=loop.promotion, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        promotion=loop.promotion,
+        policy=loop.policy,
+        config=loop.config,
+    )
     client = TelemetryClient()
     console = Console()
     executor = ConsoleCommandExecutor(router)
