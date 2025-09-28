@@ -24,10 +24,11 @@ from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 
 if TYPE_CHECKING:
     from townlet.stability.monitor import StabilityMonitor
+    from townlet.stability.promotion import PromotionManager
     from townlet.telemetry.publisher import TelemetryPublisher
 
 
-SNAPSHOT_SCHEMA_VERSION = "1.4"
+SNAPSHOT_SCHEMA_VERSION = "1.5"
 
 
 def _parse_version(value: str) -> tuple[int, ...]:
@@ -62,6 +63,7 @@ class SnapshotState:
     perturbations: dict[str, object] = field(default_factory=dict)
     relationships: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
     stability: dict[str, object] = field(default_factory=dict)
+    promotion: dict[str, object] = field(default_factory=dict)
     identity: dict[str, object] = field(default_factory=dict)
     migrations: dict[str, object] = field(
         default_factory=lambda: {"applied": [], "required": []}
@@ -91,6 +93,7 @@ class SnapshotState:
                 for owner, edges in self.relationships.items()
             },
             "stability": dict(self.stability),
+            "promotion": dict(self.promotion),
             "identity": dict(self.identity),
             "migrations": dict(self.migrations),
         }
@@ -207,6 +210,11 @@ class SnapshotState:
             dict(stability_payload) if isinstance(stability_payload, Mapping) else {}
         )
 
+        promotion_payload = payload.get("promotion", {})
+        promotion: dict[str, object] = (
+            dict(promotion_payload) if isinstance(promotion_payload, Mapping) else {}
+        )
+
         identity_payload = payload.get("identity", {})
         if isinstance(identity_payload, Mapping):
             identity: dict[str, object] = dict(identity_payload)
@@ -248,6 +256,7 @@ def snapshot_from_world(
     telemetry: Optional["TelemetryPublisher"] = None,
     perturbations: Optional[PerturbationScheduler] = None,
     stability: Optional["StabilityMonitor"] = None,
+    promotion: Optional["PromotionManager"] = None,
     rng_streams: Optional[Mapping[str, random.Random]] = None,
     identity: Optional[Mapping[str, object]] = None,
 ) -> SnapshotState:
@@ -328,6 +337,10 @@ def snapshot_from_world(
     if stability is not None:
         stability_payload = stability.export_state()
 
+    promotion_payload = {}
+    if promotion is not None:
+        promotion_payload = promotion.export_state()
+
     identity_payload: dict[str, object] = {
         "config_id": config.config_id,
         "observation_variant": getattr(config, "observation_variant", None),
@@ -359,6 +372,7 @@ def snapshot_from_world(
         perturbations=perturbations_payload,
         relationships=world.relationships_snapshot(),
         stability=stability_payload,
+        promotion=promotion_payload,
         identity=identity_payload,
         migrations=migrations_payload,
     )

@@ -11,6 +11,8 @@ def make_monitor() -> StabilityMonitor:
     config.stability.option_thrash.max_switch_rate = 0.1
     config.stability.reward_variance.min_samples = 2
     config.stability.reward_variance.max_variance = 0.01
+    config.stability.promotion.window_ticks = 2
+    config.stability.promotion.required_passes = 1
     return StabilityMonitor(config)
 
 
@@ -26,7 +28,9 @@ def test_starvation_spike_alert_triggers_after_streak() -> None:
             events=[],
         )
     assert "starvation_spike" in monitor.latest_alerts
-    assert "thresholds" in monitor.latest_metrics()
+    metrics = monitor.latest_metrics()
+    assert "thresholds" in metrics
+    assert "promotion" in metrics
 
 
 def test_option_thrash_alert_averages_over_window() -> None:
@@ -41,7 +45,9 @@ def test_option_thrash_alert_averages_over_window() -> None:
             events=[],
         )
     assert "option_thrash_detected" in monitor.latest_alerts
-    assert "thresholds" in monitor.latest_metrics()
+    metrics = monitor.latest_metrics()
+    assert "thresholds" in metrics
+    assert "promotion" in metrics
 
 
 def test_reward_variance_alert_exports_state() -> None:
@@ -72,6 +78,7 @@ def test_reward_variance_alert_exports_state() -> None:
     monitor_metrics = monitor.latest_metrics()
     assert restored_metrics["reward_variance"] == monitor_metrics["reward_variance"]
     assert "thresholds" in restored_metrics
+    assert "promotion" in restored_metrics
 
 
 def test_queue_fairness_alerts_include_metrics() -> None:
@@ -92,6 +99,7 @@ def test_queue_fairness_alerts_include_metrics() -> None:
     metrics = monitor.latest_metrics()
     assert metrics["queue_totals"]["ghost_step_events"] == 6
     assert metrics["queue_deltas"]["rotation_events"] == 6
+    assert "promotion" in metrics
 
 
 def test_rivalry_spike_alert_triggers_on_intensity() -> None:
@@ -114,3 +122,44 @@ def test_rivalry_spike_alert_triggers_on_intensity() -> None:
         rivalry_events=events,
     )
     assert "rivalry_spike" in monitor.latest_alerts
+
+
+def test_promotion_window_tracking() -> None:
+    monitor = make_monitor()
+    for tick in range(3):
+        monitor.track(
+            tick=tick,
+            rewards={},
+            terminated={"alice": False},
+            hunger_levels={"alice": 0.5},
+            option_switch_counts={"alice": 0},
+            events=[],
+        )
+    promotion = monitor.latest_metrics()["promotion"]
+    assert promotion["pass_streak"] == 1
+    assert promotion["candidate_ready"] is True
+
+    monitor.track(
+        tick=3,
+        rewards={},
+        terminated={"alice": False},
+        queue_metrics={"ghost_step_events": 10},
+        embedding_metrics={},
+        job_snapshot={},
+        events=[],
+        employment_metrics={},
+        hunger_levels={"alice": 0.5},
+        option_switch_counts={"alice": 0},
+    )
+    monitor.track(
+        tick=4,
+        rewards={},
+        terminated={"alice": False},
+        hunger_levels={"alice": 0.5},
+        option_switch_counts={"alice": 0},
+        events=[],
+    )
+    promotion = monitor.latest_metrics()["promotion"]
+    assert promotion["pass_streak"] == 0
+    assert promotion["candidate_ready"] is False
+    assert promotion["last_result"] == "fail"

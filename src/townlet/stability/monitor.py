@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Iterable
-from typing import Optional
 
 from townlet.config import SimulationConfig
 
@@ -16,8 +15,8 @@ class StabilityMonitor:
         self.config = config
         self.latest_alert: str | None = None
         self.latest_alerts: list[str] = []
-        self.last_queue_metrics: Optional[dict[str, int]] = None
-        self.last_embedding_metrics: Optional[dict[str, float]] = None
+        self.last_queue_metrics: dict[str, int] | None = None
+        self.last_embedding_metrics: dict[str, float] | None = None
         self.fail_threshold = config.stability.affordance_fail_threshold
         self.lateness_threshold = config.stability.lateness_threshold
         self._employment_enabled = config.employment.enforce_job_loop
@@ -26,6 +25,15 @@ class StabilityMonitor:
         self._starvation_cfg = config.stability.starvation
         self._reward_cfg = config.stability.reward_variance
         self._option_cfg = config.stability.option_thrash
+        self._promotion_cfg = config.stability.promotion
+        self._promotion_allowed_alerts = set(self._promotion_cfg.allowed_alerts)
+        self._promotion_window_ticks = self._promotion_cfg.window_ticks
+        self._promotion_window_start = 0
+        self._promotion_window_failed = False
+        self._promotion_pass_streak = 0
+        self._promotion_candidate_ready = False
+        self._promotion_last_result: str | None = None
+        self._promotion_last_evaluated_tick: int | None = None
 
         self._starvation_streaks: dict[str, int] = {}
         self._starvation_active: set[str] = set()
@@ -37,7 +45,46 @@ class StabilityMonitor:
         self._latest_metrics: dict[str, object] = {
             "alerts": [],
             "thresholds": self._threshold_snapshot(),
+            "promotion": self._promotion_snapshot(),
         }
+
+    def _promotion_snapshot(self) -> dict[str, object]:
+        window_end = self._promotion_window_start + self._promotion_window_ticks
+        return {
+            "window_start": self._promotion_window_start,
+            "window_end": window_end,
+            "window_ticks": self._promotion_window_ticks,
+            "pass_streak": self._promotion_pass_streak,
+            "required_passes": self._promotion_cfg.required_passes,
+            "candidate_ready": self._promotion_candidate_ready,
+            "last_result": self._promotion_last_result,
+            "last_evaluated_tick": self._promotion_last_evaluated_tick,
+        }
+
+    def _finalise_promotion_window(self, window_end: int) -> None:
+        passed = not self._promotion_window_failed
+        if passed:
+            self._promotion_pass_streak += 1
+            self._promotion_last_result = "pass"
+        else:
+            self._promotion_pass_streak = 0
+            self._promotion_last_result = "fail"
+        self._promotion_candidate_ready = (
+            self._promotion_pass_streak >= self._promotion_cfg.required_passes
+        )
+        self._promotion_last_evaluated_tick = max(window_end - 1, 0)
+        self._promotion_window_start = window_end
+        self._promotion_window_failed = False
+
+    def _update_promotion_window(self, tick: int, alerts: Iterable[str]) -> None:
+        window_end = self._promotion_window_start + self._promotion_window_ticks
+        while tick >= window_end:
+            self._finalise_promotion_window(window_end)
+            window_end = self._promotion_window_start + self._promotion_window_ticks
+        disallowed = [a for a in alerts if a not in self._promotion_allowed_alerts]
+        if disallowed:
+            self._promotion_window_failed = True
+
 
     def track(
         self,
@@ -147,6 +194,8 @@ class StabilityMonitor:
         ):
             alerts.append("reward_variance_spike")
 
+        self._update_promotion_window(tick, alerts)
+
         self.latest_alerts = alerts
         self.latest_alert = alerts[0] if alerts else None
 
@@ -163,6 +212,7 @@ class StabilityMonitor:
             "rivalry_events": rivalry_events_list,
             "alerts": list(alerts),
             "thresholds": self._threshold_snapshot(),
+            "promotion": self._promotion_snapshot(),
         }
 
     def latest_metrics(self) -> dict[str, object]:
@@ -178,6 +228,14 @@ class StabilityMonitor:
             "reward_samples": [list(entry) for entry in self._reward_samples],
             "option_samples": [list(entry) for entry in self._option_samples],
             "latest_metrics": dict(self._latest_metrics),
+            "promotion": {
+                "window_start": self._promotion_window_start,
+                "window_failed": self._promotion_window_failed,
+                "pass_streak": self._promotion_pass_streak,
+                "candidate_ready": self._promotion_candidate_ready,
+                "last_result": self._promotion_last_result,
+                "last_evaluated_tick": self._promotion_last_evaluated_tick,
+            },
         }
 
     def import_state(self, payload: dict[str, object]) -> None:
@@ -218,11 +276,33 @@ class StabilityMonitor:
                 if isinstance(entry, (list, tuple)) and len(entry) == 2:
                     tick, value = entry
                     self._option_samples.append((int(tick), float(value)))
+        promotion = payload.get("promotion", {})
+        if isinstance(promotion, dict):
+            self._promotion_window_start = int(promotion.get("window_start", 0))
+            self._promotion_window_failed = bool(promotion.get("window_failed", False))
+            self._promotion_pass_streak = int(promotion.get("pass_streak", 0))
+            self._promotion_candidate_ready = bool(promotion.get("candidate_ready", False))
+            last_result = promotion.get("last_result")
+            self._promotion_last_result = (
+                str(last_result) if last_result is not None else None
+            )
+            last_tick = promotion.get("last_evaluated_tick")
+            self._promotion_last_evaluated_tick = (
+                int(last_tick) if last_tick is not None else None
+            )
+        else:
+            self._promotion_window_start = 0
+            self._promotion_window_failed = False
+            self._promotion_pass_streak = 0
+            self._promotion_candidate_ready = False
+            self._promotion_last_result = None
+            self._promotion_last_evaluated_tick = None
 
         metrics = payload.get("latest_metrics", {})
         self._latest_metrics = dict(metrics) if isinstance(metrics, dict) else {}
         if "thresholds" not in self._latest_metrics:
             self._latest_metrics["thresholds"] = self._threshold_snapshot()
+        self._latest_metrics["promotion"] = self._promotion_snapshot()
         self.latest_alerts = list(self._latest_metrics.get("alerts", []))
         self.latest_alert = self.latest_alerts[0] if self.latest_alerts else None
 
@@ -232,9 +312,16 @@ class StabilityMonitor:
         self._starvation_incidents.clear()
         self._reward_samples.clear()
         self._option_samples.clear()
+        self._promotion_window_start = 0
+        self._promotion_window_failed = False
+        self._promotion_pass_streak = 0
+        self._promotion_candidate_ready = False
+        self._promotion_last_result = None
+        self._promotion_last_evaluated_tick = None
         self._latest_metrics = {
             "alerts": [],
             "thresholds": self._threshold_snapshot(),
+            "promotion": self._promotion_snapshot(),
         }
         self.latest_alert = None
         self.latest_alerts = []

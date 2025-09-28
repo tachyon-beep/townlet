@@ -235,12 +235,36 @@ class OptionThrashCanaryConfig(BaseModel):
     min_samples: int = Field(10, ge=1, le=100_000)
 
 
+class PromotionGateConfig(BaseModel):
+    required_passes: int = Field(2, ge=1, le=10)
+    window_ticks: int = Field(1000, ge=1, le=100_000)
+    allowed_alerts: tuple[str, ...] = ()
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    def _coerce_allowed(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            allowed = value.get("allowed_alerts")
+            if allowed is not None and not isinstance(allowed, (list, tuple)):
+                value = dict(value)
+                value["allowed_alerts"] = [allowed]
+            return value
+        return value
+
+    @model_validator(mode="after")
+    def _normalise(self) -> "PromotionGateConfig":
+        object.__setattr__(self, "allowed_alerts", tuple(self.allowed_alerts))
+        return self
+
+
 class StabilityConfig(BaseModel):
     affordance_fail_threshold: int = Field(5, ge=0, le=100)
     lateness_threshold: int = Field(3, ge=0, le=100)
     starvation: StarvationCanaryConfig = StarvationCanaryConfig()
     reward_variance: RewardVarianceCanaryConfig = RewardVarianceCanaryConfig()
     option_thrash: OptionThrashCanaryConfig = OptionThrashCanaryConfig()
+    promotion: PromotionGateConfig = PromotionGateConfig()
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -249,6 +273,7 @@ class StabilityConfig(BaseModel):
             "starvation": self.starvation.model_dump(),
             "reward_variance": self.reward_variance.model_dump(),
             "option_thrash": self.option_thrash.model_dump(),
+            "promotion": self.promotion.model_dump(),
         }
 
 

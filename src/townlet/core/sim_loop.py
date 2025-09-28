@@ -26,6 +26,7 @@ from townlet.snapshots import (
     snapshot_from_world,
 )
 from townlet.stability.monitor import StabilityMonitor
+from townlet.stability.promotion import PromotionManager
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.world.grid import WorldState
@@ -64,6 +65,7 @@ class SimulationLoop:
         self.rewards = RewardEngine(config=self.config)
         self.telemetry = TelemetryPublisher(config=self.config)
         self.stability = StabilityMonitor(config=self.config)
+        self.promotion = PromotionManager(config=self.config)
         self.tick = 0
 
     def reset(self) -> None:
@@ -96,6 +98,7 @@ class SimulationLoop:
             telemetry=self.telemetry,
             perturbations=self.perturbations,
             stability=self.stability,
+            promotion=self.promotion,
             rng_streams={
                 "world": self._rng_world,
                 "events": self._rng_events,
@@ -129,7 +132,13 @@ class SimulationLoop:
             self.stability.import_state(state.stability)
         else:
             self.stability.reset_state()
-        self.telemetry.record_stability_metrics(self.stability.latest_metrics())
+        if state.promotion:
+            self.promotion.import_state(state.promotion)
+        else:
+            self.promotion.reset()
+        stability_metrics = self.stability.latest_metrics()
+        stability_metrics["promotion_state"] = self.promotion.snapshot()
+        self.telemetry.record_stability_metrics(stability_metrics)
         self.tick = state.tick
         rng_streams = dict(state.rng_streams)
         if state.rng_state and "world" not in rng_streams:
@@ -212,7 +221,10 @@ class SimulationLoop:
             option_switch_counts=option_switch_counts,
             rivalry_events=self.telemetry.latest_rivalry_events(),
         )
-        self.telemetry.record_stability_metrics(self.stability.latest_metrics())
+        stability_metrics = self.stability.latest_metrics()
+        self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
+        stability_metrics["promotion_state"] = self.promotion.snapshot()
+        self.telemetry.record_stability_metrics(stability_metrics)
         return TickArtifacts(observations=observations, rewards=rewards)
 
     def _derive_seed(self, stream: str) -> int:
