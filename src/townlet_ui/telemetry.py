@@ -161,6 +161,17 @@ class StabilitySnapshot:
 
 
 @dataclass(frozen=True)
+class PromotionSnapshot:
+    state: str | None
+    pass_streak: int
+    required_passes: int
+    candidate_ready: bool
+    candidate_ready_tick: int | None
+    last_result: str | None
+    last_evaluated_tick: int | None
+
+
+@dataclass(frozen=True)
 class TelemetrySnapshot:
     schema_version: str
     schema_warning: str | None
@@ -175,6 +186,7 @@ class TelemetrySnapshot:
     agents: list[AgentSummary]
     anneal: AnnealStatus | None
     policy_inspector: list[PolicyInspectorEntry]
+    promotion: PromotionSnapshot | None
     stability: StabilitySnapshot
     kpis: Mapping[str, list[float]]
     transport: TransportStatus
@@ -188,9 +200,7 @@ class SchemaMismatchError(RuntimeError):
 class TelemetryClient:
     """Lightweight helper to parse telemetry payloads for the observer UI."""
 
-    def __init__(
-        self, *, expected_schema_prefix: str = SUPPORTED_SCHEMA_PREFIX
-    ) -> None:
+    def __init__(self, *, expected_schema_prefix: str = SUPPORTED_SCHEMA_PREFIX) -> None:
         self.expected_schema_prefix = expected_schema_prefix
 
     def parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
@@ -272,8 +282,7 @@ class TelemetryClient:
                         ghost_step_delta=_coerce_int(delta_payload.get("ghost_step_events")),
                         rotation_delta=_coerce_int(delta_payload.get("rotation_events")),
                         totals={
-                            str(key): _coerce_int(value)
-                            for key, value in totals_payload.items()
+                            str(key): _coerce_int(value) for key, value in totals_payload.items()
                         },
                     )
                 )
@@ -310,15 +319,11 @@ class TelemetryClient:
                 total_evictions=int(relationships_payload.get("total", 0)),
                 per_owner={
                     str(owner): int(count)
-                    for owner, count in (
-                        relationships_payload.get("owners", {}) or {}
-                    ).items()
+                    for owner, count in (relationships_payload.get("owners", {}) or {}).items()
                 },
                 per_reason={
                     str(reason): int(count)
-                    for reason, count in (
-                        relationships_payload.get("reasons", {}) or {}
-                    ).items()
+                    for reason, count in (relationships_payload.get("reasons", {}) or {}).items()
                 },
             )
 
@@ -330,9 +335,7 @@ class TelemetryClient:
                 relationship_snapshot[str(owner)] = {
                     str(other): {
                         "trust": (
-                            float(values.get("trust", 0.0))
-                            if isinstance(values, Mapping)
-                            else 0.0
+                            float(values.get("trust", 0.0)) if isinstance(values, Mapping) else 0.0
                         ),
                         "familiarity": (
                             float(values.get("familiarity", 0.0))
@@ -499,15 +502,36 @@ class TelemetryClient:
             alerts_payload = stability_payload.get("alerts", [])
             if isinstance(alerts_payload, list):
                 stability_alerts = tuple(
-                    str(alert)
-                    for alert in alerts_payload
-                    if alert is not None
+                    str(alert) for alert in alerts_payload if alert is not None
                 )
             metrics_payload = stability_payload.get("metrics")
             if isinstance(metrics_payload, Mapping):
                 stability_metrics = dict(metrics_payload)
 
         stability = StabilitySnapshot(alerts=stability_alerts, metrics=stability_metrics)
+
+        promotion_payload = payload.get("promotion")
+        if not isinstance(promotion_payload, Mapping) or not promotion_payload:
+            promotion_payload = None
+        if promotion_payload is None and isinstance(stability_payload, Mapping):
+            candidate = stability_payload.get("promotion_state")
+            if isinstance(candidate, Mapping):
+                promotion_payload = candidate
+        promotion_snapshot: PromotionSnapshot | None = None
+        if isinstance(promotion_payload, Mapping):
+            promotion_snapshot = PromotionSnapshot(
+                state=str(promotion_payload.get("state"))
+                if promotion_payload.get("state")
+                else None,
+                pass_streak=_coerce_int(promotion_payload.get("pass_streak")),
+                required_passes=_coerce_int(promotion_payload.get("required_passes")),
+                candidate_ready=bool(promotion_payload.get("candidate_ready", False)),
+                candidate_ready_tick=_maybe_int(promotion_payload.get("candidate_ready_tick")),
+                last_result=str(promotion_payload.get("last_result"))
+                if promotion_payload.get("last_result")
+                else None,
+                last_evaluated_tick=_maybe_int(promotion_payload.get("last_evaluated_tick")),
+            )
 
         transport_payload = payload.get("transport")
         if not isinstance(transport_payload, Mapping):
@@ -538,6 +562,7 @@ class TelemetryClient:
             agents=agents,
             anneal=anneal_status,
             policy_inspector=inspector_entries,
+            promotion=promotion_snapshot,
             stability=stability,
             kpis=kpi_history,
             transport=transport,
@@ -569,14 +594,10 @@ class TelemetryClient:
         return message
 
     @staticmethod
-    def _get_section(
-        payload: Mapping[str, Any], key: str, expected: type
-    ) -> Mapping[str, Any]:
+    def _get_section(payload: Mapping[str, Any], key: str, expected: type) -> Mapping[str, Any]:
         value = payload.get(key)
         if not isinstance(value, expected):
-            raise SchemaMismatchError(
-                f"Telemetry payload missing expected section '{key}'"
-            )
+            raise SchemaMismatchError(f"Telemetry payload missing expected section '{key}'")
         return cast(Mapping[str, Any], value)
 
 

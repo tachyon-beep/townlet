@@ -884,13 +884,18 @@ def test_ppo_social_chat_drift(tmp_path: Path) -> None:
 
     golden_path = Path("tests/golden/ppo_social/baseline.json")
     expected = json.loads(golden_path.read_text())
+    skip_keys = {"epoch_duration_sec"}
     for key, value in expected.items():
+        if key in skip_keys:
+            continue
         assert summary[key] == pytest.approx(value, rel=1e-5, abs=1e-6)
 
     logged_lines = log_path.read_text().strip().splitlines()
     assert logged_lines, "PPO log should contain at least one entry"
     logged = json.loads(logged_lines[-1])
     for key, value in expected.items():
+        if key in skip_keys:
+            continue
         assert logged[key] == pytest.approx(value, rel=1e-5, abs=1e-6)
 
     assert summary["chat_success_events"] == pytest.approx(dataset.chat_success_count)

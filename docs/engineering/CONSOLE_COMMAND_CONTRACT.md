@@ -98,7 +98,7 @@ Audit log entries mirror the response envelope with additional transport metadat
 | `snapshot_inspect` | viewer | `path` | Snapshot metadata (config, tick, migrations). | Performs filesystem I/O; mode viewer but may require path ACL.
 | `snapshot_validate` | admin? | `path`, optional `strict`. | `{valid: bool, migrations_applied: [...]}` | Requires `SimulationConfig` to be injected.
 | `snapshot_migrate` | admin | `path`, optional `output`. | `{migrated: true, ...}` | Admin-only; writes migrated snapshot.
-| `spawn` | admin | `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md:127` | Payload `{"agent_id": str, "position": [x, y], "job_id"?, "needs"?, "wallet"?}`. Creates agent, assigns job, initialises employment context, returns snapshot summary. |
+| `spawn` | admin | `docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md:127` | Payload `{"agent_id": str, "position": [x, y], "home_position"?, "job_id"?, "needs"?, "wallet"?}`. Creates agent, assigns job, initialises employment context, and returns snapshot summary (including `home_position`). |
 | `teleport` | admin | same | Payload `{"agent_id": str, "position": [x, y]}`. Moves agent to walkable tile, updates reservations/queues, returns new position. |
 | `setneed` | admin | `docs/ops/OPS_HANDBOOK.md:204` | Payload `{"agent_id": str, "needs": {...}}`. Clamps needs to [0,1], updates snapshot, returns new values. |
 | `price` | admin | conceptual design | Payload `{"key": str, "value": float}` (existing `config.economy` key). Updates economy entry, recomputes basket cost, returns new value. |
@@ -109,6 +109,7 @@ Audit log entries mirror the response envelope with additional transport metadat
 | `kill` | admin | conceptual design | Payload `{"agent_id": str, "reason"?: str}`. Queues immediate lifecycle exit and emits audit entry. |
 | `toggle_mortality` | admin | conceptual design | Payload `{"enabled": bool}`. Enables or disables mortality guardrails. |
 | `set_exit_cap` | admin | conceptual design | Payload `{"daily_exit_cap": int}`. Updates `employment.daily_exit_cap` and refreshes employment metrics. |
+| `set_spawn_delay` | admin | conceptual design | Payload `{"delay": int}` or positional integer. Updates `lifecycle.respawn_delay_ticks`. |
 
 ### 3.2 Planned / Not Yet Implemented Commands
 
@@ -116,7 +117,6 @@ Derived from design docs and ops handbook; these are currently missing in the ha
 
 | Command | Intended Mode | Reference | Brief |
 | --- | --- | --- | --- |
-| `set_spawn_delay` | admin | conceptual design | Adjust lifecycle respawn delay window; requires handler to update lifecycle config. |
 | `set_death_threshold` | admin | conceptual design | Parameterise need thresholds/ticks for lifecycle exits. |
 | `set_employment_param` | admin | conceptual design | Tune other employment settings (grace_ticks, penalties) via console. |
 

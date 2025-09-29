@@ -250,7 +250,9 @@ def create_console_router(
             return {"error": "unsupported"}
         payload = command.kwargs.get("payload")
         agent_id: str | None = None
-        action = command.kwargs.get("action") if isinstance(command.kwargs.get("action"), str) else None
+        action = (
+            command.kwargs.get("action") if isinstance(command.kwargs.get("action"), str) else None
+        )
         if isinstance(payload, Mapping):
             candidate = payload.get("agent_id")
             if isinstance(candidate, str):
@@ -281,6 +283,8 @@ def create_console_router(
                     "message": "agent already possessed",
                     "agent_id": agent_id,
                 }
+            if world is not None:
+                world.request_ctx_reset(agent_id)
             possessed = True
         else:
             if not policy.release_possession(agent_id):
@@ -329,7 +333,11 @@ def create_console_router(
         if lifecycle is None:
             return {"error": "unsupported"}
         payload = command.kwargs.get("payload")
-        value = command.kwargs.get("enabled") if isinstance(command.kwargs.get("enabled"), bool) else None
+        value = (
+            command.kwargs.get("enabled")
+            if isinstance(command.kwargs.get("enabled"), bool)
+            else None
+        )
         if isinstance(payload, Mapping) and "enabled" in payload:
             candidate = payload.get("enabled")
             if isinstance(candidate, bool):
@@ -346,7 +354,11 @@ def create_console_router(
         if world is None:
             return {"error": "unsupported"}
         payload = command.kwargs.get("payload")
-        cap_value = command.kwargs.get("daily_exit_cap") if isinstance(command.kwargs.get("daily_exit_cap"), int) else None
+        cap_value = (
+            command.kwargs.get("daily_exit_cap")
+            if isinstance(command.kwargs.get("daily_exit_cap"), int)
+            else None
+        )
         if isinstance(payload, Mapping) and "daily_exit_cap" in payload:
             candidate = payload.get("daily_exit_cap")
             if isinstance(candidate, int):
@@ -367,6 +379,30 @@ def create_console_router(
             "daily_exit_cap": cap_value,
             "metrics": metrics,
         }
+
+    def set_spawn_delay_handler(command: ConsoleCommand) -> object:
+        if lifecycle is None:
+            return {"error": "unsupported"}
+        payload = command.kwargs.get("payload")
+        delay_value = command.kwargs.get("delay")
+        if isinstance(payload, Mapping) and "delay" in payload:
+            delay_value = payload.get("delay")
+        if delay_value is None and command.args:
+            delay_value = command.args[0]
+        try:
+            delay_int = int(delay_value)
+        except (TypeError, ValueError):
+            return {
+                "error": "usage",
+                "message": "set_spawn_delay <ticks>",
+            }
+        if delay_int < 0:
+            return {
+                "error": "invalid_args",
+                "message": "delay must be >= 0",
+            }
+        lifecycle.set_respawn_delay(delay_int)
+        return {"respawn_delay_ticks": lifecycle.respawn_delay_ticks}
 
     def conflict_status_handler(command: ConsoleCommand) -> object:
         version, warning = _schema_metadata(publisher)
@@ -475,8 +511,7 @@ def create_console_router(
             edges = edges[:limit]
         return {
             "pairs": [
-                {"agent_a": a, "agent_b": b, "intensity": intensity}
-                for a, b, intensity in edges
+                {"agent_a": a, "agent_b": b, "intensity": intensity} for a, b, intensity in edges
             ],
             "agent_count": len(ledger),
         }
@@ -567,7 +602,11 @@ def create_console_router(
         starts_in = int(payload.get("starts_in", 0) or 0)
         duration = payload.get("duration")
         duration_int = int(duration) if duration is not None else None
-        overrides = dict(payload.get("payload", {})) if isinstance(payload.get("payload"), Mapping) else None
+        overrides = (
+            dict(payload.get("payload", {}))
+            if isinstance(payload.get("payload"), Mapping)
+            else None
+        )
         try:
             event = scheduler.schedule_manual(
                 world,
@@ -673,9 +712,7 @@ def create_console_router(
         }
 
     def snapshot_validate_handler(command: ConsoleCommand) -> object:
-        path, error = _parse_snapshot_path(
-            command, "snapshot_validate <path> [--strict]"
-        )
+        path, error = _parse_snapshot_path(command, "snapshot_validate <path> [--strict]")
         if error:
             return error
         cfg, cfg_error = _require_config()
@@ -702,9 +739,7 @@ def create_console_router(
         }
 
     def snapshot_migrate_handler(command: ConsoleCommand) -> object:
-        path, error = _parse_snapshot_path(
-            command, "snapshot_migrate <path> [--output dir]"
-        )
+        path, error = _parse_snapshot_path(command, "snapshot_migrate <path> [--output dir]")
         if error:
             return error
         cfg, cfg_error = _require_config()
@@ -765,6 +800,7 @@ def create_console_router(
         router.register("kill", kill_handler)
         router.register("toggle_mortality", toggle_mortality_handler)
         router.register("set_exit_cap", set_exit_cap_handler)
+        router.register("set_spawn_delay", set_spawn_delay_handler)
         router.register("perturbation_trigger", perturbation_trigger_handler)
         router.register("perturbation_cancel", perturbation_cancel_handler)
         router.register("snapshot_migrate", snapshot_migrate_handler)
@@ -775,6 +811,7 @@ def create_console_router(
         router.register("kill", _forbidden)
         router.register("toggle_mortality", _forbidden)
         router.register("set_exit_cap", _forbidden)
+        router.register("set_spawn_delay", _forbidden)
         router.register("perturbation_trigger", _forbidden)
         router.register("perturbation_cancel", _forbidden)
         router.register("snapshot_migrate", _forbidden)

@@ -110,6 +110,12 @@ class RivalryLedger:
         )
         return sorted_edges[:limit]
 
+    def remove(self, other_id: str, *, reason: str = "removed") -> None:
+        if other_id not in self._scores:
+            return
+        self._scores.pop(other_id, None)
+        self._emit_eviction(other_id, reason=reason)
+
     def encode_features(self, limit: int) -> list[float]:
         """Encode rivalry magnitudes into a fixed-width list for observations."""
         features: list[float] = []

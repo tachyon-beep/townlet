@@ -136,9 +136,13 @@ class ObservationBuilder:
         """Return a mapping from agent_id to observation payloads."""
         observations: dict[str, dict[str, np.ndarray]] = {}
         snapshots = world.snapshot()
+        pending_resets = world.consume_ctx_reset_requests()
         for agent_id, snapshot in snapshots.items():
             slot = world.embedding_allocator.allocate(agent_id, world.tick)
             obs = self._build_single(world, snapshot, slot)
+            if agent_id in pending_resets:
+                obs["features"][self._feature_index["ctx_reset_flag"]] = 1.0
+                pending_resets.discard(agent_id)
             if terminated.get(agent_id):
                 obs["features"][self._feature_index["ctx_reset_flag"]] = 1.0
                 world.embedding_allocator.release(agent_id, world.tick)

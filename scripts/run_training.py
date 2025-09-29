@@ -276,21 +276,6 @@ def _build_dataset_config_from_args(
         return ReplayDatasetConfig.from_manifest(default_manifest, **common_kwargs)
     return None
 
-def _evaluate_anneal_results(results: list[dict[str, object]]) -> str:
-    status = "PASS"
-    for stage in results:
-        mode = stage.get("mode")
-        if mode == "bc" and not stage.get("passed", True):
-            return "FAIL"
-        if mode == "ppo" and (
-            bool(stage.get("anneal_loss_flag"))
-            or bool(stage.get("anneal_queue_flag"))
-            or bool(stage.get("anneal_intensity_flag"))
-        ):
-            status = "HOLD"
-    return status
-
-
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
@@ -329,9 +314,14 @@ def main() -> None:
             bc_manifest=bc_manifest,
             log_dir=args.anneal_log_dir,
         )
-        print(json.dumps(results, indent=2))
+        status = harness.last_anneal_status or harness.evaluate_anneal_results(results)
+        payload = {
+            "status": status,
+            "promotion": harness.promotion.snapshot(),
+            "results": results,
+        }
+        print(json.dumps(payload, indent=2))
         if args.anneal_exit_on_failure:
-            status = _evaluate_anneal_results(results)
             if status != "PASS":
                 raise SystemExit(1)
         return

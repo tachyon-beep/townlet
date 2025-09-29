@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
@@ -18,7 +18,10 @@ class RewardEngine:
         self._latest_breakdown: dict[str, dict[str, float]] = {}
 
     def compute(
-        self, world: WorldState, terminated: dict[str, bool]
+        self,
+        world: WorldState,
+        terminated: dict[str, bool],
+        reasons: Mapping[str, str] | None = None,
     ) -> dict[str, float]:
         rewards: dict[str, float] = {}
         clip_cfg = self.config.rewards.clip
@@ -27,6 +30,7 @@ class RewardEngine:
         weights = self.config.rewards.needs_weights
         survival_tick = self.config.rewards.survival_tick
         current_tick = int(getattr(world, "tick", 0))
+        reason_map = dict(reasons or {})
 
         self._prune_termination_blocks(current_tick, block_window)
         self._reset_episode_totals(terminated, world)
@@ -67,6 +71,12 @@ class RewardEngine:
             )
             total += punctuality_value
             components["punctuality"] = punctuality_value
+
+            penalty_value = self._compute_terminal_penalty(
+                agent_id, terminated, reason_map
+            )
+            total += penalty_value
+            components["terminal_penalty"] = penalty_value
 
             pre_guard_total = total
 
@@ -213,6 +223,21 @@ class RewardEngine:
         ctx = world.agent_context(agent_id)
         punctuality = float(ctx.get("punctuality_bonus", 0.0))
         return bonus_rate * punctuality
+
+    def _compute_terminal_penalty(
+        self,
+        agent_id: str,
+        terminated: Mapping[str, bool],
+        reasons: Mapping[str, str],
+    ) -> float:
+        if not terminated.get(agent_id):
+            return 0.0
+        reason = reasons.get(agent_id)
+        if reason == "faint":
+            return float(self.config.rewards.faint_penalty)
+        if reason == "eviction":
+            return float(self.config.rewards.eviction_penalty)
+        return 0.0
 
     def _reset_episode_totals(
         self, terminated: dict[str, bool], world: WorldState

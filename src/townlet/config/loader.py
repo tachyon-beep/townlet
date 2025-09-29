@@ -133,20 +133,10 @@ class RivalryConfig(BaseModel):
     def _validate_ranges(self) -> "RivalryConfig":
         if self.min_value > self.max_value:
             raise ValueError("rivalry.min_value must be <= max_value")
-        if (
-            self.avoid_threshold < self.min_value
-            or self.avoid_threshold > self.max_value
-        ):
-            raise ValueError(
-                "rivalry.avoid_threshold must lie within [min_value, max_value]"
-            )
-        if (
-            self.eviction_threshold < self.min_value
-            or self.eviction_threshold > self.max_value
-        ):
-            raise ValueError(
-                "rivalry.eviction_threshold must lie within [min_value, max_value]"
-            )
+        if self.avoid_threshold < self.min_value or self.avoid_threshold > self.max_value:
+            raise ValueError("rivalry.avoid_threshold must lie within [min_value, max_value]")
+        if self.eviction_threshold < self.min_value or self.eviction_threshold > self.max_value:
+            raise ValueError("rivalry.eviction_threshold must lie within [min_value, max_value]")
         return self
 
 
@@ -188,9 +178,7 @@ class HybridObservationConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_window(self) -> "HybridObservationConfig":
         if self.local_window % 2 == 0:
-            raise ValueError(
-                "observations.hybrid.local_window must be odd to center on agent"
-            )
+            raise ValueError("observations.hybrid.local_window must be odd to center on agent")
         return self
 
 
@@ -205,9 +193,7 @@ class SocialSnippetConfig(BaseModel):
         if self.top_friends == 0 and self.top_rivals == 0:
             object.__setattr__(self, "include_aggregates", False)
         if self.top_friends + self.top_rivals > 8:
-            raise ValueError(
-                "Sum of top_friends and top_rivals must be <= 8 for tensor budget"
-            )
+            raise ValueError("Sum of top_friends and top_rivals must be <= 8 for tensor budget")
         return self
 
 
@@ -256,6 +242,10 @@ class PromotionGateConfig(BaseModel):
     def _normalise(self) -> "PromotionGateConfig":
         object.__setattr__(self, "allowed_alerts", tuple(self.allowed_alerts))
         return self
+
+
+class LifecycleConfig(BaseModel):
+    respawn_delay_ticks: int = Field(0, ge=0, le=100_000)
 
 
 class StabilityConfig(BaseModel):
@@ -387,10 +377,7 @@ class ArrangedMeetEventConfig(BasePerturbationEventConfig):
 
 
 PerturbationEventConfig = Annotated[
-    PriceSpikeEventConfig
-    | BlackoutEventConfig
-    | OutageEventConfig
-    | ArrangedMeetEventConfig,
+    PriceSpikeEventConfig | BlackoutEventConfig | OutageEventConfig | ArrangedMeetEventConfig,
     Field(discriminator="kind"),
 ]
 
@@ -466,9 +453,7 @@ class NarrationThrottleConfig(BaseModel):
     priority_categories: list[str] = Field(default_factory=list)
 
     def get_category_cooldown(self, category: str) -> int:
-        return int(
-            self.category_cooldown_ticks.get(category, self.global_cooldown_ticks)
-        )
+        return int(self.category_cooldown_ticks.get(category, self.global_cooldown_ticks))
 
 
 class TelemetryRetryPolicy(BaseModel):
@@ -505,24 +490,16 @@ class TelemetryTransportConfig(BaseModel):
                 )
         elif transport_type == "file":
             if self.file_path is None:
-                raise ValueError(
-                    "telemetry.transport.file_path is required when type is 'file'"
-                )
+                raise ValueError("telemetry.transport.file_path is required when type is 'file'")
             if str(self.file_path).strip() == "":
-                raise ValueError(
-                    "telemetry.transport.file_path must not be blank"
-                )
+                raise ValueError("telemetry.transport.file_path must not be blank")
         elif transport_type == "tcp":
             endpoint = (self.endpoint or "").strip()
             if not endpoint:
-                raise ValueError(
-                    "telemetry.transport.endpoint is required when type is 'tcp'"
-                )
+                raise ValueError("telemetry.transport.endpoint is required when type is 'tcp'")
             self.endpoint = endpoint
             if self.file_path is not None:
-                raise ValueError(
-                    "telemetry.transport.file_path must be omitted for tcp transport"
-                )
+                raise ValueError("telemetry.transport.file_path must be omitted for tcp transport")
         else:  # pragma: no cover - defensive branch for Literal changes
             raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
         return self
@@ -572,9 +549,7 @@ class SnapshotIdentityConfig(BaseModel):
             return self
         candidate = self.policy_hash.strip()
         if not candidate:
-            raise ValueError(
-                "snapshot.identity.policy_hash must not be blank if provided"
-            )
+            raise ValueError("snapshot.identity.policy_hash must not be blank if provided")
         if not (
             self._HEX40.match(candidate)
             or self._HEX64.match(candidate)
@@ -610,9 +585,7 @@ class SnapshotMigrationsConfig(BaseModel):
             if not str(legacy_id).strip():
                 raise ValueError("snapshot.migrations.handlers keys must not be empty")
             if not str(target).strip():
-                raise ValueError(
-                    "snapshot.migrations.handlers values must not be empty"
-                )
+                raise ValueError("snapshot.migrations.handlers values must not be empty")
         return self
 
 
@@ -647,9 +620,7 @@ class TrainingConfig(BaseModel):
     rollout_auto_seed_agents: bool = False
     replay_manifest: Path | None = None
     social_reward_stage_override: SocialRewardStage | None = None
-    social_reward_schedule: list["SocialRewardScheduleEntry"] = Field(
-        default_factory=list
-    )
+    social_reward_schedule: list["SocialRewardScheduleEntry"] = Field(default_factory=list)
     bc: BCTrainingSettings = BCTrainingSettings()
     anneal_schedule: list[AnnealStage] = Field(default_factory=list)
     anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
@@ -711,6 +682,7 @@ class SimulationConfig(BaseModel):
     telemetry: TelemetryConfig = TelemetryConfig()
     snapshot: SnapshotConfig = SnapshotConfig()
     perturbations: PerturbationSchedulerConfig = PerturbationSchedulerConfig()
+    lifecycle: LifecycleConfig = LifecycleConfig()
 
     model_config = ConfigDict(extra="allow")
 

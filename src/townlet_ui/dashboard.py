@@ -33,9 +33,7 @@ NARRATION_CATEGORY_STYLES: dict[str, tuple[str, str]] = {
 }
 
 
-def render_snapshot(
-    snapshot: TelemetrySnapshot, tick: int, refreshed: str
-) -> Iterable[Panel]:
+def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> Iterable[Panel]:
     """Yield rich Panels representing the current telemetry snapshot."""
     panels: list[Panel] = []
 
@@ -54,9 +52,7 @@ def render_snapshot(
     )
     transport = snapshot.transport
     status_text = (
-        "[green]CONNECTED[/green]"
-        if transport.connected
-        else "[bold red]DISCONNECTED[/bold red]"
+        "[green]CONNECTED[/green]" if transport.connected else "[bold red]DISCONNECTED[/bold red]"
     )
     header_table.add_row(
         f"[bold]Transport:[/bold] {status_text}",
@@ -93,14 +89,8 @@ def render_snapshot(
         str(employment.review_window),
     )
     border_style = "red" if employment.pending_count else "green"
-    badge = (
-        "[bold red]BACKLOG[/bold red]"
-        if employment.pending_count
-        else "[green]CLEAR[/green]"
-    )
-    panels.append(
-        Panel(emp_table, title=f"Employment — {badge}", border_style=border_style)
-    )
+    badge = "[bold red]BACKLOG[/bold red]" if employment.pending_count else "[green]CLEAR[/green]"
+    panels.append(Panel(emp_table, title=f"Employment — {badge}", border_style=border_style))
 
     conflict = snapshot.conflict
     conflict_table = Table(title="Conflict Snapshot", expand=True)
@@ -218,9 +208,7 @@ def render_snapshot(
                 f"{update.familiarity:.2f}",
                 f"{update.rivalry:.2f}",
             )
-        panels.append(
-            Panel(update_table, title="Relationship Updates", border_style="cyan")
-        )
+        panels.append(Panel(update_table, title="Relationship Updates", border_style="cyan"))
 
     agent_table = Table(title="Agents", expand=True)
     agent_table.add_column("Agent")
@@ -293,9 +281,7 @@ def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
                 entry.message,
                 priority_flag,
             )
-        border_style = (
-            "yellow" if any(entry.priority for entry in narrations) else "blue"
-        )
+        border_style = "yellow" if any(entry.priority for entry in narrations) else "blue"
         return Panel(table, title="Narrations", border_style=border_style)
 
     body = Text("No recent narrations", style="dim")
@@ -316,6 +302,36 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
         _safe_format(status.cycle),
         status.stage or "-",
         status.dataset or "-",
+    )
+
+    promotion = snapshot.promotion
+    promotion_grid = Table.grid(expand=True)
+    promotion_grid.add_column(justify="left")
+    promotion_grid.add_column(justify="right")
+    if promotion is None:
+        promotion_grid.add_row("Pass streak", "-")
+        promotion_grid.add_row("Required passes", "-")
+        promotion_grid.add_row("Candidate ready", "no")
+    else:
+        promotion_grid.add_row("Pass streak", str(promotion.pass_streak))
+        promotion_grid.add_row("Required passes", str(promotion.required_passes))
+        promotion_grid.add_row(
+            "Candidate ready",
+            "yes" if promotion.candidate_ready else "no",
+        )
+        if promotion.candidate_ready_tick is not None:
+            promotion_grid.add_row("Ready tick", str(promotion.candidate_ready_tick))
+        if promotion.last_result:
+            promotion_grid.add_row("Last result", promotion.last_result)
+    promotion_border = "green"
+    if promotion is not None and promotion.last_result == "fail":
+        promotion_border = "red"
+    elif promotion is not None and not promotion.candidate_ready:
+        promotion_border = "yellow"
+    promotion_panel = Panel(
+        promotion_grid,
+        title="Promotion Gate",
+        border_style=promotion_border,
     )
 
     bc_table = Table(title="BC Gate", expand=True)
@@ -358,6 +374,7 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
     )
     container = Table.grid(expand=True)
     container.add_row(meta_table)
+    container.add_row(promotion_panel)
     container.add_row(bc_table)
     container.add_row(composite)
 
@@ -370,6 +387,10 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
             else "green"
         )
     )
+    if promotion_border == "red":
+        border_style = "red"
+    elif promotion_border == "yellow" and border_style == "green":
+        border_style = "yellow"
     return Panel(container, title="Anneal Status", border_style=border_style)
 
 
@@ -405,8 +426,7 @@ def _build_policy_inspector_panel(snapshot: TelemetrySnapshot) -> Panel:
             selected_prob = float("inf")
         tops = (
             ", ".join(
-                f"{action.action}:{action.probability:.2f}"
-                for action in entry.top_actions[:3]
+                f"{action.action}:{action.probability:.2f}" for action in entry.top_actions[:3]
             )
             or "-"
         )
@@ -562,9 +582,7 @@ def run_dashboard(
             ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={})
         )
     if defer:
-        executor.submit(
-            ConsoleCommand(name="employment_exit", args=("defer", defer), kwargs={})
-        )
+        executor.submit(ConsoleCommand(name="employment_exit", args=("defer", defer), kwargs={}))
 
     tick = 0
     try:
@@ -577,9 +595,7 @@ def run_dashboard(
             for panel in render_snapshot(snapshot, tick=loop.tick, refreshed=refreshed):
                 console.print(panel)
             obs_batch = loop.observations.build_batch(loop.world, terminated={})
-            map_panel = _build_map_panel(
-                snapshot, obs_batch, focus_agent, show_coords=show_coords
-            )
+            map_panel = _build_map_panel(snapshot, obs_batch, focus_agent, show_coords=show_coords)
             if map_panel is not None:
                 console.print(map_panel)
             console.print(f"Tick: {loop.tick}")

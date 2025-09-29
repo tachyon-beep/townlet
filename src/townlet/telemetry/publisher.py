@@ -48,9 +48,7 @@ class TelemetryPublisher:
         self._latest_economy_snapshot: dict[str, object] = {}
         self._latest_relationship_snapshot: dict[str, dict[str, dict[str, float]]] = {}
         self._latest_relationship_updates: list[dict[str, object]] = []
-        self._previous_relationship_snapshot: dict[str, dict[str, dict[str, float]]] = (
-            {}
-        )
+        self._previous_relationship_snapshot: dict[str, dict[str, dict[str, float]]] = {}
         self._narration_limiter = NarrationRateLimiter(self.config.telemetry.narration)
         self._latest_narrations: list[dict[str, object]] = []
         self._latest_anneal_status: dict[str, object] | None = None
@@ -82,9 +80,7 @@ class TelemetryPublisher:
             max_batch_size=int(transport_cfg.buffer.max_batch_size),
             max_buffer_bytes=int(transport_cfg.buffer.max_buffer_bytes),
         )
-        self._transport_flush_interval = max(
-            1, int(transport_cfg.buffer.flush_interval_ticks)
-        )
+        self._transport_flush_interval = max(1, int(transport_cfg.buffer.flush_interval_ticks))
         self._last_flush_tick = 0
         self._transport_status: dict[str, Any] = {
             "connected": False,
@@ -116,9 +112,7 @@ class TelemetryPublisher:
             "relationship_snapshot": self._copy_relationship_snapshot(
                 self._latest_relationship_snapshot
             ),
-            "relationship_updates": [
-                dict(update) for update in self._latest_relationship_updates
-            ],
+            "relationship_updates": [dict(update) for update in self._latest_relationship_updates],
             "narrations": [dict(entry) for entry in self._latest_narrations],
             "narration_state": self._narration_limiter.export_state(),
             "reward_breakdown": self.latest_reward_breakdown(),
@@ -130,8 +124,7 @@ class TelemetryPublisher:
             state["anneal_status"] = dict(self._latest_anneal_status)
         if self._latest_policy_snapshot:
             state["policy_snapshot"] = {
-                agent: dict(entry)
-                for agent, entry in self._latest_policy_snapshot.items()
+                agent: dict(entry) for agent, entry in self._latest_policy_snapshot.items()
             }
         if self._latest_relationship_overlay:
             state["relationship_overlay"] = {
@@ -154,6 +147,9 @@ class TelemetryPublisher:
             state["precondition_failures"] = [
                 dict(entry) for entry in self._latest_precondition_failures
             ]
+        promotion_state = self.latest_promotion_state()
+        if promotion_state is not None:
+            state["promotion_state"] = promotion_state
         return state
 
     def import_state(self, payload: dict[str, object]) -> None:
@@ -181,14 +177,10 @@ class TelemetryPublisher:
         if isinstance(snapshot_payload, dict):
             snapshot_copy = self._copy_relationship_snapshot(snapshot_payload)
             self._latest_relationship_snapshot = snapshot_copy
-            self._previous_relationship_snapshot = self._copy_relationship_snapshot(
-                snapshot_copy
-            )
+            self._previous_relationship_snapshot = self._copy_relationship_snapshot(snapshot_copy)
         updates_payload = payload.get("relationship_updates", [])
         if isinstance(updates_payload, list):
-            self._latest_relationship_updates = [
-                dict(update) for update in updates_payload
-            ]
+            self._latest_relationship_updates = [dict(update) for update in updates_payload]
         narrations_payload = payload.get("narrations", [])
         if isinstance(narrations_payload, list):
             self._latest_narrations = [dict(entry) for entry in narrations_payload]
@@ -251,9 +243,7 @@ class TelemetryPublisher:
 
         migrations_payload = payload.get("snapshot_migrations")
         if isinstance(migrations_payload, list):
-            self._latest_snapshot_migrations = [
-                str(item) for item in migrations_payload
-            ]
+            self._latest_snapshot_migrations = [str(item) for item in migrations_payload]
         else:
             self._latest_snapshot_migrations = []
 
@@ -262,11 +252,7 @@ class TelemetryPublisher:
             history: dict[str, list[float]] = {}
             for name, values in kpi_payload.items():
                 if isinstance(values, list):
-                    coerced = [
-                        float(value)
-                        for value in values
-                        if isinstance(value, (int, float))
-                    ]
+                    coerced = [float(value) for value in values if isinstance(value, (int, float))]
                     history[str(name)] = coerced
             if history:
                 self._kpi_history = history
@@ -336,12 +322,15 @@ class TelemetryPublisher:
         failures_payload = payload.get("precondition_failures")
         if isinstance(failures_payload, list):
             self._latest_precondition_failures = [
-                dict(entry)
-                for entry in failures_payload
-                if isinstance(entry, Mapping)
+                dict(entry) for entry in failures_payload if isinstance(entry, Mapping)
             ]
         else:
             self._latest_precondition_failures = []
+        promotion_state_payload = payload.get("promotion_state")
+        if isinstance(promotion_state_payload, Mapping):
+            metrics = dict(self._latest_stability_metrics or {})
+            metrics["promotion_state"] = dict(promotion_state_payload)
+            self._latest_stability_metrics = metrics
 
     def export_console_buffer(self) -> list[object]:
         return list(self._console_buffer)
@@ -349,9 +338,7 @@ class TelemetryPublisher:
     def import_console_buffer(self, buffer: Iterable[object]) -> None:
         self._console_buffer = list(buffer)
 
-    def record_console_results(
-        self, results: Iterable["ConsoleCommandResult"]
-    ) -> None:
+    def record_console_results(self, results: Iterable["ConsoleCommandResult"]) -> None:
         batch: list[dict[str, Any]] = []
         for result in results:
             payload = result.to_dict()
@@ -391,9 +378,7 @@ class TelemetryPublisher:
                 send_timeout=float(cfg.send_timeout_seconds),
             )
         except TelemetryTransportError as exc:  # pragma: no cover - init failure
-            message = (
-                f"Failed to initialise telemetry transport '{cfg.type}': {exc}"
-            )
+            message = f"Failed to initialise telemetry transport '{cfg.type}': {exc}"
             logger.error(message)
             raise RuntimeError(message) from exc
 
@@ -434,9 +419,7 @@ class TelemetryPublisher:
                 except RuntimeError as reconnect_exc:
                     reconnect_msg = str(reconnect_exc)
                     self._transport_status["last_error"] = reconnect_msg
-                    logger.error(
-                        "Telemetry transport reconnect failed: %s", reconnect_msg
-                    )
+                    logger.error("Telemetry transport reconnect failed: %s", reconnect_msg)
                     return False
                 backoff = float(self._transport_retry.backoff_seconds)
                 if backoff > 0:
@@ -449,9 +432,7 @@ class TelemetryPublisher:
             payload = self._transport_buffer.popleft()
             if not self._send_with_retry(payload, tick):
                 self._transport_status["dropped_messages"] += 1
-                logger.error(
-                    "Dropping telemetry payload after repeated send failures"
-                )
+                logger.error("Dropping telemetry payload after repeated send failures")
                 if len(self._transport_buffer):
                     dropped = len(self._transport_buffer)
                     self._transport_status["dropped_messages"] += dropped
@@ -497,9 +478,7 @@ class TelemetryPublisher:
             "relationship_snapshot": self._copy_relationship_snapshot(
                 self._latest_relationship_snapshot
             ),
-            "relationship_updates": [
-                dict(entry) for entry in self._latest_relationship_updates
-            ],
+            "relationship_updates": [dict(entry) for entry in self._latest_relationship_updates],
             "relationship_overlay": {
                 owner: [dict(item) for item in entries]
                 for owner, entries in self._latest_relationship_overlay.items()
@@ -507,12 +486,10 @@ class TelemetryPublisher:
             "events": list(self._latest_events),
             "narrations": [dict(entry) for entry in self._latest_narrations],
             "jobs": {
-                agent_id: dict(snapshot)
-                for agent_id, snapshot in self._latest_job_snapshot.items()
+                agent_id: dict(snapshot) for agent_id, snapshot in self._latest_job_snapshot.items()
             },
             "economy": {
-                object_id: dict(obj)
-                for object_id, obj in self._latest_economy_snapshot.items()
+                object_id: dict(obj) for object_id, obj in self._latest_economy_snapshot.items()
             },
             "affordance_manifest": dict(self._latest_affordance_manifest),
             "reward_breakdown": self.latest_reward_breakdown(),
@@ -521,11 +498,11 @@ class TelemetryPublisher:
                 "alerts": self.latest_stability_alerts(),
                 "inputs": self.latest_stability_inputs(),
             },
+            "promotion": self.latest_promotion_state(),
             "perturbations": self.latest_perturbations(),
             "policy_identity": self.latest_policy_identity() or {},
             "policy_snapshot": {
-                agent: dict(data)
-                for agent, data in self._latest_policy_snapshot.items()
+                agent: dict(data) for agent, data in self._latest_policy_snapshot.items()
             },
             "anneal_status": self.latest_anneal_status(),
             "kpi_history": self.kpi_history(),
@@ -615,9 +592,7 @@ class TelemetryPublisher:
             "rivalry": rivalry_snapshot,
             "rivalry_events": list(self._rivalry_event_history[-20:]),
         }
-        relationship_metrics_getter = getattr(
-            world, "relationship_metrics_snapshot", None
-        )
+        relationship_metrics_getter = getattr(world, "relationship_metrics_snapshot", None)
         if callable(relationship_metrics_getter):
             metrics_snapshot = relationship_metrics_getter()
             if metrics_snapshot is not None:
@@ -692,8 +667,7 @@ class TelemetryPublisher:
         self._latest_employment_metrics = world.employment_queue_snapshot()
         if reward_breakdown is not None:
             self._latest_reward_breakdown = {
-                agent: dict(components)
-                for agent, components in reward_breakdown.items()
+                agent: dict(components) for agent, components in reward_breakdown.items()
             }
         else:
             self._latest_reward_breakdown = {}
@@ -720,16 +694,12 @@ class TelemetryPublisher:
                 ),
                 "reward_samples": {
                     agent: float(value)
-                    for agent, value in (
-                        (stability_inputs.get("reward_samples") or {}).items()
-                    )
+                    for agent, value in ((stability_inputs.get("reward_samples") or {}).items())
                 },
             }
 
         if isinstance(perturbations, Mapping):
-            self._latest_perturbations = self._normalize_perturbations_payload(
-                perturbations
-            )
+            self._latest_perturbations = self._normalize_perturbations_payload(perturbations)
 
         if policy_identity is not None:
             self.update_policy_identity(policy_identity)
@@ -800,8 +770,7 @@ class TelemetryPublisher:
 
     def latest_reward_breakdown(self) -> dict[str, dict[str, float]]:
         return {
-            agent: dict(components)
-            for agent, components in self._latest_reward_breakdown.items()
+            agent: dict(components) for agent, components in self._latest_reward_breakdown.items()
         }
 
     def latest_stability_inputs(self) -> dict[str, object]:
@@ -810,9 +779,7 @@ class TelemetryPublisher:
         result: dict[str, object] = {}
         hunger = self._latest_stability_inputs.get("hunger_levels")
         if isinstance(hunger, dict):
-            result["hunger_levels"] = {
-                str(agent): float(value) for agent, value in hunger.items()
-            }
+            result["hunger_levels"] = {str(agent): float(value) for agent, value in hunger.items()}
         option_counts = self._latest_stability_inputs.get("option_switch_counts")
         if isinstance(option_counts, dict):
             result["option_switch_counts"] = {
@@ -859,20 +826,12 @@ class TelemetryPublisher:
         return {
             "active": {
                 event_id: dict(data)
-                for event_id, data in self._latest_perturbations.get(
-                    "active", {}
-                ).items()
+                for event_id, data in self._latest_perturbations.get("active", {}).items()
             },
-            "pending": [
-                dict(entry) for entry in self._latest_perturbations.get("pending", [])
-            ],
+            "pending": [dict(entry) for entry in self._latest_perturbations.get("pending", [])],
             "cooldowns": {
-                "spec": dict(
-                    self._latest_perturbations.get("cooldowns", {}).get("spec", {})
-                ),
-                "agents": dict(
-                    self._latest_perturbations.get("cooldowns", {}).get("agents", {})
-                ),
+                "spec": dict(self._latest_perturbations.get("cooldowns", {}).get("spec", {})),
+                "agents": dict(self._latest_perturbations.get("cooldowns", {}).get("agents", {})),
             },
         }
 
@@ -899,9 +858,7 @@ class TelemetryPublisher:
     def latest_snapshot_migrations(self) -> list[str]:
         return list(self._latest_snapshot_migrations)
 
-    def _normalize_perturbations_payload(
-        self, payload: Mapping[str, object]
-    ) -> dict[str, object]:
+    def _normalize_perturbations_payload(self, payload: Mapping[str, object]) -> dict[str, object]:
         active = payload.get("active", {})
         pending = payload.get("pending", [])
         cooldowns = payload.get("cooldowns", {})
@@ -914,9 +871,7 @@ class TelemetryPublisher:
             }
         pending_list: list[dict[str, object]] = []
         if isinstance(pending, list):
-            pending_list = [
-                dict(entry) for entry in pending if isinstance(entry, Mapping)
-            ]
+            pending_list = [dict(entry) for entry in pending if isinstance(entry, Mapping)]
         spec_cd: dict[str, int] = {}
         agent_cd: dict[str, int] = {}
         if isinstance(cooldowns, Mapping):
@@ -941,9 +896,7 @@ class TelemetryPublisher:
         }
 
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
-        return {
-            agent: dict(data) for agent, data in self._latest_policy_snapshot.items()
-        }
+        return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
 
     def latest_anneal_status(self) -> dict[str, object] | None:
         if self._latest_anneal_status is None:
@@ -1063,14 +1016,9 @@ class TelemetryPublisher:
                     )
                 else:
                     delta_trust = metrics["trust"] - prev_metrics.get("trust", 0.0)
-                    delta_fam = metrics["familiarity"] - prev_metrics.get(
-                        "familiarity", 0.0
-                    )
+                    delta_fam = metrics["familiarity"] - prev_metrics.get("familiarity", 0.0)
                     delta_riv = metrics["rivalry"] - prev_metrics.get("rivalry", 0.0)
-                    if any(
-                        abs(delta) > 1e-6
-                        for delta in (delta_trust, delta_fam, delta_riv)
-                    ):
+                    if any(abs(delta) > 1e-6 for delta in (delta_trust, delta_fam, delta_riv)):
                         updates.append(
                             {
                                 "owner": owner,

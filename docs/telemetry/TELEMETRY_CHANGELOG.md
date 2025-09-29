@@ -2,6 +2,8 @@
 
 | Version | Date | Summary | Consumer Actions |
 | --- | --- | --- | --- |
+| 0.9.3 | 2025-10-21 | Reward breakdown adds `terminal_penalty`; docs updated with LR2 reward model. | Update dashboards/watchers to tolerate the new breakdown key; refresh local schema fixtures. |
+| 0.9.2 | 2025-10-19 | Added nightly reset event (`agent_nightly_reset`), home routing metadata in console spawn responses, and rivalry/queue fairness regression metrics. | Update event consumers/watchers to handle nightly reset payload (`home_position`, `moved` flags), `agent_respawn.original_agent_id`, and conflict snapshot rivalry history; console automation should persist new `home_position` field. |
 | 0.9.1 | 2025-10-12 | PPO telemetry tooling records hygiene/rest metrics (`utility_outage_events`, `shower_complete_events`, `sleep_complete_events`) and exposes watcher thresholds. | Upgrade `telemetry_watch.py`/`telemetry_summary.py`; configure new flags for hygiene outages and completion rates. |
 | 0.9.0 | 2025-10-12 | Conflict snapshot adds queue history, rivalry events, and stability alert payload; console gains conflict inspection commands. | Upgrade clients to schema prefix 0.9, parse `conflict.queue_history`, `conflict.rivalry_events`, and `stability` blocks; use new console commands for ops runbooks. |
 | 0.8.1 | 2025-10-04 | Transport abstraction with buffered delivery, per-snapshot transport status, and observer telemetry smoke suite. | Update configs to set `telemetry.transport`, run admin smoke command (`pytest ...telemetry_transport.py`). |

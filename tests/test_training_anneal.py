@@ -78,9 +78,7 @@ def test_run_anneal_bc_then_ppo(tmp_path: Path) -> None:
     replay_dir.mkdir()
     r_npz, r_json = _write_sample(replay_dir, "replay_sample", timesteps=6)
     replay_manifest = tmp_path / "replay_manifest.json"
-    replay_manifest.write_text(
-        json.dumps([{"sample": str(r_npz), "meta": str(r_json)}], indent=2)
-    )
+    replay_manifest.write_text(json.dumps([{"sample": str(r_npz), "meta": str(r_json)}], indent=2))
 
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.training.bc.manifest = bc_manifest
@@ -102,3 +100,9 @@ def test_run_anneal_bc_then_ppo(tmp_path: Path) -> None:
 
     log_file = tmp_path / "logs" / "anneal_results.json"
     assert log_file.exists()
+
+    assert harness.last_anneal_status == "PASS"
+    promotion_snapshot = harness.promotion.snapshot()
+    assert promotion_snapshot["last_result"] == "pass"
+    assert promotion_snapshot["pass_streak"] >= 1
+    assert promotion_snapshot["candidate_ready"] is False

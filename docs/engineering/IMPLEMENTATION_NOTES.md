@@ -1,5 +1,20 @@
 # Implementation Notes
 
+## 2025-10-19 — Needs & Affordance Effects Alignment
+- `AgentSnapshot` now clamps and backfills core needs (`hunger`, `hygiene`, `energy`) so
+  affordance effects always apply within [0, 1].
+- Added regression tests for need decay, lifecycle thresholds, and affordance success/failure
+  flows (`tests/test_need_decay.py`, `tests/test_world_queue_integration.py`).
+- `eat_meal` harness coverage now asserts hunger/energy gains and wallet deductions while failed
+  releases keep needs untouched.
+
+## 2025-10-19 — Home Routing & Nightly Reset
+- Agents persist a `home_position`; console spawn and respawn paths hydrate it for nightly routing.
+- `WorldState.apply_nightly_reset` returns agents home, tops up needs, clears employment flags, and
+  emits an `agent_nightly_reset` event (`src/townlet/world/grid.py`).
+- Simulation loop triggers the reset based on observation day length; regression tests cover direct
+  world invocation and the loop integration (`tests/test_world_nightly_reset.py`).
+
 ## 2025-09-30 — Affordance Manifest Hardening
 - Replaced ad-hoc YAML parsing with `load_affordance_manifest` helper that validates ids, preconditions/hook structure, numeric fields, and emits SHA-256 checksums for auditing.
 - `WorldState` now records manifest metadata (`path`, `checksum`, counts) and exposes it via `affordance_manifest_metadata()` so telemetry and console surfaces report the active manifest.

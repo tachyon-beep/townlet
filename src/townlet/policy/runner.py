@@ -41,6 +41,7 @@ from townlet.policy.replay import (
 )
 from townlet.policy.replay_buffer import InMemoryReplayDataset
 from townlet.policy.rollout import RolloutBuffer
+from townlet.stability.promotion import PromotionManager
 from townlet.world.grid import WorldState
 
 PPO_TELEMETRY_VERSION = 1.2
@@ -95,7 +96,9 @@ class PolicyRuntime:
         self._action_inverse: dict[int, str] = {}
         self._anneal_ratio: float | None = None
         self._anneal_blend_enabled: bool = False
-        self._policy_action_provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None] | None = None
+        self._policy_action_provider: (
+            Callable[[WorldState, str, AgentIntent], AgentIntent | None] | None
+        ) = None
         self._anneal_rng = random.Random(8675309)
         self._policy_net: ConflictAwarePolicyNetwork | None = None
         self._policy_map_shape: tuple[int, int, int] | None = None
@@ -106,6 +109,7 @@ class PolicyRuntime:
         self._option_switch_counts: dict[str, int] = {}
         self._policy_hash: str | None = None
         self._possessed_agents: set[str] = set()
+        self._ctx_reset_callback: Callable[[str], None] | None = None
         config_policy_hash = getattr(self.config, "policy_hash", None)
         if isinstance(config_policy_hash, str) and config_policy_hash:
             self._policy_hash = config_policy_hash
@@ -123,6 +127,9 @@ class PolicyRuntime:
     def enable_anneal_blend(self, enabled: bool) -> None:
         self._anneal_blend_enabled = bool(enabled)
 
+    def register_ctx_reset_callback(self, callback: Callable[[str], None] | None) -> None:
+        self._ctx_reset_callback = callback
+
     def set_policy_action_provider(
         self, provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None]
     ) -> None:
@@ -137,9 +144,7 @@ class PolicyRuntime:
                 actions[agent_id] = {"kind": "wait"}
                 continue
             scripted_intent: AgentIntent = self.behavior.decide(world, agent_id)
-            selected_intent = self._select_intent_with_blend(
-                world, agent_id, scripted_intent
-            )
+            selected_intent = self._select_intent_with_blend(world, agent_id, scripted_intent)
             if selected_intent.kind == "wait":
                 actions[agent_id] = {"kind": "wait"}
             else:
@@ -169,10 +174,7 @@ class PolicyRuntime:
             new_option = selected_intent.kind
             previous_option = self._last_option.get(agent_id)
             if new_option != "wait":
-                if (
-                    previous_option not in (None, "wait")
-                    and previous_option != new_option
-                ):
+                if previous_option not in (None, "wait") and previous_option != new_option:
                     self._option_switch_counts[agent_id] = (
                         self._option_switch_counts.get(agent_id, 0) + 1
                     )
@@ -235,6 +237,8 @@ class PolicyRuntime:
         if agent_id in self._possessed_agents:
             return False
         self._possessed_agents.add(agent_id)
+        if self._ctx_reset_callback is not None:
+            self._ctx_reset_callback(agent_id)
         return True
 
     def release_possession(self, agent_id: str) -> bool:
@@ -304,9 +308,7 @@ class PolicyRuntime:
             return
 
         action_dim = max(len(self._action_lookup), 1)
-        if not self._ensure_policy_network(
-            map_array.shape, feature_array.shape[0], action_dim
-        ):
+        if not self._ensure_policy_network(map_array.shape, feature_array.shape[0], action_dim):
             frame.setdefault("log_prob", 0.0)
             frame.setdefault("value_pred", 0.0)
             return
@@ -370,9 +372,7 @@ class PolicyRuntime:
         self._latest_policy_snapshot = snapshot
 
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
-        return {
-            agent: dict(data) for agent, data in self._latest_policy_snapshot.items()
-        }
+        return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
 
     # ------------------------------------------------------------------
     # Policy metadata helpers
@@ -457,12 +457,15 @@ class TrainingHarness:
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self._ppo_state = {"step": 0, "learning_rate": 1e-3}
-        # TODO(@townlet): Wire up PPO trainer, evaluators, and promotion hooks.
         self._capture_loop = None
         self._apply_social_reward_stage(-1)
         self._anneal_context: dict[str, object] | None = None
         self._anneal_baselines: dict[str, dict[str, float]] = {}
         self._anneal_ratio: float | None = None
+        self.promotion = PromotionManager(config=config, log_path=None)
+        self._promotion_eval_counter = 0
+        self._promotion_pass_streak = 0
+        self._last_anneal_status: str | None = None
 
     def run(self) -> None:
         """Entry point for CLI training runs based on config.training.source."""
@@ -488,9 +491,7 @@ class TrainingHarness:
             clamped = max(0.0, min(1.0, float(ratio)))
             self._anneal_ratio = clamped
 
-    def run_replay(
-        self, sample_path: Path, meta_path: Path | None = None
-    ) -> dict[str, float]:
+    def run_replay(self, sample_path: Path, meta_path: Path | None = None) -> dict[str, float]:
         """Load a replay observation sample and surface conflict-aware stats."""
         sample: ReplaySample = load_replay_sample(sample_path, meta_path)
         batch = build_batch([sample])
@@ -498,18 +499,14 @@ class TrainingHarness:
         print("Replay sample loaded:", summary)
         return summary
 
-    def run_replay_batch(
-        self, pairs: Iterable[tuple[Path, Path | None]]
-    ) -> dict[str, float]:
+    def run_replay_batch(self, pairs: Iterable[tuple[Path, Path | None]]) -> dict[str, float]:
         entries = list(pairs)
         if not entries:
             raise ValueError("Replay batch requires at least one entry")
         config = ReplayDatasetConfig(entries=entries, batch_size=len(entries))
         return self.run_replay_dataset(config)
 
-    def run_replay_dataset(
-        self, dataset_config: ReplayDatasetConfig
-    ) -> dict[str, float]:
+    def run_replay_dataset(self, dataset_config: ReplayDatasetConfig) -> dict[str, float]:
         dataset = ReplayDataset(dataset_config)
         summary: dict[str, float] = {}
         for idx, batch in enumerate(dataset, start=1):
@@ -612,9 +609,7 @@ class TrainingHarness:
         config: BCTrainingParams | None = None,
     ) -> dict[str, float]:
         if not torch_available():
-            raise TorchNotAvailableError(
-                "PyTorch is required for behaviour cloning training"
-            )
+            raise TorchNotAvailableError("PyTorch is required for behaviour cloning training")
 
         bc_settings = self.config.training.bc
         manifest_path = Path(manifest) if manifest is not None else bc_settings.manifest
@@ -705,18 +700,12 @@ class TrainingHarness:
                     "cycle": float(stage.cycle),
                     "stage": stage.mode,
                     "dataset_label": dataset_key,
-                    "bc_accuracy": (
-                        last_bc_stage.get("accuracy") if last_bc_stage else None
-                    ),
+                    "bc_accuracy": (last_bc_stage.get("accuracy") if last_bc_stage else None),
                     "bc_threshold": bc_threshold,
-                    "bc_passed": (
-                        last_bc_stage.get("passed", True) if last_bc_stage else True
-                    ),
+                    "bc_passed": (last_bc_stage.get("passed", True) if last_bc_stage else True),
                     "loss_baseline": baselines.get("loss_total"),
                     "queue_events_baseline": baselines.get("queue_conflict_events"),
-                    "queue_intensity_baseline": baselines.get(
-                        "queue_conflict_intensity"
-                    ),
+                    "queue_intensity_baseline": baselines.get("queue_conflict_intensity"),
                     "loss_tolerance": ANNEAL_LOSS_TOLERANCE_DEFAULT,
                     "queue_tolerance": ANNEAL_QUEUE_TOLERANCE_DEFAULT,
                 }
@@ -746,6 +735,9 @@ class TrainingHarness:
         if log_dir is not None:
             log_dir.mkdir(parents=True, exist_ok=True)
             (log_dir / "anneal_results.json").write_text(json.dumps(results, indent=2))
+        status = self.evaluate_anneal_results(results)
+        self._last_anneal_status = status
+        self._record_promotion_evaluation(status=status, results=results)
         return results
 
     def run_ppo(
@@ -785,9 +777,7 @@ class TrainingHarness:
             raise ValueError("Replay batch missing map shape metadata")
         action_dim_meta = example.metadata.get("action_dim")
         max_action = max(int(batch.actions.max()) for batch in batches)
-        action_dim = (
-            int(action_dim_meta) if action_dim_meta is not None else max_action + 1
-        )
+        action_dim = int(action_dim_meta) if action_dim_meta is not None else max_action + 1
         if action_dim <= 0:
             raise ValueError("Derived action_dim must be positive")
         baseline_metrics = getattr(dataset, "baseline_metrics", {})
@@ -810,9 +800,7 @@ class TrainingHarness:
         generator = torch.Generator(device=device)
 
         log_frequency = max(1, int(log_frequency or 1))
-        max_log_entries = (
-            max_log_entries if max_log_entries and max_log_entries > 0 else None
-        )
+        max_log_entries = max_log_entries if max_log_entries and max_log_entries > 0 else None
 
         log_handle = None
         log_entries_written = 0
@@ -879,9 +867,7 @@ class TrainingHarness:
                 actions = torch.from_numpy(batch.actions).long().to(device)
                 old_log_probs = torch.from_numpy(batch.old_log_probs).float().to(device)
                 rewards = torch.from_numpy(batch.rewards).float().to(device)
-                dones = (
-                    torch.from_numpy(batch.dones.astype(np.float32)).float().to(device)
-                )
+                dones = torch.from_numpy(batch.dones.astype(np.float32)).float().to(device)
                 value_preds_old = torch.from_numpy(batch.value_preds).float().to(device)
 
                 gae: AdvantageReturns = compute_gae(
@@ -894,22 +880,16 @@ class TrainingHarness:
                 advantages = gae.advantages
                 returns = gae.returns
                 if ppo_cfg.advantage_normalization:
-                    advantages = normalize_advantages(advantages.view(-1)).view_as(
-                        advantages
-                    )
+                    advantages = normalize_advantages(advantages.view(-1)).view_as(advantages)
 
                 baseline = value_baseline_from_old_preds(value_preds_old, timesteps)
 
                 reward_buffer.extend(batch.rewards.astype(float).reshape(-1).tolist())
-                advantage_buffer.extend(
-                    advantages.cpu().numpy().astype(float).reshape(-1).tolist()
-                )
+                advantage_buffer.extend(advantages.cpu().numpy().astype(float).reshape(-1).tolist())
 
                 batch_size, timestep_length = rewards.shape
                 flat_maps = maps.reshape(batch_size * timestep_length, *maps.shape[2:])
-                flat_features = features.reshape(
-                    batch_size * timestep_length, features.shape[2]
-                )
+                flat_features = features.reshape(batch_size * timestep_length, features.shape[2])
                 flat_actions = actions.reshape(-1)
                 flat_old_log_probs = old_log_probs.reshape(-1)
                 flat_advantages = advantages.reshape(-1)
@@ -971,9 +951,7 @@ class TrainingHarness:
                         sq_sum = 0.0
                         for param in policy.parameters():
                             if param.grad is not None:
-                                sq_sum += float(
-                                    torch.sum(param.grad.detach() ** 2).item()
-                                )
+                                sq_sum += float(torch.sum(param.grad.detach() ** 2).item())
                         grad_norm = float(sq_sum**0.5)
                     optimizer.step()
 
@@ -985,13 +963,9 @@ class TrainingHarness:
                     metrics["total_loss"] += float(total_loss.item())
                     metrics["clip_frac"] += float(clip_frac.item())
                     metrics["adv_mean"] += float(mb_advantages.mean().item())
-                    metrics["adv_std"] += float(
-                        mb_advantages.std(unbiased=False).item()
-                    )
+                    metrics["adv_std"] += float(mb_advantages.std(unbiased=False).item())
                     metrics["grad_norm"] += float(grad_norm)
-                    kl_value = float(
-                        torch.mean(mb_old_log_probs - new_log_probs).item()
-                    )
+                    kl_value = float(torch.mean(mb_old_log_probs - new_log_probs).item())
                     metrics["kl_divergence"] += kl_value
                     grad_norm_max = max(grad_norm_max, float(grad_norm))
                     kl_max = max(kl_max, abs(kl_value))
@@ -1001,16 +975,12 @@ class TrainingHarness:
             if mini_batch_updates == 0:
                 raise ValueError("No PPO mini-batch updates were performed")
 
-            averaged_metrics = {
-                key: value / mini_batch_updates for key, value in metrics.items()
-            }
+            averaged_metrics = {key: value / mini_batch_updates for key, value in metrics.items()}
 
             if entropy_values:
                 epoch_entropy_mean = statistics.fmean(entropy_values)
                 epoch_entropy_std = (
-                    statistics.pstdev(entropy_values)
-                    if len(entropy_values) > 1
-                    else 0.0
+                    statistics.pstdev(entropy_values) if len(entropy_values) > 1 else 0.0
                 )
             else:
                 epoch_entropy_mean = 0.0
@@ -1027,9 +997,7 @@ class TrainingHarness:
 
             lr = float(optimizer.param_groups[0]["lr"])
             self._ppo_state["learning_rate"] = lr
-            self._ppo_state["step"] = (
-                int(self._ppo_state.get("step", 0)) + transitions_processed
-            )
+            self._ppo_state["step"] = int(self._ppo_state.get("step", 0)) + transitions_processed
 
             epoch_summary = {
                 "epoch": float(epoch + 1),
@@ -1062,30 +1030,16 @@ class TrainingHarness:
                         "reward_advantage_corr": float(reward_adv_corr),
                         "rollout_ticks": float(rollout_ticks),
                         "log_stream_offset": float(log_stream_offset + 1),
-                        "queue_conflict_events": float(
-                            getattr(dataset, "queue_conflict_count", 0)
-                        ),
+                        "queue_conflict_events": float(getattr(dataset, "queue_conflict_count", 0)),
                         "queue_conflict_intensity_sum": float(
                             getattr(dataset, "queue_conflict_intensity_sum", 0.0)
                         ),
-                        "shared_meal_events": float(
-                            getattr(dataset, "shared_meal_count", 0)
-                        ),
-                        "late_help_events": float(
-                            getattr(dataset, "late_help_count", 0)
-                        ),
-                        "shift_takeover_events": float(
-                            getattr(dataset, "shift_takeover_count", 0)
-                        ),
-                        "chat_success_events": float(
-                            getattr(dataset, "chat_success_count", 0)
-                        ),
-                        "chat_failure_events": float(
-                            getattr(dataset, "chat_failure_count", 0)
-                        ),
-                        "chat_quality_mean": float(
-                            getattr(dataset, "chat_quality_mean", 0.0)
-                        ),
+                        "shared_meal_events": float(getattr(dataset, "shared_meal_count", 0)),
+                        "late_help_events": float(getattr(dataset, "late_help_count", 0)),
+                        "shift_takeover_events": float(getattr(dataset, "shift_takeover_count", 0)),
+                        "chat_success_events": float(getattr(dataset, "chat_success_count", 0)),
+                        "chat_failure_events": float(getattr(dataset, "chat_failure_count", 0)),
+                        "chat_quality_mean": float(getattr(dataset, "chat_quality_mean", 0.0)),
                     }
                 )
                 log_stream_offset += 1
@@ -1101,14 +1055,10 @@ class TrainingHarness:
                     anneal_context.get("loss_tolerance", ANNEAL_LOSS_TOLERANCE_DEFAULT)
                 )
                 queue_tolerance = float(
-                    anneal_context.get(
-                        "queue_tolerance", ANNEAL_QUEUE_TOLERANCE_DEFAULT
-                    )
+                    anneal_context.get("queue_tolerance", ANNEAL_QUEUE_TOLERANCE_DEFAULT)
                 )
                 loss_total_value = averaged_metrics["total_loss"]
-                queue_events_value = float(
-                    epoch_summary.get("queue_conflict_events", 0.0)
-                )
+                queue_events_value = float(epoch_summary.get("queue_conflict_events", 0.0))
                 queue_intensity_value = float(
                     epoch_summary.get("queue_conflict_intensity_sum", 0.0)
                 )
@@ -1116,8 +1066,7 @@ class TrainingHarness:
                 loss_flag = False
                 if isinstance(loss_baseline, (int, float)) and loss_baseline:
                     loss_flag = (
-                        abs(loss_total_value - float(loss_baseline))
-                        / abs(float(loss_baseline))
+                        abs(loss_total_value - float(loss_baseline)) / abs(float(loss_baseline))
                     ) > loss_tolerance
 
                 queue_flag = False
@@ -1191,20 +1140,13 @@ class TrainingHarness:
                     epoch_summary[f"{key}_avg"] = value / len(batches)
 
             print(f"PPO epoch {epoch + 1}:", epoch_summary)
-            should_log_epoch = log_handle is not None and (
-                (epoch + 1) % log_frequency == 0
-            )
+            should_log_epoch = log_handle is not None and ((epoch + 1) % log_frequency == 0)
             if should_log_epoch and log_path is not None:
-                if (
-                    max_log_entries is not None
-                    and log_entries_written >= max_log_entries
-                ):
+                if max_log_entries is not None and log_entries_written >= max_log_entries:
                     assert log_handle is not None
                     log_handle.close()
                     rotation_index += 1
-                    rotated_path = log_path.with_name(
-                        f"{log_path.name}.{rotation_index}"
-                    )
+                    rotated_path = log_path.with_name(f"{log_path.name}.{rotation_index}")
                     _open_log(rotated_path)
                     log_entries_written = 0
                 assert log_handle is not None
@@ -1217,6 +1159,63 @@ class TrainingHarness:
         if PPO_TELEMETRY_VERSION >= 1.1:
             self._ppo_state["log_stream_offset"] = log_stream_offset
         return last_summary
+
+    def evaluate_anneal_results(self, results: list[dict[str, object]]) -> str:
+        status = "PASS"
+        for stage in results:
+            mode = stage.get("mode")
+            if mode == "bc" and not stage.get("passed", True):
+                return "FAIL"
+            if mode == "ppo" and (
+                bool(stage.get("anneal_loss_flag"))
+                or bool(stage.get("anneal_queue_flag"))
+                or bool(stage.get("anneal_intensity_flag"))
+            ):
+                status = "HOLD"
+        return status
+
+    @property
+    def last_anneal_status(self) -> str | None:
+        return self._last_anneal_status
+
+    def _record_promotion_evaluation(
+        self,
+        *,
+        status: str,
+        results: list[dict[str, object]],
+    ) -> None:
+        self._promotion_eval_counter += 1
+        evaluation_tick = self._promotion_eval_counter
+        required = self.config.stability.promotion.required_passes
+        if status == "PASS":
+            self._promotion_pass_streak += 1
+            last_result = "pass"
+        else:
+            self._promotion_pass_streak = 0
+            last_result = "fail"
+        candidate_ready = self._promotion_pass_streak >= required
+        promotion_metrics = {
+            "promotion": {
+                "pass_streak": self._promotion_pass_streak,
+                "required_passes": required,
+                "candidate_ready": candidate_ready,
+                "last_result": last_result,
+                "last_evaluated_tick": evaluation_tick,
+            }
+        }
+        self.promotion.update_from_metrics(
+            promotion_metrics,
+            tick=evaluation_tick,
+        )
+        if status == "PASS":
+            metadata = {
+                "status": status,
+                "cycle": results[-1].get("cycle") if results else None,
+                "mode": results[-1].get("mode") if results else None,
+            }
+            self.promotion.set_candidate_metadata(metadata)
+        else:
+            self.promotion.set_candidate_metadata(None)
 
     def _select_social_reward_stage(self, cycle_id: int) -> str | None:
         training_cfg = getattr(self.config, "training", None)
@@ -1245,9 +1244,7 @@ class TrainingHarness:
         if stage != current:
             self.config.features.stages.social_rewards = stage
 
-    def _summarise_batch(
-        self, batch: ReplayBatch, batch_index: int
-    ) -> dict[str, float]:
+    def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> dict[str, float]:
         summary = {
             "batch": float(batch_index),
             "batch_size": float(batch.features.shape[0]),

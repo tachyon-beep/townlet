@@ -49,6 +49,7 @@ def test_load_config(poc_config: Path) -> None:
     assert config.employment.max_absent_shifts == 3
     assert config.employment.daily_exit_cap == 2
     assert config.employment.enforce_job_loop is True
+    assert config.lifecycle.respawn_delay_ticks == 0
     assert config.observations_config.hybrid.local_window == 11
     assert config.observations_config.hybrid.include_targets is False
     assert config.ppo is None
@@ -115,9 +116,7 @@ def test_observation_variant_guard(tmp_path: Path) -> None:
     target = tmp_path / "config.yaml"
     target.write_text(yaml.safe_dump(config_data))
 
-    with pytest.raises(
-        ValueError, match="Input should be 'full', 'hybrid' or 'compact'"
-    ):
+    with pytest.raises(ValueError, match="Input should be 'full', 'hybrid' or 'compact'"):
         load_config(target)
 
 
@@ -222,9 +221,7 @@ def test_register_snapshot_migrations_from_config(poc_config: Path) -> None:
     try:
         clear_registry()
         config_with_handler.register_snapshot_migrations()
-        path = migration_registry.find_path(
-            "legacy-config", config_with_handler.config_id
-        )
+        path = migration_registry.find_path("legacy-config", config_with_handler.config_id)
         assert len(path) == 1
     finally:
         clear_registry()

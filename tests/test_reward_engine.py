@@ -212,3 +212,50 @@ def test_wage_and_punctuality_bonus() -> None:
         config.rewards.punctuality_bonus * context["punctuality_bonus"]
     )
     assert breakdown["total"] == pytest.approx(reward)
+
+
+def test_terminal_penalty_applied_for_faint() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=0.0,
+    )
+    engine = RewardEngine(config)
+    terminated = {"alice": True}
+    reasons = {"alice": "faint"}
+    reward = engine.compute(world, terminated, reasons)["alice"]
+    raw_expected = config.rewards.survival_tick + config.rewards.faint_penalty
+    clip = config.rewards.clip.clip_per_tick
+    expected = max(min(raw_expected, clip), -clip)
+    assert reward == pytest.approx(expected)
+    breakdown = engine.latest_reward_breakdown()["alice"]
+    assert breakdown["terminal_penalty"] == pytest.approx(config.rewards.faint_penalty)
+    assert breakdown["clip_adjustment"] == pytest.approx(expected - raw_expected)
+
+
+
+def test_terminal_penalty_applied_for_eviction() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=0.0,
+    )
+    engine = RewardEngine(config)
+    terminated = {"alice": True}
+    reasons = {"alice": "eviction"}
+    reward = engine.compute(world, terminated, reasons)["alice"]
+    raw_expected = config.rewards.survival_tick + config.rewards.eviction_penalty
+    clip = config.rewards.clip.clip_per_tick
+    expected = max(min(raw_expected, clip), -clip)
+    assert reward == pytest.approx(expected)
+    breakdown = engine.latest_reward_breakdown()["alice"]
+    assert breakdown["terminal_penalty"] == pytest.approx(config.rewards.eviction_penalty)
+    assert breakdown["clip_adjustment"] == pytest.approx(expected - raw_expected)
+
+

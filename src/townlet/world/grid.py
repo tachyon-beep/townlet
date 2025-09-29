@@ -53,9 +53,7 @@ class HookRegistry:
     def __init__(self) -> None:
         self._handlers: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
 
-    def register(
-        self, name: str, handler: Callable[[dict[str, Any]], None]
-    ) -> None:
+    def register(self, name: str, handler: Callable[[dict[str, Any]], None]) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError("Hook name must be a non-empty string")
         if not callable(handler):
@@ -95,6 +93,9 @@ def _default_personality() -> Personality:
     return Personality(extroversion=0.0, forgiveness=0.0, ambition=0.0)
 
 
+_BASE_NEEDS: tuple[str, ...] = ("hunger", "hygiene", "energy")
+
+
 @dataclass
 class AgentSnapshot:
     """Minimal agent view used for scaffolding."""
@@ -103,6 +104,8 @@ class AgentSnapshot:
     position: tuple[int, int]
     needs: dict[str, float]
     wallet: float = 0.0
+    home_position: tuple[int, int] | None = None
+    origin_agent_id: str | None = None
     personality: Personality = field(default_factory=_default_personality)
     inventory: dict[str, int] = field(default_factory=dict)
     job_id: str | None = None
@@ -119,6 +122,23 @@ class AgentSnapshot:
     last_action_success: bool = False
     last_action_duration: int = 0
     episode_tick: int = 0
+
+    def __post_init__(self) -> None:
+        clamped: dict[str, float] = {}
+        for key, value in self.needs.items():
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                numeric = 0.0
+            clamped[key] = max(0.0, min(1.0, numeric))
+        for key in _BASE_NEEDS:
+            clamped.setdefault(key, 0.5)
+        self.needs = clamped
+        if self.home_position is not None:
+            x, y = int(self.home_position[0]), int(self.home_position[1])
+            self.home_position = (x, y)
+        if self.origin_agent_id is None:
+            self.origin_agent_id = self.agent_id
 
 
 @dataclass
@@ -170,54 +190,36 @@ class WorldState:
     _active_reservations: dict[str, str] = field(init=False, default_factory=dict)
     objects: dict[str, InteractiveObject] = field(init=False, default_factory=dict)
     affordances: dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
-    _running_affordances: dict[str, RunningAffordance] = field(
-        init=False, default_factory=dict
-    )
-    _pending_events: dict[int, list[dict[str, Any]]] = field(
-        init=False, default_factory=dict
-    )
+    _running_affordances: dict[str, RunningAffordance] = field(init=False, default_factory=dict)
+    _pending_events: dict[int, list[dict[str, Any]]] = field(init=False, default_factory=dict)
     store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
     _job_keys: list[str] = field(init=False, default_factory=list)
-    _employment_state: dict[str, dict[str, Any]] = field(
-        init=False, default_factory=dict
-    )
+    _employment_state: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
     _employment_exit_queue: list[str] = field(init=False, default_factory=list)
     _employment_exits_today: int = field(init=False, default=0)
-    _employment_exit_queue_timestamps: dict[str, int] = field(
-        init=False, default_factory=dict
-    )
+    _employment_exit_queue_timestamps: dict[str, int] = field(init=False, default_factory=dict)
     _employment_manual_exits: set[str] = field(init=False, default_factory=set)
 
     _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
-    _relationship_ledgers: dict[str, RelationshipLedger] = field(
-        init=False, default_factory=dict
-    )
+    _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
     _rivalry_events: deque[dict[str, Any]] = field(init=False, default_factory=deque)
     _relationship_window_ticks: int = 600
-    _recent_meal_participants: dict[str, dict[str, Any]] = field(
-        init=False, default_factory=dict
-    )
+    _recent_meal_participants: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
     _chat_events: list[dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
     _rng_state: Optional[tuple[Any, ...]] = field(init=False, default=None)
     _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
-    _affordance_manifest_info: dict[str, object] = field(
-        init=False, default_factory=dict
-    )
-    _objects_by_position: dict[tuple[int, int], list[str]] = field(
-        init=False, default_factory=dict
-    )
-    _console_handlers: dict[str, _ConsoleHandlerEntry] = field(
-        init=False, default_factory=dict
-    )
+    _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
+    _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
+    _console_handlers: dict[str, _ConsoleHandlerEntry] = field(init=False, default_factory=dict)
     _console_cmd_history: OrderedDict[str, ConsoleCommandResult] = field(
         init=False, default_factory=OrderedDict
     )
-    _console_result_buffer: deque[ConsoleCommandResult] = field(
-        init=False, default_factory=deque
-    )
+    _console_result_buffer: deque[ConsoleCommandResult] = field(init=False, default_factory=deque)
     _hook_registry: HookRegistry = field(init=False, repr=False)
+    _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
+    _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
 
     @classmethod
     def from_config(
@@ -270,10 +272,18 @@ class WorldState:
         modules = ["townlet.world.hooks.default"]
         extra = os.environ.get("TOWNLET_AFFORDANCE_HOOK_MODULES")
         if extra:
-            modules.extend(
-                module.strip() for module in extra.split(",") if module.strip()
-            )
+            modules.extend(module.strip() for module in extra.split(",") if module.strip())
         load_hook_modules(self, modules)
+
+    def generate_agent_id(self, base_id: str) -> str:
+        base = base_id or "agent"
+        counter = self._respawn_counters.get(base, 0)
+        while True:
+            counter += 1
+            candidate = f"{base}#{counter}"
+            if candidate not in self.agents:
+                self._respawn_counters[base] = counter
+                return candidate
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
@@ -619,9 +629,7 @@ class WorldState:
     def _console_noop_handler(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         return ConsoleCommandResult.ok(envelope, {}, tick=self.tick)
 
-    def _console_employment_status(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_employment_status(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         metrics = self.employment_queue_snapshot()
         payload = {
             "metrics": metrics,
@@ -629,22 +637,16 @@ class WorldState:
         }
         return ConsoleCommandResult.ok(envelope, payload, tick=self.tick)
 
-    def _console_employment_exit(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_employment_exit(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         if not envelope.args:
-            raise ConsoleCommandError(
-                "usage", "employment_exit <review|approve|defer> [agent_id]"
-            )
+            raise ConsoleCommandError("usage", "employment_exit <review|approve|defer> [agent_id]")
         action = str(envelope.args[0])
         if action == "review":
             return ConsoleCommandResult.ok(
                 envelope, self.employment_queue_snapshot(), tick=self.tick
             )
         if len(envelope.args) < 2:
-            raise ConsoleCommandError(
-                "usage", "employment_exit <approve|defer> <agent_id>"
-            )
+            raise ConsoleCommandError("usage", "employment_exit <approve|defer> <agent_id>")
         agent_id = str(envelope.args[1])
         if action == "approve":
             success = self.employment_request_manual_exit(agent_id, tick=self.tick)
@@ -668,22 +670,134 @@ class WorldState:
         if snapshot.job_id is None and self._job_keys:
             snapshot.job_id = self._job_keys[len(self.agents) % len(self._job_keys)]
 
+    def remove_agent(self, agent_id: str, tick: int) -> dict[str, Any] | None:
+        snapshot = self.agents.pop(agent_id, None)
+        if snapshot is None:
+            return None
+        self.queue_manager.remove_agent(agent_id, tick)
+        for object_id, running in list(self._running_affordances.items()):
+            if running.agent_id == agent_id:
+                self._running_affordances.pop(object_id, None)
+        for object_id, occupant in list(self._active_reservations.items()):
+            if occupant == agent_id:
+                self.queue_manager.release(object_id, agent_id, tick, success=False)
+                self._active_reservations.pop(object_id, None)
+                obj = self.objects.get(object_id)
+                if obj is not None:
+                    obj.occupied_by = None
+        self.embedding_allocator.release(agent_id, tick)
+        self._employment_state.pop(agent_id, None)
+        self._employment_manual_exits.discard(agent_id)
+        self._employment_exit_queue_timestamps.pop(agent_id, None)
+        if agent_id in self._employment_exit_queue:
+            self._employment_exit_queue.remove(agent_id)
+        self._employment_remove_from_queue(agent_id)
+        self._relationship_ledgers.pop(agent_id, None)
+        for ledger in self._relationship_ledgers.values():
+            ledger.remove_tie(agent_id, reason="removed")
+        self._rivalry_ledgers.pop(agent_id, None)
+        for ledger in self._rivalry_ledgers.values():
+            ledger.remove(agent_id, reason="removed")
+        for record in self._recent_meal_participants.values():
+            participants = record.get("agents")
+            if isinstance(participants, set):
+                participants.discard(agent_id)
+        self._chat_events = [
+            entry
+            for entry in self._chat_events
+            if entry.get("agent") != agent_id
+            and entry.get("speaker") != agent_id
+            and entry.get("listener") != agent_id
+        ]
+        blueprint = {
+            "agent_id": snapshot.agent_id,
+            "origin_agent_id": snapshot.origin_agent_id or snapshot.agent_id,
+            "personality": snapshot.personality,
+            "job_id": snapshot.job_id,
+            "position": snapshot.position,
+            "home_position": snapshot.home_position,
+        }
+        self._emit_event(
+            "agent_removed",
+            {
+                "agent_id": snapshot.agent_id,
+                "tick": tick,
+            },
+        )
+        return blueprint
+
+    def respawn_agent(self, blueprint: Mapping[str, Any]) -> None:
+        agent_id = str(blueprint.get("agent_id", ""))
+        if not agent_id or agent_id in self.agents:
+            return
+        origin_agent_id = str(
+            blueprint.get("origin_agent_id") or blueprint.get("agent_id") or agent_id
+        )
+        position = blueprint.get("position")
+        position_tuple: tuple[int, int]
+        if (
+            isinstance(position, (list, tuple))
+            and len(position) == 2
+            and all(isinstance(coord, (int, float)) for coord in position)
+        ):
+            x, y = int(position[0]), int(position[1])
+            candidate = (x, y)
+            position_tuple = candidate if self._is_position_walkable(candidate) else (0, 0)
+        else:
+            position_tuple = (0, 0)
+
+        home_position = blueprint.get("home_position")
+        home_tuple: tuple[int, int] | None
+        if (
+            isinstance(home_position, (list, tuple))
+            and len(home_position) == 2
+            and all(isinstance(coord, (int, float)) for coord in home_position)
+        ):
+            home_tuple = (int(home_position[0]), int(home_position[1]))
+        elif isinstance(home_position, tuple) and len(home_position) == 2:
+            home_tuple = (int(home_position[0]), int(home_position[1]))
+        else:
+            home_tuple = None
+        snapshot = AgentSnapshot(
+            agent_id=agent_id,
+            position=position_tuple,
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            wallet=0.0,
+            home_position=home_tuple,
+            origin_agent_id=origin_agent_id,
+        )
+        personality = blueprint.get("personality")
+        if personality is not None:
+            snapshot.personality = personality
+        job_id = blueprint.get("job_id")
+        if isinstance(job_id, str):
+            snapshot.job_id = job_id
+        self.agents[agent_id] = snapshot
+        self._assign_job_if_missing(snapshot)
+        self._sync_agent_spawn(snapshot)
+        self._emit_event(
+            "agent_respawn",
+            {
+                "agent_id": agent_id,
+                "original_agent_id": origin_agent_id,
+                "tick": self.tick,
+            },
+        )
+
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
+        if snapshot.home_position is None:
+            snapshot.home_position = snapshot.position
         ctx = self._get_employment_context(snapshot.agent_id)
         ctx.update(self._employment_context_defaults())
         self._employment_state[snapshot.agent_id] = ctx
         self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
 
-    def _console_spawn_agent(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_spawn_agent(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
             payload = {key: value for key, value in zip(["agent_id", "position"], envelope.args)}
         if not isinstance(payload, Mapping):
-            raise ConsoleCommandError(
-                "invalid_args", "spawn payload must be a mapping"
-            )
+            raise ConsoleCommandError("invalid_args", "spawn payload must be a mapping")
         agent_id = payload.get("agent_id")
         if not isinstance(agent_id, str) or not agent_id:
             raise ConsoleCommandError("invalid_args", "spawn requires agent_id")
@@ -693,9 +807,7 @@ class WorldState:
             )
         position = payload.get("position")
         if not isinstance(position, (list, tuple)) or len(position) != 2:
-            raise ConsoleCommandError(
-                "invalid_args", "position must be [x, y]"
-            )
+            raise ConsoleCommandError("invalid_args", "position must be [x, y]")
         try:
             x, y = int(position[0]), int(position[1])
         except (TypeError, ValueError):
@@ -706,6 +818,27 @@ class WorldState:
                 "position not walkable",
                 details={"position": [x, y]},
             )
+        home_payload = payload.get("home_position")
+        if home_payload is None:
+            home_tuple = (x, y)
+        else:
+            if not isinstance(home_payload, (list, tuple)) or len(home_payload) != 2:
+                raise ConsoleCommandError(
+                    "invalid_args", "home_position must be [x, y]"
+                )
+            try:
+                hx, hy = int(home_payload[0]), int(home_payload[1])
+            except (TypeError, ValueError):
+                raise ConsoleCommandError(
+                    "invalid_args", "home_position must be integers"
+                )
+            home_tuple = (hx, hy)
+            if home_tuple != (x, y) and not self._is_position_walkable(home_tuple):
+                raise ConsoleCommandError(
+                    "invalid_args",
+                    "home_position not walkable",
+                    details={"home_position": [hx, hy]},
+                )
         needs = payload.get("needs") or {}
         if not isinstance(needs, Mapping):
             raise ConsoleCommandError("invalid_args", "needs must be a mapping")
@@ -718,6 +851,7 @@ class WorldState:
             position=(x, y),
             needs={"hunger": hunger, "hygiene": hygiene, "energy": energy},
             wallet=wallet,
+            home_position=home_tuple,
         )
         self.agents[agent_id] = snapshot
         job_override = payload.get("job_id")
@@ -729,19 +863,16 @@ class WorldState:
             "agent_id": agent_id,
             "position": [x, y],
             "job_id": snapshot.job_id,
+            "home_position": list(home_tuple),
         }
         return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
 
-    def _console_teleport_agent(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_teleport_agent(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
             payload = {key: value for key, value in zip(["agent_id", "position"], envelope.args)}
         if not isinstance(payload, Mapping):
-            raise ConsoleCommandError(
-                "invalid_args", "teleport payload must be a mapping"
-            )
+            raise ConsoleCommandError("invalid_args", "teleport payload must be a mapping")
         agent_id = payload.get("agent_id")
         if not isinstance(agent_id, str) or not agent_id:
             raise ConsoleCommandError("invalid_args", "teleport requires agent_id")
@@ -752,9 +883,7 @@ class WorldState:
             )
         position = payload.get("position")
         if not isinstance(position, (list, tuple)) or len(position) != 2:
-            raise ConsoleCommandError(
-                "invalid_args", "position must be [x, y]"
-            )
+            raise ConsoleCommandError("invalid_args", "position must be [x, y]")
         try:
             x, y = int(position[0]), int(position[1])
         except (TypeError, ValueError):
@@ -768,6 +897,7 @@ class WorldState:
         self._release_queue_membership(snapshot.agent_id)
         snapshot.position = (x, y)
         self._sync_reservation_for_agent(snapshot.agent_id)
+        self.request_ctx_reset(agent_id)
         return ConsoleCommandResult.ok(
             envelope, {"agent_id": agent_id, "position": [x, y]}, tick=self.tick
         )
@@ -813,9 +943,7 @@ class WorldState:
         )
         return True
 
-    def _console_set_need(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_set_need(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
             payload = {key: value for key, value in zip(["agent_id", "needs"], envelope.args)}
@@ -857,9 +985,7 @@ class WorldState:
             tick=self.tick,
         )
 
-    def _console_set_price(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_set_price(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
             payload = {key: value for key, value in zip(["key", "value"], envelope.args)}
@@ -869,45 +995,32 @@ class WorldState:
         if not isinstance(key, str) or not key:
             raise ConsoleCommandError("invalid_args", "price requires key")
         if key not in self.config.economy:
-            raise ConsoleCommandError(
-                "not_found", "unknown economy key", details={"key": key}
-            )
+            raise ConsoleCommandError("not_found", "unknown economy key", details={"key": key})
         value = payload.get("value")
         try:
             numeric_value = float(value)
         except (TypeError, ValueError):
-            raise ConsoleCommandError(
-                "invalid_args", "value must be numeric", details={"key": key}
-            )
+            raise ConsoleCommandError("invalid_args", "value must be numeric", details={"key": key})
         self.config.economy[key] = numeric_value
         if key in {"meal_cost", "cook_energy_cost", "cook_hygiene_cost", "ingredients_cost"}:
             self._update_basket_metrics()
         result_payload = {"key": key, "value": numeric_value}
         return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
 
-    def _console_force_chat(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_force_chat(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
             payload = {
-                key: value
-                for key, value in zip(["speaker", "listener", "quality"], envelope.args)
+                key: value for key, value in zip(["speaker", "listener", "quality"], envelope.args)
             }
         if not isinstance(payload, Mapping):
-            raise ConsoleCommandError(
-                "invalid_args", "force_chat payload must be a mapping"
-            )
+            raise ConsoleCommandError("invalid_args", "force_chat payload must be a mapping")
         speaker = payload.get("speaker")
         listener = payload.get("listener")
         if not isinstance(speaker, str) or not isinstance(listener, str):
-            raise ConsoleCommandError(
-                "invalid_args", "force_chat requires speaker and listener"
-            )
+            raise ConsoleCommandError("invalid_args", "force_chat requires speaker and listener")
         if speaker == listener:
-            raise ConsoleCommandError(
-                "invalid_args", "speaker and listener must differ"
-            )
+            raise ConsoleCommandError("invalid_args", "speaker and listener must differ")
         if speaker not in self.agents:
             raise ConsoleCommandError(
                 "not_found", "speaker not found", details={"agent_id": speaker}
@@ -936,9 +1049,7 @@ class WorldState:
         }
         return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
 
-    def _console_set_relationship(
-        self, envelope: ConsoleCommandEnvelope
-    ) -> ConsoleCommandResult:
+    def _console_set_relationship(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
             payload = {
@@ -953,13 +1064,9 @@ class WorldState:
         agent_a = payload.get("agent_a")
         agent_b = payload.get("agent_b")
         if not isinstance(agent_a, str) or not isinstance(agent_b, str):
-            raise ConsoleCommandError(
-                "invalid_args", "set_rel requires agent_a and agent_b"
-            )
+            raise ConsoleCommandError("invalid_args", "set_rel requires agent_a and agent_b")
         if agent_a == agent_b:
-            raise ConsoleCommandError(
-                "invalid_args", "agent_a and agent_b must differ"
-            )
+            raise ConsoleCommandError("invalid_args", "agent_a and agent_b must differ")
         if agent_a not in self.agents:
             raise ConsoleCommandError(
                 "not_found", "agent_a not found", details={"agent_id": agent_a}
@@ -971,20 +1078,22 @@ class WorldState:
         target_trust = payload.get("trust")
         target_fam = payload.get("familiarity")
         target_rivalry = payload.get("rivalry")
-        if (
-            target_trust is None
-            and target_fam is None
-            and target_rivalry is None
-        ):
+        if target_trust is None and target_fam is None and target_rivalry is None:
             raise ConsoleCommandError(
                 "invalid_args", "set_rel requires at least one of trust/familiarity/rivalry"
             )
         forward = self._get_relationship_ledger(agent_a).tie_for(agent_b)
         reverse = self._get_relationship_ledger(agent_b).tie_for(agent_a)
-        current_forward = forward.as_dict() if forward else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
-        current_reverse = reverse.as_dict() if reverse else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
+        current_forward = (
+            forward.as_dict() if forward else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
+        )
+        current_reverse = (
+            reverse.as_dict() if reverse else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
+        )
 
-        def _compute_delta(target: object, current: float, *, clamp_low: float, clamp_high: float) -> float:
+        def _compute_delta(
+            target: object, current: float, *, clamp_low: float, clamp_high: float
+        ) -> float:
             if target is None:
                 return 0.0
             try:
@@ -997,9 +1106,15 @@ class WorldState:
             coerced = max(clamp_low, min(clamp_high, coerced))
             return coerced - current
 
-        delta_trust = _compute_delta(target_trust, current_forward["trust"], clamp_low=-1.0, clamp_high=1.0)
-        delta_fam = _compute_delta(target_fam, current_forward["familiarity"], clamp_low=-1.0, clamp_high=1.0)
-        delta_rivalry = _compute_delta(target_rivalry, current_forward["rivalry"], clamp_low=0.0, clamp_high=1.0)
+        delta_trust = _compute_delta(
+            target_trust, current_forward["trust"], clamp_low=-1.0, clamp_high=1.0
+        )
+        delta_fam = _compute_delta(
+            target_fam, current_forward["familiarity"], clamp_low=-1.0, clamp_high=1.0
+        )
+        delta_rivalry = _compute_delta(
+            target_rivalry, current_forward["rivalry"], clamp_low=0.0, clamp_high=1.0
+        )
 
         self.update_relationship(
             agent_a,
@@ -1057,9 +1172,7 @@ class WorldState:
         if object_id not in bucket:
             bucket.append(object_id)
 
-    def _unindex_object_position(
-        self, object_id: str, position: tuple[int, int]
-    ) -> None:
+    def _unindex_object_position(self, object_id: str, position: tuple[int, int]) -> None:
         bucket = self._objects_by_position.get(position)
         if not bucket:
             return
@@ -1115,9 +1228,7 @@ class WorldState:
             action_duration = int(action.get("duration", 1))
 
             if kind == "request" and object_id:
-                granted = self.queue_manager.request_access(
-                    object_id, agent_id, current_tick
-                )
+                granted = self.queue_manager.request_access(object_id, agent_id, current_tick)
                 self._sync_reservation(object_id)
                 if not granted and action.get("blocked"):
                     self._handle_blocked(object_id, current_tick)
@@ -1129,9 +1240,7 @@ class WorldState:
             elif kind == "start" and object_id:
                 affordance_id = action.get("affordance")
                 if affordance_id:
-                    action_success = self._start_affordance(
-                        agent_id, object_id, affordance_id
-                    )
+                    action_success = self._start_affordance(agent_id, object_id, affordance_id)
             elif kind == "release" and object_id:
                 success = bool(action.get("success", True))
                 running = self._running_affordances.pop(object_id, None)
@@ -1157,9 +1266,7 @@ class WorldState:
                     obj = self.objects.get(object_id)
                     if obj is not None:
                         obj.occupied_by = None
-                self.queue_manager.release(
-                    object_id, agent_id, current_tick, success=success
-                )
+                self.queue_manager.release(object_id, agent_id, current_tick, success=success)
                 self._sync_reservation(object_id)
                 if not success:
                     spec: AffordanceSpec | None = None
@@ -1205,12 +1312,8 @@ class WorldState:
             if self.queue_manager.record_blocked_attempt(object_id):
                 waiting = self.queue_manager.queue_snapshot(object_id)
                 rival = waiting[0] if waiting else None
-                self.queue_manager.release(
-                    object_id, occupant, current_tick, success=False
-                )
-                self.queue_manager.requeue_to_tail(
-                    object_id, occupant, current_tick
-                )
+                self.queue_manager.release(object_id, occupant, current_tick, success=False)
+                self.queue_manager.requeue_to_tail(object_id, occupant, current_tick)
                 if rival is not None:
                     self._record_queue_conflict(
                         object_id=object_id,
@@ -1239,9 +1342,7 @@ class WorldState:
                     spec=spec,
                     extra={"effects": dict(running.effects)},
                 )
-                self.queue_manager.release(
-                    object_id, running.agent_id, current_tick, success=True
-                )
+                self.queue_manager.release(object_id, running.agent_id, current_tick, success=True)
                 self._sync_reservation(object_id)
                 if waiting:
                     next_agent = waiting[0]
@@ -1263,6 +1364,17 @@ class WorldState:
                 )
 
         self._apply_need_decay()
+
+    def request_ctx_reset(self, agent_id: str) -> None:
+        """Mark an agent so the next observation toggles ctx_reset_flag."""
+        if agent_id in self.agents:
+            self._ctx_reset_requests.add(agent_id)
+
+    def consume_ctx_reset_requests(self) -> set[str]:
+        """Return and clear pending ctx-reset requests."""
+        pending = set(self._ctx_reset_requests)
+        self._ctx_reset_requests.clear()
+        return pending
 
     def snapshot(self) -> dict[str, AgentSnapshot]:
         """Return a shallow copy of the agent dictionary for observers."""
@@ -1385,9 +1497,7 @@ class WorldState:
             "last_action_success": snapshot.last_action_success,
             "last_action_duration": snapshot.last_action_duration,
             "wages_paid": self._employment_context_wages(snapshot.agent_id),
-            "punctuality_bonus": self._employment_context_punctuality(
-                snapshot.agent_id
-            ),
+            "punctuality_bonus": self._employment_context_punctuality(snapshot.agent_id),
         }
 
     @property
@@ -1437,18 +1547,10 @@ class WorldState:
         params = self.config.conflict.rivalry
         base_intensity = intensity
         if base_intensity is None:
-            boost = (
-                params.ghost_step_boost
-                if reason == "ghost_step"
-                else params.handover_boost
-            )
-            base_intensity = boost + params.queue_length_boost * max(
-                queue_length - 1, 0
-            )
+            boost = params.ghost_step_boost if reason == "ghost_step" else params.handover_boost
+            base_intensity = boost + params.queue_length_boost * max(queue_length - 1, 0)
         clamped_intensity = min(5.0, max(0.1, base_intensity))
-        self.register_rivalry_conflict(
-            actor, rival, intensity=clamped_intensity, reason=reason
-        )
+        self.register_rivalry_conflict(actor, rival, intensity=clamped_intensity, reason=reason)
         self.update_relationship(
             actor,
             rival,
@@ -1660,9 +1762,7 @@ class WorldState:
         for agent_id in empty_agents:
             self._relationship_ledgers.pop(agent_id, None)
 
-    def _record_relationship_eviction(
-        self, owner_id: str, other_id: str, reason: str
-    ) -> None:
+    def _record_relationship_eviction(self, owner_id: str, other_id: str, reason: str) -> None:
         self._relationship_churn.record_eviction(
             tick=self.tick,
             owner_id=owner_id,
@@ -1794,9 +1894,7 @@ class WorldState:
                 self.queue_manager.release(object_id, occupant, tick, success=False)
             self._sync_reservation(object_id)
 
-    def _start_affordance(
-        self, agent_id: str, object_id: str, affordance_id: str
-    ) -> bool:
+    def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
         if self.queue_manager.active_agent(object_id) != agent_id:
             return False
         if object_id in self._running_affordances:
@@ -1892,9 +1990,7 @@ class WorldState:
         )
         return True
 
-    def _apply_affordance_effects(
-        self, agent_id: str, effects: dict[str, float]
-    ) -> None:
+    def _apply_affordance_effects(self, agent_id: str, effects: dict[str, float]) -> None:
         snapshot = self.agents.get(agent_id)
         if snapshot is None:
             return
@@ -1914,9 +2010,7 @@ class WorldState:
         try:
             manifest = load_affordance_manifest(manifest_path)
         except FileNotFoundError as error:
-            raise RuntimeError(
-                f"Affordance manifest not found at {manifest_path}."
-            ) from error
+            raise RuntimeError(f"Affordance manifest not found at {manifest_path}.") from error
         except AffordanceManifestError as error:
             raise RuntimeError(
                 f"Failed to load affordance manifest {manifest_path}: {error}"
@@ -1984,6 +2078,73 @@ class WorldState:
         self._decay_rivalry_ledgers()
         self._apply_job_state()
         self._update_basket_metrics()
+
+    def apply_nightly_reset(self) -> list[str]:
+        """Return agents home, refresh needs, and reset employment flags."""
+
+        if not self.agents:
+            return []
+        reset_agents: list[str] = []
+        for snapshot in self.agents.values():
+            previous_position = snapshot.position
+            home = snapshot.home_position or snapshot.position
+            if home is None:
+                home = snapshot.position
+                snapshot.home_position = home
+
+            target = home
+            if target is not None and target != snapshot.position:
+                occupied = any(
+                    other.agent_id != snapshot.agent_id and other.position == target
+                    for other in self.agents.values()
+                )
+                blocked = target in self._objects_by_position
+                if not occupied and not blocked:
+                    self._release_queue_membership(snapshot.agent_id)
+                    snapshot.position = target
+                    self._sync_reservation_for_agent(snapshot.agent_id)
+
+            for need_name, value in snapshot.needs.items():
+                snapshot.needs[need_name] = max(0.5, min(1.0, float(value)))
+
+            snapshot.exit_pending = False
+            snapshot.on_shift = False
+            snapshot.shift_state = "pre_shift"
+            snapshot.late_ticks_today = 0
+            ctx = self._get_employment_context(snapshot.agent_id)
+            ctx.update(
+                {
+                    "state": "pre_shift",
+                    "late_penalty_applied": False,
+                    "absence_penalty_applied": False,
+                    "late_event_emitted": False,
+                    "absence_event_emitted": False,
+                    "departure_event_emitted": False,
+                    "late_help_event_emitted": False,
+                    "took_shift_event_emitted": False,
+                    "shift_started_tick": None,
+                    "shift_end_tick": None,
+                    "last_present_tick": None,
+                    "late_ticks": 0,
+                    "shift_outcome_recorded": False,
+                    "ever_on_time": False,
+                    "late_counter_recorded": False,
+                }
+            )
+
+            reset_agents.append(snapshot.agent_id)
+            self._emit_event(
+                "agent_nightly_reset",
+                {
+                    "agent_id": snapshot.agent_id,
+                    "moved": snapshot.position != previous_position,
+                    "home_position": list(snapshot.home_position)
+                    if snapshot.home_position
+                    else None,
+                },
+            )
+
+        return reset_agents
 
     def _assign_jobs_to_agents(self) -> None:
         if not self._job_keys:
@@ -2183,9 +2344,7 @@ class WorldState:
         value = on_time / scheduled
         return max(0.0, min(1.0, value))
 
-    def _employment_idle_state(
-        self, snapshot: AgentSnapshot, ctx: dict[str, Any]
-    ) -> None:
+    def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
         if ctx["state"] != "pre_shift":
             ctx["state"] = "pre_shift"
             ctx["late_penalty_applied"] = False
@@ -2205,16 +2364,12 @@ class WorldState:
         snapshot.shift_state = "pre_shift"
         snapshot.on_shift = False
 
-    def _employment_prepare_state(
-        self, snapshot: AgentSnapshot, ctx: dict[str, Any]
-    ) -> None:
+    def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
         ctx["state"] = "await_start"
         snapshot.shift_state = "await_start"
         snapshot.on_shift = False
 
-    def _employment_begin_shift(
-        self, ctx: dict[str, Any], start: int, end: int
-    ) -> None:
+    def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
         if ctx["shift_started_tick"] != start:
             ctx["shift_started_tick"] = start
             ctx["shift_end_tick"] = end
@@ -2335,9 +2490,7 @@ class WorldState:
 
         if state == "absent":
             if not ctx["absence_penalty_applied"]:
-                snapshot.wallet = max(
-                    0.0, snapshot.wallet - employment_cfg.absence_penalty
-                )
+                snapshot.wallet = max(0.0, snapshot.wallet - employment_cfg.absence_penalty)
                 ctx["absence_penalty_applied"] = True
             snapshot.wages_withheld += wage_rate
             if not ctx["absence_event_emitted"]:
@@ -2377,9 +2530,7 @@ class WorldState:
         if eligible_for_wage and state != "absent":
             snapshot.on_shift = True
             snapshot.wallet += wage_rate
-            snapshot.inventory["wages_earned"] = (
-                snapshot.inventory.get("wages_earned", 0) + 1
-            )
+            snapshot.inventory["wages_earned"] = snapshot.inventory.get("wages_earned", 0) + 1
             ctx["wages_paid"] += wage_rate
         else:
             snapshot.on_shift = False
@@ -2416,9 +2567,7 @@ class WorldState:
         if ctx["absence_event_emitted"] or ctx["state"] == "absent":
             # absence already recorded when event emitted.
             pass
-        snapshot.attendance_ratio = sum(ctx["attendance_samples"]) / len(
-            ctx["attendance_samples"]
-        )
+        snapshot.attendance_ratio = sum(ctx["attendance_samples"]) / len(ctx["attendance_samples"])
         ctx["shift_outcome_recorded"] = True
         ctx["state"] = "post_shift"
         snapshot.shift_state = "post_shift"

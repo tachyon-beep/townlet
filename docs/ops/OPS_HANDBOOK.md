@@ -58,6 +58,9 @@
   - Tune throttles via `telemetry.narration` (global/category cooldowns, dedupe window, rolling window limit). Example: `global_cooldown_ticks=30`, `category_cooldown_ticks.queue_conflict=30` keeps conflict narrations to ~1 every 30 ticks per queue.
   - Recent narrations surface in the observer dashboard (look for the "Narrations" panel); priority items (ghost steps) show a red `!` marker.
   - Snapshot payloads now include `narrations` (latest entries) and `narration_state`; export/import these when copying snapshots between shards to preserve throttle continuity.
+- Nightly reset event:
+  - Telemetry emits `agent_nightly_reset` once per in-sim day with `home_position` and `moved` flags; automation can confirm agents returned home before morning routines.
+  - Console `spawn` responses now include `home_position` so ops can audit nightly destinations when provisioning agents.
   - For long-form audits, redirect the state to JSON: `python scripts/telemetry_summary.py <log> --format json | jq '.narrations'`.
 - Console access: launch the Typer CLI in `scripts/` (placeholder) or connect via REST; default mode is `viewer`, escalate to `admin` only when lifecycle overrides are required. Attach a `cmd_id` to destructive commands so retries stay idempotent.
 - Telemetry snapshot command: `telemetry_snapshot` returns per-agent job status, economy stock, employment queue metrics, and a `schema_version` string (currently `0.2.0`) so tooling can validate compatibility.
@@ -198,6 +201,10 @@
 - `python scripts/telemetry_summary.py <log> --format markdown`
 - `python scripts/audit_bc_datasets.py --versions data/bc_datasets/versions.json`
 - `python scripts/run_anneal_rehearsal.py --exit-on-failure`
+- The observer dashboard’s **Promotion Gate** card (inside the Anneal panel) mirrors pass streak and
+  required passes from the stability monitor. Green border indicates the gate has cleared and the
+  candidate is ready; yellow signals more windows are required; red reflects the last window failing.
+  Use this alongside the Anneal status flags before running `promote_policy`.
 - `python scripts/telemetry_summary.py artifacts/m5/acceptance/logs/anneal_results.json --format markdown > artifacts/m5/acceptance/summary_release.md`
 - `python scripts/telemetry_watch.py artifacts/m5/acceptance/logs/anneal_results.json --anneal-bc-min 0.9`
 

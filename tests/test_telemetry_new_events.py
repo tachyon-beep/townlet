@@ -196,3 +196,41 @@ def test_sleep_events_in_telemetry() -> None:
     assert any(e.get("event") == "sleep_complete" for e in recorded_events)
     narrations = telemetry.latest_narrations()
     assert any(n["category"] == "sleep_complete" for n in narrations)
+
+def test_rivalry_events_surface_in_telemetry() -> None:
+    loop = make_loop()
+    world = loop.world
+    telemetry = loop.telemetry
+
+    for agent_id, position in (("alice", (0, 0)), ("bob", (1, 0))):
+        snapshot = AgentSnapshot(
+            agent_id=agent_id,
+            position=position,
+            needs={"hunger": 0.6, "hygiene": 0.6, "energy": 0.6},
+            wallet=1.0,
+        )
+        world.agents[agent_id] = snapshot
+        world._assign_job_if_missing(snapshot)
+        world._sync_agent_spawn(snapshot)
+
+    world.register_rivalry_conflict("alice", "bob", intensity=1.5, reason="queue_conflict")
+    events = world.drain_events()
+    telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=events,
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+    )
+    snapshot = telemetry.export_state()
+    conflict = snapshot.get("conflict_snapshot", {})
+    rivalry_events = conflict.get("rivalry_events", [])
+    assert rivalry_events
+    assert any(event.get("reason") == "queue_conflict" for event in rivalry_events)

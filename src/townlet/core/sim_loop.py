@@ -60,6 +60,7 @@ class SimulationLoop:
         )
         self.observations = ObservationBuilder(config=self.config)
         self.policy = PolicyRuntime(config=self.config)
+        self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
         if self.config.training.anneal_enable_policy_blend:
             self.policy.enable_anneal_blend(True)
         self.rewards = RewardEngine(config=self.config)
@@ -68,6 +69,7 @@ class SimulationLoop:
         log_path = Path("logs/promotion_history.jsonl")
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
+        self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
 
     def reset(self) -> None:
         """Reset the simulation loop to its initial state."""
@@ -82,9 +84,7 @@ class SimulationLoop:
     def save_snapshot(self, root: Path | None = None) -> Path:
         """Persist the current world relationships and tick to ``root``."""
 
-        target_root = (
-            Path(root).expanduser() if root is not None else self.config.snapshot_root()
-        )
+        target_root = Path(root).expanduser() if root is not None else self.config.snapshot_root()
         manager = SnapshotManager(root=target_root)
         identity_payload = self.config.build_snapshot_identity(
             policy_hash=self.policy.active_policy_hash(),
@@ -163,6 +163,7 @@ class SimulationLoop:
     def step(self) -> TickArtifacts:
         self.tick += 1
         self.world.tick = self.tick
+        self.lifecycle.process_respawns(self.world, tick=self.tick)
         console_ops = self.telemetry.drain_console_buffer()
         self.world.apply_console(console_ops)
         console_results = self.world.consume_console_results()
@@ -171,11 +172,14 @@ class SimulationLoop:
         actions = self.policy.decide(self.world, self.tick)
         self.world.apply_actions(actions)
         self.world.resolve_affordances(current_tick=self.tick)
+        if self._ticks_per_day and self.tick % self._ticks_per_day == 0:
+            self.world.apply_nightly_reset()
         episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
         for snapshot in self.world.agents.values():
             snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
         terminated = self.lifecycle.evaluate(self.world, tick=self.tick)
-        rewards = self.rewards.compute(self.world, terminated)
+        termination_reasons = self.lifecycle.termination_reasons()
+        rewards = self.rewards.compute(self.world, terminated, termination_reasons)
         reward_breakdown = self.rewards.latest_reward_breakdown()
         self.policy.post_step(rewards, terminated)
         observations = self.observations.build_batch(self.world, terminated)
@@ -230,6 +234,7 @@ class SimulationLoop:
         self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
         stability_metrics["promotion_state"] = self.promotion.snapshot()
         self.telemetry.record_stability_metrics(stability_metrics)
+        self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
         return TickArtifacts(observations=observations, rewards=rewards)
 
     def _derive_seed(self, stream: str) -> int:

@@ -582,6 +582,8 @@ Spawn details:
 - Entry: roadside near bus stop/car park.
 - SFX: car arrival “vroom + door thunk” (client-side).
 - Starter kit: `money = rent*1.5`, `food_raw=1`, `clothes_clean=1`.
+- Home routing: assign a home tile (bed/shelter) on spawn; nightly reset returns agents there before morning routines.
+- Identity: respawns should receive a new agent id (e.g., `alice#1`) while tracking the originating id for telemetry/audit.
 - Job: 50% chance pre-assigned entry job; else apply.
 - Personality: sample `extroversion/forgiveness/ambition` from fixed prior.
 - Spawn diversity: use a low‑discrepancy sequence (Sobol/Halton) to spread personalities across the space for small populations.

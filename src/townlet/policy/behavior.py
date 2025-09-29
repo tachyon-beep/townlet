@@ -120,24 +120,20 @@ class ScriptedBehavior(BehaviorController):
                 return intent
         if hygiene < self.thresholds.hygiene_threshold:
             shower_id = self._find_object_of_type(world, "shower")
-            if shower_id:
-                pressure = self._queue_rivalry_pressure(world, agent_id, shower_id)
-                if not self._rivals_in_queue(world, agent_id, shower_id) or pressure < 0.4:
-                    self.pending[agent_id] = {
-                        "object_id": shower_id,
-                        "affordance_id": "use_shower",
-                    }
-                    return AgentIntent(kind="request", object_id=shower_id)
+            if shower_id and not self._rivals_in_queue(world, agent_id, shower_id):
+                self.pending[agent_id] = {
+                    "object_id": shower_id,
+                    "affordance_id": "use_shower",
+                }
+                return AgentIntent(kind="request", object_id=shower_id)
         if energy < self.thresholds.energy_threshold:
             bed_id = self._find_object_of_type(world, "bed")
-            if bed_id:
-                pressure = self._queue_rivalry_pressure(world, agent_id, bed_id)
-                if not self._rivals_in_queue(world, agent_id, bed_id) or pressure < 0.4:
-                    self.pending[agent_id] = {
-                        "object_id": bed_id,
-                        "affordance_id": "rest_sleep",
-                    }
-                    return AgentIntent(kind="request", object_id=bed_id)
+            if bed_id and not self._rivals_in_queue(world, agent_id, bed_id):
+                self.pending[agent_id] = {
+                    "object_id": bed_id,
+                    "affordance_id": "rest_sleep",
+                }
+                return AgentIntent(kind="request", object_id=bed_id)
         return None
 
     def _rivals_in_queue(
@@ -158,44 +154,33 @@ class ScriptedBehavior(BehaviorController):
                 return True
         return False
 
-    def _queue_rivalry_pressure(
-        self, world: WorldState, agent_id: str, object_id: str
-    ) -> float:
-        """Return max rivalry value among agents occupying or waiting for object."""
-
-        pressure = 0.0
-        active = world.queue_manager.active_agent(object_id)
-        if active and active != agent_id:
-            pressure = max(pressure, world.rivalry_value(agent_id, active))
-        for rival_id in world.queue_manager.queue_snapshot(object_id):
-            if rival_id == agent_id:
-                continue
-            pressure = max(pressure, world.rivalry_value(agent_id, rival_id))
-        return pressure
-
     def _plan_meal(self, world: WorldState, agent_id: str) -> Optional[AgentIntent]:
         fridge_id = self._find_object_of_type(world, "fridge")
         stove_id = self._find_object_of_type(world, "stove")
         if fridge_id:
             fridge = world.objects.get(fridge_id)
-            if fridge and fridge.stock.get("meals", 0) > 0:
-                pressure = self._queue_rivalry_pressure(world, agent_id, fridge_id)
-                if not self._rivals_in_queue(world, agent_id, fridge_id) or pressure < 0.3:
-                    self.pending[agent_id] = {
-                        "object_id": fridge_id,
-                        "affordance_id": "eat_meal",
-                    }
-                    return AgentIntent(kind="request", object_id=fridge_id)
+            if (
+                fridge
+                and fridge.stock.get("meals", 0) > 0
+                and not self._rivals_in_queue(world, agent_id, fridge_id)
+            ):
+                self.pending[agent_id] = {
+                    "object_id": fridge_id,
+                    "affordance_id": "eat_meal",
+                }
+                return AgentIntent(kind="request", object_id=fridge_id)
         if stove_id:
             stove = world.objects.get(stove_id)
-            if stove and stove.stock.get("raw_ingredients", 0) > 0:
-                pressure = self._queue_rivalry_pressure(world, agent_id, stove_id)
-                if not self._rivals_in_queue(world, agent_id, stove_id) or pressure < 0.3:
-                    self.pending[agent_id] = {
-                        "object_id": stove_id,
-                        "affordance_id": "cook_meal",
-                    }
-                    return AgentIntent(kind="request", object_id=stove_id)
+            if (
+                stove
+                and stove.stock.get("raw_ingredients", 0) > 0
+                and not self._rivals_in_queue(world, agent_id, stove_id)
+            ):
+                self.pending[agent_id] = {
+                    "object_id": stove_id,
+                    "affordance_id": "cook_meal",
+                }
+                return AgentIntent(kind="request", object_id=stove_id)
         return None
 
     def _find_object_of_type(

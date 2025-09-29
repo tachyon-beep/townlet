@@ -5,6 +5,7 @@ import numpy as np
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.observations.builder import ObservationBuilder
+from townlet.console.command import ConsoleCommandEnvelope
 from townlet.world.grid import AgentSnapshot
 
 
@@ -108,3 +109,86 @@ def test_observation_rivalry_features_reflect_conflict() -> None:
     feature_names = obs["metadata"]["feature_names"]
     assert obs["features"][feature_names.index("rivalry_max")] > 0.0
     assert obs["features"][feature_names.index("rivalry_avoid_count")] >= 1.0
+
+
+def test_observation_queue_and_reservation_flags() -> None:
+    loop = make_world()
+    builder: ObservationBuilder = loop.observations
+    world = loop.world
+
+    world._active_reservations["stove_test"] = "alice"
+    if "stove_test" in world.objects:
+        world.objects["stove_test"].occupied_by = "alice"
+    world.queue_manager.requeue_to_tail("stove_test", "bob", tick=world.tick)
+
+    observations = builder.build_batch(world, terminated={})
+
+    alice_obs = observations["alice"]
+    feature_names = alice_obs["metadata"]["feature_names"]
+    reservation_idx = feature_names.index("reservation_active")
+    assert alice_obs["features"][reservation_idx] == 1.0
+
+    bob_obs = observations["bob"]
+    bob_feature_names = bob_obs["metadata"]["feature_names"]
+    queue_idx = bob_feature_names.index("in_queue")
+    assert bob_obs["features"][queue_idx] == 1.0
+
+
+def test_observation_respawn_resets_features() -> None:
+    loop = make_world()
+    builder: ObservationBuilder = loop.observations
+    world = loop.world
+
+    world.tick = 10
+    world.agents["alice"].needs["hunger"] = 0.01
+    terminated = loop.lifecycle.evaluate(world, tick=world.tick)
+    assert terminated["alice"] is True
+
+    loop.lifecycle.finalize(world, tick=world.tick, terminated=terminated)
+    loop.lifecycle.process_respawns(world, tick=world.tick)
+
+    respawn_id = next(agent_id for agent_id in world.agents if agent_id.startswith("alice"))
+    assert respawn_id != "alice"
+
+    observations = builder.build_batch(world, terminated={})
+    obs = observations[respawn_id]
+    feature_names = obs["metadata"]["feature_names"]
+    hunger_idx = feature_names.index("need_hunger")
+    ctx_idx = feature_names.index("ctx_reset_flag")
+    assert obs["features"][hunger_idx] == 0.5
+    assert obs["features"][ctx_idx] == 0.0
+
+
+def test_ctx_reset_flag_on_teleport_and_possession() -> None:
+    loop = make_world()
+    builder: ObservationBuilder = loop.observations
+    world = loop.world
+
+    envelope = ConsoleCommandEnvelope(
+        name="teleport",
+        args=[],
+        kwargs={"payload": {"agent_id": "alice", "position": [5, 5]}},
+        cmd_id="test-teleport-ctx",
+        mode="admin",
+    )
+    world._console_teleport_agent(envelope)
+
+    observations = builder.build_batch(world, terminated={})
+    alice_obs = observations["alice"]
+    feature_names = alice_obs["metadata"]["feature_names"]
+    idx = feature_names.index("ctx_reset_flag")
+    assert alice_obs["features"][idx] == 1.0
+
+    loop.policy.acquire_possession("bob")
+    observations = builder.build_batch(world, terminated={})
+    bob_obs = observations["bob"]
+    feature_names = bob_obs["metadata"]["feature_names"]
+    idx = feature_names.index("ctx_reset_flag")
+    assert bob_obs["features"][idx] == 1.0
+
+    loop.policy.release_possession("bob")
+    observations = builder.build_batch(world, terminated={})
+    bob_obs = observations["bob"]
+    feature_names = bob_obs["metadata"]["feature_names"]
+    idx = feature_names.index("ctx_reset_flag")
+    assert bob_obs["features"][idx] == 0.0

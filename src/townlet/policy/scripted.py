@@ -52,6 +52,9 @@ class ScriptedPolicyAdapter:
         self.last_actions: dict[str, dict] = {}
         self.last_rewards: dict[str, float] = {}
         self.last_terminated: dict[str, bool] = {}
+        self._latest_snapshot: dict[str, dict[str, object]] = {}
+        self._policy_hash: str | None = None
+        self._anneal_ratio: float | None = None
 
     def decide(self, world: WorldState, tick: int) -> dict[str, dict]:
         actions = self.scripted_policy.decide(world, tick)
@@ -60,6 +63,21 @@ class ScriptedPolicyAdapter:
         self.last_actions = {
             agent_id: actions.get(agent_id, wait_action)
             for agent_id in world.agents.keys()
+        }
+        self._latest_snapshot = {
+            agent_id: {
+                "tick": int(tick),
+                "selected_action": str(action.get("kind", "wait")),
+                "log_prob": 0.0,
+                "value_pred": 0.0,
+                "top_actions": [
+                    {
+                        "action": str(action.get("kind", "wait")),
+                        "probability": 1.0,
+                    }
+                ],
+            }
+            for agent_id, action in self.last_actions.items()
         }
         return self.last_actions
 
@@ -82,3 +100,27 @@ class ScriptedPolicyAdapter:
         self, *, clear: bool = False
     ):  # pragma: no cover - SimulationLoop hook
         return []
+
+    def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
+        return {agent: dict(data) for agent, data in self._latest_snapshot.items()}
+
+    def possessed_agents(self) -> list[str]:  # pragma: no cover - scripted policies
+        return []
+
+    def consume_option_switch_counts(self) -> dict[str, int]:
+        return {}
+
+    def active_policy_hash(self) -> str | None:
+        return self._policy_hash
+
+    def set_policy_hash(self, value: str | None) -> None:
+        self._policy_hash = value
+
+    def current_anneal_ratio(self) -> float | None:
+        return self._anneal_ratio
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        self._anneal_ratio = ratio
+
+    def enable_anneal_blend(self, _: bool) -> None:  # pragma: no cover - scripted policies
+        return

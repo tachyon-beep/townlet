@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any, List
+
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
+
+
+@dataclass
+class _RespawnTicket:
+    agent_id: str
+    scheduled_tick: int
+    blueprint: dict[str, Any]
 
 
 class LifecycleManager:
@@ -14,10 +24,14 @@ class LifecycleManager:
         self.exits_today = 0
         self._employment_day = -1
         self.mortality_enabled = True
+        self.respawn_delay_ticks = max(0, int(getattr(config.lifecycle, "respawn_delay_ticks", 0)))
+        self._pending_respawns: List[_RespawnTicket] = []
+        self._termination_reasons: dict[str, str] = {}
 
     def evaluate(self, world: WorldState, tick: int) -> dict[str, bool]:
         """Return a map of agent_id -> terminated flag."""
         terminated: dict[str, bool] = {}
+        self._termination_reasons = {}
         if self.config.employment.enforce_job_loop:
             employment_terminated = self._evaluate_employment(world, tick)
             terminated.update(employment_terminated)
@@ -25,9 +39,46 @@ class LifecycleManager:
             hunger = snapshot.needs.get("hunger", 0.0)
             if self.mortality_enabled and hunger <= 0.03:
                 terminated[agent_id] = True
+                self._termination_reasons.setdefault(agent_id, "faint")
             else:
                 terminated.setdefault(agent_id, False)
         return terminated
+
+    def finalize(self, world: WorldState, tick: int, terminated: dict[str, bool]) -> None:
+        for agent_id, flag in terminated.items():
+            if not flag:
+                continue
+            blueprint = world.remove_agent(agent_id, tick)
+            if blueprint is None:
+                continue
+            origin = str(blueprint.get("origin_agent_id") or blueprint.get("agent_id") or agent_id)
+            new_agent_id = world.generate_agent_id(origin)
+            blueprint["origin_agent_id"] = origin
+            blueprint["agent_id"] = new_agent_id
+            delay = max(0, int(self.respawn_delay_ticks))
+            scheduled_tick = tick + delay
+            self._pending_respawns.append(
+                _RespawnTicket(
+                    agent_id=agent_id,
+                    scheduled_tick=scheduled_tick,
+                    blueprint=blueprint,
+                )
+            )
+
+    def process_respawns(self, world: WorldState, tick: int) -> None:
+        if not self._pending_respawns:
+            return
+        remaining: list[_RespawnTicket] = []
+        for ticket in self._pending_respawns:
+            if tick >= ticket.scheduled_tick:
+                world.respawn_agent(ticket.blueprint)
+            else:
+                remaining.append(ticket)
+        self._pending_respawns = remaining
+
+    def set_respawn_delay(self, ticks: int) -> None:
+        self.respawn_delay_ticks = max(0, int(ticks))
+        self.config.lifecycle.respawn_delay_ticks = self.respawn_delay_ticks
 
     def set_mortality_enabled(self, enabled: bool) -> None:
         self.mortality_enabled = bool(enabled)
@@ -45,6 +96,11 @@ class LifecycleManager:
     def reset_state(self) -> None:
         self.exits_today = 0
         self._employment_day = -1
+        self._termination_reasons = {}
+
+    def termination_reasons(self) -> dict[str, str]:
+        """Return termination reasons captured during the last evaluation."""
+        return dict(self._termination_reasons)
 
     def _evaluate_employment(self, world: WorldState, tick: int) -> dict[str, bool]:
         results: dict[str, bool] = {}
@@ -55,9 +111,7 @@ class LifecycleManager:
             world._employment_exits_today = 0
 
         for agent_id in list(world._employment_manual_exits):
-            if self._employment_execute_exit(
-                world, agent_id, tick, reason="manual_approve"
-            ):
+            if self._employment_execute_exit(world, agent_id, tick, reason="manual_approve"):
                 results[agent_id] = True
             world._employment_manual_exits.discard(agent_id)
 
@@ -69,15 +123,12 @@ class LifecycleManager:
         for agent_id in list(world._employment_exit_queue):
             enqueue_tick = world._employment_exit_queue_timestamps.get(agent_id, tick)
             if tick - enqueue_tick >= cfg.exit_review_window:
-                if self._employment_execute_exit(
-                    world, agent_id, tick, reason="auto_review"
-                ):
+                if self._employment_execute_exit(world, agent_id, tick, reason="auto_review"):
                     results[agent_id] = True
 
         # Process daily cap for remaining queue entries.
         while world._employment_exit_queue and (
-            cfg.daily_exit_cap == 0
-            or world._employment_exits_today < cfg.daily_exit_cap
+            cfg.daily_exit_cap == 0 or world._employment_exits_today < cfg.daily_exit_cap
         ):
             agent_id = world._employment_exit_queue[0]
             if self._employment_execute_exit(world, agent_id, tick, reason="daily_cap"):
@@ -112,4 +163,5 @@ class LifecycleManager:
                 "tick": tick,
             },
         )
+        self._termination_reasons[agent_id] = "eviction"
         return True

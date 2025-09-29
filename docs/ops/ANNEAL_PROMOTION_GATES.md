@@ -47,6 +47,29 @@
 
 > **Action:** Flag promotion as “hold” if any dimension breaches thresholds; require corrective run or dataset refresh before go-live.
 
+### How Promotion Windows Are Evaluated
+
+The stability monitor tracks promotion readiness using the configuration block at
+`SimulationConfig.stability.promotion`:
+
+- `required_passes`: consecutive windows that must complete without disallowed alerts.
+- `window_ticks`: number of simulation ticks per evaluation window (rolling).
+- `allowed_alerts`: alert identifiers that do **not** invalidate a window (for example,
+  `embedding_reuse_warning` during expected reuse spikes).
+
+On every tick, the monitor compares the active alert list against `allowed_alerts`.
+If any other alert appears, the current window is marked as failed. When the window
+length elapses:
+
+1. The window is finalised; success increments the pass streak, failure resets it.
+2. `candidate_ready` becomes `True` once `pass_streak >= required_passes`.
+3. Telemetry snapshots expose `promotion.pass_streak`, `promotion.required_passes`,
+   and `promotion.candidate_ready` so the UI and gate automation can surface the
+   remaining passes.
+
+> **Operational rule:** promotion remains blocked until the candidate is ready **and**
+> the automated KPI checks above stay within bounds.
+
 ## Rollback Triggers & Detection Logic
 
 1. **BC accuracy dip** — If `bc_accuracy < 0.85` on any rehearsal or production run:

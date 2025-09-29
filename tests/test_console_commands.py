@@ -36,9 +36,7 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     for _ in range(5):
         loop.step()
 
-    result = router.dispatch(
-        ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})
-    )
+    result = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
     assert result["schema_version"] == loop.telemetry.schema()
     assert result["schema_warning"] is None
     assert "jobs" in result and "economy" in result and "employment" in result
@@ -52,7 +50,6 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     assert "alerts" in result["stability"]
     assert isinstance(result["stability"]["alerts"], list)
     assert "thresholds" in result["stability"]["metrics"]
-
 
 
 def test_console_conflict_status_reports_history() -> None:
@@ -77,7 +74,9 @@ def test_console_conflict_status_reports_history() -> None:
             wallet=1.2,
         ),
     )
-    router = create_console_router(loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config)
+    router = create_console_router(
+        loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
+    )
     for _ in range(3):
         loop.step()
     world.register_rivalry_conflict("alice", "bob", intensity=1.2)
@@ -93,18 +92,42 @@ def test_console_queue_inspect_returns_queue_details() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
     world = loop.world
-    router = create_console_router(loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config)
+    router = create_console_router(
+        loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
+    )
     queue_id = "test_object"
     world.queue_manager.request_access(queue_id, "alice", tick=0)
     world.queue_manager.request_access(queue_id, "bob", tick=1)
     world.queue_manager.record_blocked_attempt(queue_id)
-    result = router.dispatch(
-        ConsoleCommand(name="queue_inspect", args=(queue_id,), kwargs={})
-    )
+    result = router.dispatch(ConsoleCommand(name="queue_inspect", args=(queue_id,), kwargs={}))
     assert result["object_id"] == queue_id
     assert result["queue"]
     assert "metrics" in result
     assert isinstance(result["cooldowns"], list)
+
+
+def test_console_set_spawn_delay_updates_lifecycle() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        promotion=loop.promotion,
+        policy=loop.policy,
+        config=config,
+        lifecycle=loop.lifecycle,
+        mode="admin",
+    )
+    response = router.dispatch(
+        ConsoleCommand(
+            name="set_spawn_delay",
+            args=("5",),
+            kwargs={"cmd_id": "spawn-delay"},
+        )
+    )
+    assert response["respawn_delay_ticks"] == 5
+    assert loop.lifecycle.respawn_delay_ticks == 5
 
 
 def test_console_rivalry_dump_reports_pairs() -> None:
@@ -130,7 +153,9 @@ def test_console_rivalry_dump_reports_pairs() -> None:
         ),
     )
     world.register_rivalry_conflict("alice", "bob", intensity=2.0)
-    router = create_console_router(loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config)
+    router = create_console_router(
+        loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
+    )
     summary = router.dispatch(ConsoleCommand(name="rivalry_dump", args=(), kwargs={}))
     assert summary["pairs"]
     alice_view = router.dispatch(
@@ -157,9 +182,7 @@ def test_employment_console_commands_manage_queue() -> None:
     )
 
     world._employment_enqueue_exit("alice", world.tick)
-    review = router.dispatch(
-        ConsoleCommand(name="employment_exit", args=("review",), kwargs={})
-    )
+    review = router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={}))
     assert review["pending_count"] == 1
 
     defer = router.dispatch(
@@ -175,9 +198,7 @@ def test_employment_console_commands_manage_queue() -> None:
     assert approve["approved"] is True
     assert "alice" in world._employment_manual_exits
 
-    status = router.dispatch(
-        ConsoleCommand(name="employment_status", args=(), kwargs={})
-    )
+    status = router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={}))
     assert status["schema_version"] == loop.telemetry.schema()
     assert status["schema_warning"] is None
     assert "metrics" in status
@@ -191,9 +212,7 @@ def test_console_schema_warning_for_newer_version() -> None:
         loop.telemetry, loop.world, loop.perturbations, policy=loop.policy, config=config
     )
 
-    snapshot = router.dispatch(
-        ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})
-    )
+    snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
     assert snapshot["schema_version"] == "0.4.0"
     assert isinstance(snapshot["schema_warning"], str)
 
@@ -238,9 +257,7 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
         config=config,
     )
 
-    queue_before = router.dispatch(
-        ConsoleCommand(name="perturbation_queue", args=(), kwargs={})
-    )
+    queue_before = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
     assert queue_before["active"] == {}
 
     trigger_pending = router.dispatch(
@@ -251,9 +268,7 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
         )
     )
     pending_id = trigger_pending["event"]["event_id"]
-    queue_mid = router.dispatch(
-        ConsoleCommand(name="perturbation_queue", args=(), kwargs={})
-    )
+    queue_mid = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
     assert any(evt["event_id"] == pending_id for evt in queue_mid["pending"])
     cancel_pending = router.dispatch(
         ConsoleCommand(name="perturbation_cancel", args=(pending_id,), kwargs={})
@@ -272,9 +287,7 @@ def test_console_perturbation_commands_schedule_and_cancel() -> None:
     loop.step()
     telemetry_state = loop.telemetry.latest_perturbations()
 
-    queue_after = router.dispatch(
-        ConsoleCommand(name="perturbation_queue", args=(), kwargs={})
-    )
+    queue_after = router.dispatch(ConsoleCommand(name="perturbation_queue", args=(), kwargs={}))
     assert active_id not in queue_after["active"]
     assert "price_spike" in telemetry_state["cooldowns"]["spec"]
 
