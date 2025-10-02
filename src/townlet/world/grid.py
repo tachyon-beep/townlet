@@ -31,6 +31,14 @@ from townlet.console.command import (
 )
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
+from townlet.world.affordances import (
+    AffordanceOutcome,
+    DefaultAffordanceRuntime,
+    HookPayload,
+    RunningAffordanceState,
+    apply_affordance_outcome,
+    build_hook_payload,
+)
 from townlet.world.queue_manager import QueueManager
 from townlet.world.employment import EmploymentEngine
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
@@ -40,7 +48,6 @@ from townlet.world.preconditions import (
     CompiledPrecondition,
     PreconditionSyntaxError,
     compile_preconditions,
-    evaluate_preconditions,
 )
 
 
@@ -275,6 +282,14 @@ class WorldState:
         if extra:
             modules.extend(module.strip() for module in extra.split(",") if module.strip())
         load_hook_modules(self, modules)
+        self._affordance_runtime = DefaultAffordanceRuntime(
+            self,
+            running_cls=RunningAffordance,
+        )
+
+    @property
+    def affordance_runtime(self) -> DefaultAffordanceRuntime:
+        return self._affordance_runtime
 
     def generate_agent_id(self, base_id: str) -> str:
         base = base_id or "agent"
@@ -455,32 +470,57 @@ class WorldState:
         if not hook_names or spec is None:
             return True
         continue_execution = True
+        debug_enabled = logger.isEnabledFor(logging.DEBUG)
         for hook_name in hook_names:
             handlers = self._hook_registry.handlers_for(hook_name)
             if not handlers:
                 continue
-            base_context = {
-                "stage": stage,
-                "hook": hook_name,
-                "tick": self.tick,
-                "agent_id": agent_id,
-                "object_id": object_id,
-                "affordance_id": spec.affordance_id,
-                "world": self,
-                "spec": spec,
-            }
-            if extra:
-                base_context.update(extra)
+            hook_timer = time.perf_counter() if debug_enabled else None
+            base_payload: HookPayload = build_hook_payload(
+                stage=stage,
+                hook=hook_name,
+                tick=self.tick,
+                agent_id=agent_id,
+                object_id=object_id,
+                affordance_id=spec.affordance_id,
+                world=self,
+                spec=spec,
+                extra=extra,
+            )
             for handler in handlers:
-                context = dict(base_context)
+                context: dict[str, object] = dict(base_payload)
+                handler_timer = time.perf_counter() if debug_enabled else None
                 try:
                     handler(context)
                 except Exception:  # pragma: no cover - defensive
                     logger.exception("Affordance hook '%s' failed", hook_name)
                     continue_execution = False
                     continue
+                if debug_enabled and handler_timer is not None:
+                    handler_duration_ms = (time.perf_counter() - handler_timer) * 1000.0
+                    handler_name = getattr(
+                        handler,
+                        "__qualname__",
+                        getattr(handler, "__name__", handler.__class__.__name__),
+                    )
+                    logger.debug(
+                        "world.resolve_affordances.hook_handler stage=%s hook=%s handler=%s duration_ms=%.2f",
+                        stage,
+                        hook_name,
+                        handler_name,
+                        handler_duration_ms,
+                    )
                 if context.get("cancel"):
                     continue_execution = False
+            if debug_enabled and hook_timer is not None:
+                hook_duration_ms = (time.perf_counter() - hook_timer) * 1000.0
+                logger.debug(
+                    "world.resolve_affordances.hook stage=%s hook=%s handlers=%s duration_ms=%.2f",
+                    stage,
+                    hook_name,
+                    len(handlers),
+                    hook_duration_ms,
+                )
         return continue_execution
 
     def _build_precondition_context(
@@ -676,9 +716,7 @@ class WorldState:
         if snapshot is None:
             return None
         self.queue_manager.remove_agent(agent_id, tick)
-        for object_id, running in list(self._running_affordances.items()):
-            if running.agent_id == agent_id:
-                self._running_affordances.pop(object_id, None)
+        self._affordance_runtime.remove_agent(agent_id)
         for object_id, occupant in list(self._active_reservations.items()):
             if occupant == agent_id:
                 self.queue_manager.release(object_id, agent_id, tick, success=False)
@@ -1216,6 +1254,7 @@ class WorldState:
     def apply_actions(self, actions: dict[str, Any]) -> None:
         """Apply agent actions for the current tick."""
         current_tick = self.tick
+        runtime = self._affordance_runtime
         for agent_id, action in actions.items():
             snapshot = self.agents.get(agent_id)
             if snapshot is None:
@@ -1227,6 +1266,8 @@ class WorldState:
             object_id = action.get("object")
             action_success = False
             action_duration = int(action.get("duration", 1))
+            outcome_affordance_id: str | None = None
+            outcome_metadata: dict[str, object] = {}
 
             if kind == "request" and object_id:
                 granted = self.queue_manager.request_access(object_id, agent_id, current_tick)
@@ -1241,146 +1282,58 @@ class WorldState:
             elif kind == "start" and object_id:
                 affordance_id = action.get("affordance")
                 if affordance_id:
-                    action_success = self._start_affordance(agent_id, object_id, affordance_id)
+                    affordance_id_str = str(affordance_id)
+                    action_success, start_metadata = runtime.start(
+                        agent_id,
+                        object_id,
+                        affordance_id_str,
+                        tick=current_tick,
+                    )
+                    outcome_affordance_id = affordance_id_str
+                    if start_metadata:
+                        outcome_metadata.update(start_metadata)
             elif kind == "release" and object_id:
                 success = bool(action.get("success", True))
-                running = self._running_affordances.pop(object_id, None)
-                if running is not None and success:
-                    self._apply_affordance_effects(running.agent_id, running.effects)
-                    spec = self.affordances.get(running.affordance_id)
-                    self._dispatch_affordance_hooks(
-                        "after",
-                        spec.hooks.get("after", ()) if spec else (),
-                        agent_id=running.agent_id,
-                        object_id=object_id,
-                        spec=spec,
-                        extra={"effects": dict(running.effects)},
-                    )
-                    self._emit_event(
-                        "affordance_finish",
-                        {
-                            "agent_id": running.agent_id,
-                            "object_id": object_id,
-                            "affordance_id": running.affordance_id,
-                        },
-                    )
-                    obj = self.objects.get(object_id)
-                    if obj is not None:
-                        obj.occupied_by = None
-                self.queue_manager.release(object_id, agent_id, current_tick, success=success)
-                self._sync_reservation(object_id)
-                if not success:
-                    spec: AffordanceSpec | None = None
-                    if running is not None:
-                        spec = self.affordances.get(running.affordance_id)
-                        self._dispatch_affordance_hooks(
-                            "fail",
-                            spec.hooks.get("fail", ()) if spec else (),
-                            agent_id=agent_id,
-                            object_id=object_id,
-                            spec=spec,
-                            extra={"reason": action.get("reason")},
-                        )
-                        self._emit_event(
-                            "affordance_fail",
-                            {
-                                "agent_id": agent_id,
-                                "object_id": object_id,
-                                "affordance_id": running.affordance_id,
-                            },
-                        )
-                    self._running_affordances.pop(object_id, None)
+                affordance_hint = action.get("affordance")
+                reason_value = action.get("reason")
+                outcome_affordance_id, release_metadata = runtime.release(
+                    agent_id,
+                    object_id,
+                    success=success,
+                    reason=str(reason_value) if reason_value is not None else None,
+                    requested_affordance_id=str(affordance_hint)
+                    if affordance_hint is not None
+                    else None,
+                    tick=current_tick,
+                )
                 action_success = success
+                if release_metadata:
+                    outcome_metadata.update(release_metadata)
             elif kind == "blocked" and object_id:
-                self._handle_blocked(object_id, current_tick)
+                runtime.handle_blocked(object_id, current_tick)
                 action_success = False
-            # TODO(@townlet): Update agent snapshot based on outcomes.
 
             if kind:
-                snapshot.last_action_id = str(kind)
-                snapshot.last_action_success = action_success
-                snapshot.last_action_duration = action_duration
+                outcome = AffordanceOutcome(
+                    agent_id=agent_id,
+                    kind=str(kind),
+                    success=action_success,
+                    duration=action_duration,
+                    object_id=str(object_id) if isinstance(object_id, str) else None,
+                    affordance_id=str(outcome_affordance_id) if outcome_affordance_id else None,
+                    tick=current_tick,
+                    metadata=dict(outcome_metadata) if outcome_metadata else {},
+                )
+                apply_affordance_outcome(snapshot, outcome)
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
-        start = time.perf_counter()
-        # Tick the queue manager so cooldowns expire and fairness checks apply.
-        self.queue_manager.on_tick(current_tick)
-        # Automatically monitor stalled queues and trigger ghost steps when required.
-        for object_id, occupant in list(self._active_reservations.items()):
-            queue = self.queue_manager.queue_snapshot(object_id)
-            if not queue:
-                continue
-            if self.queue_manager.record_blocked_attempt(object_id):
-                waiting = self.queue_manager.queue_snapshot(object_id)
-                rival = waiting[0] if waiting else None
-                self.queue_manager.release(object_id, occupant, current_tick, success=False)
-                self.queue_manager.requeue_to_tail(object_id, occupant, current_tick)
-                if rival is not None:
-                    self._record_queue_conflict(
-                        object_id=object_id,
-                        actor=occupant,
-                        rival=rival,
-                        reason="ghost_step",
-                        queue_length=len(waiting),
-                        intensity=None,
-                    )
-                self._running_affordances.pop(object_id, None)
-                self._sync_reservation(object_id)
-        # TODO(@townlet): Integrate with affordance registry and hook dispatch.
+        self._affordance_runtime.resolve(tick=current_tick)
 
-        for object_id, running in list(self._running_affordances.items()):
-            running.duration_remaining -= 1
-            if running.duration_remaining <= 0:
-                self._apply_affordance_effects(running.agent_id, running.effects)
-                self._running_affordances.pop(object_id, None)
-                waiting = self.queue_manager.queue_snapshot(object_id)
-                spec = self.affordances.get(running.affordance_id)
-                self._dispatch_affordance_hooks(
-                    "after",
-                    spec.hooks.get("after", ()) if spec else (),
-                    agent_id=running.agent_id,
-                    object_id=object_id,
-                    spec=spec,
-                    extra={"effects": dict(running.effects)},
-                )
-                self.queue_manager.release(object_id, running.agent_id, current_tick, success=True)
-                self._sync_reservation(object_id)
-                if waiting:
-                    next_agent = waiting[0]
-                    self._record_queue_conflict(
-                        object_id=object_id,
-                        actor=running.agent_id,
-                        rival=next_agent,
-                        reason="handover",
-                        queue_length=len(waiting),
-                        intensity=0.5,
-                    )
-                self._emit_event(
-                    "affordance_finish",
-                    {
-                        "agent_id": running.agent_id,
-                        "object_id": object_id,
-                        "affordance_id": running.affordance_id,
-                    },
-                )
+    def running_affordances_snapshot(self) -> dict[str, RunningAffordanceState]:
+        """Return a serializable view of running affordances (for tests/telemetry)."""
 
-        if logger.isEnabledFor(logging.DEBUG):
-            duration_ms = (time.perf_counter() - start) * 1000.0
-            running_count = len(self._running_affordances)
-            queued_agents = sum(
-                len(self.queue_manager.queue_snapshot(object_id))
-                for object_id in self.objects.keys()
-            )
-            logger.debug(
-                "world.resolve_affordances tick=%s duration_ms=%.2f running=%s queued_agents=%s",
-                current_tick,
-                duration_ms,
-                running_count,
-                queued_agents,
-            )
-
-        self._apply_need_decay()
+        return self._affordance_runtime.running_snapshot()
 
     def request_ctx_reset(self, agent_id: str) -> None:
         """Mark an agent so the next observation toggles ctx_reset_flag."""
@@ -1893,119 +1846,16 @@ class WorldState:
                 obj.occupied_by = active
 
     def _handle_blocked(self, object_id: str, tick: int) -> None:
-        if self.queue_manager.record_blocked_attempt(object_id):
-            occupant = self.queue_manager.active_agent(object_id)
-            running = self._running_affordances.pop(object_id, None)
-            spec: AffordanceSpec | None = None
-            if running is not None:
-                spec = self.affordances.get(running.affordance_id)
-                self._dispatch_affordance_hooks(
-                    "fail",
-                    spec.hooks.get("fail", ()) if spec else (),
-                    agent_id=running.agent_id,
-                    object_id=object_id,
-                    spec=spec,
-                    extra={"reason": "ghost_step"},
-                )
-            if occupant is not None:
-                self.queue_manager.release(object_id, occupant, tick, success=False)
-            self._sync_reservation(object_id)
+        self._affordance_runtime.handle_blocked(object_id, tick)
 
     def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
-        if self.queue_manager.active_agent(object_id) != agent_id:
-            return False
-        if object_id in self._running_affordances:
-            return False
-        obj = self.objects.get(object_id)
-        spec = self.affordances.get(affordance_id)
-        if obj is None or spec is None:
-            return False
-        if spec.object_type != obj.object_type:
-            return False
-
-        if spec.compiled_preconditions:
-            context = self._build_precondition_context(
-                agent_id=agent_id,
-                object_id=object_id,
-                spec=spec,
-            )
-            ok, failed = evaluate_preconditions(
-                spec.compiled_preconditions,
-                context,
-            )
-            if not ok:
-                context_snapshot = self._snapshot_precondition_context(context)
-                payload = {
-                    "agent_id": agent_id,
-                    "object_id": object_id,
-                    "affordance_id": affordance_id,
-                    "condition": failed.source if failed else None,
-                    "context": context_snapshot,
-                }
-                logger.debug(
-                    "Precondition failed for affordance '%s' (agent=%s, object=%s, condition=%s)",
-                    affordance_id,
-                    agent_id,
-                    object_id,
-                    payload["condition"],
-                )
-                self._dispatch_affordance_hooks(
-                    "fail",
-                    spec.hooks.get("fail", ()),
-                    agent_id=agent_id,
-                    object_id=object_id,
-                    spec=spec,
-                    extra={
-                        "reason": "precondition_failed",
-                        "condition": payload["condition"],
-                        "context": context_snapshot,
-                    },
-                )
-                self._emit_event("affordance_precondition_fail", payload)
-                self._emit_event(
-                    "affordance_fail",
-                    {
-                        **payload,
-                        "reason": "precondition_failed",
-                    },
-                )
-                if self.queue_manager.active_agent(object_id) == agent_id:
-                    self.queue_manager.release(object_id, agent_id, self.tick, success=False)
-                    self._sync_reservation(object_id)
-                return False
-
-        self._running_affordances[object_id] = RunningAffordance(
-            agent_id=agent_id,
-            affordance_id=affordance_id,
-            duration_remaining=max(spec.duration, 1),
-            effects=spec.effects,
+        success, _ = self._affordance_runtime.start(
+            agent_id,
+            object_id,
+            affordance_id,
+            tick=self.tick,
         )
-        obj.occupied_by = agent_id
-        continue_start = self._dispatch_affordance_hooks(
-            "before",
-            spec.hooks.get("before", ()),
-            agent_id=agent_id,
-            object_id=object_id,
-            spec=spec,
-        )
-        if not continue_start:
-            self._running_affordances.pop(object_id, None)
-            if obj.occupied_by == agent_id:
-                obj.occupied_by = None
-            if self.queue_manager.active_agent(object_id) == agent_id:
-                self.queue_manager.release(object_id, agent_id, self.tick, success=False)
-                self._sync_reservation(object_id)
-            return False
-        self._emit_event(
-            "affordance_start",
-            {
-                "agent_id": agent_id,
-                "object_id": object_id,
-                "affordance_id": affordance_id,
-                "duration": spec.duration,
-            },
-        )
-        return True
+        return success
 
     def _apply_affordance_effects(self, agent_id: str, effects: dict[str, float]) -> None:
         snapshot = self.agents.get(agent_id)
