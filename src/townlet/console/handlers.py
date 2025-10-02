@@ -103,6 +103,7 @@ class TelemetryBridge:
             },
             "perturbations": self._publisher.latest_perturbations(),
             "transport": self._publisher.latest_transport_status(),
+            "health": self._publisher.latest_health_status(),
             "console_results": self._publisher.latest_console_results(),
             "possessed_agents": self._publisher.latest_possessed_agents(),
             "precondition_failures": self._publisher.latest_precondition_failures(),
@@ -121,8 +122,10 @@ def create_console_router(
     lifecycle: "LifecycleManager" | None = None,
 ) -> ConsoleRouter:
     router = ConsoleRouter()
+    allowed_snapshot_roots: tuple[Path, ...] = ()
     if config is not None:
         config.register_snapshot_migrations()
+        allowed_snapshot_roots = config.snapshot_allowed_roots()
     bridge = TelemetryBridge(publisher)
 
     def _forbidden(_: ConsoleCommand) -> object:
@@ -177,6 +180,46 @@ def create_console_router(
             )
             publisher.update_policy_identity(identity)
 
+    def _is_path_allowed(resolved: Path) -> bool:
+        return any(
+            resolved == root or resolved.is_relative_to(root)
+            for root in allowed_snapshot_roots
+        )
+
+    def _resolve_snapshot_input(
+        value: object,
+        *,
+        require_exists: bool,
+        require_file: bool,
+    ) -> tuple[Path | None, dict[str, object] | None]:
+        if not allowed_snapshot_roots:
+            return None, {
+                "error": "unsupported",
+                "message": "snapshot commands require configured snapshot roots",
+            }
+        try:
+            candidate = Path(str(value)).expanduser()
+            resolved = candidate.resolve()
+        except Exception as exc:  # pragma: no cover - defensive
+            return None, {
+                "error": "invalid_path",
+                "message": str(exc),
+            }
+        if require_exists and not resolved.exists():
+            return None, {"error": "not_found", "path": str(resolved)}
+        if require_file:
+            if resolved.is_dir():
+                return None, {
+                    "error": "invalid_path",
+                    "message": "snapshot path must reference a file",
+                }
+        if not _is_path_allowed(resolved):
+            return None, {
+                "error": "forbidden",
+                "message": "path is outside permitted snapshot roots",
+            }
+        return resolved, None
+
     def _parse_snapshot_path(
         command: ConsoleCommand, usage: str
     ) -> tuple[Path | None, dict[str, object] | None]:
@@ -185,22 +228,11 @@ def create_console_router(
             path_arg = command.args[0]
         if path_arg is None:
             return None, {"error": "usage", "message": usage}
-        try:
-            path = Path(str(path_arg)).expanduser()
-            path = path.resolve()
-        except Exception as exc:  # pragma: no cover - defensive
-            return None, {
-                "error": "invalid_path",
-                "message": str(exc),
-            }
-        if not path.exists():
-            return None, {"error": "not_found", "path": str(path)}
-        if path.is_dir():
-            return None, {
-                "error": "invalid_path",
-                "message": "snapshot path must reference a file",
-            }
-        return path, None
+        return _resolve_snapshot_input(
+            path_arg,
+            require_exists=True,
+            require_file=True,
+        )
 
     def _require_config() -> tuple[SimulationConfig | None, dict[str, object] | None]:
         if config is None:
@@ -212,6 +244,12 @@ def create_console_router(
 
     def telemetry_handler(command: ConsoleCommand) -> object:
         return bridge.snapshot()
+
+    def health_status_handler(command: ConsoleCommand) -> object:
+        return {
+            "health": publisher.latest_health_status(),
+            "transport": publisher.latest_transport_status(),
+        }
 
     def employment_status_handler(command: ConsoleCommand) -> object:
         version, warning = _schema_metadata(publisher)
@@ -810,7 +848,14 @@ def create_console_router(
         output_arg = command.kwargs.get("output")
         saved_path: Path | None = None
         if output_arg is not None:
-            output_dir = Path(str(output_arg)).expanduser()
+            output_dir, error = _resolve_snapshot_input(
+                output_arg,
+                require_exists=False,
+                require_file=False,
+            )
+            if error:
+                return error
+            assert output_dir is not None
             if output_dir.suffix:
                 return {
                     "error": "invalid_args",
@@ -833,6 +878,7 @@ def create_console_router(
     router.register("queue_inspect", queue_inspect_handler)
     router.register("rivalry_dump", rivalry_dump_handler)
     router.register("telemetry_snapshot", telemetry_handler)
+    router.register("health_status", health_status_handler)
     router.register("employment_status", employment_status_handler)
     router.register("employment_exit", employment_exit_handler)
     router.register("promotion_status", promotion_status_handler)

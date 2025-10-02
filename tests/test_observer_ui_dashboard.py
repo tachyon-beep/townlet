@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from dataclasses import replace
 
 import pytest
@@ -10,6 +9,7 @@ from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.models import torch_available
 from townlet_ui.dashboard import _build_map_panel, render_snapshot, run_dashboard, _promotion_border_style, _derive_promotion_reason
 from townlet_ui.telemetry import TelemetryClient, AnnealStatus, PromotionSnapshot
+from rich.console import Console
 
 
 def make_loop() -> SimulationLoop:
@@ -49,6 +49,12 @@ def test_render_snapshot_produces_panels() -> None:
 
     panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00"))
     assert panels
+    telemetry_panel = next(panel for panel in panels if (panel.title or "") == "Telemetry")
+    console = Console(record=True, width=120)
+    console.print(telemetry_panel)
+    header_text = console.export_text()
+    assert "Queue backlog" in header_text
+    assert "Tick duration" in header_text
     panel_titles = [getattr(p, "title", "") for p in panels]
     assert any((title or "").startswith("Employment") for title in panel_titles)
     assert any((title or "").startswith("Conflict") for title in panel_titles)
@@ -169,8 +175,6 @@ def test_narration_panel_shows_styled_categories() -> None:
     assert snapshot.narrations, "Expected narrations to be populated"
     panels = list(render_snapshot(snapshot, tick=loop.tick + 1, refreshed="00:00:00"))
     narration_panel = next(panel for panel in panels if (panel.title or "").startswith("Narrations"))
-    from rich.console import Console
-
     console = Console(record=True, width=120)
     console.print(narration_panel)
     rendered = console.export_text()

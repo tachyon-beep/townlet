@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import logging
 import os
+import copy
 from collections import OrderedDict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -1378,7 +1379,7 @@ class WorldState:
 
     def snapshot(self) -> dict[str, AgentSnapshot]:
         """Return a shallow copy of the agent dictionary for observers."""
-        return dict(self.agents)
+        return {agent_id: copy.deepcopy(snapshot) for agent_id, snapshot in self.agents.items()}
 
     def local_view(
         self,

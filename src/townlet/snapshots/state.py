@@ -499,7 +499,7 @@ class SnapshotManager:
     """Handles save/load of simulation state and RNG streams."""
 
     def __init__(self, root: Path) -> None:
-        self.root = root
+        self.root = Path(root).expanduser().resolve()
 
     def save(self, state: SnapshotState) -> Path:
         document = {
@@ -507,7 +507,9 @@ class SnapshotManager:
             "state": state.as_dict(),
         }
         self.root.mkdir(parents=True, exist_ok=True)
-        target = self.root / f"snapshot-{state.tick}.json"
+        target = (self.root / f"snapshot-{state.tick}.json").resolve()
+        if not target.is_relative_to(self.root):  # type: ignore[attr-defined]
+            raise ValueError("Snapshot target escaped configured root")
         target.write_text(json.dumps(document, indent=2, sort_keys=True))
         return target
 
@@ -520,9 +522,12 @@ class SnapshotManager:
         allow_downgrade: bool | None = None,
         require_exact_config: bool | None = None,
     ) -> SnapshotState:
-        if not path.exists():
-            raise FileNotFoundError(path)
-        payload = json.loads(path.read_text())
+        resolved = Path(path).expanduser().resolve()
+        if not resolved.is_relative_to(self.root):  # type: ignore[attr-defined]
+            raise ValueError("Snapshot path outside manager root")
+        if not resolved.exists():
+            raise FileNotFoundError(resolved)
+        payload = json.loads(resolved.read_text())
         schema_version = payload.get("schema_version")
         snapshot_cfg = getattr(config, "snapshot", None)
         migrations_cfg = getattr(snapshot_cfg, "migrations", None)

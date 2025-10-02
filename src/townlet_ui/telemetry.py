@@ -178,12 +178,26 @@ class TransportStatus:
     last_error: str | None
     last_success_tick: int | None
     last_failure_tick: int | None
+    queue_length: int
+    last_flush_duration_ms: float | None
 
 
 @dataclass(frozen=True)
 class StabilitySnapshot:
     alerts: tuple[str, ...]
     metrics: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class HealthStatus:
+    tick: int
+    tick_duration_ms: float
+    telemetry_queue: int
+    telemetry_dropped: int
+    perturbations_pending: int
+    perturbations_active: int
+    employment_exit_queue: int
+    raw: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -219,6 +233,7 @@ class TelemetrySnapshot:
     stability: StabilitySnapshot
     kpis: Mapping[str, list[float]]
     transport: TransportStatus
+    health: HealthStatus | None
     raw: Mapping[str, Any]
 
 
@@ -578,7 +593,29 @@ class TelemetryClient:
             ),
             last_success_tick=_maybe_int(transport_payload.get("last_success_tick")),
             last_failure_tick=_maybe_int(transport_payload.get("last_failure_tick")),
+            queue_length=int(_maybe_int(transport_payload.get("queue_length")) or 0),
+            last_flush_duration_ms=_maybe_float(transport_payload.get("last_flush_duration_ms")),
         )
+
+        health_payload = payload.get("health")
+        health_snapshot: HealthStatus | None = None
+        if isinstance(health_payload, Mapping) and health_payload:
+            health_snapshot = HealthStatus(
+                tick=_coerce_int(health_payload.get("tick")),
+                tick_duration_ms=_coerce_float(health_payload.get("tick_duration_ms")),
+                telemetry_queue=int(_maybe_int(health_payload.get("telemetry_queue")) or 0),
+                telemetry_dropped=int(_maybe_int(health_payload.get("telemetry_dropped")) or 0),
+                perturbations_pending=int(
+                    _maybe_int(health_payload.get("perturbations_pending")) or 0
+                ),
+                perturbations_active=int(
+                    _maybe_int(health_payload.get("perturbations_active")) or 0
+                ),
+                employment_exit_queue=int(
+                    _maybe_int(health_payload.get("employment_exit_queue")) or 0
+                ),
+                raw=dict(health_payload),
+            )
 
         return TelemetrySnapshot(
             schema_version=schema_version,
@@ -598,6 +635,7 @@ class TelemetryClient:
             stability=stability,
             kpis=kpi_history,
             transport=transport,
+            health=health_snapshot,
             raw=dict(payload),
         )
 

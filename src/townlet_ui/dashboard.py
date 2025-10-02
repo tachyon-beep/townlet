@@ -64,6 +64,27 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         f"[bold]Last success tick:[/bold] {last_success}",
         f"[bold]Last failure tick:[/bold] {last_failure}",
     )
+    health = snapshot.health
+    if health is not None:
+        tick_duration_text = f"{health.tick_duration_ms:.1f} ms"
+        header_table.add_row(
+            f"[bold]Queue backlog:[/bold] {health.telemetry_queue}",
+            f"[bold]Tick duration:[/bold] {tick_duration_text}",
+        )
+        header_table.add_row(
+            f"[bold]Perturbations:[/bold] pending {health.perturbations_pending} / active {health.perturbations_active}",
+            f"[bold]Exit queue:[/bold] {health.employment_exit_queue}",
+        )
+    else:
+        header_table.add_row(
+            f"[bold]Queue backlog:[/bold] {transport.queue_length}",
+            "[bold]Last flush:[/bold] "
+            + (
+                f"{transport.last_flush_duration_ms:.1f} ms"
+                if transport.last_flush_duration_ms is not None
+                else "—"
+            ),
+        )
     if transport.last_error:
         header_table.add_row(
             "[bold]Last error:[/bold]",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
@@ -73,6 +74,7 @@ class TelemetryPublisher:
         self._console_results_batch: list[dict[str, Any]] = []
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._console_audit_path = Path("logs/console/commands.jsonl")
+        self._latest_health_status: dict[str, object] = {}
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -88,8 +90,22 @@ class TelemetryPublisher:
             "last_error": None,
             "last_failure_tick": None,
             "last_success_tick": None,
+            "queue_length": 0,
+            "last_flush_duration_ms": None,
         }
         self._transport_client = self._build_transport_client()
+        poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
+        self._flush_poll_interval = max(0.01, poll_interval)
+        self._buffer_lock = threading.Lock()
+        self._flush_event = threading.Event()
+        self._stop_event = threading.Event()
+        self._latest_enqueue_tick = 0
+        self._flush_thread = threading.Thread(
+            target=self._flush_loop,
+            name="telemetry-flush",
+            daemon=True,
+        )
+        self._flush_thread.start()
 
     def queue_console_command(self, command: object) -> None:
         self._console_buffer.append(command)
@@ -138,7 +154,10 @@ class TelemetryPublisher:
         if self._latest_snapshot_migrations:
             state["snapshot_migrations"] = list(self._latest_snapshot_migrations)
         state["transport_status"] = dict(self._transport_status)
-        state["transport_buffer_pending"] = len(self._transport_buffer)
+        with self._buffer_lock:
+            state["transport_buffer_pending"] = len(self._transport_buffer)
+        if self._latest_health_status:
+            state["health"] = dict(self._latest_health_status)
         state["queue_history"] = list(self._queue_fairness_history)
         state["rivalry_events"] = list(self._rivalry_event_history)
         state["console_results"] = list(self._console_results_batch)
@@ -275,7 +294,15 @@ class TelemetryPublisher:
         pending = payload.get("transport_buffer_pending")
         if isinstance(pending, int) and pending > 0:
             self._transport_status["dropped_messages"] += int(pending)
-        self._transport_buffer.clear()
+        with self._buffer_lock:
+            self._transport_buffer.clear()
+        health_payload = payload.get("health")
+        if isinstance(health_payload, Mapping):
+            self._latest_health_status = {
+                str(key): value for key, value in health_payload.items()
+            }
+        else:
+            self._latest_health_status = {}
 
         history_payload = payload.get("queue_history")
         if isinstance(history_payload, list):
@@ -367,6 +394,12 @@ class TelemetryPublisher:
 
         return dict(self._transport_status)
 
+    def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
+        self._latest_health_status = dict(metrics)
+
+    def latest_health_status(self) -> dict[str, object]:
+        return dict(self._latest_health_status)
+
     def _build_transport_client(self):
         cfg = self._transport_config
         try:
@@ -426,20 +459,59 @@ class TelemetryPublisher:
                     time.sleep(backoff)
 
     def _flush_transport_buffer(self, tick: int) -> None:
-        if not len(self._transport_buffer):
-            return
-        while len(self._transport_buffer):
-            payload = self._transport_buffer.popleft()
+        flushed_any = False
+        flushed_count = 0
+        start = time.perf_counter()
+        while True:
+            with self._buffer_lock:
+                if not len(self._transport_buffer):
+                    break
+                payload = self._transport_buffer.popleft()
+                queue_length = len(self._transport_buffer)
+                self._transport_status["queue_length"] = queue_length
+            flushed_any = True
+            flushed_count += 1
             if not self._send_with_retry(payload, tick):
                 self._transport_status["dropped_messages"] += 1
                 logger.error("Dropping telemetry payload after repeated send failures")
-                if len(self._transport_buffer):
-                    dropped = len(self._transport_buffer)
-                    self._transport_status["dropped_messages"] += dropped
-                    self._transport_buffer.clear()
-                break
-        else:
+                with self._buffer_lock:
+                    if len(self._transport_buffer):
+                        dropped = len(self._transport_buffer)
+                        self._transport_status["dropped_messages"] += dropped
+                        self._transport_buffer.clear()
+                        self._transport_status["queue_length"] = 0
+                return
+        if flushed_any:
             self._last_flush_tick = int(tick)
+            duration_ms = (time.perf_counter() - start) * 1_000.0
+            self._transport_status["last_flush_duration_ms"] = duration_ms
+            with self._buffer_lock:
+                queue_length = len(self._transport_buffer)
+                self._transport_status["queue_length"] = queue_length
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Telemetry flush sent %s payloads in %.1f ms (pending=%s)",
+                    flushed_count,
+                    duration_ms,
+                    queue_length,
+                )
+
+    def _flush_loop(self) -> None:
+        while not self._stop_event.is_set():
+            self._flush_event.wait(timeout=self._flush_poll_interval)
+            self._flush_event.clear()
+            if self._stop_event.is_set():
+                break
+            with self._buffer_lock:
+                tick = self._latest_enqueue_tick
+                pending = len(self._transport_buffer)
+            if pending:
+                self._flush_transport_buffer(tick)
+        with self._buffer_lock:
+            tick = self._latest_enqueue_tick
+            pending = len(self._transport_buffer)
+        if pending:
+            self._flush_transport_buffer(tick)
 
     def _enqueue_stream_payload(self, payload: Mapping[str, Any], *, tick: int) -> None:
         encoded = json.dumps(
@@ -449,22 +521,29 @@ class TelemetryPublisher:
         ).encode("utf-8")
         if not encoded.endswith(b"\n"):
             encoded += b"\n"
-        self._transport_buffer.append(encoded)
-        if self._transport_buffer.is_over_capacity():
-            dropped = self._transport_buffer.drop_until_within_capacity()
-            if dropped:
-                self._transport_status["dropped_messages"] += dropped
-                logger.warning(
-                    "Telemetry buffer exceeded %s bytes; dropped %s payloads",
-                    self._transport_buffer.max_buffer_bytes,
-                    dropped,
+        with self._buffer_lock:
+            self._transport_buffer.append(encoded)
+            self._latest_enqueue_tick = max(self._latest_enqueue_tick, int(tick))
+            if self._transport_buffer.is_over_capacity():
+                dropped = self._transport_buffer.drop_until_within_capacity()
+                if dropped:
+                    self._transport_status["dropped_messages"] += dropped
+                    logger.warning(
+                        "Telemetry buffer exceeded %s bytes; dropped %s payloads",
+                        self._transport_buffer.max_buffer_bytes,
+                        dropped,
+                    )
+            queue_length = len(self._transport_buffer)
+            self._transport_status["queue_length"] = queue_length
+            threshold = max(1, int(self._transport_buffer.max_batch_size // 2))
+            if queue_length >= threshold and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Telemetry queue depth %s (threshold=%s, tick=%s)",
+                    queue_length,
+                    threshold,
+                    tick,
                 )
-        should_flush = (
-            len(self._transport_buffer) >= self._transport_buffer.max_batch_size
-            or tick - self._last_flush_tick >= self._transport_flush_interval
-        )
-        if should_flush:
-            self._flush_transport_buffer(tick)
+        self._flush_event.set()
 
     def _build_stream_payload(self, tick: int) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -510,12 +589,25 @@ class TelemetryPublisher:
         return payload
 
     def close(self) -> None:
-        if len(self._transport_buffer):
-            self._flush_transport_buffer(self._last_flush_tick)
+        self.stop_worker(wait=True)
+        with self._buffer_lock:
+            pending = len(self._transport_buffer)
+            tick = self._latest_enqueue_tick or self._last_flush_tick
+        if pending:
+            self._flush_transport_buffer(tick)
         try:
             self._transport_client.close()
         except Exception:  # pragma: no cover - shutdown cleanup
             logger.debug("Closing telemetry transport failed", exc_info=True)
+
+    def stop_worker(self, *, wait: bool = True, timeout: float = 2.0) -> None:
+        """Stop the background flush worker without closing transports."""
+
+        if not self._stop_event.is_set():
+            self._stop_event.set()
+            self._flush_event.set()
+        if wait and self._flush_thread.is_alive():
+            self._flush_thread.join(timeout=timeout)
 
     def publish_tick(
         self,

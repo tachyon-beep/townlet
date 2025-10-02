@@ -69,3 +69,22 @@ def test_agent_context_defaults() -> None:
     assert context["last_action_id"] == "move"
     assert context["last_action_success"] is True
     assert context["last_action_duration"] == 3
+
+
+def test_world_snapshot_returns_defensive_copies() -> None:
+    loop = make_loop()
+    world = loop.world
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.5},
+        wallet=1.5,
+    )
+
+    snapshot = world.snapshot()
+    snapshot["alice"].needs["hunger"] = 0.0
+    snapshot["alice"].wallet = 3.0
+
+    original = world.agents["alice"]
+    assert original.needs["hunger"] == 0.5
+    assert original.wallet == 1.5

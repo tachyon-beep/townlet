@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -114,3 +115,40 @@ def test_telemetry_publisher_retries_on_failure(monkeypatch: pytest.MonkeyPatch)
     assert status["last_failure_tick"] == loop.tick
     assert status["last_success_tick"] == loop.tick
     assert status["connected"] is True
+
+
+def test_telemetry_worker_metrics_and_stop(monkeypatch: pytest.MonkeyPatch) -> None:
+    class NoopTransport:
+        def send(self, payload: bytes) -> None:  # pragma: no cover - noop
+            pass
+
+        def close(self) -> None:  # pragma: no cover - noop
+            pass
+
+    monkeypatch.setattr(
+        "townlet.telemetry.publisher.create_transport",
+        lambda **_: NoopTransport(),
+    )
+
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.telemetry.transport.buffer.max_batch_size = 4
+    config.telemetry.transport.worker_poll_seconds = 0.05
+
+    loop = SimulationLoop(config)
+    _ensure_agents(loop)
+
+    loop.step()
+    time.sleep(0.1)
+
+    status = loop.telemetry.latest_transport_status()
+    assert status["queue_length"] == 0
+    assert status["last_flush_duration_ms"] is None or status["last_flush_duration_ms"] >= 0.0
+    assert loop.telemetry._flush_poll_interval == pytest.approx(0.05, rel=0.1)
+
+    health = loop.telemetry.latest_health_status()
+    assert health.get("tick") == loop.tick
+    assert "tick_duration_ms" in health
+
+    loop.telemetry.stop_worker(wait=True)
+    loop.telemetry.stop_worker(wait=True)
+    loop.telemetry.close()

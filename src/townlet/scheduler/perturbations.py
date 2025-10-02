@@ -60,6 +60,12 @@ class PerturbationScheduler:
         self._window_events: list[tuple[int, str]] = []
         self._next_id: int = 1
 
+    def pending_count(self) -> int:
+        return len(self._pending)
+
+    def active_count(self) -> int:
+        return len(self._active)
+
     # ------------------------------------------------------------------
     # Tick lifecycle
     # ------------------------------------------------------------------

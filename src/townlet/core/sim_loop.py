@@ -8,7 +8,9 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 from __future__ import annotations
 
 import hashlib
+import logging
 import random
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +32,8 @@ from townlet.stability.promotion import PromotionManager
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.world.grid import WorldState
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -161,6 +165,7 @@ class SimulationLoop:
             yield artifacts
 
     def step(self) -> TickArtifacts:
+        tick_start = time.perf_counter()
         self.tick += 1
         self.world.tick = self.tick
         self.lifecycle.process_respawns(self.world, tick=self.tick)
@@ -235,6 +240,29 @@ class SimulationLoop:
         stability_metrics["promotion_state"] = self.promotion.snapshot()
         self.telemetry.record_stability_metrics(stability_metrics)
         self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
+        duration_ms = (time.perf_counter() - tick_start) * 1000.0
+        transport_status = self.telemetry.latest_transport_status()
+        health_payload = {
+            "tick": self.tick,
+            "tick_duration_ms": duration_ms,
+            "telemetry_queue": transport_status.get("queue_length", 0),
+            "telemetry_dropped": transport_status.get("dropped_messages", 0),
+            "perturbations_pending": self.perturbations.pending_count(),
+            "perturbations_active": self.perturbations.active_count(),
+            "employment_exit_queue": len(getattr(self.world, "_employment_exit_queue", [])),
+        }
+        self.telemetry.record_health_metrics(health_payload)
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s perturbations_pending=%s perturbations_active=%s exit_queue=%s",
+                self.tick,
+                duration_ms,
+                health_payload["telemetry_queue"],
+                health_payload["telemetry_dropped"],
+                health_payload["perturbations_pending"],
+                health_payload["perturbations_active"],
+                health_payload["employment_exit_queue"],
+            )
         return TickArtifacts(observations=observations, rewards=rewards)
 
     def _derive_seed(self, stream: str) -> int:

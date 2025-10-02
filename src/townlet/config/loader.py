@@ -479,6 +479,7 @@ class TelemetryTransportConfig(BaseModel):
     send_timeout_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
     retry: TelemetryRetryPolicy = TelemetryRetryPolicy()
     buffer: TelemetryBufferConfig = TelemetryBufferConfig()
+    worker_poll_seconds: float = Field(default=0.5, ge=0.01, le=10.0)
 
     @model_validator(mode="after")
     def _validate_transport(self) -> "TelemetryTransportConfig":
@@ -596,6 +597,7 @@ class SnapshotMigrationsConfig(BaseModel):
 class SnapshotGuardrailsConfig(BaseModel):
     require_exact_config: bool = True
     allow_downgrade: bool = False
+    allowed_paths: list[Path] = Field(default_factory=list)
 
 
 class SnapshotConfig(BaseModel):
@@ -718,7 +720,19 @@ class SimulationConfig(BaseModel):
 
     def snapshot_root(self) -> Path:
         root = Path(self.snapshot.storage.root)
-        return root.expanduser()
+        return root.expanduser().resolve()
+
+    def snapshot_allowed_roots(self) -> tuple[Path, ...]:
+        roots: list[Path] = [self.snapshot_root()]
+        extra = getattr(self.snapshot.guardrails, "allowed_paths", [])
+        for candidate in extra:
+            if candidate is None:
+                continue
+            path = Path(candidate)
+            resolved = path.expanduser().resolve()
+            if resolved not in roots:
+                roots.append(resolved)
+        return tuple(roots)
 
     def build_snapshot_identity(
         self,

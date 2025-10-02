@@ -365,6 +365,7 @@ def test_console_arrange_meet_unknown_spec_returns_error() -> None:
 def test_console_snapshot_commands(tmp_path: Path) -> None:
     clear_registry()
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.snapshot.guardrails.allowed_paths.append(tmp_path)
     loop = SimulationLoop(config)
     router_viewer = create_console_router(
         loop.telemetry,
@@ -436,4 +437,27 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
     )
     assert forbidden["error"] == "forbidden"
 
+    health = router_viewer.dispatch(ConsoleCommand(name="health_status", args=(), kwargs={}))
+    assert "health" in health
+    assert isinstance(health["health"], dict)
+
     clear_registry()
+
+
+def test_console_snapshot_rejects_outside_roots(tmp_path: Path) -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        policy=loop.policy,
+        mode="admin",
+        config=config,
+    )
+    outside = tmp_path / "forbidden.json"
+    outside.write_text("{}", encoding="utf-8")
+    result = router.dispatch(
+        ConsoleCommand(name="snapshot_inspect", args=(str(outside),), kwargs={})
+    )
+    assert result["error"] == "forbidden"
