@@ -1,0 +1,17 @@
+[
+  {
+    "cmd_id": "baseline-force-chat",
+    "error": {
+      "code": "not_found",
+      "details": {
+        "agent_id": "agent_0"
+      },
+      "message": "speaker not found"
+    },
+    "issuer": null,
+    "latency_ms": null,
+    "name": "force_chat",
+    "status": "error",
+    "tick": 11
+  }
+]

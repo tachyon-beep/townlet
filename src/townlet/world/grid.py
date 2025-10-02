@@ -6,6 +6,7 @@ import random
 import logging
 import os
 import copy
+import time
 from collections import OrderedDict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -31,6 +32,7 @@ from townlet.console.command import (
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.queue_manager import QueueManager
+from townlet.world.employment import EmploymentEngine
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -195,11 +197,7 @@ class WorldState:
     _pending_events: dict[int, list[dict[str, Any]]] = field(init=False, default_factory=dict)
     store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
     _job_keys: list[str] = field(init=False, default_factory=list)
-    _employment_state: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
-    _employment_exit_queue: list[str] = field(init=False, default_factory=list)
-    _employment_exits_today: int = field(init=False, default=0)
-    _employment_exit_queue_timestamps: dict[str, int] = field(init=False, default_factory=dict)
-    _employment_manual_exits: set[str] = field(init=False, default_factory=set)
+    employment: EmploymentEngine = field(init=False, repr=False)
 
     _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
     _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
@@ -245,11 +243,13 @@ class WorldState:
         self._pending_events = {}
         self.store_stock = {}
         self._job_keys = list(self.config.jobs.keys())
-        self._employment_state = {}
-        self._employment_exit_queue = []
+        self.employment = EmploymentEngine(self.config, self._emit_event)
+        # Backwards-compatible views for existing helpers (to be removed in later phases).
+        self._employment_state = self.employment._state
+        self._employment_exit_queue = self.employment._exit_queue
+        self._employment_exit_queue_timestamps = self.employment._exit_timestamps
+        self._employment_manual_exits = self.employment._manual_exits
         self._employment_exits_today = 0
-        self._employment_exit_queue_timestamps = {}
-        self._employment_manual_exits = set()
         self._rivalry_ledgers = {}
         self._relationship_ledgers = {}
         self._relationship_window_ticks = 600
@@ -1303,6 +1303,7 @@ class WorldState:
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
+        start = time.perf_counter()
         # Tick the queue manager so cooldowns expire and fairness checks apply.
         self.queue_manager.on_tick(current_tick)
         # Automatically monitor stalled queues and trigger ghost steps when required.
@@ -1363,6 +1364,21 @@ class WorldState:
                         "affordance_id": running.affordance_id,
                     },
                 )
+
+        if logger.isEnabledFor(logging.DEBUG):
+            duration_ms = (time.perf_counter() - start) * 1000.0
+            running_count = len(self._running_affordances)
+            queued_agents = sum(
+                len(self.queue_manager.queue_snapshot(object_id))
+                for object_id in self.objects.keys()
+            )
+            logger.debug(
+                "world.resolve_affordances tick=%s duration_ms=%.2f running=%s queued_agents=%s",
+                current_tick,
+                duration_ms,
+                running_count,
+                queued_agents,
+            )
 
         self._apply_need_decay()
 
@@ -2148,145 +2164,16 @@ class WorldState:
         return reset_agents
 
     def _assign_jobs_to_agents(self) -> None:
-        if not self._job_keys:
-            return
-        for index, snapshot in enumerate(self.agents.values()):
-            if snapshot.job_id is None or snapshot.job_id not in self.config.jobs:
-                snapshot.job_id = self._job_keys[index % len(self._job_keys)]
-            snapshot.inventory.setdefault("meals_cooked", 0)
-            snapshot.inventory.setdefault("meals_consumed", 0)
-            snapshot.inventory.setdefault("wages_earned", 0)
+        self.employment.assign_jobs_to_agents(self)
 
     def _apply_job_state(self) -> None:
-        if self.config.employment.enforce_job_loop:
-            self._apply_job_state_enforced()
-        else:
-            self._apply_job_state_legacy()
+        self.employment.apply_job_state(self)
 
     def _apply_job_state_legacy(self) -> None:
-        jobs = self.config.jobs
-        default_job_id = self._job_keys[0] if self._job_keys else None
-        for snapshot in self.agents.values():
-            job_id = snapshot.job_id
-            if job_id is None or job_id not in jobs:
-                if default_job_id is None:
-                    snapshot.on_shift = False
-                    continue
-                job_id = default_job_id
-                snapshot.job_id = job_id
-            spec = jobs[job_id]
-            start = spec.start_tick
-            end = spec.end_tick or spec.start_tick
-            wage_rate = spec.wage_rate or self.config.economy.get("wage_income", 0.0)
-            lateness_penalty = spec.lateness_penalty
-            location = spec.location
-            required_position = tuple(location) if location else (0, 0)
-
-            if start <= self.tick <= end:
-                snapshot.on_shift = True
-                if self.tick == start and snapshot.position != required_position:
-                    snapshot.lateness_counter += 1
-                    if snapshot.last_late_tick != self.tick:
-                        snapshot.wallet = max(0.0, snapshot.wallet - lateness_penalty)
-                        snapshot.last_late_tick = self.tick
-                        self._emit_event(
-                            "job_late",
-                            {
-                                "agent_id": snapshot.agent_id,
-                                "job_id": job_id,
-                                "tick": self.tick,
-                            },
-                        )
-                if location and tuple(location) != snapshot.position:
-                    snapshot.on_shift = False
-                else:
-                    snapshot.wallet += wage_rate
-                    snapshot.inventory["wages_earned"] = (
-                        snapshot.inventory.get("wages_earned", 0) + 1
-                    )
-            else:
-                snapshot.on_shift = False
+        self.employment._apply_job_state_legacy(self)
 
     def _apply_job_state_enforced(self) -> None:
-        jobs = self.config.jobs
-        default_job_id = self._job_keys[0] if self._job_keys else None
-        employment_cfg = self.config.employment
-        arrival_buffer = self.config.behavior.job_arrival_buffer
-        ticks_per_day = max(1, employment_cfg.exit_review_window)
-        seven_day_window = ticks_per_day * 7
-
-        for snapshot in self.agents.values():
-            ctx = self._get_employment_context(snapshot.agent_id)
-            # Reset daily counters when day changes.
-            current_day = self.tick // ticks_per_day
-            if ctx["current_day"] != current_day:
-                ctx["current_day"] = current_day
-                ctx["late_ticks"] = 0
-                ctx["wages_paid"] = 0.0
-                snapshot.late_ticks_today = 0
-
-            job_id = snapshot.job_id
-            if job_id is None or job_id not in jobs:
-                if default_job_id is None:
-                    self._employment_idle_state(snapshot, ctx)
-                    continue
-                job_id = default_job_id
-                snapshot.job_id = job_id
-
-            spec = jobs[job_id]
-            start = spec.start_tick
-            end = spec.end_tick or spec.start_tick
-            if end < start:
-                end = start
-            wage_rate = spec.wage_rate or self.config.economy.get("wage_income", 0.0)
-            lateness_penalty = spec.lateness_penalty
-            required_position = tuple(spec.location) if spec.location else None
-            at_required_location = (
-                required_position is None or snapshot.position == required_position
-            )
-
-            # Maintenance: drop stale absence events beyond rolling window.
-            while ctx["absence_events"] and (
-                self.tick - ctx["absence_events"][0] > seven_day_window
-            ):
-                ctx["absence_events"].popleft()
-            snapshot.absent_shifts_7d = len(ctx["absence_events"])
-
-            if self.tick < start - arrival_buffer:
-                self._employment_idle_state(snapshot, ctx)
-                continue
-
-            if start - arrival_buffer <= self.tick < start:
-                self._employment_prepare_state(snapshot, ctx)
-                continue
-
-            if start <= self.tick <= end:
-                self._employment_begin_shift(ctx, start, end)
-                state = self._employment_determine_state(
-                    ctx=ctx,
-                    tick=self.tick,
-                    start=start,
-                    at_required_location=at_required_location,
-                    employment_cfg=employment_cfg,
-                )
-                self._employment_apply_state_effects(
-                    snapshot=snapshot,
-                    ctx=ctx,
-                    state=state,
-                    at_required_location=at_required_location,
-                    wage_rate=wage_rate,
-                    lateness_penalty=lateness_penalty,
-                    employment_cfg=employment_cfg,
-                )
-                continue
-
-            # Post-shift window.
-            self._employment_finalize_shift(
-                snapshot=snapshot,
-                ctx=ctx,
-                employment_cfg=employment_cfg,
-                job_id=job_id,
-            )
+        self.employment._apply_job_state_enforced(self)
 
     # ------------------------------------------------------------------
     # Employment helpers
@@ -2600,75 +2487,19 @@ class WorldState:
         return coworkers
 
     def _employment_enqueue_exit(self, agent_id: str, tick: int) -> None:
-        if agent_id in self._employment_exit_queue:
-            return
-        self._employment_exit_queue.append(agent_id)
-        self._employment_exit_queue_timestamps[agent_id] = tick
-        snapshot = self.agents.get(agent_id)
-        if snapshot is not None:
-            snapshot.exit_pending = True
-        limit = self.config.employment.exit_queue_limit
-        if limit and len(self._employment_exit_queue) > limit:
-            self._emit_event(
-                "employment_exit_queue_overflow",
-                {
-                    "pending_count": len(self._employment_exit_queue),
-                    "limit": limit,
-                },
-            )
-        else:
-            self._emit_event(
-                "employment_exit_pending",
-                {
-                    "agent_id": agent_id,
-                    "pending_count": len(self._employment_exit_queue),
-                },
-            )
+        self.employment.enqueue_exit(self, agent_id, tick)
 
     def _employment_remove_from_queue(self, agent_id: str) -> None:
-        if agent_id in self._employment_exit_queue:
-            self._employment_exit_queue.remove(agent_id)
-        self._employment_exit_queue_timestamps.pop(agent_id, None)
-        snapshot = self.agents.get(agent_id)
-        if snapshot is not None:
-            snapshot.exit_pending = False
+        self.employment.remove_from_queue(self, agent_id)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
-        return {
-            "pending": list(self._employment_exit_queue),
-            "pending_count": len(self._employment_exit_queue),
-            "exits_today": self._employment_exits_today,
-            "daily_exit_cap": self.config.employment.daily_exit_cap,
-            "queue_limit": self.config.employment.exit_queue_limit,
-            "review_window": self.config.employment.exit_review_window,
-        }
+        return self.employment.queue_snapshot()
 
     def employment_request_manual_exit(self, agent_id: str, tick: int) -> bool:
-        if agent_id not in self.agents:
-            return False
-        self._employment_manual_exits.add(agent_id)
-        self._emit_event(
-            "employment_exit_manual_request",
-            {
-                "agent_id": agent_id,
-                "tick": tick,
-            },
-        )
-        return True
+        return self.employment.request_manual_exit(self, agent_id, tick)
 
     def employment_defer_exit(self, agent_id: str) -> bool:
-        if agent_id not in self.agents:
-            return False
-        self._employment_manual_exits.discard(agent_id)
-        self._employment_remove_from_queue(agent_id)
-        self._emit_event(
-            "employment_exit_deferred",
-            {
-                "agent_id": agent_id,
-                "pending_count": len(self._employment_exit_queue),
-            },
-        )
-        return True
+        return self.employment.defer_exit(self, agent_id)
 
     def _update_basket_metrics(self) -> None:
         basket_cost = (
