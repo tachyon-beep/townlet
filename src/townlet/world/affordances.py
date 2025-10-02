@@ -229,9 +229,26 @@ class DefaultAffordanceRuntime:
         obj = objects.get(object_id)
         spec = affordances.get(affordance_id)
         if obj is None or spec is None:
-            raise RuntimeError(
-                f"Affordance '{affordance_id}' missing object/spec (object_id={object_id})"
+            logger.error(
+                "affordance.start.missing_spec object=%s affordance=%s agent=%s",
+                object_id,
+                affordance_id,
+                agent_id,
             )
+            if queue_manager.active_agent(object_id) == agent_id:
+                queue_manager.release(object_id, agent_id, tick, success=False)
+                ctx.sync_reservation(object_id)
+            ctx.emit_event(
+                "affordance_fail",
+                {
+                    "agent_id": agent_id,
+                    "object_id": object_id,
+                    "affordance_id": affordance_id,
+                    "reason": "missing_spec",
+                },
+            )
+            metadata["reason"] = "missing_spec"
+            return False, metadata
         if spec.object_type != obj.object_type:
             raise RuntimeError(
                 f"Affordance '{affordance_id}' incompatible with object '{object_id}'"
