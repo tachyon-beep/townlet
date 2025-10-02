@@ -116,5 +116,5 @@ def test_precondition_success_allows_affordance_start() -> None:
 
     success = world._start_affordance("alice", "shower_1", "use_shower")
     assert success is True
-    running = world._running_affordances["shower_1"]
+    running = world.affordance_runtime.running_affordances["shower_1"]
     assert running.affordance_id == "use_shower"

@@ -52,7 +52,7 @@ class ScriptedBehavior(BehaviorController):
             object_id = pending["object_id"]
             affordance_id = pending["affordance_id"]
             active = world.queue_manager.active_agent(object_id)
-            running = world._running_affordances.get(object_id)  # type: ignore[attr-defined]
+            running = world.affordance_runtime.running_affordances.get(object_id)
             if running and running.agent_id == agent_id:
                 return AgentIntent(kind="wait")
             if active == agent_id:
@@ -80,7 +80,7 @@ class ScriptedBehavior(BehaviorController):
         if not state:
             return
         object_id = state["object_id"]
-        running = world._running_affordances.get(object_id)  # type: ignore[attr-defined]
+        running = world.affordance_runtime.running_affordances.get(object_id)
         active = world.queue_manager.active_agent(object_id)
         if running and running.agent_id == agent_id:
             return

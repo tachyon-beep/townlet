@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, MutableMapping, Protocol, TypedDict
 from typing import Literal
 
 from townlet.world.queue_manager import QueueManager
@@ -21,12 +21,22 @@ if TYPE_CHECKING:  # pragma: no cover - type hint guard
 
 @dataclass(slots=True)
 class AffordanceRuntimeContext:
-    """Shared services supplied by `WorldState` during affordance resolution."""
+    """Dependencies supplied to the affordance runtime."""
 
+    world: "WorldState"
     queue_manager: QueueManager
+    objects: MutableMapping[str, Any]
+    affordances: MutableMapping[str, Any]
+    running_affordances: MutableMapping[str, Any]
+    active_reservations: MutableMapping[str, str]
     emit_event: Callable[[str, dict[str, object]], None]
-    register_hook: Callable[[str, Callable[[dict[str, object]], None]], None]
-    # TODO(@townlet): Extend with RNG, telemetry, and promotion handles as extraction progresses.
+    sync_reservation: Callable[[str], None]
+    apply_affordance_effects: Callable[[str, dict[str, float]], None]
+    dispatch_hooks: Callable[[str, Iterable[str]], bool]
+    record_queue_conflict: Callable[..., None]
+    apply_need_decay: Callable[[], None]
+    build_precondition_context: Callable[..., dict[str, Any]]
+    snapshot_precondition_context: Callable[[Mapping[str, Any]], dict[str, Any]]
 
 
 @dataclass(slots=True)
@@ -162,29 +172,34 @@ class AffordanceRuntime(Protocol):
 
 
 class DefaultAffordanceRuntime:
-    """Default affordance runtime bound to an existing `WorldState`."""
+    """Default affordance runtime bound to an injected context."""
 
     def __init__(
         self,
-        world: "WorldState",
+        context: AffordanceRuntimeContext,
         *,
         running_cls: type,
     ) -> None:
-        self._world = world
+        self._ctx = context
         self._running_cls = running_cls
 
     @property
-    def world(self) -> "WorldState":
-        return self._world
+    def context(self) -> AffordanceRuntimeContext:
+        return self._ctx
 
     @property
-    def running_affordances(self) -> dict[str, Any]:
-        return self._world._running_affordances  # pylint: disable=protected-access
+    def world(self) -> "WorldState":
+        return self._ctx.world
+
+    @property
+    def running_affordances(self) -> MutableMapping[str, Any]:
+        return self._ctx.running_affordances
 
     def remove_agent(self, agent_id: str) -> None:
         """Drop any running affordances owned by `agent_id`."""
 
-        world = self._world
+        ctx = self._ctx
+        world = ctx.world
         for object_id, running in list(self.running_affordances.items()):
             if running.agent_id != agent_id:
                 continue
@@ -201,28 +216,36 @@ class DefaultAffordanceRuntime:
         *,
         tick: int,
     ) -> tuple[bool, dict[str, object]]:
-        world = self._world
+        ctx = self._ctx
+        world = ctx.world
+        queue_manager = ctx.queue_manager
+        objects = ctx.objects
+        affordances = ctx.affordances
         metadata: dict[str, object] = {}
-        if world.queue_manager.active_agent(object_id) != agent_id:
+        if queue_manager.active_agent(object_id) != agent_id:
             return False, metadata
         if object_id in self.running_affordances:
             return False, metadata
-        obj = world.objects.get(object_id)
-        spec = world.affordances.get(affordance_id)
+        obj = objects.get(object_id)
+        spec = affordances.get(affordance_id)
         if obj is None or spec is None:
-            return False, metadata
+            raise RuntimeError(
+                f"Affordance '{affordance_id}' missing object/spec (object_id={object_id})"
+            )
         if spec.object_type != obj.object_type:
-            return False, metadata
+            raise RuntimeError(
+                f"Affordance '{affordance_id}' incompatible with object '{object_id}'"
+            )
 
         if spec.compiled_preconditions:
-            context = world._build_precondition_context(  # pylint: disable=protected-access
+            context = ctx.build_precondition_context(
                 agent_id=agent_id,
                 object_id=object_id,
                 spec=spec,
             )
             ok, failed = evaluate_preconditions(spec.compiled_preconditions, context)
             if not ok:
-                context_snapshot = world._snapshot_precondition_context(context)  # pylint: disable=protected-access
+                context_snapshot = ctx.snapshot_precondition_context(context)
                 payload = {
                     "agent_id": agent_id,
                     "object_id": object_id,
@@ -237,7 +260,7 @@ class DefaultAffordanceRuntime:
                     object_id,
                     payload["condition"],
                 )
-                world._dispatch_affordance_hooks(  # pylint: disable=protected-access
+                ctx.dispatch_hooks(
                     "fail",
                     spec.hooks.get("fail", ()),
                     agent_id=agent_id,
@@ -249,17 +272,17 @@ class DefaultAffordanceRuntime:
                         "context": context_snapshot,
                     },
                 )
-                world._emit_event("affordance_precondition_fail", payload)  # pylint: disable=protected-access
-                world._emit_event(  # pylint: disable=protected-access
+                ctx.emit_event("affordance_precondition_fail", payload)
+                ctx.emit_event(
                     "affordance_fail",
                     {
                         **payload,
                         "reason": "precondition_failed",
                     },
                 )
-                if world.queue_manager.active_agent(object_id) == agent_id:
-                    world.queue_manager.release(object_id, agent_id, tick, success=False)
-                    world._sync_reservation(object_id)  # pylint: disable=protected-access
+                if queue_manager.active_agent(object_id) == agent_id:
+                    queue_manager.release(object_id, agent_id, tick, success=False)
+                    ctx.sync_reservation(object_id)
                 metadata["reason"] = "precondition_failed"
                 return False, metadata
 
@@ -271,7 +294,7 @@ class DefaultAffordanceRuntime:
         )
         self.running_affordances[object_id] = running
         obj.occupied_by = agent_id
-        continue_start = world._dispatch_affordance_hooks(  # pylint: disable=protected-access
+        continue_start = ctx.dispatch_hooks(
             "before",
             spec.hooks.get("before", ()),
             agent_id=agent_id,
@@ -282,12 +305,12 @@ class DefaultAffordanceRuntime:
             self.running_affordances.pop(object_id, None)
             if obj.occupied_by == agent_id:
                 obj.occupied_by = None
-            if world.queue_manager.active_agent(object_id) == agent_id:
-                world.queue_manager.release(object_id, agent_id, tick, success=False)
-                world._sync_reservation(object_id)  # pylint: disable=protected-access
+            if queue_manager.active_agent(object_id) == agent_id:
+                queue_manager.release(object_id, agent_id, tick, success=False)
+                ctx.sync_reservation(object_id)
             metadata["reason"] = "hook_cancelled"
             return False, metadata
-        world._emit_event(  # pylint: disable=protected-access
+        ctx.emit_event(
             "affordance_start",
             {
                 "agent_id": agent_id,
@@ -308,16 +331,21 @@ class DefaultAffordanceRuntime:
         requested_affordance_id: str | None,
         tick: int,
     ) -> tuple[str | None, dict[str, object]]:
-        world = self._world
+        ctx = self._ctx
+        world = ctx.world
+        queue_manager = ctx.queue_manager
         metadata: dict[str, object] = {}
         running = self.running_affordances.pop(object_id, None)
         affordance_id = requested_affordance_id
         if running is not None:
             affordance_id = running.affordance_id
             if success:
-                world._apply_affordance_effects(running.agent_id, running.effects)  # pylint: disable=protected-access
-                spec = world.affordances.get(running.affordance_id)
-                world._dispatch_affordance_hooks(  # pylint: disable=protected-access
+                ctx.apply_affordance_effects(running.agent_id, running.effects)
+                spec = ctx.affordances.get(running.affordance_id)
+                assert (
+                    spec is not None
+                ), f"Missing spec for running affordance '{running.affordance_id}'"
+                ctx.dispatch_hooks(
                     "after",
                     spec.hooks.get("after", ()) if spec else (),
                     agent_id=running.agent_id,
@@ -325,7 +353,7 @@ class DefaultAffordanceRuntime:
                     spec=spec,
                     extra={"effects": dict(running.effects)},
                 )
-                world._emit_event(  # pylint: disable=protected-access
+                ctx.emit_event(
                     "affordance_finish",
                     {
                         "agent_id": running.agent_id,
@@ -336,14 +364,17 @@ class DefaultAffordanceRuntime:
                 obj = world.objects.get(object_id)
                 if obj is not None:
                     obj.occupied_by = None
-        world.queue_manager.release(object_id, agent_id, tick, success=success)
-        world._sync_reservation(object_id)  # pylint: disable=protected-access
+        queue_manager.release(object_id, agent_id, tick, success=success)
+        ctx.sync_reservation(object_id)
         if not success:
             if reason:
                 metadata["reason"] = reason
             if running is not None:
-                spec = world.affordances.get(running.affordance_id)
-                world._dispatch_affordance_hooks(  # pylint: disable=protected-access
+                spec = ctx.affordances.get(running.affordance_id)
+                assert (
+                    spec is not None
+                ), f"Missing spec for running affordance '{running.affordance_id}'"
+                ctx.dispatch_hooks(
                     "fail",
                     spec.hooks.get("fail", ()) if spec else (),
                     agent_id=agent_id,
@@ -351,7 +382,7 @@ class DefaultAffordanceRuntime:
                     spec=spec,
                     extra={"reason": reason},
                 )
-                world._emit_event(  # pylint: disable=protected-access
+                ctx.emit_event(
                     "affordance_fail",
                     {
                         "agent_id": agent_id,
@@ -362,14 +393,19 @@ class DefaultAffordanceRuntime:
         return affordance_id, metadata
 
     def handle_blocked(self, object_id: str, tick: int) -> None:
-        world = self._world
-        if world.queue_manager.record_blocked_attempt(object_id):
-            occupant = world.queue_manager.active_agent(object_id)
+        ctx = self._ctx
+        queue_manager = ctx.queue_manager
+        world = ctx.world
+        if queue_manager.record_blocked_attempt(object_id):
+            occupant = queue_manager.active_agent(object_id)
             running = self.running_affordances.pop(object_id, None)
             spec = None
             if running is not None:
-                spec = world.affordances.get(running.affordance_id)
-                world._dispatch_affordance_hooks(  # pylint: disable=protected-access
+                spec = ctx.affordances.get(running.affordance_id)
+                assert (
+                    spec is not None
+                ), f"Missing spec for running affordance '{running.affordance_id}'"
+                ctx.dispatch_hooks(
                     "fail",
                     spec.hooks.get("fail", ()) if spec else (),
                     agent_id=running.agent_id,
@@ -378,19 +414,24 @@ class DefaultAffordanceRuntime:
                     extra={"reason": "ghost_step"},
                 )
             if occupant is not None:
-                world.queue_manager.release(object_id, occupant, tick, success=False)
-            world._sync_reservation(object_id)  # pylint: disable=protected-access
+                queue_manager.release(object_id, occupant, tick, success=False)
+            ctx.sync_reservation(object_id)
 
     def resolve(self, *, tick: int) -> None:
-        world = self._world
+        ctx = self._ctx
+        world = ctx.world
+        queue_manager = ctx.queue_manager
+        objects = ctx.objects
+        active_reservations = ctx.active_reservations
+        record_queue_conflict = ctx.record_queue_conflict
         debug_enabled = logger.isEnabledFor(logging.DEBUG)
         entry_running = 0
         entry_queued = 0
         if debug_enabled:
             entry_running = len(self.running_affordances)
             entry_queued = sum(
-                len(world.queue_manager.queue_snapshot(object_id))
-                for object_id in world.objects.keys()
+                len(queue_manager.queue_snapshot(object_id))
+                for object_id in objects.keys()
             )
             logger.debug(
                 "world.resolve_affordances.start tick=%s running=%s queued_agents=%s",
@@ -399,18 +440,18 @@ class DefaultAffordanceRuntime:
                 entry_queued,
             )
         start_time = time.perf_counter()
-        world.queue_manager.on_tick(tick)
-        for object_id, occupant in list(world._active_reservations.items()):  # pylint: disable=protected-access
-            queue = world.queue_manager.queue_snapshot(object_id)
+        queue_manager.on_tick(tick)
+        for object_id, occupant in list(active_reservations.items()):
+            queue = queue_manager.queue_snapshot(object_id)
             if not queue:
                 continue
-            if world.queue_manager.record_blocked_attempt(object_id):
-                waiting = world.queue_manager.queue_snapshot(object_id)
+            if queue_manager.record_blocked_attempt(object_id):
+                waiting = queue_manager.queue_snapshot(object_id)
                 rival = waiting[0] if waiting else None
-                world.queue_manager.release(object_id, occupant, tick, success=False)
-                world.queue_manager.requeue_to_tail(object_id, occupant, tick)
+                queue_manager.release(object_id, occupant, tick, success=False)
+                queue_manager.requeue_to_tail(object_id, occupant, tick)
                 if rival is not None:
-                    world._record_queue_conflict(  # pylint: disable=protected-access
+                    record_queue_conflict(
                         object_id=object_id,
                         actor=occupant,
                         rival=rival,
@@ -419,19 +460,19 @@ class DefaultAffordanceRuntime:
                         intensity=None,
                     )
                 self.running_affordances.pop(object_id, None)
-                world._sync_reservation(object_id)  # pylint: disable=protected-access
+                ctx.sync_reservation(object_id)
 
         for object_id, running in list(self.running_affordances.items()):
             running.duration_remaining -= 1
             if running.duration_remaining <= 0:
-                world._apply_affordance_effects(running.agent_id, running.effects)  # pylint: disable=protected-access
+                ctx.apply_affordance_effects(running.agent_id, running.effects)
                 self.running_affordances.pop(object_id, None)
-                waiting = world.queue_manager.queue_snapshot(object_id)
-                spec = world.affordances.get(running.affordance_id)
+                waiting = queue_manager.queue_snapshot(object_id)
+                spec = ctx.affordances.get(running.affordance_id)
                 hook_names = tuple(spec.hooks.get("after", ())) if spec else ()
                 if debug_enabled:
                     hook_start = time.perf_counter()
-                world._dispatch_affordance_hooks(  # pylint: disable=protected-access
+                ctx.dispatch_hooks(
                     "after",
                     hook_names,
                     agent_id=running.agent_id,
@@ -450,11 +491,11 @@ class DefaultAffordanceRuntime:
                         hook_duration_ms,
                         len(hook_names),
                     )
-                world.queue_manager.release(object_id, running.agent_id, tick, success=True)
-                world._sync_reservation(object_id)  # pylint: disable=protected-access
+                queue_manager.release(object_id, running.agent_id, tick, success=True)
+                ctx.sync_reservation(object_id)
                 if waiting:
                     next_agent = waiting[0]
-                    world._record_queue_conflict(  # pylint: disable=protected-access
+                    record_queue_conflict(
                         object_id=object_id,
                         actor=running.agent_id,
                         rival=next_agent,
@@ -462,7 +503,7 @@ class DefaultAffordanceRuntime:
                         queue_length=len(waiting),
                         intensity=0.5,
                     )
-                world._emit_event(  # pylint: disable=protected-access
+                ctx.emit_event(
                     "affordance_finish",
                     {
                         "agent_id": running.agent_id,
@@ -475,8 +516,8 @@ class DefaultAffordanceRuntime:
             duration_ms = (time.perf_counter() - start_time) * 1000.0
             running_count = len(self.running_affordances)
             queued_agents = sum(
-                len(world.queue_manager.queue_snapshot(object_id))
-                for object_id in world.objects.keys()
+                len(queue_manager.queue_snapshot(object_id))
+                for object_id in objects.keys()
             )
             logger.debug(
                 "world.resolve_affordances.end tick=%s duration_ms=%.2f running=%s queued_agents=%s running_delta=%s queued_delta=%s",
@@ -488,10 +529,9 @@ class DefaultAffordanceRuntime:
                 queued_agents - entry_queued,
             )
 
-        world._apply_need_decay()  # pylint: disable=protected-access
+        ctx.apply_need_decay()
 
     def running_snapshot(self) -> dict[str, RunningAffordanceState]:
-        world = self._world
         return {
             object_id: snapshot_running_affordance(
                 object_id=object_id,
@@ -505,3 +545,44 @@ class DefaultAffordanceRuntime:
 
     def clear(self) -> None:
         self.running_affordances.clear()
+
+    def export_state(self) -> dict[str, object]:
+        state: dict[str, object] = {}
+        for object_id, running in self.running_affordances.items():
+            state[object_id] = {
+                "agent_id": running.agent_id,
+                "affordance_id": running.affordance_id,
+                "duration_remaining": int(running.duration_remaining),
+                "effects": {key: float(value) for key, value in running.effects.items()},
+            }
+        return state
+
+    def import_state(self, payload: Mapping[str, Mapping[str, object]]) -> None:
+        ctx = self._ctx
+        objects = ctx.objects
+        queue_manager = ctx.queue_manager
+        self.clear()
+        for object_id, entry in payload.items():
+            agent_id = str(entry.get("agent_id", ""))
+            affordance_id = str(entry.get("affordance_id", ""))
+            if not agent_id or not affordance_id:
+                continue
+            duration = int(entry.get("duration_remaining", 0))
+            effects_payload = entry.get("effects", {})
+            if isinstance(effects_payload, Mapping):
+                effects = {str(k): float(v) for k, v in effects_payload.items()}
+            else:
+                effects = {}
+            running = self._running_cls(
+                agent_id=agent_id,
+                affordance_id=affordance_id,
+                duration_remaining=max(0, duration),
+                effects=effects,
+            )
+            self.running_affordances[object_id] = running
+            obj = objects.get(object_id)
+            if obj is not None:
+                obj.occupied_by = agent_id
+            # Ensure queue manager active reservation aligns with imported state.
+            if queue_manager.active_agent(object_id) != agent_id and agent_id:
+                ctx.active_reservations[object_id] = agent_id

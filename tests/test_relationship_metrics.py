@@ -154,12 +154,12 @@ def test_shared_meal_updates_relationship() -> None:
     world.tick = 10
     assert world.queue_manager.request_access("fridge_1", "alice", world.tick) is True
     assert world._start_affordance("alice", "fridge_1", "eat_meal") is True
-    world._running_affordances["fridge_1"].duration_remaining = 0
+    world.affordance_runtime.running_affordances["fridge_1"].duration_remaining = 0
     world.resolve_affordances(world.tick)
 
     assert world.queue_manager.request_access("fridge_1", "bob", world.tick) is True
     assert world._start_affordance("bob", "fridge_1", "eat_meal") is True
-    world._running_affordances["fridge_1"].duration_remaining = 0
+    world.affordance_runtime.running_affordances["fridge_1"].duration_remaining = 0
     world.resolve_affordances(world.tick)
 
     snapshot = world.relationships_snapshot()

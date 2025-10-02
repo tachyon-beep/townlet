@@ -151,7 +151,7 @@ def test_narration_panel_shows_styled_categories() -> None:
     assert granted is True
     world._sync_reservation("bed_1")
     assert world._start_affordance("bob", "bed_1", "rest_sleep") is True
-    running = world._running_affordances["bed_1"]
+    running = world.affordance_runtime.running_affordances["bed_1"]
     running.duration_remaining = 0
     world.resolve_affordances(world.tick)
     events.extend(world.drain_events())

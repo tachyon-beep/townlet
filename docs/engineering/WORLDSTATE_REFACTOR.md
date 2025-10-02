@@ -9,6 +9,9 @@
   - Stream (120 ticks, seeded agents, queued chat success): `audit/baselines/worldstate_phase3/snapshots/telemetry_stream.jsonl`
   - Snapshot payload: `audit/baselines/worldstate_phase3/snapshots/telemetry_snapshot.json`
   - Console traces: `audit/baselines/worldstate_phase3/console/{router_results.json,queued_results.json}`
+- Phase 4 affordance baseline (post-runtime extraction):
+  - Stream/snapshot/console: `audit/baselines/worldstate_phase4/{snapshots,console}/`
+  - World snapshot for structural diffs: `audit/baselines/worldstate_phase4/world_snapshot.json`
 - Guardrail test subset: `pytest tests/test_world_* tests/test_console_* tests/test_telemetry_*` (or `tox -e refactor`).
 - Guardrail status (2025-10-03):
   - `pytest tests/test_affordance_* tests/test_world_*` ✅
@@ -218,6 +221,9 @@ These invariants should carry forward into the runtime extraction; introduce reg
 - `resolve_affordances` and `_handle_blocked` are thin adapters pointing to the runtime, preparing for full module extraction without altering public signatures.
 - Running-state snapshots are exposed via `DefaultAffordanceRuntime.running_snapshot()` to ease telemetry/test assertions when the runtime becomes standalone.
 - Runtime owns agent cleanup during `WorldState.remove_agent` and `WorldState.running_affordances_snapshot()` forwards the structured view for telemetry consumers.
+- `ConsoleBridge` (`src/townlet/world/console_bridge.py`) now encapsulates handler registration/history, letting `WorldState` delegate console orchestration instead of storing handler state.
+- Queue conflict/rivalry bookkeeping lives inside `QueueConflictTracker` (`src/townlet/world/queue_conflict.py`), keeping rivalry/chat event handling separate from core world state.
+- `SimulationLoop` accepts an optional `affordance_runtime_factory`, enabling tests to inject custom runtimes while the default factory still produces `DefaultAffordanceRuntime` instances.
 
 ## Phase 4 – Verification Snapshot (2025-10-03)
 
@@ -225,6 +231,7 @@ These invariants should carry forward into the runtime extraction; introduce reg
 - **Guardrails**: `pytest tests/test_affordance_hooks.py` + `tox -e refactor` pass on the refactored runtime.
 - **Telemetry parity**: 120-tick capture under `configs/examples/poc_hybrid.yaml` matches `audit/baselines/worldstate_phase3` stream byte-for-byte; snapshot diff limited to `health.tick_duration_ms` (expected runtime variance). Console artefacts only differ in command ids used for this run.
 - **Instrumentation sanity**: DEBUG logging still emits `world.resolve_affordances.start/end` entries and per-hook timings when `townlet.world.grid` logging is set to DEBUG.
+- **Fail-fast guards**: `DefaultAffordanceRuntime` now asserts object/spec presence during `start` and `release`, ensuring missing affordances surface immediately in pre-production.
 
 ## Phase 5 – Documentation & Handover Checklist
 

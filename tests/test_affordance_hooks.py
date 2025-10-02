@@ -141,7 +141,7 @@ def test_shower_completion_emits_event() -> None:
 
     request_object(world, "shower_1", "alice")
     assert world._start_affordance("alice", "shower_1", "use_shower") is True
-    running = world._running_affordances["shower_1"]
+    running = world.affordance_runtime.running_affordances["shower_1"]
     running.duration_remaining = 0
     world.resolve_affordances(world.tick)
 
@@ -164,7 +164,7 @@ def test_sleep_slots_cycle_and_completion_event() -> None:
     assert world._start_affordance("alice", "bed_1", "rest_sleep") is True
     assert bed.stock["sleep_slots"] == bed.stock["sleep_capacity"] - 1
 
-    running = world._running_affordances["bed_1"]
+    running = world.affordance_runtime.running_affordances["bed_1"]
     running.duration_remaining = 0
     world.resolve_affordances(world.tick)
 

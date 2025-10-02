@@ -12,6 +12,7 @@ import logging
 import random
 import time
 from collections.abc import Iterable
+from typing import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
+from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.grid import WorldState
 
 logger = logging.getLogger(__name__)
@@ -47,16 +49,26 @@ class TickArtifacts:
 class SimulationLoop:
     """Orchestrates the Townlet simulation tick-by-tick."""
 
-    def __init__(self, config: SimulationConfig) -> None:
+    def __init__(
+        self,
+        config: SimulationConfig,
+        *,
+        affordance_runtime_factory: Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime] | None = None,
+    ) -> None:
         self.config = config
         self.config.register_snapshot_migrations()
+        self._affordance_runtime_factory = affordance_runtime_factory
         self._build_components()
 
     def _build_components(self) -> None:
         self._rng_world = random.Random(self._derive_seed("world"))
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
-        self.world = WorldState.from_config(self.config, rng=self._rng_world)
+        self.world = WorldState.from_config(
+            self.config,
+            rng=self._rng_world,
+            affordance_runtime_factory=self._affordance_runtime_factory,
+        )
         self.lifecycle = LifecycleManager(config=self.config)
         self.perturbations = PerturbationScheduler(
             config=self.config,

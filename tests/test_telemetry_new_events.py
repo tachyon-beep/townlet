@@ -110,7 +110,7 @@ def test_shower_complete_narration() -> None:
     assert request is True
     world._sync_reservation("shower_1")
     assert world._start_affordance("alice", "shower_1", "use_shower") is True
-    running = world._running_affordances["shower_1"]
+    running = world.affordance_runtime.running_affordances["shower_1"]
     running.duration_remaining = 0
     world.resolve_affordances(world.tick)
     events = world.drain_events()
@@ -170,7 +170,7 @@ def test_sleep_events_in_telemetry() -> None:
     assert granted is True
     world._sync_reservation("bed_1")
     assert world._start_affordance("alice", "bed_1", "rest_sleep") is True
-    running = world._running_affordances["bed_1"]
+    running = world.affordance_runtime.running_affordances["bed_1"]
     running.duration_remaining = 0
     events = []
     world.resolve_affordances(world.tick)

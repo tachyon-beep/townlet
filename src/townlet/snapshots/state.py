@@ -61,6 +61,7 @@ class SnapshotState:
     telemetry: dict[str, object] = field(default_factory=dict)
     console_buffer: list[object] = field(default_factory=list)
     perturbations: dict[str, object] = field(default_factory=dict)
+    affordances: dict[str, object] = field(default_factory=dict)
     relationships: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
     stability: dict[str, object] = field(default_factory=dict)
     promotion: dict[str, object] = field(default_factory=dict)
@@ -88,6 +89,7 @@ class SnapshotState:
             "telemetry": dict(self.telemetry),
             "console_buffer": list(self.console_buffer),
             "perturbations": dict(self.perturbations),
+            "affordances": dict(self.affordances),
             "relationships": {
                 owner: {other: dict(values) for other, values in edges.items()}
                 for owner, edges in self.relationships.items()
@@ -205,6 +207,14 @@ class SnapshotState:
                         "rivalry": 0.0,
                     }
             relationships[owner_id] = owner_edges
+        affordances_payload = payload.get("affordances", {})
+        if isinstance(affordances_payload, Mapping):
+            affordances: dict[str, object] = {
+                str(object_id): dict(data) if isinstance(data, Mapping) else {}
+                for object_id, data in affordances_payload.items()
+            }
+        else:
+            affordances = {}
         stability_payload = payload.get("stability", {})
         stability: dict[str, object] = (
             dict(stability_payload) if isinstance(stability_payload, Mapping) else {}
@@ -241,8 +251,10 @@ class SnapshotState:
             telemetry=telemetry,
             console_buffer=console_buffer,
             perturbations=perturbations,
+            affordances=affordances,
             relationships=relationships,
             stability=stability,
+            promotion=promotion,
             identity=identity,
             migrations=migrations,
         )
@@ -333,6 +345,8 @@ def snapshot_from_world(
     if perturbations is not None:
         perturbations_payload = perturbations.export_state()
 
+    affordances_payload = world.affordance_runtime.export_state()
+
     stability_payload = {}
     if stability is not None:
         stability_payload = stability.export_state()
@@ -370,6 +384,7 @@ def snapshot_from_world(
         telemetry=telemetry_payload,
         console_buffer=console_buffer,
         perturbations=perturbations_payload,
+        affordances=affordances_payload,
         relationships=world.relationships_snapshot(),
         stability=stability_payload,
         promotion=promotion_payload,
@@ -446,6 +461,14 @@ def apply_snapshot_to_world(
         )
 
     world.embedding_allocator.import_state(snapshot.embeddings)
+
+    affordance_state = snapshot.affordances
+    if affordance_state:
+        world.affordance_runtime.import_state(affordance_state)
+    else:
+        world.affordance_runtime.clear()
+    if hasattr(world, "_queue_conflicts"):
+        world._queue_conflicts.reset()  # pylint: disable=protected-access
 
     employment_payload = snapshot.employment
     exit_queue = employment_payload.get("exit_queue", [])

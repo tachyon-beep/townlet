@@ -13,6 +13,7 @@
 - `DefaultAffordanceRuntime.handle_blocked(object_id, tick)` — performs ghost-step handling and hook dispatch when queues stall.
 - `DefaultAffordanceRuntime.remove_agent(agent_id)` — clears running affordances when an agent leaves the world.
 - `DefaultAffordanceRuntime.running_snapshot()` — serialisable view (object → `RunningAffordanceState`).
+- `AffordanceRuntimeContext` carries shared dependencies (queue manager, object maps, event emitter, reservation sync). Custom runtimes can reuse the context via the `SimulationLoop` injection hook.
 
 ## Developer Guidance
 

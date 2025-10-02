@@ -31,8 +31,11 @@ from townlet.console.command import (
 )
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
+from townlet.world.console_bridge import ConsoleBridge
+from townlet.world.queue_conflict import QueueConflictTracker
 from townlet.world.affordances import (
     AffordanceOutcome,
+    AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
     HookPayload,
     RunningAffordanceState,
@@ -78,23 +81,6 @@ class HookRegistry:
             self._handlers.clear()
             return
         self._handlers.pop(name, None)
-
-
-class _ConsoleHandlerEntry:
-    """Metadata for registered console handlers."""
-
-    __slots__ = ("handler", "mode", "require_cmd_id")
-
-    def __init__(
-        self,
-        handler: Callable[[ConsoleCommandEnvelope], ConsoleCommandResult],
-        *,
-        mode: str = "viewer",
-        require_cmd_id: bool = False,
-    ) -> None:
-        self.handler = handler
-        self.mode = mode
-        self.require_cmd_id = require_cmd_id
 
 
 def _default_personality() -> Personality:
@@ -209,20 +195,16 @@ class WorldState:
     _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
     _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
-    _rivalry_events: deque[dict[str, Any]] = field(init=False, default_factory=deque)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
-    _chat_events: list[dict[str, Any]] = field(init=False, default_factory=list)
     _rng_seed: Optional[int] = field(init=False, default=None)
     _rng_state: Optional[tuple[Any, ...]] = field(init=False, default=None)
     _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
+    affordance_runtime_factory: Callable[["WorldState", AffordanceRuntimeContext], "DefaultAffordanceRuntime"] | None = None
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
-    _console_handlers: dict[str, _ConsoleHandlerEntry] = field(init=False, default_factory=dict)
-    _console_cmd_history: OrderedDict[str, ConsoleCommandResult] = field(
-        init=False, default_factory=OrderedDict
-    )
-    _console_result_buffer: deque[ConsoleCommandResult] = field(init=False, default_factory=deque)
+    _console: ConsoleBridge = field(init=False)
+    _queue_conflicts: QueueConflictTracker = field(init=False)
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
     _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
@@ -233,10 +215,14 @@ class WorldState:
         config: SimulationConfig,
         *,
         rng: Optional[random.Random] = None,
+        affordance_runtime_factory: Callable[["WorldState", AffordanceRuntimeContext], "DefaultAffordanceRuntime"] | None = None,
     ) -> "WorldState":
         """Bootstrap the initial world from config."""
 
-        instance = cls(config=config)
+        instance = cls(
+            config=config,
+            affordance_runtime_factory=affordance_runtime_factory,
+        )
         instance.attach_rng(rng or random.Random())
         return instance
 
@@ -264,28 +250,53 @@ class WorldState:
             window_ticks=self._relationship_window_ticks,
             max_samples=8,
         )
-        self._rivalry_events = deque(maxlen=256)
         self._recent_meal_participants = {}
-        self._chat_events = []
         self._load_affordance_definitions()
         self._rng_seed = None
         if self._rng is None:
             self._rng = random.Random()
         self._rng_state = self._rng.getstate()
-        self._console_handlers = {}
-        self._console_cmd_history = OrderedDict()
-        self._console_result_buffer = deque(maxlen=_CONSOLE_RESULT_BUFFER_LIMIT)
+        self._console = ConsoleBridge(
+            world=self,
+            history_limit=_CONSOLE_HISTORY_LIMIT,
+            buffer_limit=_CONSOLE_RESULT_BUFFER_LIMIT,
+        )
         self._register_default_console_handlers()
+        from townlet.world.queue_conflict import QueueConflictTracker
+
+        self._queue_conflicts = QueueConflictTracker(
+            world=self,
+            record_rivalry_conflict=self._apply_rivalry_conflict,
+        )
         self._hook_registry = HookRegistry()
         modules = ["townlet.world.hooks.default"]
         extra = os.environ.get("TOWNLET_AFFORDANCE_HOOK_MODULES")
         if extra:
             modules.extend(module.strip() for module in extra.split(",") if module.strip())
         load_hook_modules(self, modules)
-        self._affordance_runtime = DefaultAffordanceRuntime(
-            self,
-            running_cls=RunningAffordance,
+        context = AffordanceRuntimeContext(
+            world=self,
+            queue_manager=self.queue_manager,
+            objects=self.objects,
+            affordances=self.affordances,
+            running_affordances=self._running_affordances,
+            active_reservations=self._active_reservations,
+            emit_event=self._emit_event,
+            sync_reservation=self._sync_reservation,
+            apply_affordance_effects=self._apply_affordance_effects,
+            dispatch_hooks=self._dispatch_affordance_hooks,
+            record_queue_conflict=self._record_queue_conflict,
+            apply_need_decay=self._apply_need_decay,
+            build_precondition_context=self._build_precondition_context,
+            snapshot_precondition_context=self._snapshot_precondition_context,
         )
+        if self.affordance_runtime_factory is not None:
+            self._affordance_runtime = self.affordance_runtime_factory(self, context)
+        else:
+            self._affordance_runtime = DefaultAffordanceRuntime(
+                context,
+                running_cls=RunningAffordance,
+            )
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
@@ -303,96 +314,7 @@ class WorldState:
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
-        for operation in operations:
-            try:
-                envelope = ConsoleCommandEnvelope.from_payload(operation)
-            except ConsoleCommandError as exc:
-                fallback_envelope = ConsoleCommandEnvelope(
-                    name=str(getattr(operation, "name", "unknown") or "unknown"),
-                    args=[],
-                    kwargs={},
-                    cmd_id=getattr(operation, "cmd_id", None)
-                    if isinstance(getattr(operation, "cmd_id", None), str)
-                    else None,
-                    issuer=None,
-                )
-                result = ConsoleCommandResult.from_error(
-                    fallback_envelope,
-                    exc.code,
-                    exc.message,
-                    details=exc.details or {},
-                    tick=self.tick,
-                )
-                logger.warning("Rejected console command: %s", exc)
-                self._record_console_result(result)
-                continue
-            except Exception:  # pragma: no cover - defensive
-                logger.exception("Failed to normalise console command payload: %r", operation)
-                continue
-
-            handler_entry = self._console_handlers.get(envelope.name)
-            if handler_entry is None:
-                self._record_console_result(
-                    ConsoleCommandResult.from_error(
-                        envelope,
-                        "unsupported",
-                        f"Unknown console command '{envelope.name}'",
-                        tick=self.tick,
-                    )
-                )
-                continue
-
-            if handler_entry.mode == "admin" and envelope.mode != "admin":
-                self._record_console_result(
-                    ConsoleCommandResult.from_error(
-                        envelope,
-                        "forbidden",
-                        "Command requires admin mode",
-                        tick=self.tick,
-                    )
-                )
-                continue
-
-            if handler_entry.require_cmd_id and not envelope.cmd_id:
-                self._record_console_result(
-                    ConsoleCommandResult.from_error(
-                        envelope,
-                        "usage",
-                        "Command requires cmd_id for idempotency",
-                        tick=self.tick,
-                    )
-                )
-                continue
-
-            if envelope.cmd_id and envelope.cmd_id in self._console_cmd_history:
-                cached = self._console_cmd_history[envelope.cmd_id].clone()
-                cached.tick = self.tick
-                self._record_console_result(cached)
-                continue
-
-            try:
-                result = handler_entry.handler(envelope)
-            except ConsoleCommandError as exc:
-                result = ConsoleCommandResult.from_error(
-                    envelope,
-                    exc.code,
-                    exc.message,
-                    details=exc.details or {},
-                    tick=self.tick,
-                )
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.exception("Console command '%s' failed", envelope.name)
-                result = ConsoleCommandResult.from_error(
-                    envelope,
-                    "internal",
-                    "Internal error while executing command",
-                    details={"exception": str(exc)},
-                    tick=self.tick,
-                )
-
-            if result.tick is None:
-                result.tick = self.tick
-            self._record_console_result(result)
+        self._console.apply(operations)
 
     def attach_rng(self, rng: random.Random) -> None:
         """Attach a deterministic RNG used for world-level randomness."""
@@ -427,8 +349,11 @@ class WorldState:
     ) -> None:
         """Register a console handler for queued commands."""
 
-        self._console_handlers[name] = _ConsoleHandlerEntry(
-            handler, mode=mode, require_cmd_id=require_cmd_id
+        self._console.register_handler(
+            name,
+            handler,
+            mode=mode,
+            require_cmd_id=require_cmd_id,
         )
 
     def register_affordance_hook(
@@ -446,16 +371,10 @@ class WorldState:
     def consume_console_results(self) -> list[ConsoleCommandResult]:
         """Return and clear buffered console results."""
 
-        results = list(self._console_result_buffer)
-        self._console_result_buffer.clear()
-        return results
+        return self._console.consume_results()
 
     def _record_console_result(self, result: ConsoleCommandResult) -> None:
-        if result.cmd_id:
-            self._console_cmd_history[result.cmd_id] = result.clone()
-            while len(self._console_cmd_history) > _CONSOLE_HISTORY_LIMIT:
-                self._console_cmd_history.popitem(last=False)
-        self._console_result_buffer.append(result)
+        self._console.record_result(result)
 
     def _dispatch_affordance_hooks(
         self,
@@ -741,13 +660,7 @@ class WorldState:
             participants = record.get("agents")
             if isinstance(participants, set):
                 participants.discard(agent_id)
-        self._chat_events = [
-            entry
-            for entry in self._chat_events
-            if entry.get("agent") != agent_id
-            and entry.get("speaker") != agent_id
-            and entry.get("listener") != agent_id
-        ]
+        self._queue_conflicts.remove_agent(agent_id)
         blueprint = {
             "agent_id": snapshot.agent_id,
             "origin_agent_id": snapshot.origin_agent_id or snapshot.agent_id,
@@ -1493,46 +1406,13 @@ class WorldState:
         queue_length: int,
         intensity: float | None = None,
     ) -> None:
-        if actor == rival:
-            return
-        payload = {
-            "object_id": object_id,
-            "actor": actor,
-            "rival": rival,
-            "reason": reason,
-            "queue_length": queue_length,
-        }
-        if reason == "handover":
-            self.update_relationship(
-                actor,
-                rival,
-                trust=0.05,
-                familiarity=0.05,
-                rivalry=-0.05,
-                event="queue_polite",
-            )
-            self._emit_event("queue_interaction", {**payload, "variant": "handover"})
-            return
-
-        params = self.config.conflict.rivalry
-        base_intensity = intensity
-        if base_intensity is None:
-            boost = params.ghost_step_boost if reason == "ghost_step" else params.handover_boost
-            base_intensity = boost + params.queue_length_boost * max(queue_length - 1, 0)
-        clamped_intensity = min(5.0, max(0.1, base_intensity))
-        self.register_rivalry_conflict(actor, rival, intensity=clamped_intensity, reason=reason)
-        self.update_relationship(
-            actor,
-            rival,
-            rivalry=0.05 * clamped_intensity,
-            event="conflict",
-        )
-        self._emit_event(
-            "queue_conflict",
-            {
-                **payload,
-                "intensity": clamped_intensity,
-            },
+        self._queue_conflicts.record_queue_conflict(
+            object_id=object_id,
+            actor=actor,
+            rival=rival,
+            reason=reason,
+            queue_length=queue_length,
+            intensity=intensity,
         )
 
     def register_rivalry_conflict(
@@ -1543,11 +1423,21 @@ class WorldState:
         intensity: float = 1.0,
         reason: str = "conflict",
     ) -> None:
-        """Record a rivalry-inducing conflict between two agents.
+        self._apply_rivalry_conflict(
+            agent_a,
+            agent_b,
+            intensity=intensity,
+            reason=reason,
+        )
 
-        Both ledgers are updated symmetrically so downstream consumers can
-        inspect rivalry magnitudes without having to normalise directionality.
-        """
+    def _apply_rivalry_conflict(
+        self,
+        agent_a: str,
+        agent_b: str,
+        *,
+        intensity: float = 1.0,
+        reason: str = "conflict",
+    ) -> None:
         if agent_a == agent_b:
             return
         ledger_a = self._get_rivalry_ledger(agent_a)
@@ -1560,8 +1450,12 @@ class WorldState:
             rivalry=0.1 * intensity,
             event="conflict",
         )
-        self._record_rivalry_event(
-            agent_a=agent_a, agent_b=agent_b, intensity=intensity, reason=reason
+        self._queue_conflicts.record_rivalry_event(
+            tick=self.tick,
+            agent_a=agent_a,
+            agent_b=agent_b,
+            intensity=intensity,
+            reason=reason,
         )
 
     def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
@@ -1592,9 +1486,7 @@ class WorldState:
     def consume_chat_events(self) -> list[dict[str, Any]]:
         """Return chat events staged for reward calculations and clear the buffer."""
 
-        events = list(self._chat_events)
-        self._chat_events.clear()
-        return events
+        return self._queue_conflicts.consume_chat_events()
 
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
@@ -1618,24 +1510,7 @@ class WorldState:
     def consume_rivalry_events(self) -> list[dict[str, Any]]:
         """Return rivalry events recorded since the last call."""
 
-        if not self._rivalry_events:
-            return []
-        events = list(self._rivalry_events)
-        self._rivalry_events.clear()
-        return events
-
-    def _record_rivalry_event(
-        self, *, agent_a: str, agent_b: str, intensity: float, reason: str
-    ) -> None:
-        self._rivalry_events.append(
-            {
-                "tick": int(self.tick),
-                "agent_a": agent_a,
-                "agent_b": agent_b,
-                "intensity": float(intensity),
-                "reason": reason,
-            }
-        )
+        return self._queue_conflicts.consume_rivalry_events()
 
     def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         ledger = self._rivalry_ledgers.get(agent_id)
@@ -1787,7 +1662,7 @@ class WorldState:
             familiarity=0.10 * clipped_quality,
             event="chat_success",
         )
-        self._chat_events.append(
+        self._queue_conflicts.record_chat_event(
             {
                 "event": "chat_success",
                 "speaker": speaker,
@@ -1814,7 +1689,7 @@ class WorldState:
             rivalry=0.05,
             event="chat_failure",
         )
-        self._chat_events.append(
+        self._queue_conflicts.record_chat_event(
             {
                 "event": "chat_failure",
                 "speaker": speaker,

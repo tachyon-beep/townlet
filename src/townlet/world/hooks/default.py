@@ -281,7 +281,7 @@ def _abort_affordance(
     object_id: str,
     reason: str,
 ) -> None:
-    world._running_affordances.pop(object_id, None)  # pylint: disable=protected-access
+    world.affordance_runtime.running_affordances.pop(object_id, None)
     obj = world.objects.get(object_id)
     if obj is not None and obj.occupied_by == agent_id:
         obj.occupied_by = None
