@@ -1,57 +1,43 @@
 # Risk Register
 
-## R-01: Unauthenticated Console & Telemetry Access
+## R-101: Unauthenticated Console / Admin Commands
 - **Likelihood**: High
 - **Impact**: Critical
-- **Mitigation Strategy**: Implement WP-001 (authn/authz, token management) and enforce secure transport (WP-003).
+- **Mitigation Strategy**: Deliver WP-101 (authn/authz) and ensure TLS transport via WP-102.
 - **Owner Recommendation**: Simulation Platform Lead
-- **Monitoring**: Add authentication audit logs, failed login counters, and include console access checks in CI smoke tests. Review quarterly.
+- **Monitoring**: Track failed auth counters, review access logs weekly, include auth smoke test in CI.
 
-## R-02: Snapshot Path Traversal & Data Exfiltration
+## R-102: Plaintext Telemetry Channel Exposure
 - **Likelihood**: Medium
 - **Impact**: High
-- **Mitigation Strategy**: Ship WP-002 to restrict file access to configured snapshot roots; add read-only viewer mode.
-- **Owner Recommendation**: Security Champion / Simulation Platform
-- **Monitoring**: Log all snapshot path requests, alert on attempts outside allowlist. Conduct quarterly penetration testing.
+- **Mitigation Strategy**: Implement WP-102 to add TLS and peer validation; disable plaintext TCP in production configs.
+- **Owner Recommendation**: Infrastructure / DevOps
+- **Monitoring**: Certificate expiry alerts, TLS handshake metrics, quarterly penetration tests.
 
-## R-03: Plaintext Telemetry Transport
+## R-103: Silent Telemetry Payload Loss
 - **Likelihood**: Medium
-- **Impact**: High
-- **Mitigation Strategy**: Deliver WP-003 to add TLS and client authentication; disable plaintext TCP in production configs.
-- **Owner Recommendation**: Infrastructure Engineering
-- **Monitoring**: TLS certificate expiry alerts, telemetry channel health dashboards. Review during release readiness.
+- **Impact**: Medium
+- **Mitigation Strategy**: Ship WP-103 and WP-108 to expose drop metrics, alerts, and structured logs; profile via WP-109.
+- **Owner Recommendation**: Telemetry & Insights Team
+- **Monitoring**: Dashboard on queue depth/drops, alert when drops >0 for 5 consecutive minutes, regression tests in CI.
 
-## R-04: Telemetry Flush Blocking Simulation
+## R-104: WorldState Monolith Inhibits Safe Change
 - **Likelihood**: Medium
-- **Impact**: High
-- **Mitigation Strategy**: Execute WP-004 (async flushing) and implement observability via WP-007.
+- **Impact**: Medium
+- **Mitigation Strategy**: Split responsibilities through WP-104 and close TODO hooks via WP-106 while adding profiling from WP-109.
 - **Owner Recommendation**: Core Simulation Team
-- **Monitoring**: Track tick duration metrics, enqueue depth, and flush latency. Add alert for sustained flush failures.
+- **Monitoring**: Module size KPI, change failure rate, architecture review before large features.
 
-## R-05: High Telemetry Payload Volume
+## R-105: Missing Compact Observation Variant Breaks Feature Flag
 - **Likelihood**: High
 - **Impact**: Medium
-- **Mitigation Strategy**: Complete WP-005 to reduce payload size and adopt diff streaming.
-- **Owner Recommendation**: Telemetry/Insights Team
-- **Monitoring**: Measure payload size trend, drop counts, and transport bandwidth. Review after each release.
+- **Mitigation Strategy**: Complete WP-105 to deliver compact tensors and regression tests.
+- **Owner Recommendation**: Applied RL Team
+- **Monitoring**: Test coverage for compact variant, config smoke tests in CI, backlog review after delivery.
 
-## R-06: Mutable World Snapshots Causing State Corruption
+## R-106: No Containerised Deployment Path
 - **Likelihood**: Medium
 - **Impact**: Medium
-- **Mitigation Strategy**: Apply WP-006 to return immutable copies and expand regression tests.
-- **Owner Recommendation**: Simulation Platform Lead
-- **Monitoring**: Add tests for external mutation attempts; observe anomaly reports from QA. Reassess bi-monthly.
-
-## R-07: Lack of Containerised Deployment Path
-- **Likelihood**: Medium
-- **Impact**: Medium
-- **Mitigation Strategy**: Deliver WP-008 to produce Docker images, compose manifests, and deployment runbooks.
-- **Owner Recommendation**: DevOps / Release Engineering
-- **Monitoring**: Track environment drift incidents, ensure images built on every release. Review per milestone.
-
-## R-08: Incomplete Training & Promotion Pipeline
-- **Likelihood**: Medium
-- **Impact**: Medium
-- **Mitigation Strategy**: Execute WP-009 and WP-010 to finish training orchestration and resolve scaffolding debt.
-- **Owner Recommendation**: Applied RL Team Lead
-- **Monitoring**: Monitor promotion cadence, evaluation metrics, and backlog burndown. Review after each promotion rehearsal.
+- **Mitigation Strategy**: Introduce Docker/Compose assets via WP-107 and document operational steps.
+- **Owner Recommendation**: Release Engineering
+- **Monitoring**: Track environment drift incidents, ensure container build runs per release, quarterly ops drills.
