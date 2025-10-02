@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 import numpy as np
 
@@ -71,6 +72,17 @@ def main() -> None:
     for _ in range(max(0, total_ticks)):
         loop.step()
 
+    capture_metadata: Dict[str, Any] = {
+        "config_path": str(args.config.resolve()),
+        "config_id": getattr(config, "config_id", None),
+        "scenario_name": args.config.stem,
+        "scenario_description": scenario_config.get("description") if scenario_config else None,
+        "ticks": total_ticks,
+        "seed": getattr(config, "seed", None) or (scenario_config.get("seed") if isinstance(scenario_config, dict) else None),
+        "policy_hash": loop.policy.active_policy_hash() if hasattr(loop, "policy") else None,
+        "capture_timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
     frames = loop.policy.collect_trajectory(clear=True)
     if args.agent_id is not None:
         frames = [frame for frame in frames if frame.get("agent_id") == args.agent_id]
@@ -101,17 +113,28 @@ def main() -> None:
         )
         meta_path = output_dir / f"{stem}.json"
         meta = sample.metadata.copy()
-        meta.update({"agent_id": agent_id, "frame_count": len(agent_frames)})
+        meta.update({
+            "agent_id": agent_id,
+            "frame_count": len(agent_frames),
+            "capture_metadata": capture_metadata,
+        })
         sample_metrics = compute_sample_metrics(sample)
         metrics_map[sample_path.name] = sample_metrics
         meta["metrics"] = sample_metrics
         meta_path.write_text(json.dumps(meta, indent=2))
-        manifest_entries.append({"sample": str(sample_path.name), "meta": str(meta_path.name)})
+        manifest_entries.append({
+            "sample": str(sample_path.name),
+            "meta": str(meta_path.name),
+            "agent_id": agent_id,
+            "frame_count": len(agent_frames),
+        })
 
     manifest_path = output_dir / f"{args.prefix}_manifest.json"
-    manifest_path.write_text(json.dumps(manifest_entries, indent=2))
+    manifest_payload = {"metadata": capture_metadata, "samples": manifest_entries}
+    manifest_path.write_text(json.dumps(manifest_payload, indent=2))
     metrics_path = output_dir / f"{args.prefix}_metrics.json"
-    metrics_path.write_text(json.dumps(metrics_map, indent=2))
+    metrics_payload = {"metadata": capture_metadata, "samples": metrics_map}
+    metrics_path.write_text(json.dumps(metrics_payload, indent=2))
     print(f"Captured {len(manifest_entries)} replay samples to {output_dir}")
 if __name__ == "__main__":
     main()

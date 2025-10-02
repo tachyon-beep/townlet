@@ -107,6 +107,32 @@ class PromotionManager:
         self._pass_streak = 0
         self._log_event(record)
 
+    def record_manual_swap(
+        self,
+        *,
+        tick: int,
+        metadata: Mapping[str, object],
+    ) -> dict[str, object]:
+        """Record a manual policy swap without altering candidate readiness."""
+
+        release_metadata = self._normalise_release(metadata)
+        record = {
+            "event": "policy_swap",
+            "tick": tick,
+            "metadata": dict(metadata),
+            "previous_release": dict(self._current_release),
+            "release": dict(release_metadata),
+        }
+        self._history.append(record)
+        self._current_release = release_metadata
+        self._state = "monitoring"
+        self._candidate_ready = False
+        self._candidate_ready_tick = None
+        self._pass_streak = 0
+        self._candidate_metadata = None
+        self._log_event(record)
+        return self.snapshot()
+
     def set_candidate_metadata(self, metadata: Mapping[str, object] | None) -> None:
         self._candidate_metadata = dict(metadata) if metadata is not None else None
 

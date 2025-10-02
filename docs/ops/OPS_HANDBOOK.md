@@ -113,6 +113,7 @@
 2. **Promotion**
    - Snapshot current release (`snapshots/release/<timestamp>.pkl`) and shadow candidate.
    - Flip the release pointer with `promote_policy <checkpoint> [--policy-hash HASH]`; the console updates telemetry and appends to `logs/promotion_history.jsonl`. Manual config swaps remain a fallback.
+   - If a manual override is required (e.g., hotfix or emergency revert), issue `policy_swap <checkpoint> [--policy-hash HASH]` with a unique `cmd_id`. The handler verifies the checkpoint exists, updates the live policy hash/telemetry identity, and records a `policy_swap` event in the promotion history.
    - Monitor telemetry UI; ensure canaries stay green for two windows; capture the console response and confirm the entry in `logs/promotion_history.jsonl`.
 3. **Rollback**
    - On canary breach, issue `rollback_policy [--checkpoint PATH] [--reason TEXT]` to restore the prior release (defaults to the pre-promotion pointer if no checkpoint is provided).

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
 from typing import List
 
@@ -66,7 +67,7 @@ def run_capture(
     load_config(config)  # validation only
     output.mkdir(parents=True, exist_ok=True)
     cmd: List[str] = [
-        "python",
+        sys.executable,
         "scripts/capture_rollout.py",
         str(config),
         "--ticks",

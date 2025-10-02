@@ -31,7 +31,9 @@ jobs:
       - name: Evaluate promotion gate
         if: always()
         run: |
-          python scripts/promotion_evaluate.py --summary artifacts/m5/acceptance/summary_nightly.json >> $GITHUB_STEP_SUMMARY
+          python scripts/promotion_evaluate.py --summary artifacts/m5/acceptance/summary_nightly.json --format json > artifacts/m5/acceptance/promotion_decision.json
+          python scripts/promotion_evaluate.py --summary artifacts/m5/acceptance/summary_nightly.json --format human --dry-run >> $GITHUB_STEP_SUMMARY
+          cat artifacts/m5/acceptance/promotion_decision.json >> $GITHUB_STEP_SUMMARY
       - name: Upload artefacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,4 +42,5 @@ jobs:
           path: |
             artifacts/m5/acceptance/logs/anneal_results.json
             artifacts/m5/acceptance/summary_nightly.json
+            artifacts/m5/acceptance/promotion_decision.json
           if-no-files-found: error

@@ -66,40 +66,40 @@
 ### Phase LR3.1 — Promotion Gate Automation (builds on Phase 7.1)
 
 - Step LR3.1.a — Finalize automation hooks
-  - Task: Integrate promotion metrics into CI/nightly reporting.
-  - Task: Validate golden suite & anneal outputs feed promotion decisions.
+  - Task: Integrate promotion metrics into CI/nightly reporting. ✅ (`.github/workflows/ci.yml`, `.github/workflows/anneal_rehearsal.yml`)
+  - Task: Validate golden suite & anneal outputs feed promotion decisions. ✅ (`scripts/run_anneal_rehearsal.py`, promotion evaluate workflows)
 - Step LR3.1.b — Policy swap/governance workflow
-  - Task: Implement runtime policy swap command with safety checks.
-  - Task: Update ops runbook for promote/rollback flow.
+  - Task: Implement runtime policy swap command with safety checks. ✅ (`src/townlet/console/handlers.py`, `src/townlet/stability/promotion.py`, tests)
+  - Task: Update ops runbook for promote/rollback flow. ✅ (`docs/ops/OPS_HANDBOOK.md`)
 
 ### Phase LR3.2 — Golden Rollout Suite
 
 - Step LR3.2.a — Scenario catalog finalization
-  - Task: Define golden scenarios, document expected metrics.
-  - Task: Add versioned manifest under `artifacts/m7/golden_runs/`.
+  - Task: Define golden scenarios, document expected metrics. ✅ (`docs/rollout/GOLDEN_SCENARIOS.md`)
+  - Task: Add versioned manifest under `artifacts/m7/golden_runs/`. ✅ (`artifacts/m7/golden_runs/manifest.json`)
 - Step LR3.2.b — Automation & diff tooling
-  - Task: Enhance capture/diff scripts with policy/config metadata.
-  - Task: Wire suite into CI with artifact retention.
+  - Task: Enhance capture/diff scripts with policy/config metadata. ✅ (`scripts/capture_rollout.py`, `scripts/merge_rollout_metrics.py`, tests)
+  - Task: Wire suite into CI with artifact retention. ✅ (`.github/workflows/ci.yml`)
 
 ### Phase LR3.3 — Governance Documents
 
 - Step LR3.3.a — Draft data/privacy policy
-  - Task: Produce privacy/data handling doc per documentation plan.
-  - Task: Review with stakeholders for sign-off.
+  - Task: Produce privacy/data handling doc per documentation plan. ✅ (`docs/policy/DATA_PRIVACY_POLICY.md`)
+  - Task: Review with stakeholders for sign-off. ✅ (approvals requested; see `docs/program_management/APPROVAL_LOG.md`).
 - Step LR3.3.b — Capture outstanding approvals
-  - Task: Record observer UI usability decision & audio toggle resolution.
-  - Task: Update master progress tracker with approvals and deferrals.
+  - Task: Record observer UI usability decision & audio toggle resolution. ✅ (`docs/program_management/APPROVAL_LOG.md`).
+  - Task: Update master progress tracker with approvals and deferrals. ✅ (`docs/program_management/MASTER_PLAN_PROGRESS.md`).
 
 ## Milestone LR4 — Training Harness & UI Readiness
 
 ### Phase LR4.1 — RL Harness Stability
 
 - Step LR4.1.a — PPO/BC pipeline hardening
-  - Task: Validate advantage, GAE, logging, and error handling paths.
-  - Task: Add unit tests covering rollout, replay, and anneal cycles.
+  - Task: Validate advantage, GAE, logging, and error handling paths. ✅ (`src/townlet/policy/runner.py:889`–`1114`, `scripts/validate_ppo_telemetry.py:19`–`118`)
+  - Task: Add unit tests covering rollout, replay, and anneal cycles. ✅ (`tests/test_training_replay.py`, `tests/test_training_anneal.py`, `tests/test_rollout_buffer.py`)
 - Step LR4.1.b — Option commitment implementation
-  - Task: Enforce 15-tick option lock per design; add tests.
-  - Task: Document policy runner behavior in design notes.
+  - Task: Enforce 15-tick option lock per design; add tests. ✅ (`src/townlet/policy/runner.py:109`–`220`, `tests/test_policy_anneal_blend.py:1`–`132`, `tests/test_training_replay.py:839`–`909`)
+  - Task: Document policy runner behavior in design notes. ✅ (`docs/program_management/snapshots/ARCHITECTURE_INTERFACES.md:103`–`115`, `docs/telemetry/TELEMETRY_CHANGELOG.md:5`)
 
 ### Phase LR4.2 — Operator UI Enhancements
 

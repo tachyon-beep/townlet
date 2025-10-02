@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Iterable, cast
 
 
 def _maybe_float(value: object) -> float | None:
@@ -16,6 +16,32 @@ def _maybe_float(value: object) -> float | None:
 def _coerce_float(value: object, default: float = 0.0) -> float:
     maybe = _maybe_float(value)
     return maybe if maybe is not None else default
+
+
+def _coerce_mapping(value: object) -> Mapping[str, Any] | None:
+    if isinstance(value, Mapping):
+        return {str(key): item for key, item in value.items()}
+    return None
+
+
+def _coerce_history_entries(value: object) -> tuple[Mapping[str, Any], ...]:
+    if not isinstance(value, Iterable):
+        return ()
+    entries: list[Mapping[str, Any]] = []
+    for item in value:
+        if isinstance(item, Mapping):
+            entry = dict(item)
+            metadata = entry.get("metadata")
+            if isinstance(metadata, Mapping):
+                entry["metadata"] = dict(metadata)
+            release = entry.get("release")
+            if isinstance(release, Mapping):
+                entry["release"] = dict(release)
+            previous_release = entry.get("previous_release")
+            if isinstance(previous_release, Mapping):
+                entry["previous_release"] = dict(previous_release)
+            entries.append(entry)
+    return tuple(entries)
 
 
 SUPPORTED_SCHEMA_PREFIX = "0.9"
@@ -169,6 +195,9 @@ class PromotionSnapshot:
     candidate_ready_tick: int | None
     last_result: str | None
     last_evaluated_tick: int | None
+    candidate_metadata: Mapping[str, Any] | None
+    current_release: Mapping[str, Any] | None
+    history: tuple[Mapping[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -531,6 +560,9 @@ class TelemetryClient:
                 if promotion_payload.get("last_result")
                 else None,
                 last_evaluated_tick=_maybe_int(promotion_payload.get("last_evaluated_tick")),
+                candidate_metadata=_coerce_mapping(promotion_payload.get("candidate")),
+                current_release=_coerce_mapping(promotion_payload.get("current_release")),
+                history=_coerce_history_entries(promotion_payload.get("history")),
             )
 
         transport_payload = payload.get("transport")

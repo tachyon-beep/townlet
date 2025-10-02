@@ -289,102 +289,118 @@ def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
 
 
 def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
-    status = snapshot.anneal
-    if status is None:
-        body = Text("No anneal telemetry yet", style="dim")
-        return Panel(body, title="Anneal Status", border_style="green")
+
+    anneal = snapshot.anneal
+    promotion = snapshot.promotion
 
     meta_table = Table(title="Cycle", expand=True)
     meta_table.add_column("Cycle", justify="right")
     meta_table.add_column("Stage")
     meta_table.add_column("Dataset")
     meta_table.add_row(
-        _safe_format(status.cycle),
-        status.stage or "-",
-        status.dataset or "-",
+        _safe_format(anneal.cycle if anneal is not None else None),
+        anneal.stage if anneal is not None and anneal.stage else "-",
+        anneal.dataset if anneal is not None and anneal.dataset else "-",
     )
 
-    promotion = snapshot.promotion
     promotion_grid = Table.grid(expand=True)
     promotion_grid.add_column(justify="left")
     promotion_grid.add_column(justify="right")
+    reason_text = "Awaiting first evaluation."
+    promotion_border = _promotion_border_style(promotion)
+    history_panel: Panel | None = None
     if promotion is None:
-        promotion_grid.add_row("Pass streak", "-")
-        promotion_grid.add_row("Required passes", "-")
+        promotion_grid.add_row("State", "—")
+        promotion_grid.add_row("Pass streak", "0")
+        promotion_grid.add_row("Required passes", "—")
         promotion_grid.add_row("Candidate ready", "no")
     else:
+        state_label = promotion.state or "monitoring"
+        promotion_grid.add_row("State", state_label)
         promotion_grid.add_row("Pass streak", str(promotion.pass_streak))
         promotion_grid.add_row("Required passes", str(promotion.required_passes))
-        promotion_grid.add_row(
-            "Candidate ready",
-            "yes" if promotion.candidate_ready else "no",
-        )
+        promotion_grid.add_row("Candidate ready", "yes" if promotion.candidate_ready else "no")
         if promotion.candidate_ready_tick is not None:
             promotion_grid.add_row("Ready tick", str(promotion.candidate_ready_tick))
         if promotion.last_result:
             promotion_grid.add_row("Last result", promotion.last_result)
-    promotion_border = "green"
-    if promotion is not None and promotion.last_result == "fail":
-        promotion_border = "red"
-    elif promotion is not None and not promotion.candidate_ready:
-        promotion_border = "yellow"
+        if promotion.last_evaluated_tick is not None:
+            promotion_grid.add_row("Last evaluated", str(promotion.last_evaluated_tick))
+        if promotion.candidate_metadata:
+            promotion_grid.add_row(
+                "Candidate", _format_metadata_summary(promotion.candidate_metadata)
+            )
+        if promotion.history:
+            history_panel = _build_promotion_history_panel(promotion.history, promotion_border)
+        reason_text = _derive_promotion_reason(promotion, anneal)
+    promotion_grid.add_row("Reason", reason_text)
     promotion_panel = Panel(
         promotion_grid,
         title="Promotion Gate",
         border_style=promotion_border,
     )
 
+    bc_accuracy = anneal.bc_accuracy if anneal is not None else None
+    bc_threshold = anneal.bc_threshold if anneal is not None else None
+    bc_passed = anneal.bc_passed if anneal is not None else True
+    loss_flag = anneal.loss_flag if anneal is not None else False
+    queue_flag = anneal.queue_flag if anneal is not None else False
+    intensity_flag = anneal.intensity_flag if anneal is not None else False
+    loss_baseline = anneal.loss_baseline if anneal is not None else None
+    queue_baseline = anneal.queue_baseline if anneal is not None else None
+    intensity_baseline = anneal.intensity_baseline if anneal is not None else None
+
     bc_table = Table(title="BC Gate", expand=True)
     bc_table.add_column("Accuracy", justify="right")
     bc_table.add_column("Threshold", justify="right")
     bc_table.add_column("Passed", justify="center")
     bc_table.add_row(
-        _format_optional_float(status.bc_accuracy),
-        _format_optional_float(status.bc_threshold),
-        "✅" if status.bc_passed else "❌",
+        _format_optional_float(bc_accuracy),
+        _format_optional_float(bc_threshold),
+        "✅" if bc_passed else "❌",
     )
+
     drift_table = Table.grid(expand=True)
     drift_table.add_column(justify="left")
     drift_table.add_row(
         "Loss drift: {} (baseline {})".format(
-            "⚠️" if status.loss_flag else "OK",
-            _format_optional_float(status.loss_baseline),
+            "⚠️" if loss_flag else "OK",
+            _format_optional_float(loss_baseline),
         )
     )
     drift_table.add_row(
         "Queue drift: {} (baseline {})".format(
-            "⚠️" if status.queue_flag else "OK",
-            _format_optional_float(status.queue_baseline),
+            "⚠️" if queue_flag else "OK",
+            _format_optional_float(queue_baseline),
         )
     )
     drift_table.add_row(
         "Intensity drift: {} (baseline {})".format(
-            "⚠️" if status.intensity_flag else "OK",
-            _format_optional_float(status.intensity_baseline),
+            "⚠️" if intensity_flag else "OK",
+            _format_optional_float(intensity_baseline),
         )
     )
     composite = Panel.fit(
         drift_table,
         title="Drift",
         border_style=(
-            "yellow"
-            if (status.loss_flag or status.queue_flag or status.intensity_flag)
-            else "green"
+            "yellow" if (loss_flag or queue_flag or intensity_flag) else "green"
         ),
     )
+
     container = Table.grid(expand=True)
     container.add_row(meta_table)
     container.add_row(promotion_panel)
+    if history_panel is not None:
+        container.add_row(history_panel)
     container.add_row(bc_table)
     container.add_row(composite)
 
     border_style = (
         "red"
-        if not status.bc_passed
+        if not bc_passed
         else (
-            "yellow"
-            if (status.loss_flag or status.queue_flag or status.intensity_flag)
-            else "green"
+            "yellow" if (loss_flag or queue_flag or intensity_flag) else "green"
         )
     )
     if promotion_border == "red":
@@ -392,6 +408,91 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
     elif promotion_border == "yellow" and border_style == "green":
         border_style = "yellow"
     return Panel(container, title="Anneal Status", border_style=border_style)
+
+
+def _promotion_border_style(promotion: PromotionSnapshot | None) -> str:
+    if promotion is None:
+        return "blue"
+    if promotion.last_result == "fail":
+        return "red"
+    if promotion.candidate_ready:
+        return "green"
+    return "yellow"
+
+
+def _derive_promotion_reason(promotion: PromotionSnapshot, status: AnnealStatus | None) -> str:
+    if promotion.candidate_ready:
+        return "Candidate ready for promotion review."
+    if promotion.last_result == "fail":
+        reasons: list[str] = []
+        if status is not None:
+            if status.loss_flag:
+                reasons.append("loss drift")
+            if status.queue_flag:
+                reasons.append("queue drift")
+            if status.intensity_flag:
+                reasons.append("intensity drift")
+        if not reasons:
+            reasons.append("evaluation failed")
+        return "Hold: " + ", ".join(reasons)
+    remaining = max(promotion.required_passes - promotion.pass_streak, 0)
+    if remaining > 0:
+        suffix = "es" if remaining != 1 else ""
+        return f"Need {remaining} more consecutive pass{suffix}."
+    if promotion.state == "promoted":
+        return "Promotion recently executed."
+    return "Monitoring next evaluation window."
+
+
+def _format_metadata_summary(metadata: Mapping[str, Any]) -> str:
+    ordered_keys = ("status", "mode", "cycle")
+    parts: list[str] = []
+    for key in ordered_keys:
+        value = metadata.get(key)
+        if value not in (None, "", []):
+            parts.append(f"{key}={value}")
+    extras = [
+        f"{key}={value}"
+        for key, value in metadata.items()
+        if key not in ordered_keys and value not in (None, "", [])
+    ]
+    parts.extend(extras)
+    return ", ".join(parts) if parts else "—"
+
+
+def _build_promotion_history_panel(
+    history: Iterable[Mapping[str, Any]], border_style: str
+) -> Panel:
+    table = Table(title="Promotion History", expand=True)
+    table.add_column("Event")
+    table.add_column("Tick", justify="right")
+    table.add_column("Details")
+    rows = list(history)
+    for entry in reversed(rows[-3:]):
+        event = str(entry.get("event", "—"))
+        tick = entry.get("tick")
+        tick_text = str(tick) if tick not in (None, "") else "—"
+        details = _format_history_metadata(entry)
+        table.add_row(event, tick_text, details)
+    return Panel(table, border_style=border_style)
+
+
+def _format_history_metadata(entry: Mapping[str, Any]) -> str:
+    metadata = entry.get("metadata")
+    parts: list[str] = []
+    if isinstance(metadata, Mapping):
+        for key, value in metadata.items():
+            if value in (None, "", []):
+                continue
+            parts.append(f"{key}={value}")
+    release = entry.get("release")
+    if isinstance(release, Mapping):
+        policy_hash = release.get("policy_hash")
+        if policy_hash:
+            parts.append(f"policy={policy_hash}")
+    if not parts:
+        return "—"
+    return ", ".join(parts)
 
 
 def _safe_format(value: float | None) -> str:

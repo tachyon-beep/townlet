@@ -92,6 +92,7 @@ Audit log entries mirror the response envelope with additional transport metadat
 | `promotion_status` | viewer | – | Current promotion snapshot. | No-op when promotion manager absent.
 | `promote_policy` | admin | `checkpoint`, optional `policy_hash`. | `{promoted: true, promotion: ...}` | Validates candidate readiness.
 | `rollback_policy` | admin | Optional `checkpoint`, `reason`. | `{rolled_back: true, promotion: ...}` | Resets candidate metadata.
+| `policy_swap` | admin | `checkpoint`, optional `policy_hash`. | `{swapped: true, release: ...}` | Verifies checkpoint exists, records manual swap event.
 | `perturbation_queue` | viewer | – | Latest scheduler state. | Requires scheduler wired in router.
 | `perturbation_trigger` | admin | `spec`, kwargs (`starts_in`, `duration`, `targets`, `magnitude`, `location`). | `{enqueued: true, event: ...}` | Rejects unknown specs/invalid args.
 | `perturbation_cancel` | admin | `event_id` | `{cancelled: bool}` | No-op when scheduler absent.

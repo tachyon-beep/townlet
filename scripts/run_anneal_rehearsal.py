@@ -55,37 +55,46 @@ def run_rehearsal(config_path: Path, manifest_path: Path, log_dir: Path) -> Dict
         bc_manifest=manifest_path,
         log_dir=log_dir,
     )
-    latest = results[-1] if results else {}
+    status = harness.last_anneal_status or harness.evaluate_anneal_results(results)
+    bc_stage = next((stage for stage in results if stage.get("mode") == "bc"), {})
+    ppo_stage = results[-1] if results else {}
     summary = {
-        "bc": next((stage for stage in results if stage.get("mode") == "bc"), {}),
-        "ppo": latest,
+        "status": status,
         "results": results,
+        "promotion": harness.promotion.snapshot(),
+        "bc": bc_stage,
+        "ppo": ppo_stage,
+        "bc_passed": bool(bc_stage.get("passed", False)),
+        "loss_flag": bool(ppo_stage.get("anneal_loss_flag", False)),
+        "queue_flag": bool(ppo_stage.get("anneal_queue_flag", False)),
+        "intensity_flag": bool(ppo_stage.get("anneal_intensity_flag", False)),
     }
     return summary
 
 
+
 def evaluate_summary(summary: Dict[str, object]) -> Dict[str, object]:
-    bc_stage = summary.get("bc", {})
-    ppo_stage = summary.get("ppo", {})
-    bc_passed = bool(bc_stage.get("passed", False))
-    loss_flag = bool(ppo_stage.get("anneal_loss_flag", False))
-    queue_flag = bool(ppo_stage.get("anneal_queue_flag", False))
-    intensity_flag = bool(ppo_stage.get("anneal_intensity_flag", False))
-    status = "PASS"
-    if not bc_passed:
-        status = "FAIL"
-    elif loss_flag or queue_flag or intensity_flag:
-        status = "HOLD"
-    summary.update(
-        {
-            "status": status,
-            "bc_passed": bc_passed,
-            "loss_flag": loss_flag,
-            "queue_flag": queue_flag,
-            "intensity_flag": intensity_flag,
-        }
-    )
-    return summary
+    if __package__:
+        from . import promotion_evaluate as _promotion_eval  # type: ignore[attr-defined]
+    else:  # pragma: no cover - script execution path
+        import importlib.util
+        import sys
+        module_path = Path(__file__).with_name("promotion_evaluate.py")
+        spec = importlib.util.spec_from_file_location("promotion_evaluate", module_path)
+        if spec is None or spec.loader is None:  # pragma: no cover - defensive
+            raise ModuleNotFoundError("Could not load promotion_evaluate module")
+        _promotion_eval = importlib.util.module_from_spec(spec)  # type: ignore[assignment]
+        sys.modules.setdefault("promotion_evaluate", _promotion_eval)
+        spec.loader.exec_module(_promotion_eval)  # type: ignore[arg-type]
+
+    decision = _promotion_eval.evaluate(summary)
+    combined = dict(summary)
+    combined.update(decision)
+    if "status" in combined:
+        combined["status"] = str(combined["status"]).upper()
+    if "decision" in combined:
+        combined["decision"] = str(combined["decision"]).upper()
+    return combined
 
 
 def main() -> None:

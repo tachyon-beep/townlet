@@ -86,8 +86,9 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 ### 2.7 Policy Runner (`src/townlet/policy/runner.py`)
 - wraps PettingZoo `ParallelEnv`, manages option commitment windows, scripted primitive controllers, action masking, and behaviour-clone anneal scheduler.
 - outputs `actions` + metadata (masks, diagnostics) consumed by core loop.
-- config inputs: `features.stages`, `features.training`, anneal ratios from config or runtime flags.
+- config inputs: `features.stages`, `features.training`, anneal ratios from config or runtime flags, plus `policy_runtime.option_commit_ticks` (default 15).
 - Scripted controller plug-in (`BehaviorController`) currently returns idle intents; foundation laid for richer logic.
+- Trajectory frames include `option_commit_remaining`, `option_commit_kind`, and `option_commit_enforced` when a lock is active so telemetry consumers can surface commitment state.
 
 ### 2.8 Reward Engine (`src/townlet/rewards/engine.py`)
 - computes per-agent reward: survival tick, needs penalty, wage, punctuality, social taps; enforces per-tick & per-episode clip bounds, death-window suppression.
@@ -110,7 +111,7 @@ Each subsystem exposes hooks so new features (e.g., renderer, pathfinder) can sl
 ### 2.10 PPO Telemetry NDJSON Contract (`TrainingHarness.run_ppo`)
 - **Producer:** `TrainingHarness.run_ppo` writes newline-delimited JSON (NDJSON) to `log_path` / `--ppo-log`.
 - **Schema version:** default `telemetry_version == 1.1`. Set `config.training.telemetry_version` (future flag) to `1.0` only when consumers cannot handle the new fields.
-- **Epoch summary fields (v1.1):** `epoch`, `updates`, `transitions`, `steps`, `loss_policy`, `loss_value`, `loss_entropy`, `loss_total`, `clip_fraction`, `adv_mean`, `adv_std`, `grad_norm`, `kl_divergence`, optimiser learning rate `lr`, **plus**:
+- **Epoch summary fields (v1.1):** `epoch`, `updates`, `transitions`, `steps`, `loss_policy`, `loss_value`, `loss_entropy`, `loss_total`, `clip_fraction`, `clip_fraction_max`, `clip_triggered_minibatches`, `adv_mean`, `adv_std`, `adv_zero_std_batches`, `adv_min_std`, `grad_norm`, `kl_divergence`, optimiser learning rate `lr`, **plus**:
   - `epoch_duration_sec`: wall-clock seconds for the epoch.
   - `data_mode`: `"replay"`, `"rollout"`, or `"mixed"` (alternating cycles).
   - `cycle_id`: monotonically incrementing rollout/train cycle id.

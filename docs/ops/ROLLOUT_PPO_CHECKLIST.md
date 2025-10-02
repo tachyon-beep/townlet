@@ -5,6 +5,7 @@
    ```bash
    python scripts/capture_rollout_suite.py \
      configs/scenarios/kitchen_breakfast.yaml \
+   # Each capture directory now emits a manifest/metrics pair containing capture metadata
      configs/scenarios/queue_conflict.yaml \
      configs/scenarios/employment_punctuality.yaml \
      configs/scenarios/rivalry_decay.yaml \
@@ -19,6 +20,7 @@
    ```bash
    python scripts/capture_rollout.py configs/scenarios/<scenario>.yaml      --output captures/<scenario> --compress
    ```
+   Manifest files now include a `metadata` block (config id, scenario name, capture timestamp); keep these committed alongside per-agent entries.
    Add `--auto-seed-agents` for smoke captures without scripted agents, or
    use `python scripts/run_training.py <config> --rollout-ticks N --rollout-save-dir tmp/<scenario>`
    when you need the `RolloutBuffer` scaffolding.

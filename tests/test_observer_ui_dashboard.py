@@ -1,13 +1,15 @@
 from pathlib import Path
 
+from dataclasses import replace
+
 import pytest
 
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.models import torch_available
-from townlet_ui.dashboard import _build_map_panel, render_snapshot, run_dashboard
-from townlet_ui.telemetry import TelemetryClient
+from townlet_ui.dashboard import _build_map_panel, render_snapshot, run_dashboard, _promotion_border_style, _derive_promotion_reason
+from townlet_ui.telemetry import TelemetryClient, AnnealStatus, PromotionSnapshot
 
 
 def make_loop() -> SimulationLoop:
@@ -175,7 +177,6 @@ def test_narration_panel_shows_styled_categories() -> None:
     assert "Utility Outage" in rendered
 
 
-@pytest.mark.skipif(not torch_available(), reason="Torch not installed")
 def test_policy_inspector_snapshot_contains_entries() -> None:
     loop = make_loop()
     router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
@@ -187,3 +188,89 @@ def test_policy_inspector_snapshot_contains_entries() -> None:
     entry = entries[0]
     assert entry.top_actions
     assert entry.selected_action is not None
+
+
+def test_promotion_reason_logic() -> None:
+    promotion = PromotionSnapshot(
+        state=None,
+        pass_streak=0,
+        required_passes=2,
+        candidate_ready=False,
+        candidate_ready_tick=None,
+        last_result=None,
+        last_evaluated_tick=None,
+        candidate_metadata=None,
+        current_release=None,
+        history=(),
+    )
+    reason = _derive_promotion_reason(promotion, None)
+    assert reason == "Need 2 more consecutive passes."
+
+    anneal = AnnealStatus(
+        stage="ppo",
+        cycle=1.0,
+        dataset="idle",
+        bc_accuracy=0.95,
+        bc_threshold=0.9,
+        bc_passed=True,
+        loss_flag=True,
+        queue_flag=False,
+        intensity_flag=True,
+        loss_baseline=0.1,
+        queue_baseline=5.0,
+        intensity_baseline=3.0,
+    )
+    fail_reason = _derive_promotion_reason(
+        PromotionSnapshot(
+            state="monitoring",
+            pass_streak=0,
+            required_passes=2,
+            candidate_ready=False,
+            candidate_ready_tick=None,
+            last_result="fail",
+            last_evaluated_tick=5,
+            candidate_metadata=None,
+            current_release=None,
+            history=(),
+        ),
+        anneal,
+    )
+    assert "loss drift" in fail_reason and "intensity drift" in fail_reason
+
+    ready_reason = _derive_promotion_reason(
+        PromotionSnapshot(
+            state="ready",
+            pass_streak=2,
+            required_passes=2,
+            candidate_ready=True,
+            candidate_ready_tick=10,
+            last_result="pass",
+            last_evaluated_tick=10,
+            candidate_metadata=None,
+            current_release=None,
+            history=(),
+        ),
+        anneal,
+    )
+    assert ready_reason == "Candidate ready for promotion review."
+
+
+def test_promotion_border_styles() -> None:
+    assert _promotion_border_style(None) == "blue"
+    promo = PromotionSnapshot(
+        state="monitoring",
+        pass_streak=1,
+        required_passes=3,
+        candidate_ready=False,
+        candidate_ready_tick=None,
+        last_result="pass",
+        last_evaluated_tick=1,
+        candidate_metadata=None,
+        current_release=None,
+        history=(),
+    )
+    assert _promotion_border_style(promo) == "yellow"
+    promo_fail = replace(promo, last_result="fail")
+    assert _promotion_border_style(promo_fail) == "red"
+    promo_ready = replace(promo, candidate_ready=True)
+    assert _promotion_border_style(promo_ready) == "green"

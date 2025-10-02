@@ -80,6 +80,41 @@ def test_promote_and_rollback_commands(admin_router: tuple[SimulationLoop, objec
     assert identity_after and identity_after.get("policy_hash") == "release_v0"
 
 
+def test_policy_swap_command(admin_router: tuple[SimulationLoop, object], tmp_path: Path) -> None:
+    loop, router = admin_router
+    checkpoint = tmp_path / "swap_checkpoint.pt"
+    checkpoint.write_text("dummy")
+    response = router.dispatch(
+        ConsoleCommand(
+            name="policy_swap",
+            args=(str(checkpoint),),
+            kwargs={"cmd_id": "swap-1", "policy_hash": "swap_hash"},
+        )
+    )
+    assert response["cmd_id"] == "swap-1"
+    assert response["swapped"] is True
+    release = response["release"]
+    assert release["checkpoint"] == str(checkpoint)
+    assert release.get("policy_hash") == "swap_hash"
+    assert loop.policy.active_policy_hash() == "swap_hash"
+    history = loop.promotion.snapshot()["history"]
+    assert history
+    assert history[-1]["event"] == "policy_swap"
+    assert history[-1]["release"].get("policy_hash") == "swap_hash"
+
+
+def test_policy_swap_missing_file(admin_router: tuple[SimulationLoop, object]) -> None:
+    _loop, router = admin_router
+    response = router.dispatch(
+        ConsoleCommand(
+            name="policy_swap",
+            args=("/tmp/nonexistent_policy.pt",),
+            kwargs={"cmd_id": "swap-missing"},
+        )
+    )
+    assert response["error"] == "not_found"
+
+
 @pytest.fixture()
 def viewer_router() -> object:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))

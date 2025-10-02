@@ -76,22 +76,35 @@ jobs:
 
           harness = TrainingHarness(config)
           dataset = ReplayDatasetConfig.from_manifest(manifest)
-          results = harness.run_anneal(dataset_config=dataset, log_dir=log_dir, bc_manifest=manifest)
+          results = harness.run_anneal(
+              dataset_config=dataset,
+              log_dir=log_dir,
+              bc_manifest=manifest,
+          )
+          status = harness.last_anneal_status or harness.evaluate_anneal_results(results)
+          promotion_snapshot = harness.promotion.snapshot()
           summary = {
-              'bc_accuracy': results[0].get('accuracy'),
-              'bc_threshold': results[0].get('threshold'),
-              'bc_passed': results[0].get('passed'),
-              'ppo_loss_total': results[-1].get('loss_total'),
-              'ppo_updates': results[-1].get('updates'),
+              'status': status,
+              'results': results,
+              'promotion': promotion_snapshot,
               'dataset': 'idle_v1_production',
+              'bc_stage': next((stage for stage in results if stage.get('mode') == 'bc'), {}),
+              'ppo_stage': results[-1] if results else {},
           }
           (log_dir / 'summary.json').write_text(json.dumps(summary, indent=2))
-          print(summary)
+          print(json.dumps(summary, indent=2))
           PY
 
       - name: Promotion gate evaluation
         run: |
-          python scripts/promotion_evaluate.py --summary tmp/ci_phase5/summary.json
+          python scripts/promotion_evaluate.py --summary tmp/ci_phase5/summary.json --format json > tmp/ci_phase5/promotion_decision.json
+
+      - name: Promotion gate summary
+        if: always()
+        run: |
+          echo "### Promotion Gate" >> $GITHUB_STEP_SUMMARY
+          python scripts/promotion_evaluate.py --summary tmp/ci_phase5/summary.json --format human --dry-run >> $GITHUB_STEP_SUMMARY
+          cat tmp/ci_phase5/promotion_decision.json >> $GITHUB_STEP_SUMMARY
 
       - name: Upload BC/anneal artifacts
         if: always()
@@ -101,6 +114,7 @@ jobs:
           path: |
             tmp/ci_phase5/anneal_results.json
             tmp/ci_phase5/summary.json
+            tmp/ci_phase5/promotion_decision.json
           if-no-files-found: error
 
       - name: Mixed-mode rollout validation
@@ -146,7 +160,8 @@ jobs:
           for scenario_dir in sorted(p for p in root.iterdir() if p.is_dir()):
               scenario = scenario_dir.name
               metrics_file = scenario_dir / 'rollout_sample_metrics.json'
-              current = json.loads(metrics_file.read_text())
+              current_payload = json.loads(metrics_file.read_text())
+              current = current_payload.get('samples', current_payload) if isinstance(current_payload, dict) else current_payload
               expected = golden.get(scenario)
               if expected is None:
                   failures.append(f'scenario {scenario} missing in golden metrics')
@@ -185,6 +200,13 @@ jobs:
           print('Rollout metrics match goldens within tolerance.')
           PY
 
+      - name: Upload rollout golden metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollout-golden-metrics
+          path: tmp/rollout_goldens
+          if-no-files-found: error
       - name: Upload rollout goldens
         if: always()
         uses: actions/upload-artifact@v4

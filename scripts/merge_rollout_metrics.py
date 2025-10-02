@@ -59,6 +59,9 @@ def _load_metrics_from_dir(scenario_dir: Path) -> dict[str, dict[str, float]] | 
     data = json.loads(metrics_path.read_text())
     if not isinstance(data, dict):  # defensive, schema should be mapping
         raise ValueError(f"Metrics file {metrics_path} must contain an object")
+    samples = data.get("samples") if isinstance(data, dict) else None
+    if isinstance(samples, dict):
+        return samples
     return data
 
 

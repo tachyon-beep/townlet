@@ -29,9 +29,16 @@ Status companion to `PROJECT_PLAN.md`; use this to record actual delivery progre
    - Owner: RL/Training
    - Status: Operational (soak harness artefacts archived; monitoring handed to ops).
    - Next: schedule periodic soak runs, wire results into ops review cadence.
+3. **Governance Documents (LR3.3)** (`docs/policy/DATA_PRIVACY_POLICY.md`, `docs/program_management/APPROVAL_LOG.md`)
+   - Owner: Security & Privacy Lead
+   - Status: Data & Privacy Policy v0.1 drafted; stakeholder approvals tracked in approval log.
+   - Next: Collect Ops/Program/RL sign-off and close audio toggle deferral once design lands.
 
 ## Deferred Milestones
-- **M6 – Observer Experience & Policy Inspector:** Pending audio toggle implementation (Phase 6E). Policy inspector/KPI panels are live, but audio controls, config, and ops documentation remain blocked on UX decision. Archived under deferral to avoid duplicate reviews; revisit once toggle design is approved.
+- **M6 – Observer Experience & Policy Inspector:** Pending audio toggle implementation (Phase 6E). Policy
+  inspector/KPI panels are live, but audio controls, config, and ops documentation remain blocked on UX decision.
+  Archived under deferral to avoid duplicate reviews; revisit once toggle design is approved.
+  See `docs/program_management/APPROVAL_LOG.md` for status.
 
 ## Upcoming Milestones (see `PROJECT_PLAN.md` for detail)
 - **M4 – Social Foundations** (Completed 2025-09-30)

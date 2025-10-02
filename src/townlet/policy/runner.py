@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import statistics
 import time
@@ -107,6 +108,13 @@ class PolicyRuntime:
         self._latest_policy_snapshot: dict[str, dict[str, object]] = {}
         self._last_option: dict[str, str] = {}
         self._option_switch_counts: dict[str, int] = {}
+        policy_cfg = getattr(config, "policy_runtime", None)
+        commit_ticks = 15
+        if policy_cfg is not None:
+            commit_ticks = int(getattr(policy_cfg, "option_commit_ticks", commit_ticks))
+        self._option_commit_ticks: int = max(commit_ticks, 0)
+        self._option_commit_until: dict[str, int] = {}
+        self._option_committed_intent: dict[str, AgentIntent] = {}
         self._policy_hash: str | None = None
         self._possessed_agents: set[str] = set()
         self._ctx_reset_callback: Callable[[str], None] | None = None
@@ -145,6 +153,9 @@ class PolicyRuntime:
                 continue
             scripted_intent: AgentIntent = self.behavior.decide(world, agent_id)
             selected_intent = self._select_intent_with_blend(world, agent_id, scripted_intent)
+            selected_intent, commit_enforced = self._enforce_option_commit(
+                agent_id, tick, selected_intent
+            )
             if selected_intent.kind == "wait":
                 actions[agent_id] = {"kind": "wait"}
             else:
@@ -168,6 +179,18 @@ class PolicyRuntime:
                 self._action_inverse[action_id] = action_key
             action_id = self._action_lookup[action_key]
             entry = self._transitions.setdefault(agent_id, {})
+            commit_until = self._option_commit_until.get(agent_id)
+            if commit_until is not None and commit_until > tick:
+                remaining = commit_until - tick
+                entry["option_commit_remaining"] = remaining
+                committed = self._option_committed_intent.get(agent_id)
+                if committed is not None:
+                    entry["option_commit_kind"] = committed.kind
+                entry["option_commit_enforced"] = bool(commit_enforced)
+            else:
+                entry.pop("option_commit_remaining", None)
+                entry.pop("option_commit_kind", None)
+                entry.pop("option_commit_enforced", None)
             entry["action"] = action_payload
             entry["action_id"] = action_id
 
@@ -192,6 +215,13 @@ class PolicyRuntime:
             if terminated.get(agent_id, False):
                 self._last_option.pop(agent_id, None)
                 self._option_switch_counts.pop(agent_id, None)
+                self._option_commit_until.pop(agent_id, None)
+                self._option_committed_intent.pop(agent_id, None)
+
+        for agent_id, is_done in terminated.items():
+            if is_done and agent_id not in rewards:
+                self._option_commit_until.pop(agent_id, None)
+                self._option_committed_intent.pop(agent_id, None)
 
     def flush_transitions(
         self, observations: dict[str, dict[str, object]]
@@ -212,6 +242,10 @@ class PolicyRuntime:
                 "dones": entry.get("dones", []),
                 "action_lookup": dict(self._action_inverse),
             }
+            if "option_commit_remaining" in entry:
+                frame["option_commit_remaining"] = float(entry["option_commit_remaining"])
+                frame["option_commit_kind"] = entry.get("option_commit_kind")
+                frame["option_commit_enforced"] = bool(entry.get("option_commit_enforced", False))
             self._annotate_with_policy_outputs(frame)
             frames.append(frame)
         self._trajectory.extend(frames)
@@ -237,6 +271,8 @@ class PolicyRuntime:
         if agent_id in self._possessed_agents:
             return False
         self._possessed_agents.add(agent_id)
+        self._option_commit_until.pop(agent_id, None)
+        self._option_committed_intent.pop(agent_id, None)
         if self._ctx_reset_callback is not None:
             self._ctx_reset_callback(agent_id)
         return True
@@ -260,6 +296,8 @@ class PolicyRuntime:
         self._trajectory.clear()
         self._last_option.clear()
         self._option_switch_counts.clear()
+        self._option_commit_until.clear()
+        self._option_committed_intent.clear()
 
     def _select_intent_with_blend(
         self,
@@ -285,6 +323,48 @@ class PolicyRuntime:
         if self._anneal_rng.random() < ratio:
             return alt_intent
         return scripted
+
+    @staticmethod
+    def _clone_intent(intent: AgentIntent) -> AgentIntent:
+        return AgentIntent(
+            kind=intent.kind,
+            object_id=intent.object_id,
+            affordance_id=intent.affordance_id,
+            blocked=intent.blocked,
+            position=intent.position,
+        )
+
+    @staticmethod
+    def _intents_match(lhs: AgentIntent, rhs: AgentIntent) -> bool:
+        return (
+            lhs.kind == rhs.kind
+            and lhs.object_id == rhs.object_id
+            and lhs.affordance_id == rhs.affordance_id
+            and lhs.position == rhs.position
+            and lhs.blocked == rhs.blocked
+        )
+
+    def _enforce_option_commit(
+        self, agent_id: str, tick: int, intent: AgentIntent
+    ) -> tuple[AgentIntent, bool]:
+        commit_until = self._option_commit_until.get(agent_id)
+        committed = self._option_committed_intent.get(agent_id)
+        commit_active = commit_until is not None and commit_until > tick
+        enforced = False
+
+        if commit_active and committed is not None:
+            if not self._intents_match(intent, committed):
+                intent = self._clone_intent(committed)
+                enforced = True
+            return intent, enforced
+
+        self._option_commit_until.pop(agent_id, None)
+        self._option_committed_intent.pop(agent_id, None)
+
+        if self._option_commit_ticks > 0 and intent.kind != "wait":
+            self._option_commit_until[agent_id] = tick + self._option_commit_ticks
+            self._option_committed_intent[agent_id] = self._clone_intent(intent)
+        return intent, enforced
 
     def _annotate_with_policy_outputs(self, frame: dict[str, object]) -> None:
         if not torch_available():  # pragma: no cover - torch optional
@@ -799,6 +879,36 @@ class TrainingHarness:
         self._ppo_state["learning_rate"] = float(ppo_cfg.learning_rate)
         generator = torch.Generator(device=device)
 
+        dataset_label = getattr(dataset, "label", None)
+        dataset_label_str = str(
+            dataset_label
+            or (getattr(dataset_config, "label", None) if dataset_config is not None else None)
+            or "training_dataset"
+        )
+
+        def _ensure_finite(name: str, tensor: torch.Tensor, batch_index: int) -> None:
+            if torch.isnan(tensor).any() or torch.isinf(tensor).any():
+                raise ValueError(
+                    "PPO %s contained NaN/inf (dataset=%s, batch=%s)"
+                    % (name, dataset_label_str, batch_index)
+                )
+
+        def _update_advantage_health(
+            flat_advantages: torch.Tensor,
+            *,
+            batch_index: int,
+            stats: dict[str, float],
+        ) -> None:
+            batch_std = float(flat_advantages.std(unbiased=False).item())
+            if math.isnan(batch_std) or math.isinf(batch_std):
+                raise ValueError(
+                    "PPO advantages produced invalid std (dataset=%s, batch=%s)"
+                    % (dataset_label_str, batch_index)
+                )
+            stats["min_adv_std"] = min(stats["min_adv_std"], batch_std)
+            if batch_std < 1e-8:
+                stats["adv_zero_std_batches"] += 1
+
         log_frequency = max(1, int(log_frequency or 1))
         max_log_entries = max_log_entries if max_log_entries and max_log_entries > 0 else None
 
@@ -855,6 +965,12 @@ class TrainingHarness:
             kl_max = 0.0
             reward_buffer: list[float] = []
             advantage_buffer: list[float] = []
+            health_tracking = {
+                "adv_zero_std_batches": 0.0,
+                "clip_triggered_minibatches": 0.0,
+                "max_clip_fraction": 0.0,
+                "min_adv_std": math.inf,
+            }
 
             for batch_index, batch in enumerate(batches, start=1):
                 batch_summary = self._summarise_batch(batch, batch_index=batch_index)
@@ -884,6 +1000,14 @@ class TrainingHarness:
 
                 baseline = value_baseline_from_old_preds(value_preds_old, timesteps)
 
+                flat_advantages = advantages.reshape(-1)
+                flat_returns = returns.reshape(-1)
+                _ensure_finite("advantages", flat_advantages, batch_index)
+                _ensure_finite("returns", flat_returns, batch_index)
+                _update_advantage_health(
+                    flat_advantages, batch_index=batch_index, stats=health_tracking
+                )
+
                 reward_buffer.extend(batch.rewards.astype(float).reshape(-1).tolist())
                 advantage_buffer.extend(advantages.cpu().numpy().astype(float).reshape(-1).tolist())
 
@@ -892,8 +1016,6 @@ class TrainingHarness:
                 flat_features = features.reshape(batch_size * timestep_length, features.shape[2])
                 flat_actions = actions.reshape(-1)
                 flat_old_log_probs = old_log_probs.reshape(-1)
-                flat_advantages = advantages.reshape(-1)
-                flat_returns = returns.reshape(-1)
                 flat_old_values = baseline.reshape(-1)
 
                 total_transitions = flat_actions.shape[0]
@@ -961,14 +1083,26 @@ class TrainingHarness:
                     metrics["entropy"] += entropy_value
                     entropy_values.append(entropy_value)
                     metrics["total_loss"] += float(total_loss.item())
-                    metrics["clip_frac"] += float(clip_frac.item())
+                    clip_value = float(clip_frac.item())
+                    metrics["clip_frac"] += clip_value
                     metrics["adv_mean"] += float(mb_advantages.mean().item())
-                    metrics["adv_std"] += float(mb_advantages.std(unbiased=False).item())
+                    batch_adv_std = float(mb_advantages.std(unbiased=False).item())
+                    if math.isnan(batch_adv_std) or math.isinf(batch_adv_std):
+                        raise ValueError(
+                            "PPO mini-batch advantages produced invalid std (dataset=%s, batch=%s)"
+                            % (dataset_label_str, batch_index)
+                        )
+                    metrics["adv_std"] += batch_adv_std
                     metrics["grad_norm"] += float(grad_norm)
                     kl_value = float(torch.mean(mb_old_log_probs - new_log_probs).item())
                     metrics["kl_divergence"] += kl_value
                     grad_norm_max = max(grad_norm_max, float(grad_norm))
                     kl_max = max(kl_max, abs(kl_value))
+                    if clip_value > 0.0:
+                        health_tracking["clip_triggered_minibatches"] += 1.0
+                    health_tracking["max_clip_fraction"] = max(
+                        health_tracking["max_clip_fraction"], clip_value
+                    )
                     mini_batch_updates += 1
                     transitions_processed += int(idx.shape[0])
 
@@ -1016,6 +1150,30 @@ class TrainingHarness:
                 "lr": lr,
                 "steps": float(self._ppo_state["step"]),
             }
+
+            min_adv_std = health_tracking["min_adv_std"]
+            if math.isinf(min_adv_std):
+                min_adv_std = 0.0
+            epoch_summary.update(
+                {
+                    "adv_zero_std_batches": float(health_tracking["adv_zero_std_batches"]),
+                    "adv_min_std": float(min_adv_std),
+                    "clip_triggered_minibatches": float(
+                        health_tracking["clip_triggered_minibatches"]
+                    ),
+                    "clip_fraction_max": float(health_tracking["max_clip_fraction"]),
+                }
+            )
+
+            if health_tracking["adv_zero_std_batches"]:
+                print(
+                    "[WARN] Advantage std near zero in %s batch(es) (dataset=%s, epoch=%s)"
+                    % (
+                        int(health_tracking["adv_zero_std_batches"]),
+                        dataset_label_str,
+                        epoch + 1,
+                    )
+                )
 
             if PPO_TELEMETRY_VERSION >= 1.1:
                 epoch_summary.update(

@@ -1,0 +1,42 @@
+{
+  "version": "m7.0.0",
+  "generated_at": "2025-10-21T00:00:00Z",
+  "metrics_file": "docs/samples/rollout_scenario_stats.json",
+  "scenarios": [
+    {
+      "name": "kitchen_breakfast",
+      "config": "configs/scenarios/kitchen_breakfast.yaml",
+      "description": "Two agents alternate cooking breakfast without queue contention.",
+      "ticks": 40,
+      "metrics_ref": "kitchen_breakfast"
+    },
+    {
+      "name": "queue_conflict",
+      "config": "configs/scenarios/queue_conflict.yaml",
+      "description": "Three agents contest a single shower to trigger queue rotation and rivalry deltas.",
+      "ticks": 80,
+      "metrics_ref": "queue_conflict"
+    },
+    {
+      "name": "employment_punctuality",
+      "config": "configs/scenarios/employment_punctuality.yaml",
+      "description": "Morning employment punctuality scenario covering lateness telemetry.",
+      "ticks": 80,
+      "metrics_ref": "employment_punctuality"
+    },
+    {
+      "name": "rivalry_decay",
+      "config": "configs/scenarios/rivalry_decay.yaml",
+      "description": "Two agents with rivalry decay and avoid thresholds.",
+      "ticks": 50,
+      "metrics_ref": "rivalry_decay"
+    },
+    {
+      "name": "observation_baseline",
+      "config": "configs/scenarios/observation_baseline.yaml",
+      "description": "Observation-only sanity check with idle agent.",
+      "ticks": 20,
+      "metrics_ref": "observation_baseline"
+    }
+  ]
+}

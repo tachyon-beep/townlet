@@ -41,6 +41,10 @@ class TrainingFlags(BaseModel):
     curiosity: CuriosityToggle = "phase_A"
 
 
+class PolicyRuntimeConfig(BaseModel):
+    option_commit_ticks: int = Field(15, ge=0, le=100_000)
+
+
 class ConsoleFlags(BaseModel):
     mode: ConsoleMode = "viewer"
 
@@ -678,6 +682,7 @@ class SimulationConfig(BaseModel):
     affordances: AffordanceConfig = AffordanceConfig()
     stability: StabilityConfig = StabilityConfig()
     behavior: BehaviorConfig = BehaviorConfig()
+    policy_runtime: PolicyRuntimeConfig = PolicyRuntimeConfig()
     employment: EmploymentConfig = EmploymentConfig()
     telemetry: TelemetryConfig = TelemetryConfig()
     snapshot: SnapshotConfig = SnapshotConfig()

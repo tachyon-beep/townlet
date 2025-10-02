@@ -66,8 +66,18 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     manifest = output_dir / "rollout_sample_manifest.json"
     assert manifest.exists()
-    entries = json.loads(manifest.read_text())
+    manifest_payload = json.loads(manifest.read_text())
+    if isinstance(manifest_payload, dict):
+        manifest_metadata = manifest_payload.get("metadata", {})
+        entries = manifest_payload.get("samples", [])
+    else:
+        manifest_metadata = {}
+        entries = manifest_payload
     assert entries, "Manifest empty"
+    if manifest_metadata:
+        expected_config = load_config(config_path).config_id
+        assert manifest_metadata.get("config_id") == expected_config
+        assert manifest_metadata.get("scenario_name") == config_path.stem
     for entry in entries:
         assert "sample" in entry and "meta" in entry
         sample_file = output_dir / entry["sample"]
@@ -75,8 +85,12 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     metrics_file = output_dir / "rollout_sample_metrics.json"
     assert metrics_file.exists()
-    metrics_data = json.loads(metrics_file.read_text())
-    assert metrics_data, "Metrics file empty"
+    metrics_payload = json.loads(metrics_file.read_text())
+    assert metrics_payload, "Metrics file empty"
+    if isinstance(metrics_payload, dict) and "samples" in metrics_payload:
+        metrics_data = metrics_payload.get("samples", {})
+    else:
+        metrics_data = metrics_payload
 
     golden = GOLDEN_STATS.get(config_path.stem)
     if golden:

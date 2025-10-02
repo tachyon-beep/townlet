@@ -326,7 +326,11 @@ class ReplayDatasetConfig:
         metrics_path = capture_dir / "rollout_sample_metrics.json"
         metrics_map = None
         if metrics_path.exists():
-            metrics_map = json.loads(metrics_path.read_text())
+            payload = json.loads(metrics_path.read_text())
+            if isinstance(payload, dict):
+                metrics_map = payload.get("samples") or {}
+            else:
+                metrics_map = payload
         return cls(
             entries=entries,
             batch_size=batch_size,
@@ -365,11 +369,18 @@ def _load_manifest(manifest_path: Path) -> list[tuple[Path, Optional[Path]]]:
         data = json.loads(text)
     else:
         data = yaml.safe_load(text)
-    if not isinstance(data, list):
-        raise ValueError("Replay manifest must be a list of entries")
+    if isinstance(data, dict):
+        samples = data.get("samples")
+        if not isinstance(samples, list):
+            raise ValueError("Replay manifest payload missing 'samples' list")
+        manifest_entries = samples
+    elif isinstance(data, list):
+        manifest_entries = data
+    else:
+        raise ValueError("Replay manifest must be a list or mapping with 'samples'")
     entries: list[tuple[Path, Optional[Path]]] = []
     base = manifest_path.parent
-    for item in data:
+    for item in manifest_entries:
         if isinstance(item, str):
             sample_spec = Path(item)
             sample = _resolve_manifest_path(sample_spec, base)

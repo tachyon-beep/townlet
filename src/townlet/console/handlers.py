@@ -577,6 +577,51 @@ def create_console_router(
         _apply_release_metadata(snapshot.get("current_release"))
         return _attach_metadata({"rolled_back": True, "promotion": snapshot}, command)
 
+    def policy_swap_handler(command: ConsoleCommand) -> object:
+        if policy is None and promotion is None:
+            return _attach_metadata({"error": "unsupported"}, command)
+        if command.kwargs.get("cmd_id") is None:
+            return {"error": "usage", "message": "policy_swap requires cmd_id"}
+        checkpoint_arg = command.kwargs.get("checkpoint")
+        if checkpoint_arg is None and command.args:
+            checkpoint_arg = command.args[0]
+        if checkpoint_arg is None:
+            return _attach_metadata(
+                {
+                    "error": "usage",
+                    "message": "policy_swap <checkpoint> [--policy-hash HASH]",
+                },
+                command,
+            )
+        try:
+            checkpoint_path = Path(str(checkpoint_arg)).expanduser().resolve()
+        except Exception as exc:  # pragma: no cover - defensive
+            return _attach_metadata({"error": "invalid_path", "message": str(exc)}, command)
+        if not checkpoint_path.exists():
+            return _attach_metadata(
+                {
+                    "error": "not_found",
+                    "message": f"checkpoint '{checkpoint_path}' not found",
+                },
+                command,
+            )
+        metadata: dict[str, object] = {"checkpoint": str(checkpoint_path)}
+        policy_hash = command.kwargs.get("policy_hash")
+        if policy_hash is not None:
+            metadata["policy_hash"] = str(policy_hash)
+        snapshot: dict[str, object] | None = None
+        if promotion is not None:
+            snapshot = promotion.record_manual_swap(
+                tick=getattr(world, "tick", 0),
+                metadata=metadata,
+            )
+            _refresh_promotion_metrics()
+        _apply_release_metadata(metadata)
+        result: dict[str, object] = {"swapped": True, "release": metadata}
+        if snapshot is not None:
+            result["promotion"] = snapshot
+        return _attach_metadata(result, command)
+
     def arrange_meet_handler(command: ConsoleCommand) -> object:
         if scheduler is None or world is None:
             return {"error": "unsupported"}
@@ -806,6 +851,7 @@ def create_console_router(
         router.register("snapshot_migrate", snapshot_migrate_handler)
         router.register("promote_policy", promote_policy_handler)
         router.register("rollback_policy", rollback_policy_handler)
+        router.register("policy_swap", policy_swap_handler)
     else:
         router.register("possess", _forbidden)
         router.register("kill", _forbidden)
@@ -817,6 +863,7 @@ def create_console_router(
         router.register("snapshot_migrate", _forbidden)
         router.register("promote_policy", _forbidden)
         router.register("rollback_policy", _forbidden)
+        router.register("policy_swap", _forbidden)
     return router
 
 
