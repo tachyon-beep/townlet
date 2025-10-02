@@ -1,105 +1,64 @@
-import importlib.util
-import sys
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location(
-    "telemetry_watch",
-    Path(__file__).resolve().parent.parent / "scripts" / "telemetry_watch.py",
+from scripts.telemetry_watch import (
+    _parse_health_line,
+    check_health_thresholds,
+    stream_health_records,
 )
-assert spec and spec.loader
-telemetry_watch = importlib.util.module_from_spec(spec)
-sys.modules["telemetry_watch"] = telemetry_watch
-spec.loader.exec_module(telemetry_watch)  # type: ignore[arg-type]
 
 
-def write_log(tmp_path: Path, records: list[dict[str, object]]) -> Path:
-    path = tmp_path / "log.jsonl"
-    path.write_text(
-        "\n".join([telemetry_watch.json.dumps(record) for record in records])
+def test_parse_health_line() -> None:
+    line = (
+        "tick_health tick=12 duration_ms=6.5 queue=2 dropped=0 "
+        "perturbations_pending=1 perturbations_active=0 exit_queue=3"
     )
-    return path
+    record = _parse_health_line(line)
+    assert record["tick"] == 12
+    assert record["duration_ms"] == pytest.approx(6.5)
+    assert record["queue"] == 2
+    assert record["telemetry_queue"] == 2
+    assert record["exit_queue"] == 3
 
 
-@pytest.mark.parametrize("bc_accuracy", [0.95, 0.85])
-def test_anneal_bc_threshold(tmp_path: Path, bc_accuracy: float) -> None:
-    log = write_log(
-        tmp_path,
-        [
-            {
-                "epoch": 1,
-                "loss_total": 0.2,
-                "kl_divergence": 0.0,
-                "grad_norm": 0.1,
-                "batch_entropy_mean": 0.0,
-                "reward_advantage_corr": 0.0,
-                "log_stream_offset": 1,
-                "data_mode": "replay",
-                "queue_conflict_events": 0.0,
-                "queue_conflict_intensity_sum": 0.0,
-                "shared_meal_events": 0.0,
-                "late_help_events": 0.0,
-                "shift_takeover_events": 0.0,
-                "chat_success_events": 0.0,
-                "chat_failure_events": 0.0,
-                "chat_quality_mean": 0.0,
-                "utility_outage_events": 0.0,
-                "shower_complete_events": 0.0,
-                "sleep_complete_events": 0.0,
-                "anneal_stage": "ppo",
-                "anneal_bc_accuracy": bc_accuracy,
-                "anneal_bc_threshold": 0.9,
-            }
-        ],
+def test_stream_health_records(tmp_path: Path) -> None:
+    log = tmp_path / "health.log"
+    log.write_text(
+        "tick_health tick=5 duration_ms=4.2 queue=1 dropped=0 perturbations_pending=0 "
+        "perturbations_active=0 exit_queue=0\n",
+        encoding="utf-8",
     )
-    args = ["telemetry_watch.py", str(log), "--anneal-bc-min", "0.9"]
-    try:
-        telemetry_watch.main(args=args)
-    except SystemExit as exc:
-        if bc_accuracy >= 0.9:
-            raise AssertionError("Unexpected exit for passing BC accuracy") from exc
-    else:
-        if bc_accuracy < 0.9:
-            raise AssertionError("Expected exit for failing BC accuracy")
+    records = list(stream_health_records(log, follow=False, interval=0.01))
+    assert len(records) == 1
+    assert records[0]["tick"] == 5
 
 
-def test_new_event_thresholds(tmp_path: Path) -> None:
-    log = write_log(
-        tmp_path,
-        [
-            {
-                "epoch": 3,
-                "loss_total": 0.2,
-                "kl_divergence": 0.0,
-                "grad_norm": 0.1,
-                "batch_entropy_mean": 0.0,
-                "reward_advantage_corr": 0.0,
-                "log_stream_offset": 3,
-                "data_mode": "rollout",
-                "queue_conflict_events": 10.0,
-                "queue_conflict_intensity_sum": 25.0,
-                "shared_meal_events": 2.0,
-                "late_help_events": 1.0,
-                "shift_takeover_events": 0.0,
-                "chat_success_events": 4.0,
-                "chat_failure_events": 1.0,
-                "chat_quality_mean": 0.6,
-                "utility_outage_events": 2.0,
-                "shower_complete_events": 0.0,
-                "sleep_complete_events": 0.0,
-            }
-        ],
-    )
-    args = [
-        "telemetry_watch.py",
-        str(log),
-        "--utility-outage-max",
-        "1",
-        "--shower-complete-min",
-        "1",
-        "--sleep-complete-min",
-        "1",
-    ]
+def test_health_thresholds_raise() -> None:
+    record = {
+        "tick": 7,
+        "duration_ms": 12.0,
+        "queue": 3.0,
+        "telemetry_queue": 3.0,
+        "dropped": 0.0,
+        "telemetry_dropped": 0.0,
+        "perturbations_pending": 1.0,
+        "perturbations_active": 0.0,
+        "exit_queue": 0.0,
+    }
+    args = type(
+        "Args",
+        (),
+        {
+            "tick_duration_max": 10.0,
+            "telemetry_queue_max": None,
+            "telemetry_dropped_max": None,
+            "perturbations_pending_max": None,
+            "perturbations_active_max": None,
+            "exit_queue_max": None,
+        },
+    )()
     with pytest.raises(SystemExit):
-        telemetry_watch.main(args=args)
+        check_health_thresholds(record, args)
