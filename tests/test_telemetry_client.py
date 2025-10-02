@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,8 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     assert snapshot.conflict.queue_rotation_events >= 0
     assert isinstance(snapshot.conflict.queue_history, tuple)
     assert isinstance(snapshot.conflict.rivalry_events, tuple)
+    assert snapshot.affordance_runtime.running_count >= 0
+    assert isinstance(snapshot.affordance_runtime.event_counts, Mapping)
     assert isinstance(snapshot.stability.alerts, tuple)
     assert isinstance(snapshot.stability.metrics, dict)
     assert snapshot.agents[0].agent_id

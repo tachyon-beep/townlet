@@ -87,6 +87,14 @@ class ConflictMetrics:
 
 
 @dataclass(frozen=True)
+class AffordanceRuntimeSnapshot:
+    running_count: int
+    running: Mapping[str, Mapping[str, Any]]
+    active_reservations: Mapping[str, str]
+    event_counts: Mapping[str, int]
+
+
+@dataclass(frozen=True)
 class NarrationEntry:
     tick: int
     category: str
@@ -219,6 +227,7 @@ class TelemetrySnapshot:
     schema_version: str
     schema_warning: str | None
     employment: EmploymentMetrics
+    affordance_runtime: AffordanceRuntimeSnapshot
     conflict: ConflictMetrics
     narrations: list[NarrationEntry]
     narration_state: Mapping[str, Any]
@@ -288,6 +297,43 @@ class TelemetryClient:
             daily_exit_cap=int(employment_payload.get("daily_exit_cap", 0)),
             queue_limit=int(employment_payload.get("queue_limit", 0)),
             review_window=int(employment_payload.get("review_window", 0)),
+        )
+
+        runtime_payload = payload.get("affordance_runtime")
+        runtime_running: dict[str, Mapping[str, Any]] = {}
+        active_reservations: dict[str, str] = {}
+        event_counts: dict[str, int] = {}
+        running_count = 0
+        if isinstance(runtime_payload, Mapping):
+            running_section = runtime_payload.get("running")
+            if isinstance(running_section, Mapping):
+                runtime_running = {
+                    str(object_id): {
+                        str(key): value for key, value in entry.items()
+                    }
+                    for object_id, entry in running_section.items()
+                    if isinstance(entry, Mapping)
+                }
+            running_count = _coerce_int(runtime_payload.get("running_count"))
+            if running_count == 0 and runtime_running:
+                running_count = len(runtime_running)
+            reservations_payload = runtime_payload.get("active_reservations", {})
+            if isinstance(reservations_payload, Mapping):
+                active_reservations = {
+                    str(object_id): str(agent_id)
+                    for object_id, agent_id in reservations_payload.items()
+                }
+            counts_payload = runtime_payload.get("event_counts", {})
+            if isinstance(counts_payload, Mapping):
+                for key, value in counts_payload.items():
+                    event_counts[str(key)] = _coerce_int(value)
+        for key in ("start", "finish", "fail", "precondition_fail"):
+            event_counts.setdefault(key, 0)
+        affordance_runtime = AffordanceRuntimeSnapshot(
+            running_count=running_count,
+            running=runtime_running,
+            active_reservations=active_reservations,
+            event_counts=event_counts,
         )
 
         queue_metrics = conflict_payload.get("queues", {})
@@ -621,6 +667,7 @@ class TelemetryClient:
             schema_version=schema_version,
             schema_warning=schema_warning,
             employment=employment,
+            affordance_runtime=affordance_runtime,
             conflict=conflict,
             narrations=narrations,
             narration_state=narration_state,

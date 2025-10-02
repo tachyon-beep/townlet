@@ -227,10 +227,15 @@ def test_world_relationship_snapshot_round_trip(
     world.queue_manager.request_access("fridge_1", "alice", world.tick)
     world.queue_manager.request_access("fridge_1", "bob", world.tick)
     world.queue_manager.release("fridge_1", "alice", world.tick, success=True)
-    world._employment_exit_queue = ["alice"]
-    world._employment_exit_queue_timestamps = {"alice": world.tick}
-    world._employment_manual_exits = {"bob"}
-    world._employment_exits_today = 1
+    world.employment.import_state(
+        {
+            "exit_queue": ["alice"],
+            "queue_timestamps": {"alice": world.tick},
+            "manual_exits": ["bob"],
+            "exits_today": 1,
+        }
+    )
+    world.set_employment_exits_today(1)
 
     telemetry = TelemetryPublisher(sample_config)
     telemetry._latest_queue_metrics = {"cooldown_events": 2}
@@ -304,9 +309,8 @@ def test_world_relationship_snapshot_round_trip(
         restored_world.queue_manager.export_state()
         == world.queue_manager.export_state()
     )
-    assert restored_world._employment_exit_queue == world._employment_exit_queue
-    assert restored_world._employment_manual_exits == world._employment_manual_exits
-    assert restored_world._employment_exits_today == world._employment_exits_today
+    assert restored_world.employment.export_state() == world.employment.export_state()
+    assert restored_world.employment_exits_today() == world.employment_exits_today()
     assert random.getstate() == baseline_rng_state
     assert restored_world.get_rng_state() == world.get_rng_state()
     assert "world" in state.rng_streams

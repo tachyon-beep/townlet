@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
 
 from townlet.config import EmploymentConfig, SimulationConfig
 
@@ -566,3 +566,46 @@ class EmploymentEngine:
             },
         )
         return True
+
+    # -- persistence helpers -------------------------------------------
+
+    def export_state(self) -> dict[str, object]:
+        """Return a serialisable snapshot of the employment domain state."""
+
+        return {
+            "exit_queue": list(self._exit_queue),
+            "queue_timestamps": dict(self._exit_timestamps),
+            "manual_exits": list(self._manual_exits),
+            "exits_today": int(self._exits_today),
+        }
+
+    def import_state(self, payload: Mapping[str, object]) -> None:
+        """Restore employment state from a snapshot payload."""
+
+        exit_queue = payload.get("exit_queue", [])
+        self._exit_queue.clear()
+        if isinstance(exit_queue, Iterable) and not isinstance(exit_queue, (str, bytes)):
+            self._exit_queue.extend(str(agent_id) for agent_id in exit_queue)
+
+        timestamps = payload.get("queue_timestamps", {})
+        self._exit_timestamps.clear()
+        if isinstance(timestamps, Mapping):
+            for agent_id, tick in timestamps.items():
+                self._exit_timestamps[str(agent_id)] = int(tick)
+
+        manual = payload.get("manual_exits", [])
+        self._manual_exits.clear()
+        if isinstance(manual, Iterable) and not isinstance(manual, (str, bytes)):
+            self._manual_exits.update(str(agent_id) for agent_id in manual)
+
+        exits_today = payload.get("exits_today", 0)
+        self.set_exits_today(int(exits_today))
+
+    def reset_exits_today(self) -> None:
+        self._exits_today = 0
+
+    def set_exits_today(self, value: int) -> None:
+        self._exits_today = max(0, int(value))
+
+    def increment_exits_today(self) -> None:
+        self._exits_today += 1

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping, Protocol
 
@@ -93,6 +93,7 @@ class TelemetryBridge:
             "policy_identity": self._publisher.latest_policy_identity() or {},
             "snapshot_migrations": self._publisher.latest_snapshot_migrations(),
             "affordance_manifest": self._publisher.latest_affordance_manifest(),
+            "affordance_runtime": self._publisher.latest_affordance_runtime(),
             "reward_breakdown": self._publisher.latest_reward_breakdown(),
             "stability": {
                 "alerts": self._publisher.latest_stability_alerts(),
@@ -259,6 +260,27 @@ def create_console_router(
             "schema_warning": warning,
             "metrics": metrics,
             "pending_agents": metrics.get("pending", []),
+        }
+
+    def affordance_status_handler(command: ConsoleCommand) -> object:
+        version, warning = _schema_metadata(publisher)
+        runtime = publisher.latest_affordance_runtime()
+        if world is not None:
+            snapshot = world.running_affordances_snapshot()
+            runtime = {
+                "running_count": len(snapshot),
+                "running": {object_id: asdict(state) for object_id, state in snapshot.items()},
+                "active_reservations": world.active_reservations,
+                "event_counts": dict(runtime.get("event_counts", {})),
+            }
+        event_counts = runtime.get("event_counts", {})
+        for key in ("start", "finish", "fail", "precondition_fail"):
+            event_counts.setdefault(key, 0)
+        runtime["event_counts"] = event_counts
+        return {
+            "schema_version": version,
+            "schema_warning": warning,
+            "runtime": runtime,
         }
 
     def employment_exit_handler(command: ConsoleCommand) -> object:
@@ -880,6 +902,7 @@ def create_console_router(
     router.register("telemetry_snapshot", telemetry_handler)
     router.register("health_status", health_status_handler)
     router.register("employment_status", employment_status_handler)
+    router.register("affordance_status", affordance_status_handler)
     router.register("employment_exit", employment_exit_handler)
     router.register("promotion_status", promotion_status_handler)
     router.register("arrange_meet", arrange_meet_handler)

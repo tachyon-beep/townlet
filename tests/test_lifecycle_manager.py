@@ -70,10 +70,10 @@ def test_employment_exit_emits_event_and_resets_state() -> None:
 def test_employment_daily_reset() -> None:
     manager, world = _make_world(respawn_delay=0)
     _spawn_agent(world)
-    world._employment_exits_today = 5
+    world.set_employment_exits_today(5)
     terminated = manager.evaluate(world, tick=0)
     manager.finalize(world, tick=0, terminated=terminated)
-    assert world._employment_exits_today == 0
+    assert world.employment_exits_today() == 0
 
 
 def test_termination_reasons_captured() -> None:

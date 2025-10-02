@@ -50,6 +50,9 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     assert "alerts" in result["stability"]
     assert isinstance(result["stability"]["alerts"], list)
     assert "thresholds" in result["stability"]["metrics"]
+    runtime_payload = result.get("affordance_runtime")
+    assert isinstance(runtime_payload, dict)
+    assert "running_count" in runtime_payload
 
 
 def test_console_conflict_status_reports_history() -> None:
@@ -163,6 +166,32 @@ def test_console_rivalry_dump_reports_pairs() -> None:
     )
     assert alice_view["rivals"]
     assert alice_view["rivals"][0]["agent_id"] == "bob"
+
+
+def test_console_affordance_status_reports_runtime() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"energy": 0.2},
+        wallet=1.0,
+    )
+    router = create_console_router(
+        loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
+    )
+    granted = world.queue_manager.request_access("bed_1", "alice", world.tick)
+    assert granted is True
+    world._sync_reservation("bed_1")
+    started = world._start_affordance("alice", "bed_1", "rest_sleep")
+    assert started is True
+
+    status = router.dispatch(ConsoleCommand(name="affordance_status", args=(), kwargs={}))
+    runtime = status["runtime"]
+    assert runtime["running_count"] == 1
+    assert "bed_1" in runtime["running"]
+    assert runtime["running"]["bed_1"]["agent_id"] == "alice"
 
 
 def test_employment_console_commands_manage_queue() -> None:

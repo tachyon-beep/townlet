@@ -31,7 +31,7 @@ def main() -> None:
         needs={"hunger": 0.4, "hygiene": 0.4, "energy": 0.4},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.employment.assign_jobs_to_agents(world)
     router = create_console_router(
         loop.telemetry,
         world,
@@ -47,6 +47,9 @@ def main() -> None:
 
     print("=== telemetry_snapshot ===")
     print(router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})))
+
+    print("=== affordance_status ===")
+    print(router.dispatch(ConsoleCommand(name="affordance_status", args=(), kwargs={})))
 
     # Demonstrate snapshot save/load to mirror ops workflow.
     with tempfile.TemporaryDirectory() as tmpdir:

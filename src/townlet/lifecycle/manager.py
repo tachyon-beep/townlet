@@ -108,7 +108,7 @@ class LifecycleManager:
         day_index = tick // max(1, cfg.exit_review_window)
         if day_index != self._employment_day:
             self._employment_day = day_index
-            world._employment_exits_today = 0
+            world.reset_employment_exits_today()
 
         for agent_id in list(world._employment_manual_exits):
             if self._employment_execute_exit(world, agent_id, tick, reason="manual_approve"):
@@ -128,7 +128,8 @@ class LifecycleManager:
 
         # Process daily cap for remaining queue entries.
         while world._employment_exit_queue and (
-            cfg.daily_exit_cap == 0 or world._employment_exits_today < cfg.daily_exit_cap
+            cfg.daily_exit_cap == 0
+            or world.employment_exits_today() < cfg.daily_exit_cap
         ):
             agent_id = world._employment_exit_queue[0]
             if self._employment_execute_exit(world, agent_id, tick, reason="daily_cap"):
@@ -151,7 +152,7 @@ class LifecycleManager:
         world._employment_manual_exits.discard(agent_id)
         if snapshot is None:
             return False
-        world._employment_exits_today += 1
+        world.increment_employment_exits_today()
         snapshot.absent_shifts_7d = 0
         snapshot.exit_pending = False
         world._emit_event(

@@ -9,7 +9,7 @@ import copy
 import time
 from collections import OrderedDict, deque
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -243,6 +243,7 @@ class WorldState:
         self._employment_exit_queue_timestamps = self.employment._exit_timestamps
         self._employment_manual_exits = self.employment._manual_exits
         self._employment_exits_today = 0
+        self.employment.reset_exits_today()
         self._rivalry_ledgers = {}
         self._relationship_ledgers = {}
         self._relationship_window_ticks = 600
@@ -544,6 +545,12 @@ class WorldState:
             require_cmd_id=False,
         )
         self.register_console_handler(
+            "affordance_status",
+            self._console_affordance_status,
+            mode="viewer",
+            require_cmd_id=False,
+        )
+        self.register_console_handler(
             "employment_exit",
             self._console_employment_exit,
             mode="admin",
@@ -594,6 +601,18 @@ class WorldState:
         payload = {
             "metrics": metrics,
             "pending_agents": list(metrics.get("pending", [])),
+        }
+        return ConsoleCommandResult.ok(envelope, payload, tick=self.tick)
+
+    def _console_affordance_status(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
+        runtime = self.running_affordances_snapshot()
+        payload = {
+            "running": {
+                object_id: asdict(state)
+                for object_id, state in runtime.items()
+            },
+            "running_count": len(runtime),
+            "active_reservations": self.active_reservations,
         }
         return ConsoleCommandResult.ok(envelope, payload, tick=self.tick)
 
@@ -2225,6 +2244,19 @@ class WorldState:
 
     def employment_defer_exit(self, agent_id: str) -> bool:
         return self.employment.defer_exit(self, agent_id)
+
+    def employment_exits_today(self) -> int:
+        return self._employment_exits_today
+
+    def set_employment_exits_today(self, value: int) -> None:
+        self._employment_exits_today = max(0, int(value))
+        self.employment.set_exits_today(self._employment_exits_today)
+
+    def reset_employment_exits_today(self) -> None:
+        self.set_employment_exits_today(0)
+
+    def increment_employment_exits_today(self) -> None:
+        self.set_employment_exits_today(self._employment_exits_today + 1)
 
     def _update_basket_metrics(self) -> None:
         basket_cost = (

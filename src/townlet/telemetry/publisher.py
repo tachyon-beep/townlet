@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from collections import deque
+from dataclasses import asdict
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -32,7 +33,7 @@ class TelemetryPublisher:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self.schema_version = "0.9.0"
+        self.schema_version = "0.9.5"
         self._console_buffer: list[object] = []
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
@@ -62,6 +63,18 @@ class TelemetryPublisher:
             "late_help_events": [],
         }
         self._latest_affordance_manifest: dict[str, object] = {}
+        self._latest_affordance_runtime: dict[str, object] = {
+            "tick": 0,
+            "running": {},
+            "running_count": 0,
+            "active_reservations": {},
+            "event_counts": {
+                "start": 0,
+                "finish": 0,
+                "fail": 0,
+                "precondition_fail": 0,
+            },
+        }
         self._latest_reward_breakdown: dict[str, dict[str, float]] = {}
         self._latest_stability_inputs: dict[str, object] = {}
         self._latest_stability_metrics: dict[str, object] = {}
@@ -158,6 +171,7 @@ class TelemetryPublisher:
             "economy_snapshot": dict(getattr(self, "_latest_economy_snapshot", {})),
             "employment_metrics": dict(self._latest_employment_metrics or {}),
             "events": list(self._latest_events),
+            "affordance_runtime": self.latest_affordance_runtime(),
             "relationship_snapshot": self._copy_relationship_snapshot(
                 self._latest_relationship_snapshot
             ),
@@ -225,6 +239,35 @@ class TelemetryPublisher:
         self._latest_economy_snapshot = dict(payload.get("economy_snapshot", {}))
         self._latest_employment_metrics = dict(payload.get("employment_metrics", {}))
         self._latest_events = list(payload.get("events", []))
+        runtime_payload = payload.get("affordance_runtime") or {}
+        if isinstance(runtime_payload, Mapping):
+            running_section = runtime_payload.get("running") or {}
+            self._latest_affordance_runtime = {
+                "tick": int(runtime_payload.get("tick", 0)),
+                "running_count": int(runtime_payload.get("running_count", 0)),
+                "running": {
+                    str(object_id): dict(entry)
+                    for object_id, entry in running_section.items()
+                    if isinstance(entry, Mapping)
+                },
+                "active_reservations": dict(
+                    runtime_payload.get("active_reservations", {}) or {}
+                ),
+                "event_counts": dict(runtime_payload.get("event_counts", {}) or {}),
+            }
+        else:
+            self._latest_affordance_runtime = {
+                "tick": 0,
+                "running_count": 0,
+                "running": {},
+                "active_reservations": {},
+                "event_counts": {
+                    "start": 0,
+                    "finish": 0,
+                    "fail": 0,
+                    "precondition_fail": 0,
+                },
+            }
         snapshot_payload = payload.get("relationship_snapshot") or {}
         if isinstance(snapshot_payload, dict):
             snapshot_copy = self._copy_relationship_snapshot(snapshot_payload)
@@ -642,6 +685,44 @@ class TelemetryPublisher:
         if wait and self._flush_thread.is_alive():
             self._flush_thread.join(timeout=timeout)
 
+    def _capture_affordance_runtime(
+        self,
+        *,
+        world: "WorldState",
+        events: Iterable[Mapping[str, object]] | None,
+        tick: int,
+    ) -> None:
+        runtime_snapshot = world.running_affordances_snapshot()
+        running_payload = {
+            str(object_id): asdict(state)
+            for object_id, state in runtime_snapshot.items()
+        }
+        event_counts = {
+            "start": 0,
+            "finish": 0,
+            "fail": 0,
+            "precondition_fail": 0,
+        }
+        for event in events or ():
+            if not isinstance(event, Mapping):
+                continue
+            name = str(event.get("event", ""))
+            if name == "affordance_start":
+                event_counts["start"] += 1
+            elif name == "affordance_finish":
+                event_counts["finish"] += 1
+            elif name == "affordance_fail":
+                event_counts["fail"] += 1
+            elif name == "affordance_precondition_fail":
+                event_counts["precondition_fail"] += 1
+        self._latest_affordance_runtime = {
+            "tick": int(tick),
+            "running": running_payload,
+            "running_count": len(running_payload),
+            "active_reservations": dict(world.active_reservations),
+            "event_counts": event_counts,
+        }
+
     def publish_tick(
         self,
         *,
@@ -744,6 +825,11 @@ class TelemetryPublisher:
             self._latest_events = list(events)
         else:
             self._latest_events = []
+        self._capture_affordance_runtime(
+            world=world,
+            events=self._latest_events,
+            tick=tick,
+        )
         self._latest_precondition_failures = [
             dict(event)
             for event in self._latest_events
@@ -847,6 +933,23 @@ class TelemetryPublisher:
         if not self._rivalry_event_history:
             return []
         return [dict(entry) for entry in self._rivalry_event_history[-50:]]
+
+    def latest_affordance_runtime(self) -> dict[str, object]:
+        runtime = self._latest_affordance_runtime
+        running_section = runtime.get("running") or {}
+        event_counts = dict(runtime.get("event_counts", {}))
+        for key in ("start", "finish", "fail", "precondition_fail"):
+            event_counts.setdefault(key, 0)
+        return {
+            "tick": int(runtime.get("tick", 0)),
+            "running_count": int(runtime.get("running_count", 0)),
+            "running": {
+                str(object_id): dict(entry)
+                for object_id, entry in running_section.items()
+            },
+            "active_reservations": dict(runtime.get("active_reservations", {})),
+            "event_counts": event_counts,
+        }
 
     def update_anneal_status(self, status: Mapping[str, object] | None) -> None:
         """Record the latest anneal status payload for observer dashboards."""

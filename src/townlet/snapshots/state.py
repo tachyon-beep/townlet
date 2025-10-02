@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from townlet.telemetry.publisher import TelemetryPublisher
 
 
-SNAPSHOT_SCHEMA_VERSION = "1.5"
+SNAPSHOT_SCHEMA_VERSION = "1.6"
 
 
 def _parse_version(value: str) -> tuple[int, ...]:
@@ -307,12 +307,8 @@ def snapshot_from_world(
         }
 
     queue_state = world.queue_manager.export_state()
-    employment_payload = {
-        "exit_queue": list(world._employment_exit_queue),
-        "queue_timestamps": dict(world._employment_exit_queue_timestamps),
-        "manual_exits": list(world._employment_manual_exits),
-        "exits_today": world._employment_exits_today,
-    }
+    employment_payload = world.employment.export_state()
+    employment_payload["exits_today"] = world.employment_exits_today()
 
     lifecycle_payload: dict[str, object] = {}
     if lifecycle is not None:
@@ -471,18 +467,8 @@ def apply_snapshot_to_world(
         world._queue_conflicts.reset()  # pylint: disable=protected-access
 
     employment_payload = snapshot.employment
-    exit_queue = employment_payload.get("exit_queue", [])
-    if isinstance(exit_queue, list):
-        world._employment_exit_queue = [str(agent_id) for agent_id in exit_queue]
-    timestamps = employment_payload.get("queue_timestamps", {})
-    if isinstance(timestamps, Mapping):
-        world._employment_exit_queue_timestamps = {
-            str(agent_id): int(tick) for agent_id, tick in timestamps.items()
-        }
-    manual = employment_payload.get("manual_exits", [])
-    if isinstance(manual, list):
-        world._employment_manual_exits = {str(agent_id) for agent_id in manual}
-    world._employment_exits_today = int(employment_payload.get("exits_today", 0))
+    world.employment.import_state(employment_payload)
+    world.set_employment_exits_today(employment_payload.get("exits_today", 0))
 
     if lifecycle is not None:
         lifecycle.import_state(snapshot.lifecycle)

@@ -75,6 +75,10 @@ def test_shower_events_in_telemetry() -> None:
     assert any(e.get("event") == "affordance_fail" for e in recorded_events)
     narrations = telemetry.latest_narrations()
     assert any(n["category"] == "utility_outage" for n in narrations)
+    runtime = published["affordance_runtime"]
+    assert runtime["event_counts"]["fail"] >= 1
+    assert runtime["event_counts"]["precondition_fail"] >= 1
+    assert runtime["running_count"] == 0
 
 
 def test_shower_complete_narration() -> None:
@@ -134,6 +138,8 @@ def test_shower_complete_narration() -> None:
     assert any(e.get("event") == "shower_complete" for e in recorded_events)
     narrations = telemetry.latest_narrations()
     assert any(n["category"] == "shower_complete" for n in narrations)
+    runtime = published["affordance_runtime"]
+    assert runtime["event_counts"]["finish"] >= 1
 
 
 def test_sleep_events_in_telemetry() -> None:
@@ -196,6 +202,64 @@ def test_sleep_events_in_telemetry() -> None:
     assert any(e.get("event") == "sleep_complete" for e in recorded_events)
     narrations = telemetry.latest_narrations()
     assert any(n["category"] == "sleep_complete" for n in narrations)
+    runtime = published["affordance_runtime"]
+    assert runtime["event_counts"]["finish"] >= 1
+
+
+def test_affordance_runtime_running_snapshot() -> None:
+    loop = make_loop()
+    world = loop.world
+    telemetry = loop.telemetry
+
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"energy": 0.2},
+        wallet=1.0,
+    )
+
+    telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=[],
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+    )
+    world.apply_console([])
+    world.consume_console_results()
+
+    granted = world.queue_manager.request_access("bed_1", "alice", world.tick)
+    assert granted is True
+    world._sync_reservation("bed_1")
+    started = world._start_affordance("alice", "bed_1", "rest_sleep")
+    assert started is True
+    events = world.drain_events()
+
+    telemetry.publish_tick(
+        tick=loop.tick + 1,
+        world=world,
+        observations={},
+        rewards={},
+        events=events,
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+    )
+    runtime = telemetry.export_state()["affordance_runtime"]
+    assert runtime["running_count"] == 1
+    assert "bed_1" in runtime["running"]
+    assert runtime["running"]["bed_1"]["agent_id"] == "alice"
 
 def test_rivalry_events_surface_in_telemetry() -> None:
     loop = make_loop()
