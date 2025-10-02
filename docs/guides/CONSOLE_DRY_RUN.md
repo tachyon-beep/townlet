@@ -46,20 +46,21 @@ else:
     print("(console audit log not found; ensure log directory exists)")
 
 print("=== force_chat agent_0->agent_1 ===")
-loop.telemetry.queue_console_command(
-    {
-        "name": "force_chat",
-        "mode": "admin",
-        "cmd_id": "chat-demo",
-        "kwargs": {
-            "payload": {
-                "speaker": "agent_0",
-                "listener": "agent_1",
-                "quality": 0.75,
-            }
-        },
-    }
-)
+payload = {
+    "name": "force_chat",
+    "mode": "admin",
+    "cmd_id": "chat-demo",
+    "kwargs": {
+        "payload": {
+            "speaker": "agent_0",
+            "listener": "agent_1",
+            "quality": 0.75,
+        }
+    },
+}
+# When console_auth.enabled is true, attach a token:
+# payload["auth"] = {"token": os.environ["TOWNLET_CONSOLE_VIEWER_TOKEN"]}
+loop.telemetry.queue_console_command(payload)
 loop.step()
 print(loop.telemetry.latest_console_results()[-1])
 ```

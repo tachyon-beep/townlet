@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from townlet.config import SimulationConfig
+from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
+from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.telemetry.narration import NarrationRateLimiter
 from townlet.telemetry.transport import (
     TelemetryTransportError,
@@ -22,7 +24,6 @@ from townlet.telemetry.transport import (
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from townlet.console.command import ConsoleCommandResult
     from townlet.world.grid import WorldState
 
 
@@ -75,6 +76,7 @@ class TelemetryPublisher:
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._console_audit_path = Path("logs/console/commands.jsonl")
         self._latest_health_status: dict[str, object] = {}
+        self._console_auth = ConsoleAuthenticator(config.console_auth)
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -108,7 +110,38 @@ class TelemetryPublisher:
         self._flush_thread.start()
 
     def queue_console_command(self, command: object) -> None:
-        self._console_buffer.append(command)
+        try:
+            sanitized, _principal = self._console_auth.authorise(command)
+        except ConsoleAuthenticationError as exc:
+            identity = exc.identity
+            envelope = ConsoleCommandEnvelope(
+                name=identity.get("name") or "unknown",
+                args=[],
+                kwargs={},
+                cmd_id=identity.get("cmd_id"),
+                issuer=identity.get("issuer"),
+            )
+            result = ConsoleCommandResult.from_error(
+                envelope,
+                code="unauthorized",
+                message=exc.message,
+                details={"reason": "auth_failed"},
+            )
+            self.record_console_results([result])
+            logger.warning(
+                "Rejected console command due to authentication failure: name=%s issuer=%s",
+                identity.get("name"),
+                identity.get("issuer"),
+            )
+            return
+        except TypeError as exc:
+            logger.warning("Rejected malformed console command: %s", exc)
+            return
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Unexpected error while authenticating console command")
+            return
+
+        self._console_buffer.append(sanitized)
 
     def drain_console_buffer(self) -> Iterable[object]:
         drained = list(self._console_buffer)

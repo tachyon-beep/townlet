@@ -20,6 +20,7 @@ to the following envelope (all fields snake_case, JSON serialisable):
 | `cmd_id` | `str` | Optional idempotency token. Required for destructive/admin ops; router must reject duplicates. |
 | `issuer` | `str` | Optional actor identifier (user/service). Propagated to audit log and response metadata. |
 | `mode` | `"viewer"` \| `"admin"` | Authorisation tier. Defaults to `"viewer"`; admin commands MUST validate this. |
+| `auth` | `dict` | Optional `{"token": str}` payload. Required when `console_auth.enabled` is true. Tokens are stripped server-side after verification. |
 | `timestamp` | `int` | Optional Unix epoch (ms). Used only for audit trail; server clock is authoritative. |
 | `metadata` | `dict` | Optional opaque client metadata (e.g., UI correlation ids). Stored with audit record only. |
 
@@ -133,8 +134,9 @@ command outcomes.
 
 1. **Backlog Commands** — Implement the planned operations to close the gap with ops
    runbooks (spawn, teleport, setneed, force_chat, arrange_meet, lifecycle toggles).
-2. **Admin Safety Rails** — Layer role-based permissions and optional rate limits on
-   destructive commands once the backlog lands.
+2. **Admin Safety Rails** — Evaluate rate limits and multi-factor flows on top of
+   the token-based authentication introduced in WP-101, especially for destructive
+   commands.
 3. **CLI/Transport Updates** — Update `scripts/console_*` clients to emit the
    full envelope (including `cmd_id`, `mode`) and surface `console_results` to
    operators alongside audit tail helpers.
