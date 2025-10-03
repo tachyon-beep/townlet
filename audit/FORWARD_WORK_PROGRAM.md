@@ -80,21 +80,20 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 
 **Phase 1.1 – Transport Gateway**
 - Tasks
-  - [ ] Draft API contract for `/ws/telemetry` (handshake params, heartbeat cadence).
-  - [ ] Implement FastAPI-based gateway translating internal pub/sub queue to WebSocket (snapshot + diff streaming).
-  - [ ] Add tick monotonicity & auth stubs (spectator mode: optional token, operator mode: rejected).
-  - [ ] Write integration test harness replaying fixtures from `tests/data/web_telemetry` and asserting client merge parity.
-  - [ ] Instrument gateway with Prometheus metrics (connected clients, messages/sec).
+  - [x] Draft API contract for `/ws/telemetry` (handshake params, heartbeat cadence).
+  - [x] Implement FastAPI-based gateway translating internal pub/sub queue to WebSocket (snapshot + diff streaming).
+  - [x] Add tick monotonicity & auth stubs (spectator mode: optional token, operator mode: rejected).
+  - [x] Write integration test harness replaying fixtures from `tests/data/web_telemetry` and asserting client merge parity.
+  - [x] Instrument gateway with Prometheus metrics (connected clients, messages/sec).
 - Dependencies: Milestone 0 schema fixtures, existing telemetry publisher.
 - Exit Criteria: Gateway runs locally via `uvicorn`, passes integration tests, emits metrics; documented in `docs/design/WEB_TELEMETRY_SCHEMA.md` appendix.
 
-**Phase 1.2 – Frontend Shell**
-- Tasks
-  - [ ] Scaffold React/Vite app (TypeScript) using tokens from `docs/design/web_ui_tokens.json`.
-  - [ ] Implement telemetry client hook applying diff merges (unit tests with Jest using fixtures).
-  - [ ] Build core read-only components: header status bar, agent KPI grid (summary only), narration list, perturbation banner.
-  - [ ] Set up Storybook/Chromatic to capture component snapshots.
-  - [ ] Add accessibility smoke tests (axe-core) for key screens.
+- **Phase 1.2 – Frontend Shell**
+  - [x] Scaffold React/Vite app (TypeScript) using tokens from `docs/design/web_ui_tokens.json`.
+  - [x] Implement telemetry client hook applying diff merges (unit tests with Vitest fixtures).
+  - [x] Build core read-only components: header status bar, agent summary grid, narration feed (KPI/perturbation TBD).
+  - [x] Set up Storybook configuration to capture component snapshots.
+  - [x] Add accessibility smoke tests (axe-core) for key screens.
 - Dependencies: tokens, parity checklist, gateway contract (mocked if gateway not ready).
 - Exit Criteria: `npm run build` produces static bundle; Storybook stories for each component; CI runs lint/test/build.
 

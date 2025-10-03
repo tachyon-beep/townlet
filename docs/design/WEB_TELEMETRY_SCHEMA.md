@@ -64,3 +64,12 @@ See `tests/data/web_telemetry/snapshot.json` and `tests/data/web_telemetry/diff.
 - the schema wrapper behaves as expected.
 
 Consumers integrating the web observer should depend on this schema and fixtures to keep parity with the Rich dashboard.
+
+## Gateway Reference
+
+The FastAPI gateway lives in `src/townlet/web/gateway.py` and exposes two endpoints:
+
+- `GET /metrics` – Prometheus metrics covering connection counts and message totals.
+- `WS /ws/telemetry` – Streams an initial `snapshot` followed by `diff` payloads. The gateway drops out-of-order ticks and keeps payloads JSON-compatible for the web client.
+
+Unit tests in `tests/test_web_gateway.py` cover snapshot/diff delivery, stale tick handling, and metrics exposure.

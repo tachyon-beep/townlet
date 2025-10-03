@@ -1,12 +1,30 @@
-# Townlet Web Scaffold
+# Townlet Web Viewer
 
-Milestone 0 placeholder used to validate CI wiring for the spectator/operator web UI.
+Milestone 1 (Phase 1.2) scaffold for the spectator dashboard.
 
-## Current State
-- `package.json` with stub `lint`, `test`, and `build` scripts.
-- `scripts/smoke.js` placeholder smoke check executed by the `npm run test` script.
+## Scripts
+
+```bash
+npm install
+e npm run dev     # Start Vite dev server
+npm run test      # Run Vitest unit tests
+npm run storybook # Launch Storybook for component review
+```
+
+## Structure
+
+- `src/hooks/useTelemetryClient.ts` — WebSocket diff-merging hook shared by app/tests.
+- `src/components/` — Presentational components for header, agent grid, narration feed.
+- `src/theme/tokens.ts` — Shared design tokens in sync with docs/design/web_ui_tokens.json.
+- `.storybook/` — Storybook configuration for rapid UI review.
+- `vite.config.ts` / `vitest.setup.ts` — Tooling for build + tests.
+
+### Testing Fixtures
+
+The hook tests exercise the diff merge helper; integration with the real gateway happens in Milestone 1.3 once the transport service is deployed.
 
 ## Next Steps
-- Replace echo scripts with Vite/React tooling once Milestone 1 begins.
-- Introduce ESLint/Prettier configuration and Storybook for component development.
-- Wire this package into CI (see `docs/program_management/WEB_UI_SECURITY_BASELINE.md` for deployment requirements).
+
+- Wire the hook to the new FastAPI gateway once deployed (`ws://.../ws/telemetry`).
+- Flesh out agent detail panels and KPI charts per parity checklist.
+- Add accessibility checks (axe) and expand Storybook stories covering empty/error states.
