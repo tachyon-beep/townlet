@@ -99,11 +99,11 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 
 **Phase 1.3 – Demo Hardening**
 - Tasks
-  - [ ] Containerize gateway + static frontend (Dockerfile + docker-compose sample).
-  - [ ] Create Helm (or Terraform) stub for demo deployment with config toggles (spectator URL, rate limits).
-  - [ ] Add CDN caching headers for spectator assets; ensure no caching of auth endpoints (future operator view).
+  - [x] Containerize gateway + static frontend (Dockerfile + docker-compose sample).
+  - [x] Create Helm stub for demo deployment with config toggles (spectator URL, rate limits).
+  - [x] Add CDN caching headers for spectator assets; ensure no caching of auth endpoints.
   - [ ] Run k6 (or Locust) load test simulating 50 concurrent spectators, collect latency metrics.
-  - [ ] Document deployment/runbook in `docs/ops/WEB_SPECTATOR_DEPLOY.md`.
+  - [x] Document deployment/runbook in `docs/ops/WEB_SPECTATOR_DEPLOY.md`.
 - Dependencies: Gateway & frontend phases complete; ops baseline from Milestone 0.
 - Exit Criteria: Container images build in CI; load test report meets <250 ms p95 update latency; deployment guide published.
 
