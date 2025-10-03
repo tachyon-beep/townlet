@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from townlet.config import SimulationConfig
+    from townlet.lifecycle.manager import LifecycleManager
     from townlet.policy.runner import PolicyRuntime
     from townlet.scheduler.perturbations import PerturbationScheduler
     from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
-    from townlet.lifecycle.manager import LifecycleManager
 
 from townlet.snapshots import SnapshotManager
 from townlet.stability.promotion import PromotionManager
@@ -75,9 +76,27 @@ class TelemetryBridge:
 
     def snapshot(self) -> dict[str, dict[str, object]]:
         version, warning = _schema_metadata(self._publisher)
+        command_metadata = {
+            "relationship_summary": {
+                "mode": "viewer",
+                "usage": "relationship_summary",
+                "description": "Return per-agent friends/rivals plus churn aggregates",
+            },
+            "relationship_detail": {
+                "mode": "admin",
+                "usage": "relationship_detail <agent_id>",
+                "description": "Inspect detailed ledger ties and recent updates for an agent",
+            },
+            "social_events": {
+                "mode": "viewer",
+                "usage": "social_events [--limit N]",
+                "description": "List recent chat and rivalry avoidance events (newest first)",
+            },
+        }
         return {
             "schema_version": version,
             "schema_warning": warning,
+            "console_commands": command_metadata,
             "jobs": self._publisher.latest_job_snapshot(),
             "economy": self._publisher.latest_economy_snapshot(),
             "economy_settings": self._publisher.latest_economy_settings(),
@@ -88,6 +107,8 @@ class TelemetryBridge:
             "relationships": self._publisher.latest_relationship_metrics() or {},
             "relationship_snapshot": self._publisher.latest_relationship_snapshot(),
             "relationship_updates": self._publisher.latest_relationship_updates(),
+            "relationship_summary": self._publisher.latest_relationship_summary(),
+            "social_events": self._publisher.latest_social_events(),
             "events": list(self._publisher.latest_events()),
             "narrations": self._publisher.latest_narrations(),
             "narration_state": self._publisher.latest_narration_state(),
@@ -113,6 +134,115 @@ class TelemetryBridge:
             "precondition_failures": self._publisher.latest_precondition_failures(),
         }
 
+    def relationship_summary_payload(self) -> dict[str, object]:
+        """Return normalised relationship summary data for console consumers."""
+
+        raw_summary = self._publisher.latest_relationship_summary()
+        per_agent: dict[str, dict[str, object]] = {}
+        churn_payload: dict[str, object] = {}
+        for agent, entry in raw_summary.items():
+            if agent == "churn":
+                if isinstance(entry, Mapping):
+                    churn_payload = dict(entry)
+                continue
+            if not isinstance(entry, Mapping):
+                continue
+            friends = entry.get("top_friends", [])
+            rivals = entry.get("top_rivals", [])
+            per_agent[agent] = {
+                "top_friends": [dict(item) for item in friends if isinstance(item, Mapping)],
+                "top_rivals": [dict(item) for item in rivals if isinstance(item, Mapping)],
+            }
+        return {"per_agent": per_agent, "churn": churn_payload}
+
+    def relationship_detail_payload(self, agent_id: str) -> dict[str, object]:
+        """Expose ledger metrics and recent updates for the requested agent."""
+
+        agent_key = str(agent_id)
+        snapshot = self._publisher.latest_relationship_snapshot()
+        agent_ties = snapshot.get(agent_key)
+        if not agent_ties:
+            raise KeyError(agent_key)
+
+        tie_entries: list[dict[str, object]] = []
+        for other, metrics in (agent_ties or {}).items():
+            if not isinstance(metrics, Mapping):
+                continue
+            tie_entries.append(
+                {
+                    "other": str(other),
+                    "trust": float(metrics.get("trust", 0.0)),
+                    "familiarity": float(metrics.get("familiarity", 0.0)),
+                    "rivalry": float(metrics.get("rivalry", 0.0)),
+                }
+            )
+        tie_entries.sort(key=lambda item: item["trust"] + item["familiarity"], reverse=True)
+
+        overlay_entries: list[dict[str, object]] = []
+        overlay = self._publisher.latest_relationship_overlay().get(agent_key, [])
+        for entry in overlay:
+            if not isinstance(entry, Mapping):
+                continue
+            overlay_entries.append(
+                {
+                    "other": str(entry.get("other", "")),
+                    "trust": float(entry.get("trust", 0.0)),
+                    "familiarity": float(entry.get("familiarity", 0.0)),
+                    "rivalry": float(entry.get("rivalry", 0.0)),
+                    "delta_trust": float(entry.get("delta_trust", 0.0)),
+                    "delta_familiarity": float(entry.get("delta_familiarity", 0.0)),
+                    "delta_rivalry": float(entry.get("delta_rivalry", 0.0)),
+                }
+            )
+
+        updates_payload: list[dict[str, object]] = []
+        incoming_payload: list[dict[str, object]] = []
+        for update in self._publisher.latest_relationship_updates():
+            if not isinstance(update, Mapping):
+                continue
+            owner = str(update.get("owner", ""))
+            other = str(update.get("other", ""))
+            delta_mapping = update.get("delta")
+            if isinstance(delta_mapping, Mapping):
+                delta_trust = float(delta_mapping.get("trust", 0.0))
+                delta_familiarity = float(delta_mapping.get("familiarity", 0.0))
+                delta_rivalry = float(delta_mapping.get("rivalry", 0.0))
+            else:
+                delta_trust = delta_familiarity = delta_rivalry = 0.0
+            payload = {
+                "owner": owner,
+                "other": other,
+                "status": str(update.get("status", "")),
+                "trust": float(update.get("trust", 0.0)),
+                "familiarity": float(update.get("familiarity", 0.0)),
+                "rivalry": float(update.get("rivalry", 0.0)),
+                "delta": {
+                    "trust": delta_trust,
+                    "familiarity": delta_familiarity,
+                    "rivalry": delta_rivalry,
+                },
+            }
+            if owner == agent_key:
+                updates_payload.append(payload)
+            elif other == agent_key:
+                incoming_payload.append(payload)
+
+        return {
+            "agent_id": agent_key,
+            "ties": tie_entries,
+            "overlay": overlay_entries,
+            "recent_updates": updates_payload,
+            "incoming_updates": incoming_payload,
+        }
+
+    def social_events_payload(self, limit: int | None = None) -> list[dict[str, object]]:
+        """Return a bounded list of the most recent social events."""
+
+        events = self._publisher.latest_social_events()
+        if limit is not None and limit >= 0:
+            return list(reversed(events))[:limit]
+        return list(reversed(events))
+
 
 def create_console_router(
     publisher: TelemetryPublisher,
@@ -123,7 +253,7 @@ def create_console_router(
     policy: PolicyRuntime | None = None,
     mode: str = "viewer",
     config: SimulationConfig | None = None,
-    lifecycle: "LifecycleManager" | None = None,
+    lifecycle: LifecycleManager | None = None,
 ) -> ConsoleRouter:
     router = ConsoleRouter()
     allowed_snapshot_roots: tuple[Path, ...] = ()
@@ -263,6 +393,68 @@ def create_console_router(
             "schema_warning": warning,
             "metrics": metrics,
             "pending_agents": metrics.get("pending", []),
+        }
+
+    def relationship_summary_handler(command: ConsoleCommand) -> object:
+        version, warning = _schema_metadata(publisher)
+        payload = bridge.relationship_summary_payload()
+        return {
+            "schema_version": version,
+            "schema_warning": warning,
+            "summary": payload["per_agent"],
+            "churn": payload["churn"],
+        }
+
+    def relationship_detail_handler(command: ConsoleCommand) -> object:
+        agent_arg = command.kwargs.get("agent_id")
+        if agent_arg is None and command.args:
+            agent_arg = command.args[0]
+        if agent_arg is None:
+            return {
+                "error": "usage",
+                "message": "relationship_detail <agent_id>",
+            }
+        agent_id = str(agent_arg)
+        try:
+            payload = bridge.relationship_detail_payload(agent_id)
+        except KeyError:
+            return {
+                "error": "not_found",
+                "agent_id": agent_id,
+            }
+        version, warning = _schema_metadata(publisher)
+        return {
+            "schema_version": version,
+            "schema_warning": warning,
+            **payload,
+        }
+
+    def social_events_handler(command: ConsoleCommand) -> object:
+        limit_arg = command.kwargs.get("limit")
+        if limit_arg is None and command.args:
+            limit_arg = command.args[0]
+        limit_value: int | None
+        if limit_arg is None:
+            limit_value = None
+        else:
+            try:
+                limit_value = int(limit_arg)
+            except (TypeError, ValueError):
+                return {
+                    "error": "invalid_args",
+                    "message": "limit must be an integer",
+                }
+            if limit_value < 0:
+                return {
+                    "error": "invalid_args",
+                    "message": "limit must be non-negative",
+                }
+        version, warning = _schema_metadata(publisher)
+        events = bridge.social_events_payload(limit_value)
+        return {
+            "schema_version": version,
+            "schema_warning": warning,
+            "events": events,
         }
 
     def affordance_status_handler(command: ConsoleCommand) -> object:
@@ -905,6 +1097,8 @@ def create_console_router(
     router.register("telemetry_snapshot", telemetry_handler)
     router.register("health_status", health_status_handler)
     router.register("employment_status", employment_status_handler)
+    router.register("relationship_summary", relationship_summary_handler)
+    router.register("social_events", social_events_handler)
     router.register("affordance_status", affordance_status_handler)
     router.register("employment_exit", employment_exit_handler)
     router.register("promotion_status", promotion_status_handler)
@@ -913,6 +1107,7 @@ def create_console_router(
     router.register("snapshot_inspect", snapshot_inspect_handler)
     router.register("snapshot_validate", snapshot_validate_handler)
     if mode == "admin":
+        router.register("relationship_detail", relationship_detail_handler)
         router.register("possess", possess_handler)
         router.register("kill", kill_handler)
         router.register("toggle_mortality", toggle_mortality_handler)
@@ -925,6 +1120,7 @@ def create_console_router(
         router.register("rollback_policy", rollback_policy_handler)
         router.register("policy_swap", policy_swap_handler)
     else:
+        router.register("relationship_detail", _forbidden)
         router.register("possess", _forbidden)
         router.register("kill", _forbidden)
         router.register("toggle_mortality", _forbidden)

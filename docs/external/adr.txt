@@ -883,10 +883,11 @@ exit_pending (if queued for removal) 260
 55 . These are updated by the Employment
 
 Loop logic as agents attend or miss work.
-• Relationships: Currently only conflict/rivalry metrics are tracked. Each agent has a rivalry ledger
-mapping other agents to a “conflict tension” score 59 60 . This grows when they conflict in
-queues and decays over time. Social friendship metrics are planned but not implemented yet
-(placeholders exist in observation output but always zero) 111 .
+• Relationships: Agents maintain rivalry ledgers and now record trust/familiarity ties via the
+relationship ledger. Rivalry scores grow when agents conflict in queues and decay over time,
+while successful chats and shared activities raise trust/familiarity (with telemetry narrations
+emitted for new friendships or escalations). Observation social slots are populated directly from
+these ledgers, and operators can inspect live summaries via console commands.
 These agent fields flow into observations (for the agent’s own view) and telemetry snapshots (for
 operators to monitor individuals). Data integrity: the design ensures no negative needs (clamped
 at 0), and values like attendance_ratio stay between 0 and 1 262 263 .

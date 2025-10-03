@@ -213,6 +213,11 @@
 - Smoke command after transport changes: `pytest tests/test_telemetry_client.py tests/test_observer_ui_dashboard.py tests/test_telemetry_stream_smoke.py tests/test_telemetry_transport.py`.
 - Sample payload located at `docs/samples/telemetry_stream_sample.jsonl` demonstrates schema headers and transport metadata.
 - Console conflict tooling: `conflict_status [--history N --rivalries N]` surfaces queue deltas, rivalry events, and stability alerts; `queue_inspect <object_id>` dumps active/cooldown entries; `rivalry_dump [agent_id] [--limit N]` reports rivalry intensities for audit logs. Record these outputs during incident response.
+- Social telemetry tooling: `relationship_summary` (viewer) returns top friends/rivals plus churn metrics, `social_events [--limit N]` (viewer) streams recent chat / avoidance events, and `relationship_detail <agent_id>` (admin) exposes ledger deltas for deep dives—request admin elevation before running the latter on shared shards. Narration feed now includes `relationship_friendship`, `relationship_rivalry`, and `relationship_social_alert`; configure watchers to surface these alongside conflict alerts and tweak thresholds via `telemetry.relationship_narration` when tuning demo behaviour. Console snapshots include these narrations in `telemetry_snapshot.narrations` so dashboards can mirror the same stories.
+- Social stage toggles:
+  - Set `features.stages.relationships` to `OFF` to disable ledger updates (dashboard social panels fall back to empties and scripted behaviour skips chats).
+  - Use `features.stages.social_rewards` (`OFF`/`C1`/`C2`) to control chat/avoidance reward emissions; when `OFF`, telemetry still logs events but rewards remain neutral.
+  - Adjust narration thresholds via `telemetry.relationship_narration.*` (trust, rivalry) when calibrating demo intensity; re-run `telemetry_snapshot` to confirm new categories still emit as expected.
 - Observer dashboard conflict panel highlights rotation counts and maintains a rolling table of fairness deltas plus latest rivalry events; include screenshots when drafting incident timelines.
 
 ## Tooling & Logs

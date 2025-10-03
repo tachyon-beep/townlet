@@ -1,4 +1,4 @@
-# Console Command Contract — v2025-10-05
+# Console Command Contract — v2025-10-07
 
 This note captures the authoritative schema for console commands, response payloads,
 and the current vs. planned command catalog. It consolidates the architecture snapshot
@@ -86,6 +86,9 @@ Audit log entries mirror the response envelope with additional transport metadat
 | --- | --- | --- | --- | --- |
 | `telemetry_snapshot` | viewer | – | Latest telemetry blocks (jobs, economy, conflict, etc.). | Wraps `TelemetryBridge.snapshot()`.
 | `employment_status` | viewer | – | Employment queue metrics + schema version. | Depends on employment telemetry being populated.
+| `relationship_summary` | viewer | – | Per-agent top friends/rivals plus churn aggregates. | Read-only; safe for dashboards even when relationships disabled (returns empty sets).
+| `social_events` | viewer | Optional `limit` kwarg (`int ≥ 0`). | Recent chat / rivalry-avoidance events (newest first). | Defaults to full bounded history (60 events).
+| `relationship_detail` | admin | `agent_id` positional or kwarg. | Detailed ties, delta overlay, and update history for an agent. | Admin-only; exposes ledger edges and should be guarded in shared shards.
 | `employment_exit` | admin | `("review")` or `("approve", agent_id)`, `("defer", agent_id)` | Queue state / boolean flags. | Calls `WorldState.employment_queue_snapshot` and approval helpers.
 | `conflict_status` | viewer | Optional `history`, `rivalries`. | Conflict snapshot, queue history, rivalry events. | Useful for dashboards.
 | `queue_inspect` | viewer | `object_id` | Queue entries, cooldowns, stall counts. | Requires queue manager export state.

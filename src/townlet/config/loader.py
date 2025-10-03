@@ -471,6 +471,28 @@ class NarrationThrottleConfig(BaseModel):
         return int(self.category_cooldown_ticks.get(category, self.global_cooldown_ticks))
 
 
+class RelationshipNarrationConfig(BaseModel):
+    friendship_trust_threshold: float = Field(0.6, ge=-1.0, le=1.0)
+    friendship_delta_threshold: float = Field(0.25, ge=0.0, le=2.0)
+    friendship_priority_threshold: float = Field(0.85, ge=-1.0, le=1.0)
+    rivalry_avoid_threshold: float = Field(0.7, ge=0.0, le=1.0)
+    rivalry_escalation_threshold: float = Field(0.9, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _validate_thresholds(self) -> "RelationshipNarrationConfig":
+        if self.friendship_priority_threshold < self.friendship_trust_threshold:
+            raise ValueError(
+                "telemetry.relationship_narration.friendship_priority_threshold must be "
+                ">= friendship_trust_threshold"
+            )
+        if self.rivalry_escalation_threshold < self.rivalry_avoid_threshold:
+            raise ValueError(
+                "telemetry.relationship_narration.rivalry_escalation_threshold must be "
+                ">= rivalry_avoid_threshold"
+            )
+        return self
+
+
 class TelemetryRetryPolicy(BaseModel):
     max_attempts: int = Field(default=3, ge=0, le=10)
     backoff_seconds: float = Field(default=0.5, ge=0.0, le=30.0)
@@ -524,6 +546,7 @@ class TelemetryTransportConfig(BaseModel):
 class TelemetryConfig(BaseModel):
     narration: NarrationThrottleConfig = NarrationThrottleConfig()
     transport: TelemetryTransportConfig = TelemetryTransportConfig()
+    relationship_narration: RelationshipNarrationConfig = RelationshipNarrationConfig()
 
 
 class ConsoleAuthTokenConfig(BaseModel):

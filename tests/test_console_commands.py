@@ -17,6 +17,85 @@ from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import AgentSnapshot
 
 
+def _seed_relationship_state(loop: SimulationLoop) -> None:
+    loop.telemetry.import_state(
+        {
+            "relationship_summary": {
+                "alice": {
+                    "top_friends": [
+                        {"agent": "bob", "trust": 0.8, "familiarity": 0.7, "rivalry": 0.1},
+                        {"agent": "carol", "trust": 0.6, "familiarity": 0.5, "rivalry": 0.05},
+                    ],
+                    "top_rivals": [{"agent": "dave", "rivalry": 0.4}],
+                },
+                "churn": {
+                    "window_start": 10,
+                    "window_end": 20,
+                    "total_evictions": 1,
+                    "per_owner": {"alice": 1},
+                    "per_reason": {"conflict": 1},
+                },
+            },
+            "relationship_snapshot": {
+                "alice": {
+                    "bob": {"trust": 0.8, "familiarity": 0.7, "rivalry": 0.1},
+                    "carol": {"trust": 0.6, "familiarity": 0.5, "rivalry": 0.05},
+                },
+                "bob": {
+                    "alice": {"trust": 0.75, "familiarity": 0.65, "rivalry": 0.12}
+                },
+            },
+            "relationship_updates": [
+                {
+                    "owner": "alice",
+                    "other": "bob",
+                    "status": "updated",
+                    "trust": 0.8,
+                    "familiarity": 0.7,
+                    "rivalry": 0.1,
+                    "delta": {"trust": 0.1, "familiarity": 0.1, "rivalry": -0.05},
+                },
+                {
+                    "owner": "bob",
+                    "other": "alice",
+                    "status": "updated",
+                    "trust": 0.75,
+                    "familiarity": 0.65,
+                    "rivalry": 0.12,
+                    "delta": {"trust": -0.05, "familiarity": 0.05, "rivalry": 0.02},
+                },
+            ],
+            "relationship_overlay": {
+                "alice": [
+                    {
+                        "owner": "alice",
+                        "other": "bob",
+                        "trust": 0.8,
+                        "familiarity": 0.7,
+                        "rivalry": 0.1,
+                        "delta_trust": 0.1,
+                        "delta_familiarity": 0.1,
+                        "delta_rivalry": -0.05,
+                    }
+                ]
+            },
+            "social_events": [
+                {"tick": 15, "type": "chat", "actors": ["alice", "bob"]},
+                {"tick": 17, "type": "rivalry_avoid", "owner": "bob", "other": "alice"},
+            ],
+            "narrations": [
+                {
+                    "tick": 10,
+                    "category": "relationship_friendship",
+                    "message": "alice bonded with bob",
+                    "priority": True,
+                    "data": {"owner": "alice", "other": "bob"},
+                }
+            ],
+        }
+    )
+
+
 def test_console_telemetry_snapshot_returns_payload() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
@@ -53,6 +132,11 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     runtime_payload = result.get("affordance_runtime")
     assert isinstance(runtime_payload, dict)
     assert "running_count" in runtime_payload
+    command_metadata = result.get("console_commands")
+    assert isinstance(command_metadata, dict)
+    assert "relationship_summary" in command_metadata
+    assert "relationship_detail" in command_metadata
+    assert "social_events" in command_metadata
 
 
 def test_console_conflict_status_reports_history() -> None:
@@ -166,6 +250,103 @@ def test_console_rivalry_dump_reports_pairs() -> None:
     )
     assert alice_view["rivals"]
     assert alice_view["rivals"][0]["agent_id"] == "bob"
+
+
+def test_console_relationship_summary_returns_payload() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    _seed_relationship_state(loop)
+    router = create_console_router(
+        loop.telemetry, loop.world, loop.perturbations, policy=loop.policy, config=config
+    )
+    result = router.dispatch(ConsoleCommand(name="relationship_summary", args=(), kwargs={}))
+    assert result["schema_version"] == loop.telemetry.schema()
+    summary = result["summary"]["alice"]
+    assert summary["top_friends"][0]["agent"] == "bob"
+    assert result["churn"]["total_evictions"] == 1
+
+
+def test_console_relationship_detail_requires_admin_mode() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    _seed_relationship_state(loop)
+    viewer_router = create_console_router(
+        loop.telemetry, loop.world, loop.perturbations, policy=loop.policy, config=config
+    )
+    response = viewer_router.dispatch(
+        ConsoleCommand(name="relationship_detail", args=("alice",), kwargs={})
+    )
+    assert response["error"] == "forbidden"
+
+
+def test_console_relationship_detail_returns_payload_for_admin() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    _seed_relationship_state(loop)
+    admin_router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        policy=loop.policy,
+        config=config,
+        mode="admin",
+    )
+    payload = admin_router.dispatch(
+        ConsoleCommand(name="relationship_detail", args=("alice",), kwargs={})
+    )
+    assert payload["agent_id"] == "alice"
+    assert any(entry["other"] == "bob" for entry in payload["ties"])
+    assert payload["recent_updates"][0]["delta"]["trust"] == 0.1
+    assert any(update["owner"] == "bob" for update in payload["incoming_updates"])
+
+
+def test_console_relationship_detail_unknown_agent_returns_error() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    _seed_relationship_state(loop)
+    admin_router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        policy=loop.policy,
+        config=config,
+        mode="admin",
+    )
+    result = admin_router.dispatch(
+        ConsoleCommand(name="relationship_detail", args=("zoe",), kwargs={})
+    )
+    assert result["error"] == "not_found"
+
+
+def test_console_social_events_limit_and_validation() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    _seed_relationship_state(loop)
+    router = create_console_router(
+        loop.telemetry, loop.world, loop.perturbations, policy=loop.policy, config=config
+    )
+    limited = router.dispatch(
+        ConsoleCommand(name="social_events", args=(), kwargs={"limit": 1})
+    )
+    assert len(limited["events"]) == 1
+    assert limited["events"][0]["type"] == "rivalry_avoid"
+    invalid = router.dispatch(
+        ConsoleCommand(name="social_events", args=(), kwargs={"limit": "bad"})
+    )
+    assert invalid["error"] == "invalid_args"
+
+
+def test_console_narrations_and_relationship_summary_snapshot() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    _seed_relationship_state(loop)
+    router = create_console_router(
+        loop.telemetry, loop.world, loop.perturbations, policy=loop.policy, config=config
+    )
+    snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
+    assert snapshot["relationship_summary"]["alice"]["top_friends"][0]["agent"] == "bob"
+    narrations = loop.telemetry.latest_narrations()
+    assert any(entry.get("category") == "relationship_friendship" for entry in narrations)
 
 
 def test_console_affordance_status_reports_runtime() -> None:

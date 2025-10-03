@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 
 
@@ -61,4 +63,36 @@ def test_eviction_hook_invoked_for_decay() -> None:
     ledger.apply_delta("bob", trust=0.5)
     ledger.decay()
 
+    assert events == [("alice", "bob", "decay")]
+
+
+def test_decay_reduces_values_before_eviction() -> None:
+    events: list[tuple[str, str, str]] = []
+
+    def hook(owner: str, other: str, reason: str) -> None:
+        events.append((owner, other, reason))
+
+    ledger = RelationshipLedger(
+        owner_id="alice",
+        params=RelationshipParameters(
+            trust_decay=0.2,
+            familiarity_decay=0.2,
+            rivalry_decay=0.2,
+            max_edges=3,
+        ),
+        eviction_hook=hook,
+    )
+    ledger.apply_delta("bob", trust=0.6, familiarity=0.4, rivalry=0.3)
+
+    ledger.decay()
+    tie = ledger.tie_for("bob")
+    assert tie is not None
+    assert tie.trust == pytest.approx(0.4)
+    assert tie.familiarity == pytest.approx(0.2)
+    assert tie.rivalry == pytest.approx(0.1)
+
+    ledger.decay()
+    ledger.decay()
+
+    assert ledger.tie_for("bob") is None
     assert events == [("alice", "bob", "decay")]

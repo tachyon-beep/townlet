@@ -15,7 +15,15 @@ from rich.text import Text
 
 from townlet.console.handlers import ConsoleCommand
 from townlet_ui.commands import ConsoleCommandExecutor
-from townlet_ui.telemetry import TelemetryClient, TelemetrySnapshot
+from townlet_ui.telemetry import (
+    RelationshipChurn,
+    RelationshipSummarySnapshot,
+    FriendSummary,
+    RivalSummary,
+    SocialEventEntry,
+    TelemetryClient,
+    TelemetrySnapshot,
+)
 
 if TYPE_CHECKING:
     from townlet.core.sim_loop import SimulationLoop
@@ -241,7 +249,36 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
     narration_panel = _build_narration_panel(snapshot)
     panels.append(narration_panel)
 
+    summary = snapshot.relationship_summary
     relationships = snapshot.relationships
+    if relationships is None and summary is not None:
+        churn_metrics = summary.churn_metrics
+        if churn_metrics:
+            owners_field = churn_metrics.get("owners")
+            reasons_field = churn_metrics.get("reasons")
+            relationships = RelationshipChurn(
+                window_start=int(churn_metrics.get("window_start", 0) or 0),
+                window_end=int(churn_metrics.get("window_end", 0) or 0),
+                total_evictions=int(churn_metrics.get("total", 0) or 0),
+                per_owner={
+                    str(owner): int(count)
+                    for owner, count in (owners_field or {}).items()
+                    if isinstance(owner, str) and isinstance(count, (int, float))
+                }
+                if isinstance(owners_field, Mapping)
+                else {},
+                per_reason={
+                    str(reason): int(count)
+                    for reason, count in (reasons_field or {}).items()
+                    if isinstance(reason, str) and isinstance(count, (int, float))
+                }
+                if isinstance(reasons_field, Mapping)
+                else {},
+            )
+
+    social_panel = _build_social_panel(summary, relationships, snapshot.social_events)
+    if social_panel is not None:
+        panels.append(social_panel)
     if relationships is not None:
         rel_table = Table(title="Relationship Churn", expand=True)
         rel_table.add_column("Window", justify="left")
@@ -314,12 +351,252 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         "Relationship Overlay shows top ties with trust/familiarity/rivalry deltas.",
         "KPI Panel tracks queue intensity, lateness, and late help with colour-coded trends.",
         "Relationships panel displays eviction churn; updates table lists recent tie changes.",
+        "Social panel highlights top friends/rivals, churn aggregates, and recent chats/avoidance.",
         "Narrations panel lists throttled conflict narrations (! marks priority entries).",
     ]
     legend = Text("\n".join(legend_lines), style="dim")
     panels.append(Panel(legend, title="Legend"))
 
     return panels
+
+
+def _build_social_panel(
+    summary: RelationshipSummarySnapshot | None,
+    relationships: RelationshipChurn | None,
+    events: tuple[SocialEventEntry, ...],
+) -> Panel | None:
+    status_panel = _build_social_status_panel(summary)
+    cards_panel = _build_social_cards_panel(summary)
+    churn_panel = _build_social_churn_panel(summary, relationships)
+    events_panel = _build_social_events_panel(events)
+
+    renderables: list[RenderableType] = []
+    if status_panel is not None:
+        renderables.append(status_panel)
+    if cards_panel is not None:
+        renderables.append(cards_panel)
+    if churn_panel is not None:
+        renderables.append(churn_panel)
+    if events_panel is not None:
+        renderables.append(events_panel)
+
+    if not renderables:
+        body = Text("No social telemetry available", style="dim")
+        return Panel(body, title="Social", border_style="green")
+
+    border = "magenta"
+    if churn_panel is not None and isinstance(churn_panel, Panel):
+        total_evictions = _extract_churn_total(summary, relationships)
+        if total_evictions:
+            border = "red"
+
+    return Panel(Group(*renderables), title="Social", border_style=border)
+
+
+def _build_social_status_panel(
+    summary: RelationshipSummarySnapshot | None,
+) -> Panel | None:
+    if summary is None:
+        body = Text(
+            "Relationships telemetry unavailable (stage OFF or not yet emitted)",
+            style="yellow",
+        )
+        return Panel(body, title="Status", border_style="yellow")
+    if not summary.per_agent:
+        body = Text(
+            "No agent friendships or rivalries recorded yet",
+            style="dim",
+        )
+        return Panel(body, title="Status", border_style="green")
+    return None
+
+
+def _build_social_cards_panel(
+    summary: RelationshipSummarySnapshot | None,
+) -> Panel | None:
+    if summary is None or not summary.per_agent:
+        return None
+
+    table = Table(title="Agent Ties", expand=True)
+    table.add_column("Agent")
+    table.add_column("Friends (trust/fam)")
+    table.add_column("Rivals (rivalry)")
+
+    rows_added = 0
+
+    max_agents = 6
+    for agent_id, entry in list(sorted(summary.per_agent.items()))[:max_agents]:
+        friends_text = _format_friends(entry.top_friends)
+        rivals_text = _format_rivals(entry.top_rivals)
+        table.add_row(agent_id, friends_text, rivals_text)
+        rows_added += 1
+
+    if rows_added == 0:
+        table.add_row("—", "No tracked friendships", "No active rivals")
+
+    return Panel(table, title="Social Ties", border_style="cyan")
+
+
+def _build_social_churn_panel(
+    summary: RelationshipSummarySnapshot | None,
+    relationships: RelationshipChurn | None,
+) -> Panel | None:
+    churn_data = summary.churn_metrics if summary is not None else {}
+    owners_raw = churn_data.get("owners") if isinstance(churn_data, Mapping) else {}
+    reasons_raw = churn_data.get("reasons") if isinstance(churn_data, Mapping) else {}
+    owners = (
+        {
+            str(owner): int(count)
+            for owner, count in owners_raw.items()
+            if isinstance(count, (int, float))
+        }
+        if isinstance(owners_raw, Mapping)
+        else {}
+    )
+    reasons = (
+        {
+            str(reason): int(count)
+            for reason, count in reasons_raw.items()
+            if isinstance(count, (int, float))
+        }
+        if isinstance(reasons_raw, Mapping)
+        else {}
+    )
+    total = int(churn_data.get("total", 0)) if isinstance(churn_data, Mapping) else 0
+    window_start = churn_data.get("window_start") if isinstance(churn_data, Mapping) else None
+    window_end = churn_data.get("window_end") if isinstance(churn_data, Mapping) else None
+
+    if relationships is not None:
+        if window_start is None:
+            window_start = relationships.window_start
+        if window_end is None:
+            window_end = relationships.window_end
+        if not owners:
+            owners = dict(relationships.per_owner)
+        if not reasons:
+            reasons = dict(relationships.per_reason)
+        if total == 0:
+            total = relationships.total_evictions
+
+    window_label = (
+        f"{int(window_start)}-{int(window_end)}"
+        if window_start is not None and window_end is not None
+        else "n/a"
+    )
+
+    table = Table(title="Churn Summary", expand=True)
+    table.add_column("Window")
+    table.add_column("Total", justify="right")
+    table.add_column("Top Owners")
+    table.add_column("Reasons")
+
+    if total == 0 and not owners and not reasons:
+        table.add_row(window_label, "0", "(no evictions)", "(no evictions)")
+        return Panel(table, title="Churn", border_style="green")
+
+    table.add_row(
+        window_label,
+        str(total),
+        _format_top_entries(owners),
+        _format_top_entries(reasons),
+    )
+
+    border = "red" if total else "yellow"
+    return Panel(table, title="Churn", border_style=border)
+
+
+def _build_social_events_panel(
+    events: tuple[SocialEventEntry, ...],
+) -> Panel | None:
+    max_events = 8
+    displayed_events = list(events)[-max_events:]
+
+    table = Table(title="Recent Social Events", expand=True)
+    table.add_column("Type")
+    table.add_column("Details")
+
+    if not displayed_events:
+        table.add_row("—", "No recent social events")
+    else:
+        for entry in reversed(displayed_events):
+            table.add_row(_format_event_type(entry.type), _summarise_social_event(entry))
+
+    border = "blue" if displayed_events else "green"
+    return Panel(table, title="Social Events", border_style=border)
+
+
+def _format_friends(friends: tuple[FriendSummary, ...]) -> str:
+    if not friends:
+        return "(none)"
+    parts = []
+    for friend in friends:
+        trust = f"{friend.trust:.2f}" if isinstance(friend.trust, float) else "n/a"
+        familiarity = (
+            f"{friend.familiarity:.2f}"
+            if isinstance(friend.familiarity, float)
+            else "n/a"
+        )
+        parts.append(f"{friend.agent} ({trust}/{familiarity})")
+    return ", ".join(parts)
+
+
+def _format_rivals(rivals: tuple[RivalSummary, ...]) -> str:
+    if not rivals:
+        return "(none)"
+    parts = []
+    for rival in rivals:
+        rivalry = f"{rival.rivalry:.2f}" if isinstance(rival.rivalry, float) else "n/a"
+        parts.append(f"{rival.agent} ({rivalry})")
+    return ", ".join(parts)
+
+
+def _format_event_type(event_type: str) -> str:
+    mapping = {
+        "chat_success": "Chat Success",
+        "chat_failure": "Chat Failure",
+        "rivalry_avoidance": "Rivalry Avoidance",
+    }
+    label = mapping.get(event_type, event_type.replace("_", " ").title())
+    if event_type == "chat_failure":
+        return f"[red]{label}[/]"
+    if event_type == "chat_success":
+        return f"[green]{label}[/]"
+    return label
+
+
+def _summarise_social_event(entry: SocialEventEntry) -> str:
+    payload = entry.payload
+    if entry.type in {"chat_success", "chat_failure"}:
+        speaker = str(payload.get("speaker", "?"))
+        listener = str(payload.get("listener", "?"))
+        quality = payload.get("quality")
+        quality_text = (
+            f" q {float(quality):.2f}"
+            if isinstance(quality, (int, float))
+            else ""
+        )
+        return f"{speaker} → {listener}{quality_text}"
+    if entry.type == "rivalry_avoidance":
+        agent = str(payload.get("agent", "?"))
+        target = str(payload.get("object", payload.get("object_id", "?")))
+        reason = str(payload.get("reason", ""))
+        reason_text = f" ({reason})" if reason else ""
+        return f"{agent} avoided {target}{reason_text}"
+    if not payload:
+        return "(no details)"
+    details = ", ".join(f"{key}={value}" for key, value in payload.items())
+    return details or "(no details)"
+
+
+def _extract_churn_total(
+    summary: RelationshipSummarySnapshot | None,
+    relationships: RelationshipChurn | None,
+) -> int:
+    churn_data = summary.churn_metrics if summary is not None else {}
+    total = int(churn_data.get("total", 0)) if isinstance(churn_data, Mapping) else 0
+    if total == 0 and relationships is not None:
+        total = relationships.total_evictions
+    return total
 
 
 def _format_top_entries(entries: Mapping[str, int]) -> str:

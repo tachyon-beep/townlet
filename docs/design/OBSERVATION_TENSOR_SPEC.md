@@ -1,4 +1,4 @@
-# Observation Tensor Specification — v2025-09-30
+# Observation Tensor Specification — v2025-10-23
 
 Townlet exposes three observation variants (`hybrid`, `full`, `compact`). Each
 variant includes a shared scalar feature bundle and then adds variant-specific
@@ -24,10 +24,12 @@ All variants emit the following scalars in the order shown:
 - Path hint logits: `path_hint_north`, `path_hint_south`, `path_hint_east`, `path_hint_west`
 - Landmark bearings/distances (optional): for each of `fridge`, `stove`, `bed`, `shower`
   we append `<name>_dx`, `<name>_dy`, `<name>_dist`
-- Social snippet (optional): `social_slot{n}_d{m}` entries plus aggregates when
+- Social snippet: `social_slot{n}_d{m}` entries plus aggregates when
   `include_aggregates` is enabled. Each slot packs the hashed agent embedding
   followed by trust, familiarity, and rivalry scores derived from the relationship
-  ledger. Aggregates compute mean/max trust and rivalry across populated slots.
+  ledger. When relationship data are disabled the builder falls back to rivalry
+  edges (for avoidance context) and flags the snippet as empty in metadata.
+  Aggregates compute mean/max trust and rivalry across populated slots.
 
 Episode progress derives from `agent_snapshot.episode_tick` divided by
 `time_ticks_per_day` (wraps each day). Last-action fields are updated whenever the
@@ -70,7 +72,9 @@ Compact omits the spatial map entirely. Consumers should branch when
 Social slots may be included with any variant provided relationships stage ≥ `A`. Each
 slot contributes `embed_dim + 3` floats (embedding + trust/familiarity/rivalry) plus
 optional aggregates when `include_aggregates` is true. Disable `top_friends`/`top_rivals`
-for compact/full fixtures when social context is unnecessary.
+for compact/full fixtures when social context is unnecessary. The builder now backfills
+friendship/rivalry data from the live relationship ledger every tick, ensuring compact
+variants expose the same context operators see in telemetry.
 
 Metadata emitted alongside each observation now includes a `social_context` block:
 

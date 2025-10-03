@@ -148,6 +148,38 @@ class RelationshipOverlayEntry:
 
 
 @dataclass(frozen=True)
+class FriendSummary:
+    agent: str
+    trust: float
+    familiarity: float
+    rivalry: float
+
+
+@dataclass(frozen=True)
+class RivalSummary:
+    agent: str
+    rivalry: float
+
+
+@dataclass(frozen=True)
+class RelationshipSummaryEntry:
+    top_friends: tuple[FriendSummary, ...]
+    top_rivals: tuple[RivalSummary, ...]
+
+
+@dataclass(frozen=True)
+class RelationshipSummarySnapshot:
+    per_agent: Mapping[str, RelationshipSummaryEntry]
+    churn_metrics: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class SocialEventEntry:
+    type: str
+    payload: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class PolicyInspectorAction:
     action: str
     probability: float
@@ -253,6 +285,8 @@ class TelemetrySnapshot:
     economy_settings: Mapping[str, float]
     price_spikes: tuple[PriceSpikeEntry, ...]
     utilities: Mapping[str, bool]
+    relationship_summary: RelationshipSummarySnapshot | None
+    social_events: tuple[SocialEventEntry, ...]
     raw: Mapping[str, Any]
 
 
@@ -296,7 +330,9 @@ class TelemetryClient:
         conflict_payload = self._get_section(payload, "conflict", Mapping)
         relationships_payload = payload.get("relationships")
         relationship_snapshot_payload = payload.get("relationship_snapshot", {})
+        relationship_summary_payload = payload.get("relationship_summary")
         relationship_updates_payload = payload.get("relationship_updates", [])
+        social_events_payload = payload.get("social_events")
         narrations_payload = payload.get("narrations", [])
         narration_state_payload = payload.get("narration_state", {})
 
@@ -557,6 +593,66 @@ class TelemetryClient:
                     )
                 relationship_overlay[str(owner)] = entries
 
+        summary_snapshot: RelationshipSummarySnapshot | None = None
+        if isinstance(relationship_summary_payload, Mapping):
+            per_agent: dict[str, RelationshipSummaryEntry] = {}
+            churn_data: dict[str, Any] = {}
+            for owner, entry in relationship_summary_payload.items():
+                if owner == "churn":
+                    if isinstance(entry, Mapping):
+                        churn_data = {str(key): value for key, value in entry.items()}
+                    continue
+                if not isinstance(entry, Mapping):
+                    continue
+                friends_payload = entry.get("top_friends", [])
+                rivals_payload = entry.get("top_rivals", [])
+                friends: list[FriendSummary] = []
+                if isinstance(friends_payload, list):
+                    for friend in friends_payload:
+                        if not isinstance(friend, Mapping):
+                            continue
+                        friends.append(
+                            FriendSummary(
+                                agent=str(friend.get("agent", "")),
+                                trust=_coerce_float(friend.get("trust")),
+                                familiarity=_coerce_float(friend.get("familiarity")),
+                                rivalry=_coerce_float(friend.get("rivalry")),
+                            )
+                        )
+                rivals: list[RivalSummary] = []
+                if isinstance(rivals_payload, list):
+                    for rival in rivals_payload:
+                        if not isinstance(rival, Mapping):
+                            continue
+                        rivals.append(
+                            RivalSummary(
+                                agent=str(rival.get("agent", "")),
+                                rivalry=_coerce_float(rival.get("rivalry")),
+                            )
+                        )
+                per_agent[str(owner)] = RelationshipSummaryEntry(
+                    top_friends=tuple(friends),
+                    top_rivals=tuple(rivals),
+                )
+            if per_agent or churn_data:
+                summary_snapshot = RelationshipSummarySnapshot(
+                    per_agent=per_agent,
+                    churn_metrics=churn_data,
+                )
+
+        social_events: list[SocialEventEntry] = []
+        if isinstance(social_events_payload, list):
+            for entry in social_events_payload:
+                if not isinstance(entry, Mapping):
+                    continue
+                event_type = str(entry.get("type", "unknown"))
+                payload_copy = {
+                    str(key): value for key, value in entry.items() if key != "type"
+                }
+                social_events.append(
+                    SocialEventEntry(type=event_type, payload=payload_copy)
+                )
+
         narrations: list[NarrationEntry] = []
         if isinstance(narrations_payload, list):
             for entry in narrations_payload:
@@ -742,6 +838,8 @@ class TelemetryClient:
             economy_settings=economy_settings,
             price_spikes=tuple(price_spikes),
             utilities=utilities,
+            relationship_summary=summary_snapshot,
+            social_events=tuple(social_events),
             raw=dict(payload),
         )
 

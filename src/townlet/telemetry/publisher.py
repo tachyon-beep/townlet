@@ -7,14 +7,19 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import asdict
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from townlet.config import SimulationConfig
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
+from townlet.telemetry.events import (
+    RELATIONSHIP_FRIENDSHIP_EVENT,
+    RELATIONSHIP_RIVALRY_EVENT,
+    RELATIONSHIP_SOCIAL_ALERT_EVENT,
+)
 from townlet.telemetry.narration import NarrationRateLimiter
 from townlet.telemetry.transport import (
     TelemetryTransportError,
@@ -33,7 +38,8 @@ class TelemetryPublisher:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
-        self.schema_version = "0.9.5"
+        self.schema_version = "0.9.7"
+        self._relationship_narration_cfg = self.config.telemetry.relationship_narration
         self._console_buffer: list[object] = []
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
@@ -502,7 +508,7 @@ class TelemetryPublisher:
     def import_console_buffer(self, buffer: Iterable[object]) -> None:
         self._console_buffer = list(buffer)
 
-    def record_console_results(self, results: Iterable["ConsoleCommandResult"]) -> None:
+    def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         batch: list[dict[str, Any]] = []
         for result in results:
             payload = result.to_dict()
@@ -518,7 +524,7 @@ class TelemetryPublisher:
         return list(self._console_results_history)
 
     def record_possessed_agents(self, agents: Iterable[str]) -> None:
-        self._latest_possessed_agents = sorted(set(str(agent) for agent in agents))
+        self._latest_possessed_agents = sorted({str(agent) for agent in agents})
 
     def latest_possessed_agents(self) -> list[str]:
         return list(self._latest_possessed_agents)
@@ -758,7 +764,7 @@ class TelemetryPublisher:
     def _capture_affordance_runtime(
         self,
         *,
-        world: "WorldState",
+        world: WorldState,
         events: Iterable[Mapping[str, object]] | None,
         tick: int,
     ) -> None:
@@ -899,10 +905,13 @@ class TelemetryPublisher:
             self._latest_events = list(events)
         else:
             self._latest_events = []
+        latest_social_events: list[dict[str, object]] = []
         if social_events is not None:
             for event in social_events:
                 if isinstance(event, Mapping):
-                    self._social_event_history.append(dict(event))
+                    payload = dict(event)
+                    self._social_event_history.append(payload)
+                    latest_social_events.append(payload)
         self._capture_affordance_runtime(
             world=world,
             events=self._latest_events,
@@ -914,7 +923,12 @@ class TelemetryPublisher:
             if isinstance(event, Mapping)
             and str(event.get("event")) == "affordance_precondition_fail"
         ]
-        self._process_narrations(self._latest_events, int(tick))
+        self._process_narrations(
+            self._latest_events,
+            latest_social_events,
+            self._latest_relationship_updates,
+            int(tick),
+        )
         for subscriber in self._event_subscribers:
             subscriber(list(self._latest_events))
         if policy_snapshot is not None:
@@ -1455,7 +1469,7 @@ class TelemetryPublisher:
     def _build_relationship_summary(
         self,
         snapshot: Mapping[str, Mapping[str, Mapping[str, float]]],
-        world: "WorldState",
+        world: WorldState,
     ) -> dict[str, object]:
         summary: dict[str, object] = {}
         max_entries = 3
@@ -1492,8 +1506,12 @@ class TelemetryPublisher:
     def _process_narrations(
         self,
         events: Iterable[dict[str, object]],
+        social_events: Iterable[Mapping[str, object]] | None,
+        relationship_updates: Iterable[Mapping[str, object]],
         tick: int,
     ) -> None:
+        social_events_snapshot = list(social_events or [])
+        relationship_updates_snapshot = list(relationship_updates)
         for event in events:
             event_name = event.get("event")
             if event_name == "queue_conflict":
@@ -1504,6 +1522,165 @@ class TelemetryPublisher:
                 self._handle_shower_complete_narration(event, tick)
             elif event_name == "sleep_complete":
                 self._handle_sleep_complete_narration(event, tick)
+        self._emit_relationship_friendship_narrations(
+            relationship_updates_snapshot, tick
+        )
+        self._emit_relationship_rivalry_narrations(tick)
+        self._emit_social_alert_narrations(social_events_snapshot, tick)
+
+    def _emit_relationship_friendship_narrations(
+        self,
+        updates: Iterable[Mapping[str, object]],
+        tick: int,
+    ) -> None:
+        trust_threshold = float(self._relationship_narration_cfg.friendship_trust_threshold)
+        delta_threshold = float(self._relationship_narration_cfg.friendship_delta_threshold)
+        priority_threshold = float(
+            self._relationship_narration_cfg.friendship_priority_threshold
+        )
+        for update in updates:
+            owner = str(update.get("owner", ""))
+            other = str(update.get("other", ""))
+            if not owner or not other:
+                continue
+            status = str(update.get("status", ""))
+            trust = float(update.get("trust", 0.0) or 0.0)
+            familiarity = float(update.get("familiarity", 0.0) or 0.0)
+            delta = update.get("delta")
+            delta_trust = float(delta.get("trust", 0.0)) if isinstance(delta, Mapping) else 0.0
+            delta_fam = float(delta.get("familiarity", 0.0)) if isinstance(delta, Mapping) else 0.0
+            new_tie = status == "added"
+            if not new_tie and trust < trust_threshold and delta_trust < delta_threshold:
+                continue
+            message = (
+                f"{owner} bonded with {other}: trust {trust:.2f}, familiarity {familiarity:.2f}."
+            )
+            dedupe_key = f"relationship_friendship:{owner}:{other}"
+            priority = new_tie or trust >= priority_threshold
+            if self._narration_limiter.allow(
+                RELATIONSHIP_FRIENDSHIP_EVENT,
+                message=message,
+                priority=priority,
+                dedupe_key=dedupe_key,
+            ):
+                self._latest_narrations.append(
+                    {
+                        "tick": int(tick),
+                        "category": RELATIONSHIP_FRIENDSHIP_EVENT,
+                        "message": message,
+                        "priority": priority,
+                        "data": {
+                            "owner": owner,
+                            "other": other,
+                            "status": status,
+                            "trust": trust,
+                            "familiarity": familiarity,
+                            "delta_trust": delta_trust,
+                            "delta_familiarity": delta_fam,
+                        },
+                    }
+                )
+
+    def _emit_relationship_rivalry_narrations(self, tick: int) -> None:
+        summary = self._latest_relationship_summary
+        if not isinstance(summary, Mapping):
+            return
+        avoid_threshold = float(self._relationship_narration_cfg.rivalry_avoid_threshold)
+        escalation_threshold = float(
+            self._relationship_narration_cfg.rivalry_escalation_threshold
+        )
+        for owner, payload in summary.items():
+            if owner == "churn" or not isinstance(payload, Mapping):
+                continue
+            rivals = payload.get("top_rivals", [])
+            if not isinstance(rivals, Iterable):
+                continue
+            for rival_entry in rivals:
+                if not isinstance(rival_entry, Mapping):
+                    continue
+                rival = str(rival_entry.get("agent", ""))
+                if not rival:
+                    continue
+                rivalry_value = float(rival_entry.get("rivalry", 0.0) or 0.0)
+                if rivalry_value < avoid_threshold:
+                    continue
+                reason = "avoid_threshold" if rivalry_value < escalation_threshold else "escalation"
+                priority = rivalry_value >= escalation_threshold
+                message = (
+                    f"Rivalry between {owner} and {rival} is at {rivalry_value:.2f} ({reason})."
+                )
+                dedupe_key = f"relationship_rivalry:{owner}:{rival}"
+                if self._narration_limiter.allow(
+                    RELATIONSHIP_RIVALRY_EVENT,
+                    message=message,
+                    priority=priority,
+                    dedupe_key=dedupe_key,
+                ):
+                    self._latest_narrations.append(
+                        {
+                            "tick": int(tick),
+                            "category": RELATIONSHIP_RIVALRY_EVENT,
+                            "message": message,
+                            "priority": priority,
+                            "data": {
+                                "owner": owner,
+                                "rival": rival,
+                                "rivalry": rivalry_value,
+                                "threshold": reason,
+                            },
+                        }
+                    )
+
+    def _emit_social_alert_narrations(
+        self,
+        events: Iterable[Mapping[str, object]],
+        tick: int,
+    ) -> None:
+        for event in events:
+            event_type = str(event.get("type", ""))
+            if event_type not in {"chat_failure", "rivalry_avoidance"}:
+                continue
+            if event_type == "chat_failure":
+                speaker = str(event.get("speaker", ""))
+                listener = str(event.get("listener", ""))
+                if not speaker or not listener:
+                    continue
+                message = f"Chat between {speaker} and {listener} failed."
+                dedupe_key = f"social_chat_failure:{speaker}:{listener}"
+                priority = False
+                data = {
+                    "speaker": speaker,
+                    "listener": listener,
+                    "quality": event.get("quality"),
+                }
+            else:
+                agent = str(event.get("agent", ""))
+                target = str(event.get("object", ""))
+                if not agent:
+                    continue
+                message = f"{agent} avoided a rivalry interaction at {target or 'unknown'}"
+                dedupe_key = f"social_rivalry_avoidance:{agent}:{target}"
+                priority = True
+                data = {
+                    "agent": agent,
+                    "object": target,
+                    "reason": event.get("reason"),
+                }
+            if self._narration_limiter.allow(
+                RELATIONSHIP_SOCIAL_ALERT_EVENT,
+                message=message,
+                priority=priority,
+                dedupe_key=dedupe_key,
+            ):
+                self._latest_narrations.append(
+                    {
+                        "tick": int(tick),
+                        "category": RELATIONSHIP_SOCIAL_ALERT_EVENT,
+                        "message": message,
+                        "priority": priority,
+                        "data": data,
+                    }
+                )
 
     def _handle_queue_conflict_narration(
         self,

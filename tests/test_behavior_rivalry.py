@@ -1,9 +1,8 @@
 from pathlib import Path
 
-import pytest
-
-from townlet.config import load_config
+from townlet.config import SimulationConfig, load_config
 from townlet.policy.behavior import ScriptedBehavior
+from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
@@ -67,3 +66,73 @@ def test_behavior_retries_after_rival_leaves() -> None:
     behavior.pending.pop("alice", None)
     intent = behavior.decide(world, "alice")
     assert intent.kind == "request"
+
+
+def test_scripted_behavior_initiates_chat_when_conditions_met() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    for agent_id in ("alice", "bob"):
+        world.agents[agent_id] = AgentSnapshot(
+            agent_id=agent_id,
+            position=(0, 0),
+            needs={"hunger": 0.9, "hygiene": 0.9, "energy": 0.9},
+            wallet=1.0,
+        )
+        world.agents[agent_id].personality.extroversion = 0.8
+    world.tick = 100
+
+    behavior = ScriptedBehavior(config)
+    intent = behavior.decide(world, "alice")
+    assert intent.kind == "chat"
+    assert intent.target_agent == "bob"
+    assert 0.1 <= intent.quality <= 1.0
+
+    follow_up = behavior.decide(world, "alice")
+    assert follow_up.kind != "chat"
+
+    world.record_chat_success("alice", "bob", quality=intent.quality or 1.0)
+    engine = RewardEngine(config)
+    rewards = engine.compute(world, {agent_id: False for agent_id in world.agents})
+    assert rewards["alice"] > config.rewards.survival_tick
+
+
+def test_scripted_behavior_avoids_chat_when_relationships_disabled() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    data = config.model_dump()
+    data["features"]["stages"]["relationships"] = "OFF"
+    config = SimulationConfig.model_validate(data)
+    world = WorldState.from_config(config)
+    for agent_id in ("alice", "bob"):
+        world.agents[agent_id] = AgentSnapshot(
+            agent_id=agent_id,
+            position=(0, 0),
+            needs={"hunger": 0.9, "hygiene": 0.9, "energy": 0.9},
+            wallet=1.0,
+        )
+        world.agents[agent_id].personality.extroversion = 0.9
+    world.tick = 50
+
+    behavior = ScriptedBehavior(config)
+    intent = behavior.decide(world, "alice")
+    assert intent.kind != "chat"
+
+
+def test_scripted_behavior_moves_when_rival_on_same_tile() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.conflict.rivalry.avoid_threshold = 0.1
+    world = WorldState.from_config(config)
+    for agent_id in ("alice", "bob"):
+        world.agents[agent_id] = AgentSnapshot(
+            agent_id=agent_id,
+            position=(0, 0),
+            needs={"hunger": 0.9, "hygiene": 0.9, "energy": 0.9},
+            wallet=1.0,
+        )
+        world.agents[agent_id].personality.extroversion = 0.0
+    world.register_rivalry_conflict("alice", "bob", intensity=1.0)
+    world.tick = 10
+
+    behavior = ScriptedBehavior(config)
+    intent = behavior.decide(world, "alice")
+    assert intent.kind == "move"
+    assert intent.position is not None

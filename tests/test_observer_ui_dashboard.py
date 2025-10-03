@@ -7,7 +7,13 @@ from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.models import torch_available
-from townlet_ui.dashboard import _build_map_panel, render_snapshot, run_dashboard, _promotion_border_style, _derive_promotion_reason
+from townlet_ui.dashboard import (
+    _build_map_panel,
+    render_snapshot,
+    run_dashboard,
+    _promotion_border_style,
+    _derive_promotion_reason,
+)
 from townlet_ui.telemetry import TelemetryClient, AnnealStatus, PromotionSnapshot
 from rich.console import Console
 
@@ -192,6 +198,76 @@ def test_policy_inspector_snapshot_contains_entries() -> None:
     entry = entries[0]
     assert entry.top_actions
     assert entry.selected_action is not None
+
+
+def test_social_panel_renders_with_summary_and_events() -> None:
+    loop = make_loop()
+    world = loop.world
+    telemetry = loop.telemetry
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+
+    world.update_relationship("alice", "bob", trust=0.6, familiarity=0.4)
+    world.update_relationship("bob", "alice", trust=0.45, familiarity=0.3, rivalry=0.05)
+
+    telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=[],
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+        social_events=[
+            {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
+            {
+                "type": "rivalry_avoidance",
+                "agent": "bob",
+                "object": "stove_1",
+                "reason": "queue_rival",
+            },
+        ],
+    )
+
+    snapshot = TelemetryClient().from_console(router)
+    panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00"))
+    social_panel = next(panel for panel in panels if (panel.title or "") == "Social")
+
+    console = Console(record=True, width=120)
+    console.print(social_panel)
+    rendered = console.export_text()
+
+    assert "Social Ties" in rendered
+    assert "alice → bob" in rendered
+    assert "Social Events" in rendered
+
+
+def test_social_panel_handles_missing_summary() -> None:
+    loop = make_loop()
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    for _ in range(2):
+        loop.step()
+    snapshot = TelemetryClient().from_console(router)
+
+    blank_snapshot = replace(
+        snapshot,
+        relationship_summary=None,
+        relationships=None,
+        social_events=tuple(),
+    )
+
+    panels = list(render_snapshot(blank_snapshot, tick=loop.tick, refreshed="00:00:00"))
+    social_panel = next(panel for panel in panels if (panel.title or "") == "Social")
+
+    console = Console(record=True, width=120)
+    console.print(social_panel)
+    rendered = console.export_text()
+
+    assert "Relationships telemetry unavailable" in rendered
 
 
 def test_promotion_reason_logic() -> None:

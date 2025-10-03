@@ -132,6 +132,31 @@ def test_chat_reward_skipped_when_needs_override_triggers() -> None:
     assert rewards["alice"] <= 0.0
 
 
+def test_chat_events_ignored_when_social_stage_disabled() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    data = config.model_dump()
+    data["features"]["stages"]["social_rewards"] = "OFF"
+    config = SimulationConfig.model_validate(data)
+    world = WorldState.from_config(config)
+    for agent_id in ("alice", "bob"):
+        world.agents[agent_id] = AgentSnapshot(
+            agent_id=agent_id,
+            position=(0, 0),
+            needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+            wallet=1.0,
+        )
+    world.record_chat_success("alice", "bob", quality=1.0)
+
+    engine = RewardEngine(config)
+    terminated = {agent_id: False for agent_id in world.agents}
+    rewards = engine.compute(world, terminated)
+
+    for agent_id in ("alice", "bob"):
+        assert rewards[agent_id] == pytest.approx(config.rewards.survival_tick)
+        breakdown = engine.latest_reward_breakdown()[agent_id]
+        assert breakdown["social"] == pytest.approx(0.0)
+
+
 def test_chat_reward_blocked_within_termination_window() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)
