@@ -24,10 +24,11 @@ For each item capture:
 - Acceptance tests (unit + e2e)
 - Accessibility requirements (keyboard focus order, screen-reader labels)
 
-### Current Progress (Milestone 2.2)
+### Current Progress (Milestone 2.3)
 
-- Spectator shell includes header status, agent summary grid, narration feed, perturbation banner, economy/employment panels, conflict metrics, KPI cards, relationship overlays, social feed, and legend.
-- Telemetry hook and selector unit tests live in `townlet_web/src/hooks/useTelemetryClient.test.ts` and `townlet_web/src/utils/selectors.test.ts`.
-- Storybook stories cover all spectator/overlay panels (`townlet_web/src/components/DashboardPanels.stories.tsx`).
+- Spectator/operator UI now includes skip-link navigation, audio cue toggle, and narration-focused audio alerts.
+- Panels implemented: header, perturbations, economy, employment, conflict, KPIs, agent grid, narration feed, relationship overlays, social feed, legend.
+- Unit tests: telemetry hook (`useTelemetryClient.test.ts`), selectors (`selectors.test.ts`), audio cue hook (`useAudioCue.test.ts`).
+- Storybook stories cover panels (`DashboardPanels.stories.tsx`) for visual regression and accessibility checks.
 
 Update this file at the end of each milestone to record parity status.

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HeaderStatus } from "./components/HeaderStatus";
 import { AgentSummaryGrid } from "./components/AgentSummaryGrid";
 import { NarrationFeed } from "./components/NarrationFeed";
@@ -11,6 +11,7 @@ import { RelationshipOverlay } from "./components/RelationshipOverlay";
 import { SocialPanel } from "./components/SocialPanel";
 import { LegendPanel } from "./components/LegendPanel";
 import { useTelemetryClient } from "./hooks/useTelemetryClient";
+import { useAudioCue } from "./hooks/useAudioCue";
 import { tokens } from "./theme/tokens";
 import {
   selectConflict,
@@ -28,6 +29,7 @@ export interface AppProps {
 }
 
 export function App({ initialSnapshot = null }: AppProps) {
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const { snapshot, tick, schemaVersion } = useTelemetryClient({
     autoConnect: false,
     initialSnapshot: initialSnapshot as any
@@ -43,6 +45,9 @@ export function App({ initialSnapshot = null }: AppProps) {
   const kpis = selectKpis(snapshot);
   const relationships = selectRelationshipOverlays(snapshot);
   const socialEvents = selectSocialEvents(snapshot);
+
+  const { play } = useAudioCue({ enabled: audioEnabled });
+  const lastAlertTickRef = useRef<number | null>(null);
 
   const agentSummaries = useMemo(
     () =>
@@ -69,6 +74,17 @@ export function App({ initialSnapshot = null }: AppProps) {
     [narrations]
   );
 
+  useEffect(() => {
+    if (!audioEnabled) {
+      return;
+    }
+    const latestAlert = narrationEntries.find((entry) => entry.priority);
+    if (latestAlert && (lastAlertTickRef.current ?? -1) < latestAlert.tick) {
+      lastAlertTickRef.current = latestAlert.tick;
+      play("alert");
+    }
+  }, [audioEnabled, narrationEntries, play]);
+
   return (
     <div
       style={{
@@ -81,8 +97,47 @@ export function App({ initialSnapshot = null }: AppProps) {
         paddingBottom: tokens.spacing.xl
       }}
     >
+      <a
+        href="#main"
+        style={{
+          position: "absolute",
+          left: "-9999px",
+          top: "auto",
+          width: "1px",
+          height: "1px",
+          overflow: "hidden"
+        }}
+        onFocus={(event) => {
+          event.currentTarget.style.left = "16px";
+          event.currentTarget.style.top = "16px";
+          event.currentTarget.style.width = "auto";
+          event.currentTarget.style.height = "auto";
+          event.currentTarget.style.padding = "4px 8px";
+          event.currentTarget.style.background = tokens.color.surface;
+        }}
+        onBlur={(event) => {
+          event.currentTarget.style.left = "-9999px";
+          event.currentTarget.style.top = "auto";
+          event.currentTarget.style.width = "1px";
+          event.currentTarget.style.height = "1px";
+          event.currentTarget.style.padding = "0";
+        }}
+      >
+        Skip to content
+      </a>
       <HeaderStatus schemaVersion={schemaVersion} tick={tick} transportConnected={transport.connected} />
+      <div style={{ alignSelf: "flex-end", paddingRight: tokens.spacing.lg }}>
+        <label style={{ fontFamily: tokens.typography.fontFamily, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={audioEnabled}
+            onChange={(event) => setAudioEnabled(event.target.checked)}
+          />
+          Enable audio cues
+        </label>
+      </div>
       <main
+        id="main"
         style={{
           padding: `0 ${tokens.spacing.lg}px`,
           display: "grid",

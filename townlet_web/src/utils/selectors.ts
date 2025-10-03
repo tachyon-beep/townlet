@@ -95,3 +95,8 @@ export function selectSocialEvents(snapshot: TelemetrySnapshotPayload | null) {
   const events = snapshot?.social_events as Array<Record<string, unknown>> | undefined;
   return events ?? [];
 }
+
+export function selectNarrations(snapshot: TelemetrySnapshotPayload | null) {
+  const narrations = snapshot?.narrations as Array<Record<string, unknown>> | undefined;
+  return narrations ?? [];
+}
