@@ -45,6 +45,33 @@ loaded. The runtime now enforces the following guardrails:
    hooks execute arbitrary Python, they should be reviewed like any code
    running inside the simulation container.
 
+## Telemetry Transport Security
+
+Townlet shards now require deliberate acknowledgement before emitting telemetry
+over plaintext TCP. The transport config adds TLS controls:
+
+- Enable TLS with `telemetry.transport.enable_tls: true`. Provide certificates
+  via `ca_file`, `cert_file`, and `key_file` when mutual auth is required.
+- Hostname verification is on by default; set `verify_hostname: false` only for
+  trusted lab environments with pinned certificates.
+- Plaintext TCP is disabled unless you set `telemetry.transport.allow_plaintext:
+  true`. This flag is intended for legacy tooling and should not be used in
+  multi-tenant or internet-facing deployments.
+- All plaintext runs log a warning (`telemetry_tcp_plaintext_enabled`); treat it
+  as an alert that hardening is incomplete.
+
+Operational checklist:
+
+1. Issue certificates for telemetry collectors and distribute CA bundles to
+   shards. Store secrets via environment-specific tooling (e.g., Vault or
+   Kubernetes secrets).
+2. Configure endpoints in `configs/<env>/` with TLS enabled and hostname
+   verification intact.
+3. Run the telemetry release checklist before rollout to confirm the secure
+   transport negotiates successfully.
+4. Avoid sharing demo configs that set `allow_plaintext: true` unless the target
+   environment is fully trusted.
+
 ## Observation Privacy & Social Data
 
 Townlet observations can include per-agent social snippets (hashed identity

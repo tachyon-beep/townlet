@@ -510,6 +510,12 @@ class TelemetryTransportConfig(BaseModel):
     file_path: Path | None = None
     connect_timeout_seconds: float = Field(default=5.0, ge=0.0, le=60.0)
     send_timeout_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    enable_tls: bool = False
+    verify_hostname: bool = True
+    ca_file: Path | None = None
+    cert_file: Path | None = None
+    key_file: Path | None = None
+    allow_plaintext: bool = False
     retry: TelemetryRetryPolicy = TelemetryRetryPolicy()
     buffer: TelemetryBufferConfig = TelemetryBufferConfig()
     worker_poll_seconds: float = Field(default=0.5, ge=0.01, le=10.0)
@@ -526,11 +532,35 @@ class TelemetryTransportConfig(BaseModel):
                 raise ValueError(
                     "telemetry.transport.file_path must be omitted for stdout transport"
                 )
+            if self.enable_tls:
+                raise ValueError(
+                    "telemetry.transport.enable_tls is only supported for tcp transport"
+                )
+            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
+                raise ValueError(
+                    "telemetry.transport TLS options are only supported for tcp transport"
+                )
+            if self.allow_plaintext:
+                raise ValueError(
+                    "telemetry.transport.allow_plaintext is only supported for tcp transport"
+                )
         elif transport_type == "file":
             if self.file_path is None:
                 raise ValueError("telemetry.transport.file_path is required when type is 'file'")
             if str(self.file_path).strip() == "":
                 raise ValueError("telemetry.transport.file_path must not be blank")
+            if self.enable_tls:
+                raise ValueError(
+                    "telemetry.transport.enable_tls is only supported for tcp transport"
+                )
+            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
+                raise ValueError(
+                    "telemetry.transport TLS options are only supported for tcp transport"
+                )
+            if self.allow_plaintext:
+                raise ValueError(
+                    "telemetry.transport.allow_plaintext is only supported for tcp transport"
+                )
         elif transport_type == "tcp":
             endpoint = (self.endpoint or "").strip()
             if not endpoint:
@@ -538,6 +568,25 @@ class TelemetryTransportConfig(BaseModel):
             self.endpoint = endpoint
             if self.file_path is not None:
                 raise ValueError("telemetry.transport.file_path must be omitted for tcp transport")
+            if self.enable_tls:
+                if self.key_file and not self.cert_file:
+                    raise ValueError(
+                        "telemetry.transport.cert_file must be provided when key_file is set"
+                    )
+                if self.cert_file and not self.key_file:
+                    raise ValueError(
+                        "telemetry.transport.key_file must be provided when cert_file is set"
+                    )
+                if self.cert_file is not None and str(self.cert_file).strip() == "":
+                    raise ValueError("telemetry.transport.cert_file must not be blank")
+                if self.key_file is not None and str(self.key_file).strip() == "":
+                    raise ValueError("telemetry.transport.key_file must not be blank")
+                if self.ca_file is not None and str(self.ca_file).strip() == "":
+                    raise ValueError("telemetry.transport.ca_file must not be blank")
+            elif not self.allow_plaintext:
+                raise ValueError(
+                    "telemetry.transport.tcp requires enable_tls=true or allow_plaintext=true"
+                )
         else:  # pragma: no cover - defensive branch for Literal changes
             raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
         return self

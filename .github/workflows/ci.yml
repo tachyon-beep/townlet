@@ -27,6 +27,9 @@ jobs:
       - name: Unit tests
         run: pytest -k "not rollout_capture"
 
+      - name: CLI smoke tests
+        run: pytest tests/test_run_simulation_cli.py tests/test_demo_run_cli.py tests/test_observer_ui_cli.py
+
       - name: Observation variant regressions
         run: pytest tests/test_observation_builder_full.py tests/test_observation_builder_compact.py
 

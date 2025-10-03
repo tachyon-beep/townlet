@@ -23,6 +23,19 @@ The observer dashboard provides a console-based view of Townlet’s employment K
 
 Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-agent` selects the map focus agent; `--approve/--defer` can trigger employment actions at startup.
 
+For scripted demos, launch `scripts/demo_run.py` with the new `configs/demo/poc_demo.yaml` config, which writes telemetry to `logs/demo_stream.jsonl` so the Rich dashboard stays readable. For example:
+
+```bash
+python scripts/demo_run.py configs/demo/poc_demo.yaml --ticks 300 --refresh 0.5
+```
+
+Reuse the same config with `scripts/observer_ui.py` when you want a quiet telemetry sink while exploring manually.
+
+When screen-sharing or streaming demos over untrusted networks, switch to
+`configs/demo/poc_demo_tls.yaml`. It targets a secure TCP collector with TLS
+enabled (`allow_plaintext: false`) so telemetry stays encrypted in transit.
+
+
 ## Schema Compatibility
 - The dashboard uses `schema_version` from telemetry snapshots. If a shard reports a newer major version, the client aborts with a `SchemaMismatchError`.
 - Minor mismatches emit a warning banner in the header; upgrade the UI when possible.

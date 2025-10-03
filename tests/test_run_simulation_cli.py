@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 
 from scripts import run_simulation
+from townlet.config import load_config
+from townlet.core.sim_loop import SimulationLoop
 
 
 def test_run_simulation_cli_iterates_ticks(monkeypatch):
@@ -21,6 +23,10 @@ def test_run_simulation_cli_iterates_ticks(monkeypatch):
                 self.iterations += 1
                 yield None
 
+        def run_for(self, max_ticks: int) -> None:
+            for _ in range(int(max_ticks)):
+                self.iterations += 1
+
     monkeypatch.setattr(run_simulation, "SimulationLoop", StubLoop)
 
     config_path = Path("configs/examples/poc_hybrid.yaml")
@@ -30,3 +36,11 @@ def test_run_simulation_cli_iterates_ticks(monkeypatch):
 
     assert instances, "SimulationLoop was never constructed"
     assert instances[0].iterations == 3
+
+
+def test_simulation_loop_run_for_advances_ticks():
+    config_path = Path("configs/demo/poc_demo.yaml")
+    config = load_config(config_path)
+    loop = SimulationLoop(config)
+    loop.run_for(2)
+    assert loop.tick == 2

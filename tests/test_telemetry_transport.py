@@ -8,7 +8,11 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.telemetry.transport import TransportBuffer
+from townlet.telemetry.transport import (
+    TelemetryTransportError,
+    TransportBuffer,
+    create_transport,
+)
 
 
 def _ensure_agents(loop: SimulationLoop) -> None:
@@ -152,3 +156,134 @@ def test_telemetry_worker_metrics_and_stop(monkeypatch: pytest.MonkeyPatch) -> N
     loop.telemetry.stop_worker(wait=True)
     loop.telemetry.stop_worker(wait=True)
     loop.telemetry.close()
+
+
+def test_tcp_transport_wraps_socket_with_tls(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, object] = {}
+
+    class DummySocket:
+        def __init__(self) -> None:
+            self.timeout = None
+            self.sent: list[bytes] = []
+            self.closed = False
+
+        def settimeout(self, timeout: float | None) -> None:
+            self.timeout = timeout
+
+        def sendall(self, payload: bytes) -> None:
+            self.sent.append(payload)
+
+        def close(self) -> None:
+            self.closed = True
+
+    class StubContext:
+        def __init__(self) -> None:
+            self.check_hostname = True
+            self.loaded_cafile: str | None = None
+            self.loaded_chain: tuple[str | None, str | None] | None = None
+            self.wrap_calls: list[str | None] = []
+
+        def load_verify_locations(self, cafile=None, capath=None, cadata=None):  # pragma: no cover - compatibility
+            self.loaded_cafile = cafile
+
+        def load_cert_chain(self, certfile, keyfile=None):  # pragma: no cover - optional chain
+            self.loaded_chain = (certfile, keyfile)
+
+        def wrap_socket(self, sock, server_hostname=None):
+            self.wrap_calls.append(server_hostname)
+            calls["wrapped_socket"] = sock
+            return sock
+
+    dummy_socket = DummySocket()
+
+    def fake_create_connection(endpoint, timeout=None):
+        calls["endpoint"] = endpoint
+        calls["timeout"] = timeout
+        return dummy_socket
+
+    context = StubContext()
+
+    monkeypatch.setattr(
+        "townlet.telemetry.transport.socket.create_connection",
+        fake_create_connection,
+    )
+    monkeypatch.setattr(
+        "townlet.telemetry.transport.ssl.create_default_context",
+        lambda: context,
+    )
+
+    transport = create_transport(
+        transport_type="tcp",
+        file_path=None,
+        endpoint="demo.local:8765",
+        connect_timeout=3.0,
+        send_timeout=1.5,
+        enable_tls=True,
+        verify_hostname=True,
+        ca_file=Path("certs/demo_ca.pem"),
+        cert_file=None,
+        key_file=None,
+        allow_plaintext=False,
+    )
+
+    assert context.loaded_cafile == str(Path("certs/demo_ca.pem").expanduser())
+    assert context.wrap_calls == ["demo.local"]
+    transport.send(b"payload")
+    assert dummy_socket.sent == [b"payload"]
+    transport.close()
+    assert dummy_socket.closed is True
+
+
+def test_create_transport_plaintext_warning(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    calls = {}
+
+    class DummySocket:
+        def settimeout(self, timeout):
+            calls["timeout"] = timeout
+
+        def sendall(self, payload: bytes) -> None:
+            calls.setdefault("payloads", []).append(payload)
+
+        def close(self) -> None:
+            calls["closed"] = True
+
+    monkeypatch.setattr(
+        "townlet.telemetry.transport.socket.create_connection",
+        lambda *args, **kwargs: DummySocket(),
+    )
+
+    caplog.set_level("WARNING")
+    transport = create_transport(
+        transport_type="tcp",
+        file_path=None,
+        endpoint="plaintext.host:9000",
+        connect_timeout=1.0,
+        send_timeout=1.0,
+        enable_tls=False,
+        verify_hostname=True,
+        ca_file=None,
+        cert_file=None,
+        key_file=None,
+        allow_plaintext=True,
+    )
+    assert any("telemetry_tcp_plaintext_enabled" in record.message for record in caplog.records)
+    transport.send(b"hello")
+    transport.close()
+    assert calls.get("closed") is True
+
+
+def test_create_transport_plaintext_disallowed() -> None:
+    with pytest.raises(TelemetryTransportError, match="Plaintext TCP transport is disabled"):
+        create_transport(
+            transport_type="tcp",
+            file_path=None,
+            endpoint="secure.host:9000",
+            connect_timeout=1.0,
+            send_timeout=1.0,
+            enable_tls=False,
+            verify_hostname=True,
+            ca_file=None,
+            cert_file=None,
+            key_file=None,
+            allow_plaintext=False,
+        )

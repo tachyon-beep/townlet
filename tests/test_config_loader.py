@@ -17,6 +17,16 @@ def poc_config(tmp_path: Path) -> Path:
     return target
 
 
+def test_demo_config_uses_file_transport() -> None:
+    config = load_config(Path("configs/demo/poc_demo.yaml"))
+    transport = config.telemetry.transport
+    assert transport.type == "file"
+    assert transport.file_path == Path("logs/demo_stream.jsonl")
+    assert transport.buffer.max_batch_size == 32
+    assert transport.buffer.flush_interval_ticks == 1
+
+
+
 def test_load_config(poc_config: Path) -> None:
     config = load_config(poc_config)
     assert isinstance(config, SimulationConfig)
@@ -74,6 +84,56 @@ def test_invalid_queue_cooldown_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         load_config(target)
+
+
+def test_tcp_transport_requires_tls_or_explicit_plaintext(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["telemetry"]["transport"] = {
+        "type": "tcp",
+        "endpoint": "localhost:5555",
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="requires enable_tls=true or allow_plaintext=true"):
+        load_config(target)
+
+
+def test_tcp_transport_tls_requires_cert_and_key_pair(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["telemetry"]["transport"] = {
+        "type": "tcp",
+        "endpoint": "localhost:5555",
+        "enable_tls": True,
+        "key_file": "certs/client.key",
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="cert_file must be provided when key_file is set"):
+        load_config(target)
+
+
+def test_tcp_transport_tls_loads_with_hostname_disabled(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["telemetry"]["transport"] = {
+        "type": "tcp",
+        "endpoint": "localhost:5555",
+        "enable_tls": True,
+        "verify_hostname": False,
+        "allow_plaintext": False,
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    config = load_config(target)
+    transport = config.telemetry.transport
+    assert transport.type == "tcp"
+    assert transport.enable_tls is True
+    assert transport.verify_hostname is False
 
 
 def test_invalid_embedding_threshold_rejected(tmp_path: Path) -> None:

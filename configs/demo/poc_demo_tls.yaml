@@ -1,0 +1,115 @@
+# Demo variant configured for secure TCP telemetry with TLS.
+config_id: "v1.3.0"
+features:
+  stages:
+    relationships: "B"
+    social_rewards: "C1"
+  systems:
+    lifecycle: "on"
+    observations: "hybrid"
+  training:
+    curiosity: "phase_A"
+  console:
+    mode: "viewer"
+rewards:
+  needs_weights:
+    hunger: 1.0
+    hygiene: 0.6
+    energy: 0.8
+  decay_rates:
+    hunger: 0.01
+    hygiene: 0.005
+    energy: 0.008
+  punctuality_bonus: 0.05
+  wage_rate: 0.01
+  survival_tick: 0.002
+  faint_penalty: -1.0
+  eviction_penalty: -2.0
+  social:
+    C1_chat_base: 0.01
+    C1_coeff_trust: 0.3
+    C1_coeff_fam: 0.2
+    C2_avoid_conflict: 0.005
+  clip:
+    clip_per_tick: 0.2
+    clip_per_episode: 50
+    no_positive_within_death_ticks: 10
+economy:
+  meal_cost: 0.4
+  cook_energy_cost: 0.05
+  cook_hygiene_cost: 0.02
+  wage_income: 0.02
+  ingredients_cost: 0.15
+  stove_stock_replenish: 2
+jobs:
+  grocer:
+    start_tick: 180
+    end_tick: 360
+    wage_rate: 0.02
+    lateness_penalty: 0.1
+    location: [0, 0]
+  barista:
+    start_tick: 400
+    end_tick: 560
+    wage_rate: 0.025
+    lateness_penalty: 0.12
+    location: [1, 0]
+behavior:
+  hunger_threshold: 0.4
+  hygiene_threshold: 0.4
+  energy_threshold: 0.4
+  job_arrival_buffer: 20
+employment:
+  enforce_job_loop: true
+shaping:
+  use_potential: true
+curiosity:
+  phase_A_weight: 0.02
+  decay_by_milestone: "M2"
+# Extra keys are forwarded to modules via SimulationConfig.extra
+world:
+  grid_size: [48, 48]
+  weather_seed: 1337
+queue_fairness:
+  cooldown_ticks: 60
+  ghost_step_after: 3
+  age_priority_weight: 0.1
+embedding_allocator:
+  cooldown_ticks: 2000
+  reuse_warning_threshold: 0.05
+  log_forced_reuse: true
+  max_slots: 64
+affordances:
+  affordances_file: configs/affordances/core.yaml
+  runtime:
+    instrumentation: "off"
+    hook_allowlist:
+      - townlet.world.hooks.default
+    allow_env_hooks: true
+stability:
+  affordance_fail_threshold: 5
+  lateness_threshold: 3
+telemetry:
+  transport:
+    type: tcp
+    endpoint: demo.local:8765
+    enable_tls: true
+    verify_hostname: true
+    ca_file: certs/demo_ca.pem
+    cert_file: certs/demo_client.pem
+    key_file: certs/demo_client.key
+    allow_plaintext: false
+    buffer:
+      max_batch_size: 32
+      max_buffer_bytes: 256000
+      flush_interval_ticks: 1
+    retry:
+      max_attempts: 3
+      backoff_seconds: 0.5
+  narration:
+    global_cooldown_ticks: 30
+    category_cooldown_ticks:
+      queue_conflict: 30
+    dedupe_window_ticks: 20
+    global_window_ticks: 600
+    global_window_limit: 10

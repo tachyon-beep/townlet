@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import socket
+import ssl
 import sys
 from collections import deque
 from pathlib import Path
 from typing import Protocol
+
+
+logger = logging.getLogger(__name__)
 
 
 class TelemetryTransportError(RuntimeError):
@@ -62,6 +67,12 @@ class TcpTransport:
         *,
         connect_timeout: float,
         send_timeout: float,
+        enable_tls: bool,
+        verify_hostname: bool,
+        ca_file: Path | None,
+        cert_file: Path | None,
+        key_file: Path | None,
+        allow_plaintext: bool,
     ) -> None:
         host, sep, port_str = endpoint.partition(":")
         if not host or sep != ":" or not port_str:
@@ -78,6 +89,17 @@ class TcpTransport:
         self._connect_timeout = connect_timeout
         self._send_timeout = send_timeout
         self._socket = None
+        self._enable_tls = enable_tls
+        self._verify_hostname = verify_hostname
+        self._ca_file = Path(ca_file).expanduser() if ca_file else None
+        self._cert_file = Path(cert_file).expanduser() if cert_file else None
+        self._key_file = Path(key_file).expanduser() if key_file else None
+        self._allow_plaintext = allow_plaintext
+        if not self._enable_tls and not self._allow_plaintext:
+            raise TelemetryTransportError(
+                "Plaintext TCP transport is disabled; enable TLS or allow plaintext explicitly"
+            )
+        self._ssl_context: ssl.SSLContext | None = None
         self._connect()
 
     def _connect(self) -> None:
@@ -91,7 +113,30 @@ class TcpTransport:
                 f"Failed to connect to telemetry endpoint {host}:{port}: {exc}"
             ) from exc
         sock.settimeout(self._send_timeout or None)
+        if self._enable_tls:
+            context = self._ssl_context or self._build_ssl_context()
+            server_hostname = self._endpoint[0] if self._verify_hostname else None
+            try:
+                wrapped = context.wrap_socket(sock, server_hostname=server_hostname)
+            except ssl.SSLError as exc:  # pragma: no cover - handshake failure path
+                sock.close()
+                raise TelemetryTransportError(str(exc)) from exc
+            sock = wrapped
         self._socket = sock
+
+    def _build_ssl_context(self) -> ssl.SSLContext:
+        context = ssl.create_default_context()
+        if self._ca_file is not None:
+            context.load_verify_locations(cafile=str(self._ca_file))
+        if not self._verify_hostname:
+            context.check_hostname = False
+        if self._cert_file is not None:
+            context.load_cert_chain(
+                certfile=str(self._cert_file),
+                keyfile=str(self._key_file) if self._key_file is not None else None,
+            )
+        self._ssl_context = context
+        return context
 
     def send(self, payload: bytes) -> None:
         if self._socket is None:
@@ -160,6 +205,12 @@ def create_transport(
     endpoint: str | None,
     connect_timeout: float,
     send_timeout: float,
+    enable_tls: bool,
+    verify_hostname: bool,
+    ca_file: Path | None,
+    cert_file: Path | None,
+    key_file: Path | None,
+    allow_plaintext: bool,
 ) -> TransportClient:
     """Factory helper for `TelemetryPublisher`."""
 
@@ -176,10 +227,20 @@ def create_transport(
             raise TelemetryTransportError(
                 "telemetry.transport.endpoint is required when using tcp transport"
             )
+        if not enable_tls and allow_plaintext:
+            logger.warning(
+                "telemetry_tcp_plaintext_enabled endpoint=%s", endpoint
+            )
         return TcpTransport(
             endpoint,
             connect_timeout=connect_timeout,
             send_timeout=send_timeout,
+            enable_tls=enable_tls,
+            verify_hostname=verify_hostname,
+            ca_file=ca_file,
+            cert_file=cert_file,
+            key_file=key_file,
+            allow_plaintext=allow_plaintext,
         )
     raise TelemetryTransportError(
         f"Unsupported telemetry transport type: {transport_type}"

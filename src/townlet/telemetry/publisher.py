@@ -120,6 +120,9 @@ class TelemetryPublisher:
             "last_success_tick": None,
             "queue_length": 0,
             "last_flush_duration_ms": None,
+            "tls_enabled": bool(getattr(transport_cfg, "enable_tls", False)),
+            "verify_hostname": bool(getattr(transport_cfg, "verify_hostname", True)),
+            "allow_plaintext": bool(getattr(transport_cfg, "allow_plaintext", False)),
         }
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
@@ -552,6 +555,12 @@ class TelemetryPublisher:
                 endpoint=getattr(cfg, "endpoint", None),
                 connect_timeout=float(cfg.connect_timeout_seconds),
                 send_timeout=float(cfg.send_timeout_seconds),
+                enable_tls=bool(getattr(cfg, "enable_tls", False)),
+                verify_hostname=bool(getattr(cfg, "verify_hostname", True)),
+                ca_file=getattr(cfg, "ca_file", None),
+                cert_file=getattr(cfg, "cert_file", None),
+                key_file=getattr(cfg, "key_file", None),
+                allow_plaintext=bool(getattr(cfg, "allow_plaintext", False)),
             )
         except TelemetryTransportError as exc:  # pragma: no cover - init failure
             message = f"Failed to initialise telemetry transport '{cfg.type}': {exc}"

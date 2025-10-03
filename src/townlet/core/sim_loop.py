@@ -184,6 +184,13 @@ class SimulationLoop:
             artifacts = self.step()
             yield artifacts
 
+    def run_for(self, max_ticks: int) -> None:
+        """Execute exactly ``max_ticks`` iterations of the simulation loop."""
+        if max_ticks < 0:
+            raise ValueError("max_ticks must be non-negative")
+        for _ in range(max_ticks):
+            self.step()
+
     def step(self) -> TickArtifacts:
         tick_start = time.perf_counter()
         self.tick += 1

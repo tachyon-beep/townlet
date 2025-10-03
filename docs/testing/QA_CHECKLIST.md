@@ -17,6 +17,13 @@ QA engineers should capture observation batches using `scripts/run_simulation.py
 `--capture-observations` (when available) or directly through test helpers in
 `tests/test_observation_builder.py` to validate the contract above.
 
+## CLI Smoke Coverage
+- [ ] Run `pytest tests/test_run_simulation_cli.py` to verify the simulation CLI and
+      `SimulationLoop.run_for` helper execute bounded ticks.
+- [ ] Run `pytest tests/test_demo_run_cli.py` to confirm the scripted demo renders without
+      stdout telemetry noise.
+- [ ] Run `pytest tests/test_observer_ui_cli.py` to exercise the observer dashboard entry point.
+
 ## Observer UI — Promotion Gate Review
 - [ ] Run `scripts/observer_ui.py configs/examples/poc_hybrid.yaml --ticks 10 --refresh 0.0` and confirm the Promotion Gate panel renders `State`, `Pass streak`, `Required passes`, and `Reason` rows.
 - [ ] While the system is idling (no evaluations yet), verify the reason reads "Awaiting first evaluation." and the border colour stays blue.
