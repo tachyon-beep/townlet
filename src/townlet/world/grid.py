@@ -280,11 +280,57 @@ class WorldState:
             record_rivalry_conflict=self._apply_rivalry_conflict,
         )
         self._hook_registry = HookRegistry()
-        modules = ["townlet.world.hooks.default"]
+        modules = list(self.config.affordances.runtime.hook_allowlist)
+        if not modules:
+            modules.append("townlet.world.hooks.default")
         extra = os.environ.get("TOWNLET_AFFORDANCE_HOOK_MODULES")
-        if extra:
-            modules.extend(module.strip() for module in extra.split(",") if module.strip())
-        load_hook_modules(self, modules)
+        self.loaded_hook_modules: list[str] = []
+        self.rejected_hook_modules: list[tuple[str, str]] = []  # (module, reason)
+
+        if extra and self.config.affordances.runtime.allow_env_hooks:
+            for module in extra.split(","):
+                mod = module.strip()
+                if mod:
+                    modules.append(mod)
+        elif extra and not self.config.affordances.runtime.allow_env_hooks:
+            self.rejected_hook_modules.append(
+                ("env@TOWNLET_AFFORDANCE_HOOK_MODULES", "environment overrides disabled")
+            )
+            logger.warning(
+                "affordance_hook_rejected module=%s reason=%s",
+                "env@TOWNLET_AFFORDANCE_HOOK_MODULES",
+                "environment overrides disabled",
+            )
+
+        allowed = set(self.config.affordances.runtime.hook_allowlist)
+        filtered: list[str] = []
+        for module in modules:
+            if module in filtered:
+                continue
+            if module.startswith("townlet.world.hooks") or module in allowed:
+                filtered.append(module)
+            else:
+                self.rejected_hook_modules.append((module, "not in hook_allowlist"))
+                logger.warning(
+                    "affordance_hook_rejected module=%s reason=%s",
+                    module,
+                    "not in hook_allowlist",
+                )
+
+        accepted, loader_rejected = load_hook_modules(self, filtered)
+        self.loaded_hook_modules.extend(accepted)
+        for module, reason in loader_rejected:
+            self.rejected_hook_modules.append((module, reason))
+            logger.warning(
+                "affordance_hook_rejected module=%s reason=%s",
+                module,
+                reason,
+            )
+        if accepted:
+            logger.info(
+                "affordance_hooks_loaded modules=%s",
+                ",".join(accepted),
+            )
         context = AffordanceRuntimeContext(
             world=self,
             queue_manager=self.queue_manager,
@@ -1246,6 +1292,26 @@ class WorldState:
                 target_pos = tuple(action["position"])
                 snapshot.position = target_pos
                 action_success = True
+            elif kind == "chat":
+                target_id = action.get("target") or action.get("listener")
+                if not isinstance(target_id, str):
+                    continue
+                listener = self.agents.get(target_id)
+                if listener is None:
+                    continue
+                if self.rivalry_should_avoid(agent_id, target_id):
+                    self.record_chat_failure(agent_id, target_id)
+                    continue
+                if listener.position != snapshot.position:
+                    self.record_chat_failure(agent_id, target_id)
+                    continue
+                quality_value = action.get("quality", 0.5)
+                try:
+                    quality = float(quality_value)
+                except (TypeError, ValueError):
+                    quality = 0.5
+                self.record_chat_success(agent_id, target_id, quality)
+                action_success = True
             elif kind == "start" and object_id:
                 affordance_id = action.get("affordance")
                 if affordance_id:
@@ -1542,6 +1608,11 @@ class WorldState:
 
         return self._queue_conflicts.consume_chat_events()
 
+    def consume_relationship_avoidance_events(self) -> list[dict[str, Any]]:
+        """Return relationship avoidance events recorded since the last call."""
+
+        return self._queue_conflicts.consume_avoidance_events()
+
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
         ledger = self._rivalry_ledgers.get(agent_id)
@@ -1672,6 +1743,15 @@ class WorldState:
     def relationship_metrics_snapshot(self) -> dict[str, object]:
         return self._relationship_churn.latest_payload()
 
+    def load_relationship_metrics(self, payload: Mapping[str, object] | None) -> None:
+        if not payload:
+            self._relationship_churn = RelationshipChurnAccumulator(
+                window_ticks=self._relationship_window_ticks,
+                max_samples=8,
+            )
+            return
+        self._relationship_churn.ingest_payload(dict(payload))
+
     def load_relationship_snapshot(
         self,
         snapshot: dict[str, dict[str, dict[str, float]]],
@@ -1758,6 +1838,23 @@ class WorldState:
                 "listener": listener,
             },
         )
+
+    def record_relationship_guard_block(
+        self,
+        *,
+        agent_id: str,
+        reason: str,
+        target_agent: str | None = None,
+        object_id: str | None = None,
+    ) -> None:
+        payload = {
+            "agent": agent_id,
+            "reason": reason,
+            "target": target_agent,
+            "object_id": object_id,
+            "tick": int(self.tick),
+        }
+        self._queue_conflicts.record_avoidance_event(payload)
 
     # ------------------------------------------------------------------
     # Internal helpers

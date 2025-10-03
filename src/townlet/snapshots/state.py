@@ -63,6 +63,7 @@ class SnapshotState:
     perturbations: dict[str, object] = field(default_factory=dict)
     affordances: dict[str, object] = field(default_factory=dict)
     relationships: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
+    relationship_metrics: dict[str, object] = field(default_factory=dict)
     stability: dict[str, object] = field(default_factory=dict)
     promotion: dict[str, object] = field(default_factory=dict)
     identity: dict[str, object] = field(default_factory=dict)
@@ -94,6 +95,7 @@ class SnapshotState:
                 owner: {other: dict(values) for other, values in edges.items()}
                 for owner, edges in self.relationships.items()
             },
+            "relationship_metrics": dict(self.relationship_metrics),
             "stability": dict(self.stability),
             "promotion": dict(self.promotion),
             "identity": dict(self.identity),
@@ -207,6 +209,14 @@ class SnapshotState:
                         "rivalry": 0.0,
                     }
             relationships[owner_id] = owner_edges
+
+        metrics_payload = payload.get("relationship_metrics", {})
+        if isinstance(metrics_payload, Mapping):
+            relationship_metrics: dict[str, object] = dict(metrics_payload)
+        elif metrics_payload in (None,):
+            relationship_metrics = {}
+        else:
+            raise ValueError("Snapshot relationship_metrics field must be a mapping if provided")
         affordances_payload = payload.get("affordances", {})
         if isinstance(affordances_payload, Mapping):
             affordances: dict[str, object] = {
@@ -253,6 +263,7 @@ class SnapshotState:
             perturbations=perturbations,
             affordances=affordances,
             relationships=relationships,
+            relationship_metrics=relationship_metrics,
             stability=stability,
             promotion=promotion,
             identity=identity,
@@ -382,6 +393,7 @@ def snapshot_from_world(
         perturbations=perturbations_payload,
         affordances=affordances_payload,
         relationships=world.relationships_snapshot(),
+        relationship_metrics=world.relationship_metrics_snapshot(),
         stability=stability_payload,
         promotion=promotion_payload,
         identity=identity_payload,
@@ -482,6 +494,7 @@ def apply_snapshot_to_world(
             random.setstate(state_tuple)
 
     world.load_relationship_snapshot(snapshot.relationships)
+    world.load_relationship_metrics(snapshot.relationship_metrics)
 
 
 def apply_snapshot_to_telemetry(
@@ -490,6 +503,8 @@ def apply_snapshot_to_telemetry(
 ) -> None:
     telemetry.import_state(snapshot.telemetry)
     telemetry.import_console_buffer(snapshot.console_buffer)
+    if snapshot.relationship_metrics:
+        telemetry.update_relationship_metrics(dict(snapshot.relationship_metrics))
     stability_metrics = snapshot.stability.get("latest_metrics")
     if isinstance(stability_metrics, Mapping):
         telemetry.record_stability_metrics(dict(stability_metrics))

@@ -133,6 +133,74 @@ def test_queue_events_modify_relationships() -> None:
     assert positive_snapshot["alice"]["bob"]["trust"] > 0.0
 
 
+def test_apply_actions_chat_updates_relationships() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.8, "hygiene": 0.9, "energy": 0.9},
+        wallet=1.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(0, 0),
+        needs={"hunger": 0.9, "hygiene": 0.9, "energy": 0.9},
+        wallet=1.0,
+    )
+
+    world.apply_actions({"alice": {"kind": "chat", "target": "bob", "quality": 0.8}})
+
+    tie = world.relationship_tie("alice", "bob")
+    assert tie is not None
+    assert tie.trust > 0.0
+
+
+def test_friend_handover_priority() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    stove_id = "stove_test"
+    world.register_object(object_id=stove_id, object_type="stove", position=(0, 0))
+    world.objects[stove_id].stock.setdefault("raw_ingredients", 0)
+    world.objects[stove_id].stock["raw_ingredients"] = 2
+
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.4, "hygiene": 0.6, "energy": 0.6},
+        wallet=2.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(1, 0),
+        needs={"hunger": 0.6, "hygiene": 0.6, "energy": 0.6},
+        wallet=2.0,
+    )
+    world.agents["carol"] = AgentSnapshot(
+        agent_id="carol",
+        position=(1, 1),
+        needs={"hunger": 0.6, "hygiene": 0.6, "energy": 0.6},
+        wallet=2.0,
+    )
+
+    assert world.queue_manager.request_access(stove_id, "alice", world.tick) is True
+    start_ok, _metadata = world.affordance_runtime.start(
+        "alice", stove_id, "cook_meal", tick=world.tick
+    )
+    assert start_ok is True
+    running = world.affordance_runtime.running_affordances[stove_id]
+    running.duration_remaining = 0
+
+    world.queue_manager.request_access(stove_id, "carol", world.tick)
+    world.queue_manager.request_access(stove_id, "bob", world.tick)
+
+    world.update_relationship("alice", "bob", trust=0.6, familiarity=0.3)
+
+    world.resolve_affordances(world.tick)
+
+    assert world.queue_manager.active_agent(stove_id) == "bob"
+
+
 def test_shared_meal_updates_relationship() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)

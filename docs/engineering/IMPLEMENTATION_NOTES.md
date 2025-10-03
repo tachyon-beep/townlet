@@ -1,5 +1,26 @@
 # Implementation Notes
 
+## 2025-10-22 — Observation Variant Parity & Tooling
+- `ObservationBuilder` now emits full/compact variants using shared feature
+  initialisation and enriches metadata with `map_shape`, channel listings, and a
+  `social_context` block that records configured slot counts, filled slots, and
+  whether relationships or rivalry fallbacks supplied the data. Unsupported
+  variants raise a clear error instead of returning dummy tensors.
+- CLI tooling was updated to preserve and surface the richer metadata:
+  `scripts/capture_scripted.py` stores the original observation metadata in each
+  replay frame, `scripts/run_replay.py` renders variant/map/social context when
+  inspecting samples, and `scripts/profile_observation_tensor.py` summarises
+  social slot usage across ticks. Replay datasets should be regenerated to pick
+  up the schema bump.
+- Social snippet fixtures were consolidated under `tests/helpers/social.py` so
+  observation tests seed relationship ledgers consistently. New assertions lock
+  the metadata contract for hybrid/full/compact variants and ensure the golden
+  social sample still matches the ADR spec.
+- Reward engine and telemetry now track social interactions: chat failures incur
+  penalties, rivalry avoidance pays a configurable bonus, and telemetry exports
+  `social_events` plus a `relationship_summary` (top friends/rivals with churn
+  metrics). Dashboards should be refreshed to visualise the new fields.
+
 ## 2025-10-19 — Needs & Affordance Effects Alignment
 - `AgentSnapshot` now clamps and backfills core needs (`hunger`, `hygiene`, `energy`) so
   affordance effects always apply within [0, 1].
@@ -14,6 +35,23 @@
   emits an `agent_nightly_reset` event (`src/townlet/world/grid.py`).
 - Simulation loop triggers the reset based on observation day length; regression tests cover direct
   world invocation and the loop integration (`tests/test_world_nightly_reset.py`).
+
+## 2025-10-21 — Affordance Hook Hardening
+- Configuration now exposes `affordances.runtime.hook_allowlist` and
+  `allow_env_hooks` to control which modules register affordance hooks. The
+  default allowlist contains only `townlet.world.hooks.default` for safe
+  startup.
+- `WorldState` validates requested modules against the allowlist, optionally
+  appending environment overrides when enabled, and records accepted/rejected
+  modules for observability. Rejections emit structured log warnings with the
+  failure reason (not in allowlist, import error, missing `register_hooks`, etc.).
+- `townlet.world.hooks.load_modules` now guards against import/registration
+  failures so a bad module cannot partially register and crash later. It returns
+  detailed results used by telemetry/logs.
+- Example configs updated to illustrate the new allowlist, and tests cover
+  allowlisted modules, env gating, and rejection paths
+  (`tests/test_affordance_hook_security.py`). Operators must migrate any
+  environment-managed hook modules into the allowlist before upgrading.
 
 ## 2025-09-30 — Affordance Manifest Hardening
 - Replaced ad-hoc YAML parsing with `load_affordance_manifest` helper that validates ids, preconditions/hook structure, numeric fields, and emits SHA-256 checksums for auditing.

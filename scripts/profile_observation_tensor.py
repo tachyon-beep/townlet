@@ -42,6 +42,8 @@ def profile(world: WorldState, builder: ObservationBuilder, ticks: int) -> dict[
     feature_dims: list[int] = []
     map_shapes: set[tuple[int, int, int]] = set()
     trust_means: list[float] = []
+    variants: set[str] = set()
+    social_contexts: list[dict[str, object]] = []
 
     for tick in range(ticks):
         world.tick = tick
@@ -49,14 +51,31 @@ def profile(world: WorldState, builder: ObservationBuilder, ticks: int) -> dict[
         for obs in batch.values():
             features = obs["features"]
             feature_dims.append(int(features.shape[0]))
-            map_shape = obs["metadata"].get("map_shape")
+            metadata = obs.get("metadata") or {}
+            map_shape = metadata.get("map_shape")
             if map_shape:
                 map_shapes.add(tuple(map_shape))
-            trust_indices = [idx for name, idx in builder._feature_index.items() if name.endswith("trust_mean")]
-            for idx in trust_indices:
+            variant = metadata.get("variant")
+            if variant:
+                variants.add(str(variant))
+
+            feature_names = metadata.get("feature_names") or []
+            if "social_trust_mean" in feature_names:
+                idx = feature_names.index("social_trust_mean")
                 if idx < len(features):
                     trust_means.append(float(features[idx]))
+
+            social_context = metadata.get("social_context")
+            if isinstance(social_context, dict):
+                social_contexts.append(dict(social_context))
         world._apply_need_decay()
+
+    relation_sources = {
+        str(ctx.get("relation_source"))
+        for ctx in social_contexts
+        if ctx.get("relation_source") is not None
+    }
+    filled_slots = [int(ctx.get("filled_slots", 0)) for ctx in social_contexts]
 
     return {
         "ticks": ticks,
@@ -68,6 +87,13 @@ def profile(world: WorldState, builder: ObservationBuilder, ticks: int) -> dict[
         },
         "map_shapes": sorted(map_shapes),
         "trust_mean_avg": mean(trust_means) if trust_means else 0.0,
+        "variants": sorted(variants),
+        "social": {
+            "samples": len(social_contexts),
+            "filled_slots_max": max(filled_slots) if filled_slots else 0,
+            "filled_slots_mean": mean(filled_slots) if filled_slots else 0.0,
+            "sources": sorted(relation_sources),
+        },
     }
 
 

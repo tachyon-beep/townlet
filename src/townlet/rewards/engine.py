@@ -36,9 +36,18 @@ class RewardEngine:
         self._reset_episode_totals(terminated, world)
 
         social_rewards: dict[str, float] = {}
-        chat_events = self._consume_chat_events(world)
-        if self._social_rewards_enabled():
-            social_rewards = self._compute_chat_rewards(world, chat_events)
+        chat_events = list(self._consume_chat_events(world))
+        avoidance_events = list(self._consume_avoidance_events(world))
+        self._latest_social_events = []
+        social_bonus: dict[str, float] = {}
+        social_penalty: dict[str, float] = {}
+        avoidance_bonus: dict[str, float] = {}
+        if self._social_stage_value() >= 1:
+            social_bonus, social_penalty = self._compute_chat_rewards(
+                world, chat_events
+            )
+        if self._social_stage_value() >= 2:
+            avoidance_bonus = self._compute_avoidance_rewards(world, avoidance_events)
 
         wage_rate = float(self.config.rewards.wage_rate)
         punctuality_bonus = float(self.config.rewards.punctuality_bonus)
@@ -58,9 +67,14 @@ class RewardEngine:
             total -= needs_penalty
             components["needs_penalty"] = -needs_penalty
 
-            social_value = social_rewards.get(agent_id, 0.0)
-            total += social_value
-            components["social"] = social_value
+            social_value = social_bonus.get(agent_id, 0.0)
+            penalty_value = social_penalty.get(agent_id, 0.0)
+            avoidance_value = avoidance_bonus.get(agent_id, 0.0)
+            total += social_value + penalty_value + avoidance_value
+            components["social_bonus"] = social_value
+            components["social_penalty"] = penalty_value
+            components["social_avoidance"] = avoidance_value
+            components["social"] = social_value + penalty_value + avoidance_value
 
             wage_value = self._compute_wage_bonus(agent_id, world, wage_rate)
             total += wage_value
@@ -114,6 +128,9 @@ class RewardEngine:
             breakdowns[agent_id] = components
 
         self._latest_breakdown = breakdowns
+        self._latest_social_events = self._prepare_social_event_log(
+            chat_events, avoidance_events
+        )
         return rewards
 
     # ------------------------------------------------------------------
@@ -125,16 +142,26 @@ class RewardEngine:
             return consumer()
         return []
 
-    def _social_rewards_enabled(self) -> bool:
+    def _consume_avoidance_events(
+        self, world: WorldState
+    ) -> Iterable[dict[str, object]]:
+        consumer = getattr(world, "consume_relationship_avoidance_events", None)
+        if callable(consumer):
+            return consumer()
+        return []
+
+    def _social_stage_value(self) -> int:
         stage = getattr(self.config.features.stages, "social_rewards", "OFF")
-        return stage in {"C1", "C2", "C3"}
+        order = {"OFF": 0, "C1": 1, "C2": 2, "C3": 3}
+        return order.get(stage, 0)
 
     def _compute_chat_rewards(
         self,
         world: WorldState,
         events: Iterable[dict[str, object]],
-    ) -> dict[str, float]:
-        rewards: dict[str, float] = {}
+    ) -> tuple[dict[str, float], dict[str, float]]:
+        bonus: dict[str, float] = {}
+        penalties: dict[str, float] = {}
         social_cfg = self.config.rewards.social
         base = float(social_cfg.C1_chat_base)
         coeff_trust = float(social_cfg.C1_coeff_trust)
@@ -142,6 +169,14 @@ class RewardEngine:
 
         for event in events:
             if event.get("event") != "chat_success":
+                if event.get("event") == "chat_failure":
+                    speaker = str(event.get("speaker")) if event.get("speaker") else None
+                    listener = str(event.get("listener")) if event.get("listener") else None
+                    if not speaker or not listener:
+                        continue
+                    penalty = -0.5 * base
+                    penalties[speaker] = penalties.get(speaker, 0.0) + penalty
+                    penalties[listener] = penalties.get(listener, 0.0) + penalty * 0.5
                 continue
             speaker = str(event.get("speaker")) if event.get("speaker") else None
             listener = str(event.get("listener")) if event.get("listener") else None
@@ -165,9 +200,54 @@ class RewardEngine:
                 reward = base + coeff_trust * trust + coeff_fam * familiarity
                 if quality_factor != 1.0:
                     reward *= quality_factor
-                rewards[subject] = rewards.get(subject, 0.0) + reward
+                bonus[subject] = bonus.get(subject, 0.0) + reward
 
+        return bonus, penalties
+
+    def _compute_avoidance_rewards(
+        self,
+        world: WorldState,
+        events: Iterable[dict[str, object]],
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = {}
+        reward_value = float(self.config.rewards.social.C2_avoid_conflict)
+        if reward_value == 0.0:
+            return rewards
+        for event in events:
+            agent_id = str(event.get("agent")) if event.get("agent") else None
+            if not agent_id or agent_id not in world.agents:
+                continue
+            rewards[agent_id] = rewards.get(agent_id, 0.0) + reward_value
         return rewards
+
+    def _prepare_social_event_log(
+        self,
+        chat_events: Iterable[dict[str, object]],
+        avoidance_events: Iterable[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        log: list[dict[str, object]] = []
+        for event in chat_events:
+            etype = str(event.get("event", "chat"))
+            if etype not in {"chat_success", "chat_failure"}:
+                continue
+            log.append(
+                {
+                    "type": etype,
+                    "speaker": event.get("speaker"),
+                    "listener": event.get("listener"),
+                    "quality": event.get("quality"),
+                }
+            )
+        for event in avoidance_events:
+            log.append(
+                {
+                    "type": "rivalry_avoidance",
+                    "agent": event.get("agent"),
+                    "object": event.get("object_id"),
+                    "reason": event.get("reason"),
+                }
+            )
+        return log
 
     def _needs_override(self, snapshot) -> bool:
         for value in snapshot.needs.values():
@@ -255,3 +335,6 @@ class RewardEngine:
             agent: dict(components)
             for agent, components in self._latest_breakdown.items()
         }
+
+    def latest_social_events(self) -> list[dict[str, object]]:
+        return [dict(event) for event in self._latest_social_events]

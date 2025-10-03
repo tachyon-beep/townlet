@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from townlet.config import load_config
-from townlet.policy.behavior import AgentIntent
+from townlet.policy.behavior import AgentIntent, BehaviorController
 from townlet.policy.runner import PolicyRuntime
 from townlet.world.grid import AgentSnapshot, WorldState
 
@@ -19,6 +19,27 @@ def _make_world(option_commit_ticks: int | None = None) -> tuple[PolicyRuntime, 
         wallet=1.0,
     )
     return runtime, world
+
+
+def test_relationship_guardrail_blocks_rival_chat() -> None:
+    runtime, world = _make_world()
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(0, 0),
+        needs={"hunger": 0.8, "hygiene": 0.8, "energy": 0.8},
+        wallet=1.0,
+    )
+    world.register_rivalry_conflict("alice", "bob", intensity=5.0)
+
+    class ChatBehaviour(BehaviorController):
+        def decide(self, _world, _agent_id):  # type: ignore[override]
+            return AgentIntent(kind="chat", target_agent="bob", quality=0.9)
+
+    runtime.behavior = ChatBehaviour()
+
+    actions = runtime.decide(world, tick=0)
+    assert actions["alice"]["kind"] == "wait"
+    assert actions["alice"].get("blocked") is True
 
 
 def test_anneal_ratio_uses_provider_when_enabled() -> None:

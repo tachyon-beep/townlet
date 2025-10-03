@@ -278,6 +278,69 @@ class ObservationBuilder:
         features[self._path_hint_indices["east"]] = east
         features[self._path_hint_indices["west"]] = west
 
+    def _initialise_feature_vector(
+        self,
+        world: "WorldState",
+        snapshot: "AgentSnapshot",
+        slot: int,
+    ) -> tuple[np.ndarray, dict[str, object]]:
+        features = np.zeros(len(self._feature_names), dtype=np.float32)
+        context = world.agent_context(snapshot.agent_id)
+        self._encode_common_features(
+            features,
+            context=context,
+            slot=slot,
+            snapshot=snapshot,
+            world_tick=world.tick,
+        )
+        self._encode_environmental_flags(features, world, snapshot)
+        self._encode_path_hint(features, world, snapshot)
+
+        if self.hybrid_cfg.include_targets and self._landmark_slices:
+            self._encode_landmarks(features, world, snapshot)
+
+        self._encode_rivalry(features, world, snapshot)
+
+        social_context: dict[str, object] = {
+            "configured_slots": self._social_slots,
+            "slot_dim": self._social_slot_dim,
+            "aggregates": list(self._social_aggregate_names),
+            "filled_slots": 0,
+            "relation_source": "disabled" if self._social_vector_length == 0 else "empty",
+            "has_data": False,
+        }
+
+        if self._social_vector_length:
+            social_vector, slot_context = self._build_social_vector(world, snapshot)
+            features[self._social_slice] = social_vector
+            social_context.update(slot_context)
+
+        return features, social_context
+
+    def _build_metadata(
+        self,
+        *,
+        slot: int,
+        map_shape: tuple[int, int, int],
+        map_channels: tuple[str, ...] | list[str],
+        social_context: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        metadata: dict[str, object] = {
+            "variant": self.variant,
+            "map_shape": map_shape,
+            "map_channels": list(map_channels),
+            "feature_names": list(self._feature_names),
+            "embedding_slot": slot,
+        }
+        if self._landmark_slices:
+            metadata["landmark_slices"] = {
+                name: (slice_.start, slice_.stop)
+                for name, slice_ in self._landmark_slices.items()
+            }
+        if social_context is not None and social_context.get("configured_slots"):
+            metadata["social_context"] = social_context
+        return metadata
+
     def _build_single(
         self,
         world: "WorldState",
@@ -290,12 +353,7 @@ class ObservationBuilder:
             return self._build_full(world, snapshot, slot)
         if self.variant == "compact":
             return self._build_compact(world, snapshot, slot)
-        # TODO(@townlet): implement compact variant.
-        return {
-            "map": np.zeros((1, 1, 1), dtype=np.float32),
-            "features": np.zeros(1, dtype=np.float32),
-            "metadata": {"variant": self.variant},
-        }
+        raise ValueError(f"Unsupported observation variant: {self.variant}")
 
     def _map_from_view(
         self,
@@ -348,39 +406,13 @@ class ObservationBuilder:
             self.MAP_CHANNELS, local_view, window, radius, snapshot
         )
 
-        features = np.zeros(len(self._feature_names), dtype=np.float32)
-        context = world.agent_context(snapshot.agent_id)
-        self._encode_common_features(
-            features,
-            context=context,
+        features, social_context = self._initialise_feature_vector(world, snapshot, slot)
+        metadata = self._build_metadata(
             slot=slot,
-            snapshot=snapshot,
-            world_tick=world.tick,
+            map_shape=map_tensor.shape,
+            map_channels=self.MAP_CHANNELS,
+            social_context=social_context,
         )
-        self._encode_environmental_flags(features, world, snapshot)
-        self._encode_path_hint(features, world, snapshot)
-
-        if self.hybrid_cfg.include_targets and self._landmark_slices:
-            self._encode_landmarks(features, world, snapshot)
-
-        self._encode_rivalry(features, world, snapshot)
-
-        if self._social_vector_length:
-            social_vector = self._build_social_vector(world, snapshot)
-            features[self._social_slice] = social_vector
-
-        metadata = {
-            "variant": self.variant,
-            "map_shape": map_tensor.shape,
-            "map_channels": list(self.MAP_CHANNELS),
-            "feature_names": self._feature_names,
-            "embedding_slot": slot,
-        }
-        if self._landmark_slices:
-            metadata["landmark_slices"] = {
-                name: (slice_.start, slice_.stop)
-                for name, slice_ in self._landmark_slices.items()
-            }
 
         return {
             "map": map_tensor,
@@ -401,39 +433,13 @@ class ObservationBuilder:
             self.full_channels, local_view, window, radius, snapshot
         )
 
-        features = np.zeros(len(self._feature_names), dtype=np.float32)
-        context = world.agent_context(snapshot.agent_id)
-        self._encode_common_features(
-            features,
-            context=context,
+        features, social_context = self._initialise_feature_vector(world, snapshot, slot)
+        metadata = self._build_metadata(
             slot=slot,
-            snapshot=snapshot,
-            world_tick=world.tick,
+            map_shape=map_tensor.shape,
+            map_channels=self.full_channels,
+            social_context=social_context,
         )
-        self._encode_environmental_flags(features, world, snapshot)
-        self._encode_path_hint(features, world, snapshot)
-
-        if self.hybrid_cfg.include_targets and self._landmark_slices:
-            self._encode_landmarks(features, world, snapshot)
-
-        self._encode_rivalry(features, world, snapshot)
-
-        if self._social_vector_length:
-            social_vector = self._build_social_vector(world, snapshot)
-            features[self._social_slice] = social_vector
-
-        metadata = {
-            "variant": self.variant,
-            "map_shape": map_tensor.shape,
-            "map_channels": list(self.full_channels),
-            "feature_names": self._feature_names,
-            "embedding_slot": slot,
-        }
-        if self._landmark_slices:
-            metadata["landmark_slices"] = {
-                name: (slice_.start, slice_.stop)
-                for name, slice_ in self._landmark_slices.items()
-            }
 
         return {
             "map": map_tensor,
@@ -447,42 +453,17 @@ class ObservationBuilder:
         snapshot: "AgentSnapshot",
         slot: int,
     ) -> dict[str, np.ndarray | dict[str, object]]:
-        features = np.zeros(len(self._feature_names), dtype=np.float32)
-        context = world.agent_context(snapshot.agent_id)
-        self._encode_common_features(
-            features,
-            context=context,
+        features, social_context = self._initialise_feature_vector(world, snapshot, slot)
+        map_tensor = np.zeros((0, 0, 0), dtype=np.float32)
+        metadata = self._build_metadata(
             slot=slot,
-            snapshot=snapshot,
-            world_tick=world.tick,
+            map_shape=map_tensor.shape,
+            map_channels=(),
+            social_context=social_context,
         )
-        self._encode_environmental_flags(features, world, snapshot)
-        self._encode_path_hint(features, world, snapshot)
-
-        if self.hybrid_cfg.include_targets and self._landmark_slices:
-            self._encode_landmarks(features, world, snapshot)
-
-        self._encode_rivalry(features, world, snapshot)
-
-        if self._social_vector_length:
-            social_vector = self._build_social_vector(world, snapshot)
-            features[self._social_slice] = social_vector
-
-        metadata = {
-            "variant": self.variant,
-            "map_shape": (0, 0, 0),
-            "map_channels": [],
-            "feature_names": self._feature_names,
-            "embedding_slot": slot,
-        }
-        if self._landmark_slices:
-            metadata["landmark_slices"] = {
-                name: (slice_.start, slice_.stop)
-                for name, slice_ in self._landmark_slices.items()
-            }
 
         return {
-            "map": np.zeros((0, 0, 0), dtype=np.float32),
+            "map": map_tensor,
             "features": features,
             "metadata": metadata,
         }
@@ -494,12 +475,19 @@ class ObservationBuilder:
         self,
         world: "WorldState",
         snapshot: "AgentSnapshot",
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, dict[str, object]]:
         if not self._social_vector_length:
-            return self._empty_social_vector
+            return self._empty_social_vector, {
+                "configured_slots": 0,
+                "slot_dim": self._social_slot_dim,
+                "aggregates": list(self._social_aggregate_names),
+                "filled_slots": 0,
+                "relation_source": "disabled",
+                "has_data": False,
+            }
 
         vector = np.zeros(self._social_vector_length, dtype=np.float32)
-        slot_values = self._collect_social_slots(world, snapshot)
+        slot_values, slot_context = self._collect_social_slots(world, snapshot)
         offset = 0
         for slot in slot_values:
             embed_vector = slot["embedding"]
@@ -520,18 +508,32 @@ class ObservationBuilder:
                 if offset < len(vector):
                     vector[offset] = value
                     offset += 1
-        return vector
+        valid_slots = sum(1 for slot in slot_values if slot["valid"])
+        slot_context.update(
+            {
+                "configured_slots": self._social_slots,
+                "slot_dim": self._social_slot_dim,
+                "aggregates": list(self._social_aggregate_names),
+                "filled_slots": valid_slots,
+                "has_data": bool(valid_slots),
+            }
+        )
+        return vector, slot_context
 
     def _collect_social_slots(
         self,
         world: "WorldState",
         snapshot: "AgentSnapshot",
-    ) -> list[dict[str, float]]:
+    ) -> tuple[list[dict[str, float]], dict[str, object]]:
         total_slots = self._social_slots
+        context: dict[str, object] = {
+            "relation_source": "disabled" if total_slots == 0 else "empty",
+        }
         if total_slots == 0:
-            return []
+            return [], context
 
-        relations = self._resolve_relationships(world, snapshot.agent_id)
+        relations, relation_source = self._resolve_relationships(world, snapshot.agent_id)
+        context["relation_source"] = relation_source
         friend_candidates = sorted(
             relations,
             key=lambda entry: entry["trust"] + entry["familiarity"],
@@ -559,13 +561,13 @@ class ObservationBuilder:
         while len(slots) < total_slots:
             slots.append(self._empty_relationship_entry())
 
-        return slots[:total_slots]
+        return slots[:total_slots], context
 
     def _resolve_relationships(
         self,
         world: "WorldState",
         agent_id: str,
-    ) -> list[dict[str, float]]:
+    ) -> tuple[list[dict[str, float]], str]:
         snapshot_getter = getattr(world, "relationships_snapshot", None)
         relationships: dict[str, dict[str, float]] = {}
         if callable(snapshot_getter):
@@ -587,7 +589,7 @@ class ObservationBuilder:
             )
 
         if entries:
-            return entries
+            return entries, "relationships"
 
         # Fallback to rivalry ledger until full relationship system lands.
         rivalry_data = world.rivalry_top(agent_id, limit=self.social_cfg.top_rivals)
@@ -601,7 +603,9 @@ class ObservationBuilder:
                     "rivalry": float(rivalry),
                 }
             )
-        return fallback_entries
+        if fallback_entries:
+            return fallback_entries, "rivalry_fallback"
+        return [], "empty"
 
     def _encode_landmarks(
         self,

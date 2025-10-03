@@ -17,3 +17,50 @@ Please disclose vulnerabilities via security@townlet.dev. Include:
 We aim to acknowledge reports within three business days and provide status
 updates weekly until resolution. Once a fix is available we will credit the
 reporter (if desired) and document the remediation path.
+
+## Affordance Hook Security
+
+Townlet allows projects to extend the simulation via affordance hook modules.
+These modules run with full process privileges, so only trusted code should be
+loaded. The runtime now enforces the following guardrails:
+
+- A hook allowlist must be declared in configuration (`affordances.runtime
+  .hook_allowlist`). Only modules in this list (or the built-in
+  `townlet.world.hooks.default`) will be imported.
+- Environment overrides via `TOWNLET_AFFORDANCE_HOOK_MODULES` are optional and
+  gated by `affordances.runtime.allow_env_hooks`. Disable this flag in
+  production to prevent operator error or environment tampering.
+- Invalid modules (missing imports or `register_hooks`) are rejected with clear
+  logging so operators can audit attempted injections.
+
+**Operational guidance**
+
+1. Add all approved hook modules to the configuration allowlist. Ship the list
+   with your deployment artifact so it is version controlled.
+2. For shared or cloud deployments, set `allow_env_hooks: false` to ensure
+   runtime state cannot be altered by environment variables.
+3. Monitor logs for `affordance_hook_rejected` entries; unexpected rejections
+   may indicate tampering or misconfiguration.
+4. Document any third-party hook packages as part of your threat model. Because
+   hooks execute arbitrary Python, they should be reviewed like any code
+   running inside the simulation container.
+
+## Observation Privacy & Social Data
+
+Townlet observations can include per-agent social snippets (hashed identity
+embeddings plus trust/familiarity/rivalry metrics). Treat these fields as
+sensitive telemetry:
+
+- Disable social observations entirely by keeping
+  `features.stages.relationships: "OFF"` or setting
+  `observations.social_snippet.top_friends = top_rivals = 0` when scenarios do
+  not require social context. The observation builder now records the chosen
+  configuration in `metadata.social_context` so downstream tools can verify the
+  expected posture.
+- If social snippets are required, ensure the output is scoped to trusted
+  analytics paths (e.g., replay artifacts, telemetry dashboards). The hashed
+  embeddings are not reversible, but the surrounding metrics can reveal agent
+  interactions and should be shielded from untrusted parties.
+- Operators must refresh replay datasets and downstream tooling after upgrading
+  to this release so the new metadata (variant, map channels, social context)
+  stays aligned across training pipelines.

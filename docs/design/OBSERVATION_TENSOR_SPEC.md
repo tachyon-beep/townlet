@@ -25,7 +25,9 @@ All variants emit the following scalars in the order shown:
 - Landmark bearings/distances (optional): for each of `fridge`, `stove`, `bed`, `shower`
   we append `<name>_dx`, `<name>_dy`, `<name>_dist`
 - Social snippet (optional): `social_slot{n}_d{m}` entries plus aggregates when
-  `include_aggregates` is enabled
+  `include_aggregates` is enabled. Each slot packs the hashed agent embedding
+  followed by trust, familiarity, and rivalry scores derived from the relationship
+  ledger. Aggregates compute mean/max trust and rivalry across populated slots.
 
 Episode progress derives from `agent_snapshot.episode_tick` divided by
 `time_ticks_per_day` (wraps each day). Last-action fields are updated whenever the
@@ -69,6 +71,23 @@ Social slots may be included with any variant provided relationships stage ≥ `
 slot contributes `embed_dim + 3` floats (embedding + trust/familiarity/rivalry) plus
 optional aggregates when `include_aggregates` is true. Disable `top_friends`/`top_rivals`
 for compact/full fixtures when social context is unnecessary.
+
+Metadata emitted alongside each observation now includes a `social_context` block:
+
+```json
+"social_context": {
+  "configured_slots": 4,
+  "slot_dim": 11,
+  "filled_slots": 2,
+  "relation_source": "relationships",
+  "aggregates": ["social_trust_mean", "social_trust_max", "social_rivalry_mean", "social_rivalry_max"],
+  "has_data": true
+}
+```
+
+`relation_source` reports whether the data originated from the relationship ledger,
+the rivalry fallback, or if no data were found (`"empty"`). Consumers should prefer
+metadata rather than hard-coded indices when interpreting social values.
 
 ## 6. Configuration Knobs
 

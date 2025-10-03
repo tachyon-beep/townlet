@@ -18,6 +18,8 @@ class AgentIntent:
     affordance_id: Optional[str] = None
     blocked: bool = False
     position: Optional[tuple[int, int]] = None
+    target_agent: Optional[str] = None
+    quality: Optional[float] = None
 
 
 class BehaviorController(Protocol):
@@ -40,6 +42,9 @@ class ScriptedBehavior(BehaviorController):
         self.config = config
         self.thresholds = config.behavior
         self.pending: dict[str, dict[str, str]] = {}
+        self._chat_cooldowns: dict[str, int] = {}
+        self._chat_cooldown_ticks: int = 30
+        self._chat_min_extroversion: float = 0.2
 
     def decide(self, world: WorldState, agent_id: str) -> AgentIntent:
         snapshot = world.agents.get(agent_id)
@@ -73,7 +78,18 @@ class ScriptedBehavior(BehaviorController):
         if need_intent:
             return need_intent
 
+        chat_intent = self._maybe_chat(world, agent_id, snapshot)
+        if chat_intent:
+            return chat_intent
+
+        avoid_intent = self._avoid_rivals(world, agent_id, snapshot)
+        if avoid_intent:
+            return avoid_intent
+
         return AgentIntent(kind="wait")
+
+    def cancel_pending(self, agent_id: str) -> None:
+        self.pending.pop(agent_id, None)
 
     def _cleanup_pending(self, world: WorldState, agent_id: str) -> None:
         state = self.pending.get(agent_id)
@@ -134,6 +150,95 @@ class ScriptedBehavior(BehaviorController):
                     "affordance_id": "rest_sleep",
                 }
                 return AgentIntent(kind="request", object_id=bed_id)
+        return None
+
+    def _maybe_chat(
+        self, world: WorldState, agent_id: str, snapshot: object
+    ) -> Optional[AgentIntent]:
+        relationships_stage = getattr(self.config.features.stages, "relationships", "OFF")
+        if relationships_stage == "OFF":
+            return None
+        tick = int(getattr(world, "tick", 0))
+        if tick < self._chat_cooldowns.get(agent_id, 0):
+            return None
+        personality = getattr(snapshot, "personality", None)
+        extroversion = float(getattr(personality, "extroversion", 0.0)) if personality else 0.0
+        if extroversion < self._chat_min_extroversion:
+            return None
+        if snapshot.needs.get("hunger", 1.0) < self.thresholds.hunger_threshold:
+            return None
+        if snapshot.needs.get("hygiene", 1.0) < self.thresholds.hygiene_threshold:
+            return None
+        if snapshot.needs.get("energy", 1.0) < self.thresholds.energy_threshold:
+            return None
+
+        position = getattr(snapshot, "position", None)
+        if position is None:
+            return None
+
+        candidates: list[tuple[float, str, float]] = []
+        for other_id, other in world.agents.items():
+            if other_id == agent_id:
+                continue
+            if getattr(other, "position", None) != position:
+                continue
+            if world.rivalry_should_avoid(agent_id, other_id):
+                continue
+            tie = world.relationship_tie(agent_id, other_id)
+            trust = float(getattr(tie, "trust", 0.0)) if tie else 0.0
+            familiarity = float(getattr(tie, "familiarity", 0.0)) if tie else 0.0
+            rivalry = world.rivalry_value(agent_id, other_id)
+            score = trust + familiarity - rivalry + 0.1 * extroversion
+            candidates.append((score, other_id, rivalry))
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda entry: entry[0], reverse=True)
+        best_score, listener_id, rivalry_value = candidates[0]
+        if best_score <= 0.0:
+            return None
+
+        tie = world.relationship_tie(agent_id, listener_id)
+        trust = float(getattr(tie, "trust", 0.0)) if tie else 0.0
+        familiarity = float(getattr(tie, "familiarity", 0.0)) if tie else 0.0
+        quality = 0.5 + 0.3 * extroversion + 0.2 * trust + 0.1 * familiarity - 0.2 * rivalry_value
+        quality = max(0.1, min(1.0, quality))
+
+        self._chat_cooldowns[agent_id] = tick + self._chat_cooldown_ticks
+        self.pending.pop(agent_id, None)
+        return AgentIntent(kind="chat", target_agent=listener_id, quality=quality)
+
+    def _avoid_rivals(
+        self, world: WorldState, agent_id: str, snapshot: object
+    ) -> Optional[AgentIntent]:
+        position = getattr(snapshot, "position", None)
+        if position is None:
+            return None
+        cx, cy = position
+        rivals_present = any(
+            other_id != agent_id
+            and getattr(other, "position", None) == position
+            and world.rivalry_should_avoid(agent_id, other_id)
+            for other_id, other in world.agents.items()
+        )
+        if not rivals_present:
+            return None
+
+        grid_size = getattr(self.config.world, "grid_size", (48, 48))
+        width, height = int(grid_size[0]), int(grid_size[1])
+        occupied_positions = {
+            getattr(agent, "position", None)
+            for agent in world.agents.values()
+        }
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cx + dx, cy + dy
+            if not (0 <= nx < width and 0 <= ny < height):
+                continue
+            candidate = (nx, ny)
+            if candidate in occupied_positions:
+                continue
+            return AgentIntent(kind="move", position=candidate)
         return None
 
     def _rivals_in_queue(

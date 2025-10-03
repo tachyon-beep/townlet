@@ -153,11 +153,17 @@ class PolicyRuntime:
                 continue
             scripted_intent: AgentIntent = self.behavior.decide(world, agent_id)
             selected_intent = self._select_intent_with_blend(world, agent_id, scripted_intent)
+            selected_intent = self._apply_relationship_guardrails(
+                world, agent_id, selected_intent
+            )
             selected_intent, commit_enforced = self._enforce_option_commit(
                 agent_id, tick, selected_intent
             )
             if selected_intent.kind == "wait":
-                actions[agent_id] = {"kind": "wait"}
+                wait_payload: dict[str, object] = {"kind": "wait"}
+                if selected_intent.blocked:
+                    wait_payload["blocked"] = True
+                actions[agent_id] = wait_payload
             else:
                 action_dict: dict[str, object | None] = {
                     "kind": selected_intent.kind,
@@ -167,6 +173,10 @@ class PolicyRuntime:
                 }
                 if selected_intent.position is not None:
                     action_dict["position"] = selected_intent.position
+                if selected_intent.target_agent is not None:
+                    action_dict["target"] = selected_intent.target_agent
+                if selected_intent.quality is not None:
+                    action_dict["quality"] = float(selected_intent.quality)
                 actions[agent_id] = action_dict
             action_payload = actions[agent_id]
             try:
@@ -324,6 +334,38 @@ class PolicyRuntime:
             return alt_intent
         return scripted
 
+    def _apply_relationship_guardrails(
+        self,
+        world: WorldState,
+        agent_id: str,
+        intent: AgentIntent,
+    ) -> AgentIntent:
+        if intent.kind == "chat" and intent.target_agent:
+            if world.rivalry_should_avoid(agent_id, intent.target_agent):
+                world.record_chat_failure(agent_id, intent.target_agent)
+                world.record_relationship_guard_block(
+                    agent_id=agent_id,
+                    reason="chat_rival",
+                    target_agent=intent.target_agent,
+                )
+                cancel = getattr(self.behavior, "cancel_pending", None)
+                if callable(cancel):
+                    cancel(agent_id)
+                return AgentIntent(kind="wait", blocked=True)
+        if intent.kind in {"request", "start"} and intent.object_id:
+            guard = getattr(self.behavior, "_rivals_in_queue", None)
+            if callable(guard) and guard(world, agent_id, intent.object_id):
+                world.record_relationship_guard_block(
+                    agent_id=agent_id,
+                    reason="queue_rival",
+                    object_id=intent.object_id,
+                )
+                cancel = getattr(self.behavior, "cancel_pending", None)
+                if callable(cancel):
+                    cancel(agent_id)
+                return AgentIntent(kind="wait", blocked=True)
+        return intent
+
     @staticmethod
     def _clone_intent(intent: AgentIntent) -> AgentIntent:
         return AgentIntent(
@@ -332,6 +374,8 @@ class PolicyRuntime:
             affordance_id=intent.affordance_id,
             blocked=intent.blocked,
             position=intent.position,
+            target_agent=intent.target_agent,
+            quality=intent.quality,
         )
 
     @staticmethod
@@ -342,6 +386,8 @@ class PolicyRuntime:
             and lhs.affordance_id == rhs.affordance_id
             and lhs.position == rhs.position
             and lhs.blocked == rhs.blocked
+            and lhs.target_agent == rhs.target_agent
+            and (lhs.quality == rhs.quality or (lhs.quality is None and rhs.quality is None))
         )
 
     def _enforce_option_commit(

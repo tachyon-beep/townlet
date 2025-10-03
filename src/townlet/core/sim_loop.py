@@ -241,6 +241,7 @@ class SimulationLoop:
             perturbations=perturbation_state,
             policy_identity=policy_identity,
             possessed_agents=possessed_agents,
+            social_events=self.rewards.latest_social_events(),
         )
         self.stability.track(
             tick=self.tick,

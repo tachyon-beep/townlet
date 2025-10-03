@@ -38,11 +38,20 @@ def test_compact_observation_features_only() -> None:
     metadata = obs["metadata"]
 
     assert map_tensor.shape == (0, 0, 0)
+    assert metadata["map_shape"] == (0, 0, 0)
+    assert metadata["variant"] == "compact"
     assert metadata["map_channels"] == []
 
     feature_names = metadata["feature_names"]
+    assert len(feature_names) == features.shape[0]
     hunger_idx = feature_names.index("need_hunger")
     assert np.isclose(features[hunger_idx], 0.2)
+
+    social_context = metadata.get("social_context")
+    assert social_context
+    assert social_context["configured_slots"] >= 0
+    assert social_context["filled_slots"] == 0
+    assert social_context["relation_source"] in {"empty", "rivalry_fallback"}
 
     reservation_idx = feature_names.index("reservation_active")
     queue_idx = feature_names.index("in_queue")

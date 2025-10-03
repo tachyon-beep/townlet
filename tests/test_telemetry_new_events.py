@@ -206,6 +206,58 @@ def test_sleep_events_in_telemetry() -> None:
     assert runtime["event_counts"]["finish"] >= 1
 
 
+def test_relationship_summary_and_social_events() -> None:
+    loop = make_loop()
+    world = loop.world
+    telemetry = loop.telemetry
+
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=1.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=1.0,
+    )
+    world.update_relationship("alice", "bob", trust=0.4, familiarity=0.2)
+    world.record_chat_success("alice", "bob", quality=0.9)
+    world.record_relationship_guard_block(
+        agent_id="alice", reason="queue_rival", object_id="stove_1"
+    )
+
+    telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=[],
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown={},
+        stability_inputs={},
+        perturbations={},
+        policy_identity={},
+        possessed_agents=[],
+        social_events=[
+            {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
+            {"type": "rivalry_avoidance", "agent": "alice", "object": "stove_1", "reason": "queue_rival"},
+        ],
+    )
+
+    exported = telemetry.export_state()
+    social_events = exported.get("social_events")
+    assert social_events and any(e.get("type") == "chat_success" for e in social_events)
+    summary = exported.get("relationship_summary")
+    assert summary is not None
+    assert "alice" in summary
+    alice_summary = summary["alice"]
+    assert alice_summary["top_friends"]
+
+
 def test_affordance_runtime_running_snapshot() -> None:
     loop = make_loop()
     world = loop.world

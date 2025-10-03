@@ -53,6 +53,12 @@ def test_observation_builder_hybrid_map_and_features() -> None:
         builder.hybrid_cfg.local_window,
         builder.hybrid_cfg.local_window,
     )
+    assert metadata["map_shape"] == (
+        4,
+        builder.hybrid_cfg.local_window,
+        builder.hybrid_cfg.local_window,
+    )
+    assert metadata["variant"] == "hybrid"
     center = builder.hybrid_cfg.local_window // 2
     assert map_tensor[0, center, center] == 1.0
     # Bob is at (1,0) relative to Alice
@@ -61,6 +67,7 @@ def test_observation_builder_hybrid_map_and_features() -> None:
     assert map_tensor[2, center, center + 2] == 1.0
 
     feature_names = metadata["feature_names"]
+    assert len(feature_names) == features.shape[0]
     hunger_idx = feature_names.index("need_hunger")
     wallet_idx = feature_names.index("wallet")
     shift_pre_idx = feature_names.index("shift_pre")
@@ -83,6 +90,11 @@ def test_observation_builder_hybrid_map_and_features() -> None:
     assert np.isclose(features[stove_dist_idx], 2.0)
     landmark_slices = metadata.get("landmark_slices", {})
     assert landmark_slices.get("stove") == (stove_dx_idx, stove_dist_idx + 1)
+
+    social_context = metadata.get("social_context")
+    assert social_context
+    assert social_context["configured_slots"] >= 0
+    assert social_context["relation_source"] in {"empty", "rivalry_fallback", "relationships"}
 
 
 def test_observation_ctx_reset_releases_slot() -> None:

@@ -95,6 +95,8 @@ class TelemetryPublisher:
         self._latest_price_spikes: dict[str, dict[str, object]] = {}
         self._latest_utilities: dict[str, bool] = {"power": True, "water": True}
         self._console_auth = ConsoleAuthenticator(config.console_auth)
+        self._social_event_history: deque[dict[str, object]] = deque(maxlen=60)
+        self._latest_relationship_summary: dict[str, object] = {}
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -194,6 +196,8 @@ class TelemetryPublisher:
             "narration_state": self._narration_limiter.export_state(),
             "reward_breakdown": self.latest_reward_breakdown(),
             "perturbations": self.latest_perturbations(),
+            "relationship_summary": dict(self._latest_relationship_summary),
+            "social_events": [dict(event) for event in self._social_event_history],
         }
         if self._latest_affordance_manifest:
             state["affordance_manifest"] = dict(self._latest_affordance_manifest)
@@ -248,6 +252,15 @@ class TelemetryPublisher:
         self._latest_relationship_metrics = (
             dict(relationship_metrics) if relationship_metrics else None
         )
+        summary_payload = payload.get("relationship_summary") or {}
+        if isinstance(summary_payload, Mapping):
+            self._latest_relationship_summary = dict(summary_payload)
+        social_events_payload = payload.get("social_events") or []
+        if isinstance(social_events_payload, list):
+            self._social_event_history = deque(
+                [dict(entry) for entry in social_events_payload],
+                maxlen=self._social_event_history.maxlen,
+            )
 
         self._latest_job_snapshot = dict(payload.get("job_snapshot", {}))
         self._latest_economy_snapshot = dict(payload.get("economy_snapshot", {}))
@@ -795,6 +808,7 @@ class TelemetryPublisher:
         perturbations: Mapping[str, object] | None = None,
         policy_identity: Mapping[str, object] | None = None,
         possessed_agents: Iterable[str] | None = None,
+        social_events: Iterable[dict[str, object]] | None = None,
     ) -> None:
         # Observations and rewards are consumed for downstream side effects.
         _ = observations, rewards
@@ -870,6 +884,9 @@ class TelemetryPublisher:
             relationship_snapshot
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
+        self._latest_relationship_summary = self._build_relationship_summary(
+            relationship_snapshot, world
+        )
         raw_embedding_metrics = world.embedding_allocator.metrics()
         processed_embedding_metrics: dict[str, object] = {}
         for key, value in raw_embedding_metrics.items():
@@ -882,6 +899,10 @@ class TelemetryPublisher:
             self._latest_events = list(events)
         else:
             self._latest_events = []
+        if social_events is not None:
+            for event in social_events:
+                if isinstance(event, Mapping):
+                    self._social_event_history.append(dict(event))
         self._capture_affordance_runtime(
             world=world,
             events=self._latest_events,
@@ -1071,6 +1092,12 @@ class TelemetryPublisher:
         return {
             agent: dict(components) for agent, components in self._latest_reward_breakdown.items()
         }
+
+    def latest_social_events(self) -> list[dict[str, object]]:
+        return [dict(event) for event in self._social_event_history]
+
+    def latest_relationship_summary(self) -> dict[str, object]:
+        return dict(self._latest_relationship_summary)
 
     def latest_stability_inputs(self) -> dict[str, object]:
         if not self._latest_stability_inputs:
@@ -1424,6 +1451,43 @@ class TelemetryPublisher:
             if summaries:
                 overlay[owner] = summaries
         return overlay
+
+    def _build_relationship_summary(
+        self,
+        snapshot: Mapping[str, Mapping[str, Mapping[str, float]]],
+        world: "WorldState",
+    ) -> dict[str, object]:
+        summary: dict[str, object] = {}
+        max_entries = 3
+        for owner, ties in snapshot.items():
+            ranked_friends = sorted(
+                ties.items(),
+                key=lambda item: item[1].get("trust", 0.0)
+                + item[1].get("familiarity", 0.0),
+                reverse=True,
+            )
+            friend_payload = [
+                {
+                    "agent": other,
+                    "trust": float(metrics.get("trust", 0.0)),
+                    "familiarity": float(metrics.get("familiarity", 0.0)),
+                    "rivalry": float(metrics.get("rivalry", 0.0)),
+                }
+                for other, metrics in ranked_friends[:max_entries]
+            ]
+            rivals: list[dict[str, object]] = []
+            try:
+                top_rivals = world.rivalry_top(owner, max_entries)
+            except Exception:  # pragma: no cover - defensive
+                top_rivals = []
+            for other, value in top_rivals:
+                rivals.append({"agent": other, "rivalry": float(value)})
+            summary[owner] = {
+                "top_friends": friend_payload,
+                "top_rivals": rivals,
+            }
+        summary["churn"] = dict(self._latest_relationship_metrics or {})
+        return summary
 
     def _process_narrations(
         self,

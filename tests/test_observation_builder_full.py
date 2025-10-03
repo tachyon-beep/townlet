@@ -50,6 +50,8 @@ def test_full_observation_map_and_features() -> None:
 
     window = builder.hybrid_cfg.local_window
     assert map_tensor.shape == (6, window, window)
+    assert metadata["map_shape"] == (6, window, window)
+    assert metadata["variant"] == "full"
     center = window // 2
     # Self channel
     assert map_tensor[0, center, center] == 1.0
@@ -81,3 +83,7 @@ def test_full_observation_map_and_features() -> None:
         "path_dx",
         "path_dy",
     ]
+
+    feature_names = metadata["feature_names"]
+    assert len(feature_names) == features.shape[0]
+    assert "social_context" not in metadata

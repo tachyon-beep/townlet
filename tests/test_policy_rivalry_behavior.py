@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from townlet.config.loader import load_config
+from townlet.agents.models import Personality
 from townlet.policy.behavior import ScriptedBehavior
 from townlet.world.grid import AgentSnapshot, WorldState
 
@@ -36,6 +37,32 @@ def _build_world(base_config):
         wallet=2.0,
     )
     return world, fridge_id
+
+
+def test_scripted_behavior_chat_intent(base_config):
+    world = WorldState.from_config(base_config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(5, 5),
+        needs={"hunger": 0.8, "hygiene": 0.9, "energy": 0.9},
+        wallet=2.0,
+        personality=Personality(extroversion=0.9, forgiveness=0.5, ambition=0.5),
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(5, 5),
+        needs={"hunger": 0.9, "hygiene": 0.9, "energy": 0.9},
+        wallet=2.0,
+    )
+    world.update_relationship("alice", "bob", trust=0.3, familiarity=0.1)
+
+    behaviour = ScriptedBehavior(base_config)
+
+    intent = behaviour.decide(world, "alice")
+
+    assert intent.kind == "chat"
+    assert intent.target_agent == "bob"
+    assert intent.quality is not None
 
 
 def _occupy(world: WorldState, object_id: str, agent_id: str) -> None:

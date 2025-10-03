@@ -47,6 +47,10 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
     assert (
         restored.world.relationships_snapshot() == loop.world.relationships_snapshot()
     )
+    assert (
+        restored.world.relationship_metrics_snapshot()
+        == loop.world.relationship_metrics_snapshot()
+    )
     assert set(restored.world.agents.keys()) == set(loop.world.agents.keys())
     assert restored.world.agents["alice"].needs == loop.world.agents["alice"].needs
     assert restored.world.objects.keys() == loop.world.objects.keys()

@@ -406,6 +406,8 @@ class AffordanceRuntimeConfig(BaseModel):
     factory: str | None = None
     instrumentation: Literal["off", "timings"] = "off"
     options: dict[str, object] = Field(default_factory=dict)
+    hook_allowlist: tuple[str, ...] = Field(default_factory=tuple)
+    allow_env_hooks: bool = True
 
     model_config = ConfigDict(extra="allow")
 

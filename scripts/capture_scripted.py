@@ -40,14 +40,18 @@ def _build_frame(
     terminated: bool,
     trajectory_id: str,
 ) -> Dict[str, object]:
-    metadata = observation.get("metadata", {}) or {}
-    feature_names = metadata.get("feature_names")
-    frame_meta = {
+    observation_meta = dict(observation.get("metadata", {}) or {})
+    frame_meta: Dict[str, object] = {
+        **observation_meta,
         "agent_id": agent_id,
         "trajectory_id": trajectory_id,
-        "feature_names": feature_names,
-        "map_shape": list(observation["map"].shape),
     }
+    map_shape = tuple(observation.get("map", np.zeros(0)).shape)
+    frame_meta["map_shape"] = list(frame_meta.get("map_shape", map_shape))
+    map_channels = frame_meta.get("map_channels", [])
+    if isinstance(map_channels, tuple):
+        frame_meta["map_channels"] = list(map_channels)
+
     action = adapter.last_actions.get(agent_id, {"kind": "wait"})
     return {
         "map": observation["map"],

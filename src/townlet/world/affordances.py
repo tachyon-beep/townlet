@@ -446,6 +446,29 @@ class DefaultAffordanceRuntime:
                 queue_manager.release(object_id, occupant, tick, success=False)
             ctx.sync_reservation(object_id)
 
+    def _select_handover_candidate(
+        self,
+        world: "WorldState",
+        source_agent: str,
+        waiting: list[str],
+    ) -> str | None:
+        if not waiting:
+            return None
+        best_id: str | None = None
+        best_score = float("-inf")
+        for index, candidate in enumerate(waiting):
+            tie = world.relationship_tie(source_agent, candidate)
+            trust = float(getattr(tie, "trust", 0.0)) if tie else 0.0
+            familiarity = float(getattr(tie, "familiarity", 0.0)) if tie else 0.0
+            rivalry = world.rivalry_value(source_agent, candidate)
+            score = trust + familiarity - rivalry - 0.05 * index
+            if score > best_score:
+                best_score = score
+                best_id = candidate
+        if best_id is None or best_score <= 0.0:
+            return None
+        return best_id
+
     def resolve(self, *, tick: int) -> None:
         ctx = self._ctx
         world = ctx.world
@@ -520,10 +543,13 @@ class DefaultAffordanceRuntime:
                         hook_duration_ms,
                         len(hook_names),
                     )
+                preferred = self._select_handover_candidate(world, running.agent_id, waiting)
+                if preferred is not None:
+                    queue_manager.promote_agent(object_id, preferred)
                 queue_manager.release(object_id, running.agent_id, tick, success=True)
                 ctx.sync_reservation(object_id)
                 if waiting:
-                    next_agent = waiting[0]
+                    next_agent = preferred if preferred is not None else waiting[0]
                     record_queue_conflict(
                         object_id=object_id,
                         actor=running.agent_id,

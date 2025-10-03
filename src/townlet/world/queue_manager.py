@@ -159,6 +159,20 @@ class QueueManager:
         queue.append(QueueEntry(agent_id=agent_id, joined_tick=tick))
         self._metrics["rotation_events"] += 1
 
+    def promote_agent(self, object_id: str, agent_id: str) -> None:
+        """Move `agent_id` to the front of the queue if present."""
+
+        queue = self._queues.get(object_id)
+        if not queue:
+            return
+        for index, entry in enumerate(queue):
+            if entry.agent_id == agent_id:
+                if index == 0:
+                    return
+                queue.insert(0, queue.pop(index))
+                self._metrics["rotation_events"] += 1
+                break
+
     def remove_agent(self, agent_id: str, tick: int) -> None:
         """Remove `agent_id` from all queues and active reservations."""
 

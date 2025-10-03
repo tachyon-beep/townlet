@@ -19,6 +19,7 @@ class QueueConflictTracker:
         self._record_rivalry_conflict_cb = record_rivalry_conflict
         self._rivalry_events: Deque[dict[str, object]] = deque(maxlen=256)
         self._chat_events: List[dict[str, object]] = []
+        self._avoidance_events: List[dict[str, object]] = []
 
     def record_queue_conflict(
         self,
@@ -93,6 +94,14 @@ class QueueConflictTracker:
         self._chat_events.clear()
         return events
 
+    def record_avoidance_event(self, payload: dict[str, object]) -> None:
+        self._avoidance_events.append(payload)
+
+    def consume_avoidance_events(self) -> list[dict[str, object]]:
+        events = list(self._avoidance_events)
+        self._avoidance_events.clear()
+        return events
+
     def record_rivalry_event(
         self,
         *,
@@ -122,6 +131,7 @@ class QueueConflictTracker:
     def reset(self) -> None:
         self._rivalry_events.clear()
         self._chat_events.clear()
+        self._avoidance_events.clear()
 
     def remove_agent(self, agent_id: str) -> None:
         self._chat_events = [
@@ -130,6 +140,9 @@ class QueueConflictTracker:
             if entry.get("agent") != agent_id
             and entry.get("speaker") != agent_id
             and entry.get("listener") != agent_id
+        ]
+        self._avoidance_events = [
+            entry for entry in self._avoidance_events if entry.get("agent") != agent_id
         ]
         filtered = (
             event

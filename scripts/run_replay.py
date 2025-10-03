@@ -39,11 +39,45 @@ def parse_args() -> argparse.Namespace:
 
 
 def render_observation(sample: Dict[str, Any]) -> None:
-    feature_names = sample["metadata"].get("feature_names") if sample.get("metadata") else None
-    features = sample["features"]
+    metadata = sample.get("metadata") or {}
+    feature_names = metadata.get("feature_names")
+    features = np.asarray(sample["features"], dtype=np.float32)
+    if features.ndim > 1:
+        features = features[0]
+
+    variant = metadata.get("variant")
+    map_shape = metadata.get("map_shape")
+    map_channels = metadata.get("map_channels")
+    if variant or map_shape or map_channels:
+        print("Observation metadata:")
+        if variant:
+            print(f"  variant: {variant}")
+        if map_shape:
+            print(f"  map_shape: {tuple(map_shape)}")
+        if map_channels:
+            print(f"  map_channels: {list(map_channels)}")
+
+    social_context = metadata.get("social_context")
+    if social_context:
+        print("  social_context:")
+        for key in ("configured_slots", "filled_slots", "relation_source", "has_data"):
+            if key in social_context:
+                print(f"    {key}: {social_context[key]}")
+        aggregates = social_context.get("aggregates") or []
+        if aggregates:
+            print(f"    aggregates: {aggregates}")
+
     if feature_names:
         print("Key features (including rivalry metrics):")
-        for key in ("need_hunger", "need_hygiene", "need_energy", "rivalry_max", "rivalry_avoid_count"):
+        for key in (
+            "need_hunger",
+            "need_hygiene",
+            "need_energy",
+            "rivalry_max",
+            "rivalry_avoid_count",
+            "social_trust_mean",
+            "social_rivalry_mean",
+        ):
             if key in feature_names:
                 idx = feature_names.index(key)
                 print(f"  {key}: {features[idx]:.3f}")

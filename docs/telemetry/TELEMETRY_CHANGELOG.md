@@ -2,6 +2,7 @@
 
 | Version | Date | Summary | Consumer Actions |
 | --- | --- | --- | --- |
+| 0.9.6 | 2025-10-22 | Added `relationship_summary` (top friends/rivals, churn totals) and `social_events` (chat successes/failures, rivalry avoidance) to observer snapshots. Reward breakdown now splits social bonuses, penalties, and avoidance contributions. | Update dashboards/validators to handle new telemetry fields; trim social event history as needed and consume expanded reward breakdown keys. |
 | 0.9.5 | 2025-10-15 | Telemetry snapshots expose affordance runtime payload (running set, reservations, per-tick event counts) and console includes the new `affordance_status` command. | Update consumers/validators to tolerate the optional `affordance_runtime` block; surface new command in ops tooling. |
 | 0.9.4 | 2025-10-06 | PPO telemetry adds advantage health metrics (`adv_zero_std_batches`, `adv_min_std`, `clip_fraction_max`, `clip_triggered_minibatches`), emits option commitment state (`option_commit_remaining`, `option_commit_kind`, `option_commit_enforced`) in trajectory frames, surfaces promotion candidate metadata/history, and adds NaN guards in the training harness. | Update validators/watchers to expect new fields; investigate logs if harness raises the new NaN errors. |
 | 0.9.3 | 2025-10-21 | Reward breakdown adds `terminal_penalty`; docs updated with LR2 reward model. | Update dashboards/watchers to tolerate the new breakdown key; refresh local schema fixtures. |

@@ -109,6 +109,22 @@ def test_snapshot_round_trip(tmp_path: Path, sample_config) -> None:
                 "alice": {"trust": 0.4, "familiarity": 0.1, "rivalry": 0.0},
             },
         },
+        relationship_metrics={
+            "window_start": 0,
+            "window_end": 600,
+            "total": 2,
+            "owners": {"alice": 2},
+            "reasons": {"capacity": 1, "decay": 1},
+            "history": [
+                {
+                    "window_start": 0,
+                    "window_end": 600,
+                    "total": 2,
+                    "owners": {"alice": 2},
+                    "reasons": {"capacity": 1, "decay": 1},
+                }
+            ],
+        },
         identity=identity_payload,
     )
     path = manager.save(state)
@@ -323,7 +339,13 @@ def test_world_relationship_snapshot_round_trip(
     assert loaded.identity == state.identity
     assert state.migrations == {"applied": [], "required": []}
     assert state.perturbations == scheduler.export_state()
-    assert restored_telemetry.export_state() == telemetry.export_state()
+    restored_state = restored_telemetry.export_state()
+    baseline_state = telemetry.export_state()
+    assert restored_state.get("relationship_metrics") == world.relationship_metrics_snapshot()
+    assert baseline_state.get("relationship_metrics") == {"total": 3}
+    restored_state.pop("relationship_metrics", None)
+    baseline_state.pop("relationship_metrics", None)
+    assert restored_state == baseline_state
     assert (
         restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()
     )

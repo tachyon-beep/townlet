@@ -7,6 +7,28 @@
 - Rollout example: `--mode rollout --rollout-ticks 200 --rollout-auto-seed-agents --ppo-log logs/live.jsonl`.
 - Mixed example: `--mode mixed --capture-dir captures/<scenario> --rollout-ticks 100 --ppo-log logs/mixed.jsonl`.
 - Affordance manifest lint: `python scripts/validate_affordances.py --strict` — run after editing files under `configs/affordances/` to confirm schema, duplicate, and checksum compliance (CI runs the same check).
+- Affordance hook security: manage `affordances.runtime.hook_allowlist` to
+  whitelist permitted modules. For production deployments set
+  `affordances.runtime.allow_env_hooks: false` so the
+  `TOWNLET_AFFORDANCE_HOOK_MODULES` environment variable is ignored. Startup logs
+  emit `affordance_hook_rejected … reason=…` for disallowed or failing modules—treat
+  unexpected entries as a security alert. Existing environments that relied on the
+  environment variable should migrate by adding those modules to the allowlist
+  before upgrading.
+- Observation tooling refresh:
+  - `scripts/run_replay.py` now prints observation variant, map channels, and
+    social snippet context. Use `--validate` in CI to guard replay bundles before
+    distribution.
+  - `scripts/profile_observation_tensor.py` reports social slot coverage and
+    relation sources. Capture its JSON output during environment audits to prove
+    relationship metrics are populated (or intentionally disabled).
+  - `scripts/capture_scripted.py` persists observation metadata with each replay
+    frame. Regenerate behaviour-cloning datasets after upgrading so downstream
+    tooling inherits the new metadata schema.
+  - Existing pipelines that parse NPZ samples must read the metadata block
+    rather than assuming fixed feature indices; the new
+    `metadata.social_context` describes configured slots, filled slots, and the
+    relationship source (`relationships`, `rivalry_fallback`, or `empty`).
 - Mixed-mode queue-conflict workflow:
   1. `python scripts/capture_rollout.py configs/scenarios/queue_conflict.yaml --output tmp/ops_run`
   2. `python scripts/run_training.py configs/scenarios/queue_conflict.yaml --mode mixed --replay-manifest tmp/ops_run/rollout_sample_manifest.json --rollout-ticks 40 --epochs 1 --ppo-log tmp/ops_run/ppo_mixed.jsonl`
@@ -177,6 +199,7 @@
 ## Telemetry Transport & Observer Workflow
 
 - Observer telemetry emits schema version `0.9.x`; console and dashboard clients warn on newer majors but expect the new conflict history fields. Run `telemetry_snapshot` after upgrades to confirm the reported schema matches `0.9.x`.
+- Telemetry payloads now embed `relationship_summary` (top friends/rivals per agent plus churn snapshot) and `social_events` (recent chat successes/failures and rivalry-avoidance events). Update dashboards that parse the export to surface the new metrics and cap history to the latest 60 entries.
 - `config.telemetry.transport` selects the stream destination. Supported types:
   - `stdout`: development/debug. Payloads print to the shard stdout (NDJSON).
   - `file`: append-only JSONL file (set `file_path`). Parents are created automatically.

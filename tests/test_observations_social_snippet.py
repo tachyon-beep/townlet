@@ -9,13 +9,19 @@ from townlet.config import SimulationConfig, load_config
 from townlet.observations.builder import ObservationBuilder
 from townlet.world.grid import AgentSnapshot, WorldState
 
+from tests.helpers.social import seed_relationship_activity
+
 
 @pytest.fixture(scope="module")
 def base_config() -> SimulationConfig:
     return load_config(Path("configs/examples/poc_hybrid.yaml"))
 
 
-def _build_world(config: SimulationConfig) -> WorldState:
+def _build_world(
+    config: SimulationConfig,
+    *,
+    with_social: bool = True,
+) -> WorldState:
     world = WorldState.from_config(config)
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
@@ -29,9 +35,8 @@ def _build_world(config: SimulationConfig) -> WorldState:
         needs={"hunger": 0.3, "hygiene": 0.2, "energy": 0.7},
         wallet=3.0,
     )
-    # Register a rivalry event to populate fallback social data.
-    world.register_rivalry_conflict("alice", "bob")
-    world.update_relationship("alice", "bob", trust=0.6, familiarity=0.3)
+    if with_social:
+        seed_relationship_activity(world, agent_a="alice", agent_b="bob")
     return world
 
 
@@ -42,6 +47,10 @@ def test_social_snippet_vector_length(base_config: SimulationConfig) -> None:
     batch = builder.build_batch(world, terminated={})
     alice_obs = batch["alice"]
     features = alice_obs["features"]
+    social_context = alice_obs["metadata"].get("social_context")
+    assert social_context
+    assert social_context["has_data"] is True
+    assert social_context["relation_source"] in {"relationships", "rivalry_fallback"}
 
     assert features.shape[0] == len(builder._feature_names)
 
@@ -72,6 +81,9 @@ def test_disable_aggregates_via_config(base_config: SimulationConfig) -> None:
     world = _build_world(config)
     batch = builder.build_batch(world, terminated={})
     features = batch["alice"]["features"]
+    social_context = batch["alice"]["metadata"].get("social_context")
+    assert social_context
+    assert social_context["aggregates"] == []
     agg_indices = [
         idx
         for name, idx in builder._feature_index.items()
@@ -92,4 +104,7 @@ def test_observation_matches_golden_fixture(base_config: SimulationConfig) -> No
     expected = data["features"]
     names = data["names"].tolist()
     assert builder._feature_names == names
+    social_context = obs["alice"]["metadata"].get("social_context")
+    assert social_context
+    assert social_context["relation_source"] == "relationships"
     np.testing.assert_allclose(features, expected, atol=1e-6)

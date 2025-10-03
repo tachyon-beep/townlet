@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from townlet.config import load_config
+from townlet.config import SimulationConfig, load_config
 from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
 
@@ -161,6 +161,53 @@ def test_chat_reward_blocked_within_termination_window() -> None:
     assert rewards["alice"] > 0.0
 
 
+def test_chat_failure_penalty() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=1.0,
+    )
+    world.agents["bob"] = AgentSnapshot(
+        agent_id="bob",
+        position=(0, 1),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=1.0,
+    )
+    world.record_chat_failure("alice", "bob")
+
+    engine = RewardEngine(world.config)
+    rewards = engine.compute(world, {agent_id: False for agent_id in world.agents})
+
+    assert rewards["alice"] < world.config.rewards.survival_tick
+
+
+def test_rivalry_avoidance_reward() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    data = config.model_dump()
+    data["features"]["stages"]["social_rewards"] = "C2"
+    config = SimulationConfig.model_validate(data)
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=1.0,
+    )
+    world.record_relationship_guard_block(
+        agent_id="alice",
+        reason="queue_rival",
+        object_id="stove_1",
+    )
+
+    engine = RewardEngine(config)
+    rewards = engine.compute(world, {agent_id: False for agent_id in world.agents})
+
+    assert rewards["alice"] > config.rewards.survival_tick
+
+
 def test_episode_clip_enforced() -> None:
     world = _make_world(hunger=0.0)
     engine = RewardEngine(world.config)
@@ -257,5 +304,3 @@ def test_terminal_penalty_applied_for_eviction() -> None:
     breakdown = engine.latest_reward_breakdown()["alice"]
     assert breakdown["terminal_penalty"] == pytest.approx(config.rewards.eviction_penalty)
     assert breakdown["clip_adjustment"] == pytest.approx(expected - raw_expected)
-
-
