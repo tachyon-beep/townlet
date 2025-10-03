@@ -14,11 +14,11 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Affected Components**: `src/townlet/core/sim_loop.py`, `tests/test_sim_loop_structure.py`, `tests/test_training_cli.py`, docs (`docs/guides/CONSOLE_DRY_RUN.md`).
 - **Validation**: `pytest tests/test_sim_loop_structure.py tests/test_run_simulation_cli.py tests/test_training_cli.py`; spot-checked CLI flows (`run_simulation`, `run_training --mode replay`); `mypy src/townlet/core/sim_loop.py` still flags pre-existing variance issues (not a regression).
 
-## FWP-03 Complete Observation & Reward Plumbing
-- **Fix / Change**: Implement the compact observation variant (currently placeholder zeros) and verify reward clipping/termination guardrails align with design notes.
-- **Risks**: Policy models may need retraining; observation tensors must remain backward compatible; reward changes could shift agent behaviour.
-- **Affected Components**: `src/townlet/observations/builder.py`, `src/townlet/rewards/engine.py`, `tests/test_observation_builder_compact.py`, `tests/test_reward_engine.py`.
-- **Validation**: Regression tests for all observation variants, reward summary tests, training smoke runs.
+## FWP-03 Complete Observation & Reward Plumbing *(Completed)*
+- **Fix / Change**: Compact observations now include normalized local summaries (agent/object/reservation ratios, nearest-agent distance) with metadata in `local_summary`. Reward guardrails verified via new termination-window tests.
+- **Risks**: Compact feature vector grew slightly; downstream consumers should rely on metadata (`feature_names`, `local_summary`) rather than positional assumptions.
+- **Affected Components**: `src/townlet/observations/builder.py`, `tests/test_observation_builder_compact.py`, `docs/design/OBSERVATION_TENSOR_SPEC.md`, `tests/test_reward_engine.py`.
+- **Validation**: `pytest tests/test_observation_builder_compact.py tests/test_observation_builder.py tests/test_reward_engine.py`.
 
 ## FWP-04 Optimize Performance for Longer Runs
 - **Fix / Change**: Remove O(n²) local-view scans by caching spatial indices; share observation inputs across agents where possible.

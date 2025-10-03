@@ -61,11 +61,16 @@ Reference sample: `docs/samples/observation_hybrid_sample.npz` (metadata JSON al
 
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
-| Feature vector | Shared bundle (§1), environment flags, path hints, landmark bearings | Observation builder | ~80 |
+| Feature vector | Shared bundle (§1) plus local summary scalars (`neighbor_agent_ratio`, `neighbor_object_ratio`, `reserved_tile_ratio`, `nearest_agent_distance`) | Observation builder | ~84 |
 | Map tensor | Not used (placeholder zeros) | — | (0, 0, 0) |
 
-Compact omits the spatial map entirely. Consumers should branch when
-`metadata['map_shape'] == (0, 0, 0)`.
+Compact omits the spatial map entirely. Instead, the builder encodes a coarse
+summary of the local egocentric window: counts and ratios for neighboring
+agents/objects/reservations and the normalized distance to the nearest other
+agent. These values populate the new scalar features and appear in
+`metadata['local_summary']` for downstream inspection. Consumers should branch
+when `metadata['map_shape'] == (0, 0, 0)` and rely on the summary bundle rather
+than expecting spatial grids.
 
 ## 5. Social Snippet Behaviour
 

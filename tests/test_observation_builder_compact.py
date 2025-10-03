@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
@@ -70,3 +71,18 @@ def test_compact_observation_features_only() -> None:
     assert np.isclose(dx, 1.0)
     assert np.isclose(dy, 0.0)
     assert np.isclose(dist, 2.0)
+
+    summary = metadata.get("local_summary")
+    assert summary is not None
+    assert summary["object_count"] >= 1.0
+    assert summary["agent_count"] == pytest.approx(0.0)
+    agent_ratio_idx = feature_names.index("neighbor_agent_ratio")
+    object_ratio_idx = feature_names.index("neighbor_object_ratio")
+    reserved_ratio_idx = feature_names.index("reserved_tile_ratio")
+    nearest_agent_idx = feature_names.index("nearest_agent_distance")
+    assert np.isclose(features[agent_ratio_idx], summary["agent_ratio"])
+    assert np.isclose(features[object_ratio_idx], summary["object_ratio"])
+    assert np.isclose(features[reserved_ratio_idx], summary["reserved_ratio"])
+    assert np.isclose(
+        features[nearest_agent_idx], summary["nearest_agent_distance_norm"]
+    )

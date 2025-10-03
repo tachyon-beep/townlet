@@ -329,3 +329,28 @@ def test_terminal_penalty_applied_for_eviction() -> None:
     breakdown = engine.latest_reward_breakdown()["alice"]
     assert breakdown["terminal_penalty"] == pytest.approx(config.rewards.eviction_penalty)
     assert breakdown["clip_adjustment"] == pytest.approx(expected - raw_expected)
+
+
+def test_positive_rewards_blocked_within_death_window() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
+        wallet=1.0,
+    )
+    engine = RewardEngine(config)
+    baseline = engine.compute(world, {"alice": False})["alice"]
+    assert baseline > 0
+
+    window = int(config.rewards.clip.no_positive_within_death_ticks)
+    engine.compute(world, {"alice": True})
+    for offset in range(1, window):
+        world.tick += 1
+        reward = engine.compute(world, {"alice": False})["alice"]
+        assert reward <= 0.0
+
+    world.tick += window + 1
+    reward = engine.compute(world, {"alice": False})["alice"]
+    assert reward == pytest.approx(baseline)

@@ -71,6 +71,14 @@ class ObservationBuilder:
         ]
         base_feature_names.extend(path_hint_names)
 
+        self._local_summary_names = [
+            "neighbor_agent_ratio",
+            "neighbor_object_ratio",
+            "reserved_tile_ratio",
+            "nearest_agent_distance",
+        ]
+        base_feature_names.extend(self._local_summary_names)
+
         self._landmark_slices: dict[str, slice] = {}
         if self.hybrid_cfg.include_targets:
             for landmark in self._landmarks:
@@ -129,6 +137,10 @@ class ObservationBuilder:
         self._empty_social_vector = np.zeros(
             self._social_vector_length, dtype=np.float32
         )
+
+        self._local_summary_indices = {
+            name: self._feature_index[name] for name in self._local_summary_names
+        }
 
     def build_batch(
         self, world: "WorldState", terminated: dict[str, bool]
@@ -278,12 +290,72 @@ class ObservationBuilder:
         features[self._path_hint_indices["east"]] = east
         features[self._path_hint_indices["west"]] = west
 
+    def _encode_local_summary(
+        self,
+        features: np.ndarray,
+        world: "WorldState",
+        snapshot: "AgentSnapshot",
+    ) -> dict[str, float]:
+        window = self.hybrid_cfg.local_window
+        radius = max(1, window // 2)
+        local_view = world.local_view(snapshot.agent_id, radius)
+        tiles: list[list[dict[str, object]]] = local_view.get("tiles", [])  # type: ignore[assignment]
+
+        total_tiles = sum(len(row) for row in tiles) or 1
+        other_agents = 0
+        object_total = 0
+        reserved_tiles = 0
+        nearest_distance: float | None = None
+
+        for row in tiles:
+            for tile in row:
+                position = tile.get("position")
+                agent_ids = list(tile.get("agent_ids", []))
+                if agent_ids:
+                    count = sum(1 for agent_id in agent_ids if agent_id != snapshot.agent_id)
+                    other_agents += count
+                    if count and position is not None:
+                        dx = position[0] - snapshot.position[0]
+                        dy = position[1] - snapshot.position[1]
+                        distance = float(np.hypot(dx, dy))
+                        if nearest_distance is None or distance < nearest_distance:
+                            nearest_distance = distance
+                object_total += len(tile.get("object_ids", []))
+                if tile.get("reservation_active"):
+                    reserved_tiles += 1
+
+        max_tiles = max(1, total_tiles - 1)
+        agent_ratio = min(1.0, other_agents / max_tiles)
+        object_ratio = min(1.0, object_total / max(1, total_tiles))
+        reserved_ratio = min(1.0, reserved_tiles / max(1, total_tiles))
+        if nearest_distance is None:
+            nearest_norm = 0.0
+        else:
+            nearest_norm = max(0.0, min(1.0, nearest_distance / max(1, radius)))
+
+        features[self._local_summary_indices["neighbor_agent_ratio"]] = float(agent_ratio)
+        features[self._local_summary_indices["neighbor_object_ratio"]] = float(object_ratio)
+        features[self._local_summary_indices["reserved_tile_ratio"]] = float(reserved_ratio)
+        features[self._local_summary_indices["nearest_agent_distance"]] = float(nearest_norm)
+
+        return {
+            "agent_count": float(other_agents),
+            "object_count": float(object_total),
+            "reserved_tiles": float(reserved_tiles),
+            "radius": float(radius),
+            "agent_ratio": float(agent_ratio),
+            "object_ratio": float(object_ratio),
+            "reserved_ratio": float(reserved_ratio),
+            "nearest_agent_distance": 0.0 if nearest_distance is None else float(nearest_distance),
+            "nearest_agent_distance_norm": float(nearest_norm),
+        }
+
     def _initialise_feature_vector(
         self,
         world: "WorldState",
         snapshot: "AgentSnapshot",
         slot: int,
-    ) -> tuple[np.ndarray, dict[str, object]]:
+    ) -> tuple[np.ndarray, dict[str, object], dict[str, float]]:
         features = np.zeros(len(self._feature_names), dtype=np.float32)
         context = world.agent_context(snapshot.agent_id)
         self._encode_common_features(
@@ -295,6 +367,7 @@ class ObservationBuilder:
         )
         self._encode_environmental_flags(features, world, snapshot)
         self._encode_path_hint(features, world, snapshot)
+        local_summary = self._encode_local_summary(features, world, snapshot)
 
         if self.hybrid_cfg.include_targets and self._landmark_slices:
             self._encode_landmarks(features, world, snapshot)
@@ -315,7 +388,7 @@ class ObservationBuilder:
             features[self._social_slice] = social_vector
             social_context.update(slot_context)
 
-        return features, social_context
+        return features, social_context, local_summary
 
     def _build_metadata(
         self,
@@ -324,6 +397,7 @@ class ObservationBuilder:
         map_shape: tuple[int, int, int],
         map_channels: tuple[str, ...] | list[str],
         social_context: dict[str, object] | None = None,
+        local_summary: dict[str, float] | None = None,
     ) -> dict[str, object]:
         metadata: dict[str, object] = {
             "variant": self.variant,
@@ -339,6 +413,8 @@ class ObservationBuilder:
             }
         if social_context is not None and social_context.get("configured_slots"):
             metadata["social_context"] = social_context
+        if local_summary is not None:
+            metadata["local_summary"] = local_summary
         return metadata
 
     def _build_single(
@@ -406,12 +482,15 @@ class ObservationBuilder:
             self.MAP_CHANNELS, local_view, window, radius, snapshot
         )
 
-        features, social_context = self._initialise_feature_vector(world, snapshot, slot)
+        features, social_context, local_summary = self._initialise_feature_vector(
+            world, snapshot, slot
+        )
         metadata = self._build_metadata(
             slot=slot,
             map_shape=map_tensor.shape,
             map_channels=self.MAP_CHANNELS,
             social_context=social_context,
+            local_summary=local_summary,
         )
 
         return {
@@ -433,12 +512,15 @@ class ObservationBuilder:
             self.full_channels, local_view, window, radius, snapshot
         )
 
-        features, social_context = self._initialise_feature_vector(world, snapshot, slot)
+        features, social_context, local_summary = self._initialise_feature_vector(
+            world, snapshot, slot
+        )
         metadata = self._build_metadata(
             slot=slot,
             map_shape=map_tensor.shape,
             map_channels=self.full_channels,
             social_context=social_context,
+            local_summary=local_summary,
         )
 
         return {
@@ -453,13 +535,16 @@ class ObservationBuilder:
         snapshot: "AgentSnapshot",
         slot: int,
     ) -> dict[str, np.ndarray | dict[str, object]]:
-        features, social_context = self._initialise_feature_vector(world, snapshot, slot)
+        features, social_context, local_summary = self._initialise_feature_vector(
+            world, snapshot, slot
+        )
         map_tensor = np.zeros((0, 0, 0), dtype=np.float32)
         metadata = self._build_metadata(
             slot=slot,
             map_shape=map_tensor.shape,
             map_channels=(),
             social_context=social_context,
+            local_summary=local_summary,
         )
 
         return {
