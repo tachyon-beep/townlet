@@ -1,0 +1,82 @@
+# Forward Work Program – Townlet Tech Demo
+
+Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, this document re-casts each forward work package with actionable detail, risk highlights, and the primary components we expect to modify.
+
+## FWP-01 Restore Simulation Loop Execution & Smoke Tests
+- **Fix / Change**: Ensure `scripts/run_simulation.py` actually iterates the simulation loop (e.g. invoke `SimulationLoop.run()` or a new `run_for_ticks()` helper). Add a CLI smoke test that asserts ticks advance and telemetry is emitted.
+- **Risks**: Regression in existing CLI behaviour; potential infinite loops if termination conditions mishandled; increased CI time due to new smoke test.
+- **Affected Components**: `scripts/run_simulation.py`, `src/townlet/core/sim_loop.py`, `tests/test_run_simulation_cli.py`, telemetry fixtures in `tests/test_console_dispatcher.py`.
+- **Validation**: Run smoke CLI test, targeted telemetry tests, and ensure `pytest -k run_simulation_cli` passes in CI.
+
+## FWP-02 Strengthen Core Loop Stability with Tests
+- **Fix / Change**: Add end-to-end CLI tests for simulation and training flows; introduce a safe wrapper such as `SimulationLoop.run_for_ticks()`; update docs on recommended usage.
+- **Risks**: Longer test suites; new helper could diverge from existing code paths if not reused; potential breakage in scripts expecting generator semantics.
+- **Affected Components**: `src/townlet/core/sim_loop.py`, `scripts/run_training.py`, `tests/test_training_cli.py`, docs under `docs/guides/`.
+- **Validation**: Execute new CLI integration tests, verify training harness still succeeds, and run `mypy` to ensure helper signatures propagate.
+
+## FWP-03 Complete Observation & Reward Plumbing
+- **Fix / Change**: Implement the compact observation variant (currently placeholder zeros) and verify reward clipping/termination guardrails align with design notes.
+- **Risks**: Policy models may need retraining; observation tensors must remain backward compatible; reward changes could shift agent behaviour.
+- **Affected Components**: `src/townlet/observations/builder.py`, `src/townlet/rewards/engine.py`, `tests/test_observation_builder_compact.py`, `tests/test_reward_engine.py`.
+- **Validation**: Regression tests for all observation variants, reward summary tests, training smoke runs.
+
+## FWP-04 Optimize Performance for Longer Runs
+- **Fix / Change**: Remove O(n²) local-view scans by caching spatial indices; share observation inputs across agents where possible.
+- **Risks**: Cache invalidation bugs leading to stale world views; increased memory usage; interplay with queue manager and hooks must remain correct.
+- **Affected Components**: `src/townlet/world/grid.py`, `src/townlet/observations/builder.py`, `src/townlet/world/queue_manager.py`, profiling scripts under `scripts/benchmark_tick.py`.
+- **Validation**: Microbenchmarks for tick throughput, soak tests (`scripts/run_mixed_soak.py`), ensure deterministic outputs remain unchanged.
+
+## FWP-05 Telemetry Reliability & Diff Streaming
+- **Fix / Change**: Introduce diff or channel-filtered telemetry payloads, surface queue length and worker health metrics, and refine buffering.
+- **Risks**: Client compatibility (UI/third-party tools must handle new schema); risk of missing data if diffs are misordered; more complex recovery logic.
+- **Affected Components**: `src/townlet/telemetry/publisher.py`, `src/townlet/telemetry/transport.py`, `src/townlet_ui/telemetry.py`, dashboard tests (`tests/test_telemetry_stream_smoke.py`).
+- **Validation**: Telemetry smoke tests, dashboard integration runs, log inspection for drop metrics.
+
+## FWP-06 Finalize Observer Dashboard UI
+- **Fix / Change**: Complete Rich console panels (per-agent cards, overlays, audio toggle), ensure real-time refresh, and cover all KPIs.
+- **Risks**: Rendering performance drops if layouts become heavy; accessibility concerns for audio cues; UI tests may require terminal control adjustments.
+- **Affected Components**: `src/townlet_ui/dashboard.py`, `src/townlet_ui/commands.py`, `tests/test_dashboard_panels.py`, `docs/design/DASHBOARD_UI_ENHANCEMENT.md`.
+- **Validation**: Visual smoke test via `scripts/observer_ui.py`, snapshot tests for dashboard panels, documentation updates.
+
+## FWP-07 Decide on Web GUI vs. Console
+- **Fix / Change**: Make a go/no-go decision for a web UI, prototype minimal telemetry viewer if approved, and update operators’ guide accordingly.
+- **Risks**: Resource diversion; web stack introduces new dependencies and security considerations; inconsistent UX if both UIs diverge.
+- **Affected Components**: New web frontend (if built), `docs/ops/CONSOLE_ACCESS.md`, telemetry schema documentations, potential additions under `scripts/`.
+- **Validation**: Decision record; if web UI built, end-to-end telemetry integration test; update runbooks.
+
+## FWP-08 Demo Scenario Scripting & QA
+- **Fix / Change**: Script a narrative-driven demo using `DemoScheduler`, rehearse perturbations/console triggers, and ensure telemetry narrations tell the story.
+- **Risks**: Time-sensitive scripts can flake; heavy scheduling might strain stability; demo drift if config changes are untracked.
+- **Affected Components**: `src/townlet/demo/timeline.py`, `scripts/demo_run.py`, `configs/scenarios/`, narrative tests (`tests/test_demo_timeline.py`).
+- **Validation**: Full demo rehearsal (CLI + UI), verify narration stream, document operator checklist.
+
+## FWP-09 Agent Personalities & Diversity
+- **Fix / Change**: Introduce personality profiles affecting needs, rewards, and action bias; expose traits in observations and UI.
+- **Risks**: Behaviour variance could destabilize training; balancing traits requires tuning; UI clutter if not well presented.
+- **Affected Components**: `src/townlet/agents/models.py`, `src/townlet/policy/behavior.py`, `src/townlet_ui/dashboard.py`, relevant tests (`tests/test_behavior_rivalry.py`, `tests/test_dashboard_panels.py`).
+- **Validation**: Behavioural regression tests, telemetry summaries highlighting trait-driven outcomes, updated documentation.
+
+## FWP-10 Personal Agent Inventories & Items
+- **Fix / Change**: Add inventory system for agents (e.g., meals/tools), integrate with affordances and telemetry, and display inventory state.
+- **Risks**: Data model expansion may impact snapshots; inventory state must serialize cleanly; observer UI must handle new metadata.
+- **Affected Components**: `src/townlet/world/grid.py`, `src/townlet/world/affordances.py`, `src/townlet_ui/dashboard.py`, tests (`tests/test_affordance_hooks.py`, `tests/test_observer_payload.py`).
+- **Validation**: Unit tests for new affordances, snapshot migration checks, UI verification for inventory icons.
+
+## FWP-11 Richer Social Interactions & Relationships
+- **Fix / Change**: Add organic chat/conflict affordances, scripted social vignettes, and richer narrative logging.
+- **Risks**: Event spam could overwhelm telemetry; balancing social rewards critical; narrative logging must avoid performance regressions.
+- **Affected Components**: `src/townlet/world/relationships.py`, `src/townlet/rewards/engine.py`, `src/townlet/telemetry/narration.py`, social tests (`tests/test_relationship_metrics.py`, `tests/test_telemetry_narration.py`).
+- **Validation**: Social event regression tests, narrative playback checks, telemetry diff validation.
+
+## FWP-12 Extended Visualization & Feedback
+- **Fix / Change**: Enhance console/global map views, agent highlights, optional audio cues, and ensure new stats (inventory, personality) are visible.
+- **Risks**: Visualization updates might desync from telemetry; audio support raises accessibility/config complexity; map rendering must scale.
+- **Affected Components**: `src/townlet_ui/dashboard.py`, `src/townlet_ui/telemetry.py`, optional web visualizer, docs (`docs/design/DASHBOARD_UI_ENHANCEMENT.md`).
+- **Validation**: UI manual checks, telemetry-client contract tests, documentation walkthrough.
+
+## FWP-13 Polish, Testing, and Tuning
+- **Fix / Change**: Execute long-running sims, expand tests for new features, tune rewards/needs to hit KPIs, and refresh documentation.
+- **Risks**: Schedule pressure as this work is open-ended; risk of chasing emergent edge cases; documentation drift if not maintained.
+- **Affected Components**: Cross-cutting (reward configs, telemetry KPIs, docs in `docs/ops/`, `docs/program_management/`), CI scripts.
+- **Validation**: Extended soak tests (`pytest -m slow` where applicable), KPI monitoring, final doc review.
+
