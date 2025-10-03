@@ -7,7 +7,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 
@@ -25,6 +25,17 @@ MESSAGES_SENT = Counter(
     "townlet_web_ws_messages_total",
     "Count of telemetry messages sent to web clients",
     labelnames=("type",),
+)
+
+OPERATOR_CONNECTIONS = Gauge(
+    "townlet_web_operator_connections",
+    "Active operator WebSocket connections",
+)
+
+OPERATOR_COMMANDS = Counter(
+    "townlet_web_operator_commands_total",
+    "Operator commands dispatched via web UI",
+    labelnames=("status",),
 )
 
 
@@ -91,6 +102,7 @@ def create_app(
     stream_factory: Callable[[], AsyncIterator[dict[str, Any]]],
     *,
     heartbeat_interval: float = 30.0,
+    operator_config: dict[str, Any] | None = None,
 ) -> FastAPI:
     """Construct a FastAPI app exposing telemetry over WebSocket."""
 
@@ -108,6 +120,19 @@ def create_app(
     @app.get("/health")
     async def _health() -> dict[str, str]:
         return {"status": "ok"}
+
+    if operator_config is not None:
+        operator_gateway = OperatorGateway(
+            token_validator=operator_config["token_validator"],
+            dispatch=operator_config["dispatch"],
+            status_provider=operator_config["status_provider"],
+        )
+
+        @app.websocket("/ws/operator")
+        async def _operator_ws(websocket: WebSocket) -> None:  # pragma: no cover - wrapper
+            await operator_gateway.websocket_handler(websocket)
+
+        app.state.operator_gateway = operator_gateway
 
     app.state.telemetry_gateway = gateway
     return app
@@ -137,4 +162,57 @@ class ReplayStreamFactory:
         return 0.05
 
 
-__all__ = ["TelemetryGateway", "create_app", "ReplayStreamFactory"]
+__all__ = ["TelemetryGateway", "OperatorGateway", "create_app", "ReplayStreamFactory"]
+
+
+class OperatorGateway:
+    """Handle operator command WebSocket connections."""
+
+    def __init__(
+        self,
+        *,
+        token_validator: Callable[[str], bool],
+        dispatch: Callable[[dict[str, Any]], dict[str, Any]],
+        status_provider: Callable[[], dict[str, Any]],
+    ) -> None:
+        self._token_validator = token_validator
+        self._dispatch = dispatch
+        self._status_provider = status_provider
+
+    async def websocket_handler(self, websocket: WebSocket) -> None:
+        token = websocket.query_params.get("token", "")
+        if not self._token_validator(token):
+            await websocket.close(code=4403)
+            return
+
+        await websocket.accept()
+        OPERATOR_CONNECTIONS.inc()
+        try:
+            await self._send_status(websocket)
+            while True:
+                try:
+                    message = await websocket.receive_json()
+                except WebSocketDisconnect:
+                    break
+                msg_type = message.get("type")
+                if msg_type != "command":
+                    continue
+                payload = message.get("payload", {})
+                try:
+                    result = self._dispatch(payload)
+                    await websocket.send_json({"type": "command_ack", "status": "ok", "result": result})
+                    OPERATOR_COMMANDS.labels(status="ok").inc()
+                except Exception as exc:  # noqa: BLE001
+                    await websocket.send_json({
+                        "type": "command_ack",
+                        "status": "error",
+                        "error": str(exc)
+                    })
+                    OPERATOR_COMMANDS.labels(status="error").inc()
+                await self._send_status(websocket)
+        finally:
+            OPERATOR_CONNECTIONS.dec()
+
+    async def _send_status(self, websocket: WebSocket) -> None:
+        status = self._status_provider()
+        await websocket.send_json({"type": "status", **status})

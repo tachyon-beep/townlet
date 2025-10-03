@@ -102,17 +102,25 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
   - [x] Containerize gateway + static frontend (Dockerfile + docker-compose sample).
   - [x] Create Helm stub for demo deployment with config toggles (spectator URL, rate limits).
   - [x] Add CDN caching headers for spectator assets; ensure no caching of auth endpoints.
-  - [ ] Run k6 (or Locust) load test simulating 50 concurrent spectators, collect latency metrics.
+  - [x] Run k6 (or Locust) load test simulating 50 concurrent spectators, collect latency metrics.
   - [x] Document deployment/runbook in `docs/ops/WEB_SPECTATOR_DEPLOY.md`.
 - Dependencies: Gateway & frontend phases complete; ops baseline from Milestone 0.
 - Exit Criteria: Container images build in CI; load test report meets <250 ms p95 update latency; deployment guide published.
 
 ### Milestone 2 Detailed Plan – Operator Console Parity
-(to begin after Milestone 1)
-- **Phase 2.1 Command Dispatch** – Implement authenticated WebSocket channels for command palette, mirror console queue status/history, add e2e tests dispatching against a sandbox SimulationLoop.
-- **Phase 2.2 Perturbation & Overlay Panels** – Render interactive overlays (relationships, social, KPIs) using parity checklist; write snapshot/unit tests.
-- **Phase 2.3 Accessibility & Audio** – Add keyboard navigation, ARIA labels, optional audio cues consistent with console docs.
-- Exit Criteria: Operator UI achieves parity checklist, passes e2e command dispatch test suite, accessibility audit complete.
+
+| Phase | Goal | Tasks | Exit Criteria |
+|-------|------|-------|---------------|
+| **2.1 Command Dispatch** | Bring operator command palette online via secure WebSocket | 1. Implement authenticated operator channel (JWT/opaque token) and gateway auth middleware. 2. Mirror command queue status/history feed in spectator UI (read-only mode). 3. Build command palette UI with preview/execute toggles, tie into parity checklist. 4. Add sandbox SimulationLoop integration tests dispatching commands end-to-end. | Command dispatch succeeds via web UI against test loop; web and console command logs match; auth required for operator mode. |
+| **2.2 Perturbation & Overlay Panels** | Achieve visual parity for overlays (relationships, social, KPIs, perturbations) | 1. Implement observer panels using parity checklist items (relationships, overlays, KPI trends, perturbation banner). 2. Add storybook snapshots + unit tests for each panel. 3. Integrate telemetry hook selectors for performance. 4. Update docs with parity matrix status. | Storybook covers all panels; unit tests snapshot output; parity checklist items under FWP-07 marked complete. |
+| **2.3 Accessibility & Audio** | Ensure operator UI is accessible and supports alert audio cues | 1. Keyboard navigation + focus order audit across operator screens. 2. Add ARIA labels/live regions for telemetry updates. 3. Implement opt-in audio cues consistent with console docs (muted by default). 4. Run axe/Storybook accessibility checks; capture results. | WCAG smoke tests pass; audio toggle documented; accessibility report stored in ops docs. |
+
+**Dependencies:** Milestone 1 spectator stack, telemetry gateway auth stubs, parity checklist.
+
+**Exit Criteria:** Operator UI meets parity checklist, end-to-end command dispatch suite passes, accessibility audit documented.
+
+**Progress:**
+- ✅ Phase 2.1 Command Dispatch – operator WebSocket auth, command palette UI hooks, status mirroring, and dispatch tests delivered (`tests/test_web_operator.py`).
 
 ## FWP-08 Demo Scenario Scripting & QA
 - **Fix / Change**: Script a narrative-driven demo using `DemoScheduler`, rehearse perturbations/console triggers, and ensure telemetry narrations tell the story.

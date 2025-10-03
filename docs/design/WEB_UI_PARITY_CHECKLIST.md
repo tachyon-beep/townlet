@@ -16,6 +16,7 @@ Keep this checklist updated as panels evolve. Each section corresponds to an exi
 - [ ] Narrations feed (priority markers)
 - [ ] Map overlay (local agent map or equivalent visualization)
 - [ ] Command palette & history (operator console only)
+- [x] Command palette & history (web operator mode) *(Phase 2.1 MVP: dispatch + status)*
 - [ ] Legend / operator tips
 
 For each item capture:

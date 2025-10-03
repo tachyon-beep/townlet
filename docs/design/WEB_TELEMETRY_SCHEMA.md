@@ -67,9 +67,11 @@ Consumers integrating the web observer should depend on this schema and fixtures
 
 ## Gateway Reference
 
-The FastAPI gateway lives in `src/townlet/web/gateway.py` and exposes two endpoints:
+The FastAPI gateway lives in `src/townlet/web/gateway.py` and exposes:
 
 - `GET /metrics` – Prometheus metrics covering connection counts and message totals.
+- `GET /health` – Simple readiness probe for orchestration.
 - `WS /ws/telemetry` – Streams an initial `snapshot` followed by `diff` payloads. The gateway drops out-of-order ticks and keeps payloads JSON-compatible for the web client.
+- `WS /ws/operator` – Authenticated operator channel (requires `token` query param). Accepts `{"type":"command", "payload":{...}}` messages and emits `status` snapshots (command history + queue info) plus `command_ack` responses.
 
 Unit tests in `tests/test_web_gateway.py` cover snapshot/diff delivery, stale tick handling, and metrics exposure.
