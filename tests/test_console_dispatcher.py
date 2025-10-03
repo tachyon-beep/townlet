@@ -4,16 +4,35 @@ from pathlib import Path
 
 import pytest
 
-from townlet.config import load_config
+from townlet.config import (
+    ConsoleAuthConfig,
+    ConsoleAuthTokenConfig,
+    load_config,
+)
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot
+
+ADMIN_TOKEN = "admin-token"
+VIEWER_TOKEN = "viewer-token"
 
 
 @pytest.fixture()
 def employment_loop() -> SimulationLoop:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = True
+    config = config.model_copy(
+        update={
+            "console_auth": ConsoleAuthConfig(
+                enabled=True,
+                require_auth_for_viewer=False,
+                tokens=[
+                    ConsoleAuthTokenConfig(token=VIEWER_TOKEN, role="viewer", label="viewer"),
+                    ConsoleAuthTokenConfig(token=ADMIN_TOKEN, role="admin", label="admin"),
+                ],
+            )
+        }
+    )
     loop = SimulationLoop(config)
     loop.world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
@@ -26,6 +45,11 @@ def employment_loop() -> SimulationLoop:
 
 
 def _queue_command(loop: SimulationLoop, payload: dict[str, object]) -> None:
+    if "auth" not in payload:
+        token = VIEWER_TOKEN
+        if payload.get("mode") == "admin":
+            token = ADMIN_TOKEN
+        payload = {**payload, "auth": {"token": token}}
     loop.telemetry.queue_console_command(payload)
 
 

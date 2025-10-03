@@ -4,7 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 
-from townlet.config import load_config
+from townlet.config import (
+    ConsoleAuthConfig,
+    ConsoleAuthTokenConfig,
+    load_config,
+)
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet.snapshots import SnapshotManager
@@ -15,6 +19,18 @@ from townlet.world.grid import AgentSnapshot
 def main() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = True
+    config = config.model_copy(
+        update={
+            "console_auth": ConsoleAuthConfig(
+                enabled=True,
+                require_auth_for_viewer=False,
+                tokens=[
+                    ConsoleAuthTokenConfig(token="viewer-token", role="viewer"),
+                    ConsoleAuthTokenConfig(token="admin-token", role="admin"),
+                ],
+            )
+        }
+    )
     loop = SimulationLoop(config)
     world = loop.world
     world.agents.clear()
@@ -112,6 +128,7 @@ def main() -> None:
             "name": "force_chat",
             "mode": "admin",
             "cmd_id": "chat-demo",
+            "auth": {"token": "admin-token"},
             "kwargs": {
                 "payload": {
                     "speaker": "agent_0",

@@ -1,115 +1,100 @@
 # Work Packages
 
 ## Summary Statistics
-- Priorities: CRITICAL (1), HIGH (3), MEDIUM (4), LOW (2)
-- Category coverage: Security (2), Operational (1), Performance (1), Quality (1), BestPractice (1), Enhancement (2), TechnicalDebt (2)
-- Effort by priority:
-  - CRITICAL: 1 × XS (<2h)
-  - HIGH: 2 × S (2–8h), 1 × M (1–3d)
-  - MEDIUM: 1 × S, 3 × M
-  - LOW: 1 × XS, 1 × S
+- Priorities: CRITICAL=1, HIGH=4, MEDIUM=5, LOW=0
+- Categories: Security=2, Operational=2, Performance=1, Quality=1, BestPractice=2, Enhancement=1, TechnicalDebt=1
+- Effort totals (approximate):
+  - CRITICAL: S (~0.5 day)
+  - HIGH: S + 3×M ≈ 2.5 days
+  - MEDIUM: L + 3×M + S ≈ 5.5 days
+
 
 ## Priority: CRITICAL
 
-## WP-001: Restore Simulation CLI Tick Execution
+## WP-301: Harden Console Auth Defaults
 
-**Category**: Operational
+**Category**: Security
 **Priority**: CRITICAL
-**Effort**: XS (< 2hrs)
-**Risk Level**: High
+**Effort**: S (2-8hrs)
+**Risk Level**: Critical
 
 ### Description
-`scripts/run_simulation.py` instantiates `SimulationLoop` and calls `loop.run(max_ticks=...)` without iterating the generator, so no ticks execute. The flagship CLI therefore produces no side effects, misleading operators and blocking smoke tests.
+Console authentication is disabled by default, and when disabled any caller can elevate to admin mode by setting `mode="admin"` in the payload.
 
 ### Current State
-- `SimulationLoop.run()` yields `TickArtifacts` lazily.
-- CLI drops the iterable, exiting immediately without a single tick.
-- No regression test guards this behaviour, so the defect persisted unnoticed.
+`ConsoleAuthenticator.authorise` normalises the caller-supplied mode whenever `console_auth.enabled` is false, enabling privilege escalation (`src/townlet/console/auth.py:105-112`). The default config keeps auth disabled (`src/townlet/config/loader.py:623-638`).
 
 ### Desired State
-- CLI iterates the generator (e.g., `for _ in loop.run(...): pass`).
-- Add a smoke test that executes a small number of ticks and asserts tick counter/telemetry side effects.
-- Optionally adjust `SimulationLoop.run()` to execute immediately when `max_ticks` is provided to prevent future misuse.
+Admin-only actions must be gated by explicit tokens. When auth is disabled, the system should coerce every request to viewer mode (or refuse admin commands) and emit a warning.
 
 ### Impact if Not Addressed
-- Simulation CLI remains non-functional, blocking QA demos and automated rehearsals.
-- Downstream tooling (telemetry capture, replay buffers) cannot be validated end-to-end.
+Unauthenticated clients can execute admin console commands, undermining safety controls and allowing arbitrary world mutations or promotion triggers.
 
 ### Proposed Solution
-1. Update `scripts/run_simulation.py` to iterate over `loop.run()`.
-2. Consider adding a convenience method (`loop.run_for(max_ticks)`) to make intent explicit.
-3. Add a pytest CLI smoke test invoking the script via `subprocess` or direct call, asserting world tick increments.
-4. Document expected usage in README/docs.
+- Force viewer mode when auth is disabled or require `console_auth.enabled=true` to expose admin commands.
+- Surface a startup warning when auth is off.
+- Add regression tests for viewer/admin separation and ensure CLI defaults enable auth in non-dev configs.
 
 ### Affected Components
-- scripts/run_simulation.py
-- tests (new CLI smoke test)
-- src/townlet/core/sim_loop.py (optional API ergonomics)
+- src/townlet/console/auth.py:105-139
+- src/townlet/console/handlers.py
+- configs/demo/*
 
 ### Dependencies
-- None.
+- None
 
 ### Acceptance Criteria
-- [ ] CLI executes requested tick count and logs telemetry.
-- [ ] New smoke test fails on the pre-fix behaviour and passes after the fix.
-- [ ] README or docs updated with corrected invocation guidance.
+- [ ] Admin-only handlers reject requests unless a valid token is supplied.
+- [ ] Default configs no longer allow `mode="admin"` without auth.
+- [ ] Tests cover viewer/admin splits and log emission when auth disabled.
 
 ### Related Issues
-- AUDIT_SUMMARY.md (Top priority #1)
+- Ties to WP-302 for secure transport guidance.
+
 
 ## Priority: HIGH
 
-## WP-002: Harden Affordance Hook Module Imports
+## WP-303: Guard Telemetry Flush Worker Failures
 
-**Category**: Security
+**Category**: Operational
 **Priority**: HIGH
 **Effort**: S (2-8hrs)
 **Risk Level**: High
 
 ### Description
-`WorldState` reads `TOWNLET_AFFORDANCE_HOOK_MODULES` and blindly imports each module, enabling arbitrary code execution if the environment variable is manipulated.
+The telemetry flush thread runs without exception guards or liveness checks; any runtime error silently kills telemetry streaming.
 
 ### Current State
-- `world/grid.py` builds the module list, `world/hooks.load_modules` imports without validation.
-- No allowlist, signature checks, or sandboxing.
+`TelemetryPublisher._flush_loop` lacks try/except or watchdog notification (`src/townlet/telemetry/publisher.py:651-666`). Failures leave the system unaware while telemetry stops.
 
 ### Desired State
-- Restrict hook imports to configured allowlists or packaged entry points.
-- Reject or warn on modules outside trusted namespaces.
-- Document secure deployment expectations.
+Flush worker failures should be caught, surfaced via state, and optionally retried/restarted so operators can react.
 
 ### Impact if Not Addressed
-- Anyone with environment access can execute arbitrary Python within the simulation process.
-- Violates least-privilege expectations in shared or automated environments.
+Telemetry and console command delivery can halt silently, eroding observability and promotion readiness.
 
 ### Proposed Solution
-1. Add configuration allowlist (e.g., `config.affordances.allowed_hook_modules`).
-2. Validate environment-provided modules against allowlist and log rejections.
-3. Consider replacing env control with config-level specification.
-4. Add tests covering valid/invalid module imports.
-5. Update security docs with guidance.
+- Wrap the flush loop with exception handling that records failure state and triggers a restart or fails fast.
+- Expose a heartbeat flag via `export_state()` and log CRITICAL errors when the worker dies.
+- Add unit tests simulating flush exceptions.
 
 ### Affected Components
-- src/townlet/world/grid.py
-- src/townlet/world/hooks/__init__.py
-- configs (new allowlist field)
-- docs/security guidance
+- src/townlet/telemetry/publisher.py:620-699
+- tests/test_telemetry_stream_smoke.py
 
 ### Dependencies
-- None.
+- None, though complements WP-304 for broader health coverage.
 
 ### Acceptance Criteria
-- [ ] Hook imports limited to explicit allowlist.
-- [ ] Invalid modules raise descriptive errors and refuse execution.
-- [ ] Tests cover trusted/untrusted module scenarios.
-- [ ] Security documentation updated.
+- [ ] Flush thread failures set a health flag and produce structured logs.
+- [ ] Optional auto-restart or explicit shutdown path implemented.
+- [ ] Tests assert health flag toggling on simulated failure.
 
 ### Related Issues
-- AUDIT_SUMMARY (Security finding #1)
+- Feeds into risk R-003 in the risk register.
 
----
 
-## WP-003: Secure Telemetry Transport Path
+## WP-302: Require Secure Telemetry Transport Defaults
 
 **Category**: Security
 **Priority**: HIGH
@@ -117,352 +102,323 @@
 **Risk Level**: High
 
 ### Description
-`TelemetryPublisher` supports a TCP transport that sends JSON payloads in plaintext with no authentication, exposing sensitive simulation metrics and console results on the network.
+Telephony transport defaults encourage plaintext TCP because TLS is disabled and operators must set `allow_plaintext=true` to connect.
 
 ### Current State
-- `TcpTransport` uses `socket.create_connection` without TLS.
-- Transport configuration lacks authentication or shared secrets.
-- No warnings surface when TCP is selected.
+`TelemetryTransportConfig` defaults to `enable_tls=False`, and TCP mode raises unless `allow_plaintext=True` (`src/townlet/config/loader.py:507-560`). TCP clients log a warning but continue without encryption (`src/townlet/telemetry/transport.py:201-243`).
 
 ### Desired State
-- Provide TLS (via `ssl.wrap_socket` or a pluggable secure client) and/or token-based signing.
-- Default to secure transports; clearly warn (or disallow) plaintext in production.
+TLS should be the default for TCP transport with clear certificate configuration, and plaintext should be a temporary dev-only override with feature flagging.
 
 ### Impact if Not Addressed
-- Telemetry can be intercepted or modified in transit.
-- Console command audit trails and promotion state may leak.
+Telemetry data and console responses traverse networks unencrypted, exposing sensitive behavioural metrics and enabling manipulation.
 
 ### Proposed Solution
-1. Add TLS configuration (cert paths, verification flags) to telemetry transport config.
-2. Wrap sockets using Python’s `ssl` module; fall back to plaintext only when explicitly allowed.
-3. Optionally add HMAC signing of payloads.
-4. Document deployment steps and update tests/mocks for new parameters.
+- Default TCP transport to `enable_tls=True` with hostname verification.
+- Provide configuration validation errors when plaintext is requested outside explicitly tagged dev configs.
+- Extend docs with certificate provisioning steps and add regression tests for TLS handshake paths.
 
 ### Affected Components
-- src/townlet/telemetry/transport.py
-- src/townlet/telemetry/publisher.py (config validation)
-- configs/examples (new TLS fields)
-- docs/ops or security guidance
+- src/townlet/config/loader.py:507-560
+- src/townlet/telemetry/transport.py:201-263
+- docs/ops/CONSOLE_ACCESS.md
 
 ### Dependencies
-- WP-002 (shared security review cadence).
+- None
 
 ### Acceptance Criteria
-- [ ] TLS-enabled TCP transport with certificate validation is available.
-- [ ] Plaintext mode emits explicit warnings and is disabled by default in production configs.
-- [ ] Unit tests cover secure and insecure modes.
-- [ ] Documentation updated with deployment guidance.
+- [ ] TLS-enabled TCP transport works out of the box with sample certs.
+- [ ] CI covers TLS and plaintext (dev) scenarios.
+- [ ] Documentation warns about plaintext and explains cert management.
 
 ### Related Issues
-- AUDIT_SUMMARY (Security finding #2)
+- Works with WP-301 to lock down remote command access.
 
----
 
-## WP-004: Add CLI Regression Tests & Strengthen SimulationLoop Contract
+## WP-305: Introduce Spatial Indexing for Local Views
 
-**Category**: Quality
+**Category**: Performance
 **Priority**: HIGH
-**Effort**: S (2-8hrs)
+**Effort**: M (1-3 days)
+**Risk Level**: High
+
+### Description
+`WorldState.local_view` rebuilds agent/object lookups by scanning every agent for each request, leading to O(n²) behaviour as populations grow.
+
+### Current State
+Lines `src/townlet/world/grid.py:1396-1459` iterate over every agent and object per agent view, recomputing dictionaries on each call.
+
+### Desired State
+Maintain spatial indices (per-tile buckets or uniform grid) that can be updated incrementally, reducing local view construction to O(k) for neighbourhood size.
+
+### Impact if Not Addressed
+Observation building and policy loops will degrade rapidly as agent counts increase, blocking planned scale-outs.
+
+### Proposed Solution
+- Introduce a spatial index maintained during agent/object movement updates.
+- Update `local_view` to query the index instead of scanning full collections.
+- Add microbenchmarks and regression tests verifying performance at higher agent counts.
+
+### Affected Components
+- src/townlet/world/grid.py:1396-1469
+- src/townlet/world/queue_manager.py
+- tests/test_world_local_view.py
+
+### Dependencies
+- Coordinate with WP-306 to avoid duplicate structural work.
+
+### Acceptance Criteria
+- [ ] Benchmarks show near-linear behaviour in radius instead of agent count.
+- [ ] Tests cover index updates during moves/spawns/despawns.
+- [ ] Observation builders consume the new index without regressions.
+
+### Related Issues
+- Mitigates performance risk R-004.
+
+
+## WP-309: Complete Compact Observation Variant
+
+**Category**: Enhancement
+**Priority**: HIGH
+**Effort**: M (1-3 days)
 **Risk Level**: Medium
 
 ### Description
-Lack of integration tests allowed the simulation CLI regression to ship. `SimulationLoop.run` returning a generator is easily misused.
+The compact observation variant returns zero tensors, preventing configs marked `observations: compact` from functioning.
 
 ### Current State
-- No automated tests execute CLI scripts.
-- `SimulationLoop.run` does not guard against non-iteration usage.
+`ObservationBuilder._build_compact` returns zero arrays with placeholder metadata (`src/townlet/observations/builder.py:450-468`).
 
 ### Desired State
-- Regression tests cover `run_simulation.py` and `run_training.py` happy paths.
-- Simulation loop exposes a convenience API that cannot be misused silently.
+Compact observations should include a reduced feature vector and minimal spatial map consistent with network expectations.
 
 ### Impact if Not Addressed
-- Future regressions will slip through review.
-- Developers remain unaware of API pitfalls.
+Compact-mode experiments and documentation remain blocked, reducing flexibility for scale testing.
 
 ### Proposed Solution
-1. Create pytest integration tests invoking CLI entry points (via subprocess or direct call) with temporary configs.
-2. Add helper method `SimulationLoop.run_for(max_ticks)` that executes internally, deprecating the generator usage in CLI contexts.
-3. Update documentation and test harnesses accordingly.
+- Define the compact schema (channels, feature ordering) aligned with policy models.
+- Implement tensor population and update UI/telemetry validation tests.
+- Extend tests in `tests/test_observation_builder_compact.py` to assert contents.
 
 ### Affected Components
-- tests/test_sim_loop_structure.py (extend) or new integration test module
-- scripts/run_simulation.py
-- scripts/run_training.py (smoke path)
-- src/townlet/core/sim_loop.py (API ergonomics)
+- src/townlet/observations/builder.py:420-520
+- tests/test_observation_builder_compact.py
+- docs/design/OBSERVATIONS.md (if added)
 
 ### Dependencies
-- WP-001 (ensures CLI works after fix).
+- None, though coordinate with WP-305 for data sources.
 
 ### Acceptance Criteria
-- [ ] Tests fail on current regression and pass post-fix.
-- [ ] CLI helper method documented for developers.
-- [ ] CI includes new regression tests.
+- [ ] Compact builder returns populated tensors matching design spec.
+- [ ] Policy runners accept compact observations without requiring hybrid/full.
+- [ ] Documentation updated for compact feature availability.
 
 ### Related Issues
-- AUDIT_SUMMARY (Operational/Quality findings)
+- Eliminates enhancement risk R-005.
+
 
 ## Priority: MEDIUM
 
-## WP-005: Optimise World Local View & Observation Builder Hot Paths
+## WP-306: Decompose WorldState and PolicyRuntime
 
-**Category**: Performance
+**Category**: Quality
+**Priority**: MEDIUM
+**Effort**: L (3-10 days)
+**Risk Level**: High
+
+### Description
+`WorldState` and `PolicyRuntime` are monolithic (2700+ and 1400+ lines respectively), mixing console, telemetry, employment, and policy responsibilities.
+
+### Current State
+The classes span numerous responsibilities with nested helpers, complicating reviews and increasing regression risk (`src/townlet/world/grid.py:178-2700`, `src/townlet/policy/runner.py:1-1481`).
+
+### Desired State
+Extract dedicated modules for console bridge, employment engine, affordance runtime, and policy heads with explicit interfaces.
+
+### Impact if Not Addressed
+Future changes risk cross-cutting regressions, slowing development and making bug fixes error-prone.
+
+### Proposed Solution
+- Follow the refactor roadmap in `docs/engineering/WORLDSTATE_REFACTOR.md`.
+- Stage extraction into discrete modules with targeted unit tests.
+- Introduce lightweight context objects to eliminate circular imports.
+
+### Affected Components
+- src/townlet/world/grid.py
+- src/townlet/world/console_bridge.py
+- src/townlet/world/employment.py
+- src/townlet/policy/runner.py
+
+### Dependencies
+- Coordinate with WP-305 to avoid conflicting structural changes.
+
+### Acceptance Criteria
+- [ ] Responsibilities distributed across focused modules with matching tests.
+- [ ] Public APIs documented and consumed by `SimulationLoop` without behavioural drift.
+- [ ] CI suite extended to guard extracted modules.
+
+### Related Issues
+- Mitigates maintainability portion of risk R-004.
+
+
+## WP-304: Add Simulation Loop Health & Recovery Hooks
+
+**Category**: Operational
 **Priority**: MEDIUM
 **Effort**: M (1-3 days)
 **Risk Level**: Medium
 
 ### Description
-`WorldState.local_view` and `ObservationBuilder._build_single` rebuild neighbourhood maps for every agent each tick, leading to O(n²) behaviour as agent count grows beyond the design target.
+The main loop lacks panic handling; exceptions propagate and halt the simulation with no structured error reporting.
 
 ### Current State
-- For each agent, loops over all agents/objects to rebuild lookup tables.
-- Tests currently focus on small populations (≤10 agents), hiding scaling issues.
+`SimulationLoop.run` simply yields `step()` results (`src/townlet/core/sim_loop.py:181-238`), so runtime errors fail hard without cleanup, snapshotting, or alerts.
 
 ### Desired State
-- Precompute spatial indices once per tick and reuse across agents.
-- Profile and document resulting performance budgets.
+Provide error interception that captures snapshots, emits telemetry alerts, and optionally restarts or exits gracefully.
 
 ### Impact if Not Addressed
-- Performance degrades rapidly with additional agents or scripted NPCs.
-- PPO training and anneal rehearsals stall when scaling scenarios.
+Transient bugs crash long-running runs silently, causing data loss and unobserved outages.
 
 ### Proposed Solution
-1. Introduce shared spatial cache computed once per tick (e.g., grid occupancy map).
-2. Inject cache into observation builder/local view functions.
-3. Add benchmarks or profiling assertions for target agent counts.
-4. Update tests to cover larger agent populations.
+- Wrap loop iterations with try/except, logging structured telemetry alerts and capturing diagnostics.
+- Provide hooks for external supervisors (CLI, training harness) to recover or exit with context.
+- Add integration tests simulating failures in affordance resolution.
 
 ### Affected Components
-- src/townlet/world/grid.py (local_view, snapshot usage)
-- src/townlet/observations/builder.py
-- tests/test_observation_builder*.py
+- src/townlet/core/sim_loop.py:181-276
+- scripts/run_simulation.py
 
 ### Dependencies
-- None.
+- Complements WP-303 for holistic health coverage.
 
 ### Acceptance Criteria
-- [ ] Local view/observation builder reuse cached spatial data.
-- [ ] Profiling demonstrates sub-quadratic behaviour for 32 agents.
-- [ ] Tests updated to cover higher agent counts.
+- [ ] Loop surfaces structured failure telemetry and console output.
+- [ ] Hooks allow CLI to exit gracefully with non-zero status.
+- [ ] Regression tests verify snapshot capture on crash.
 
 ### Related Issues
-- AUDIT_SUMMARY (Performance finding)
+- Linked to operational risk R-003.
 
----
 
-## WP-006: Complete Compact Observation Variant
-
-**Category**: TechnicalDebt
-**Priority**: MEDIUM
-**Effort**: M (1-3 days)
-**Risk Level**: Medium
-
-### Description
-`ObservationBuilder` contains a TODO for the compact variant and tests reference it, but no implementation exists.
-
-### Current State
-- Hybrid/full variants implemented; compact path unimplemented (`# TODO(@townlet)`).
-- Config allows selecting `compact`, risking runtime errors or inconsistent tensors.
-
-### Desired State
-- Compact variant produces deterministic tensors with documentation and tests.
-
-### Impact if Not Addressed
-- Users selecting compact observations hit placeholder behaviour.
-- PPO/training code cannot rely on variant parity.
-
-### Proposed Solution
-1. Define compact feature map (subset of hybrid features) and implement builder path.
-2. Add fixtures/tests verifying shapes/values for compact variant.
-3. Update docs/config comments explaining variant differences.
-
-### Affected Components
-- src/townlet/observations/builder.py
-- tests/test_observation_builder_compact.py (extend)
-- docs/guides on observations
-
-### Dependencies
-- WP-005 (shared observation refactor) [optional sequencing].
-
-### Acceptance Criteria
-- [ ] Compact variant enabled via config without crashes.
-- [ ] Test coverage validates tensor shapes/values across variants.
-- [ ] Documentation updated to describe variant capabilities.
-
-### Related Issues
-- TODO marker in observations builder
-
----
-
-## WP-007: Introduce Dependency Pinning & Environment Guidance
+## WP-307: Raise API Docstring Coverage & Developer Docs
 
 **Category**: BestPractice
 **Priority**: MEDIUM
-**Effort**: S (2-8hrs)
+**Effort**: M (1-3 days)
 **Risk Level**: Medium
 
 ### Description
-`pyproject.toml` specifies only lower bounds. Without pinning, new upstream releases (numpy, pydantic, pettingzoo) can break the project unpredictably.
+Only ~16% of callables carry docstrings, leaving public APIs under-documented.
 
 ### Current State
-- No lock file; contributors may install divergent versions.
-- Lack of documented Python/PyTorch compatibility matrix.
+Static analysis shows 267 docstrings across 1,708 callables (`audit/module metadata`).
 
 ### Desired State
-- Reproducible dependency sets via lock file or constraints.
-- Documented tooling versions for CI/local parity.
+All exported modules, classes, and public methods should describe behaviour and side effects, with docs summarising module responsibilities.
 
 ### Impact if Not Addressed
-- Builds become non-deterministic; subtle regressions surface unexpectedly.
-- Difficult to troubleshoot dependency-induced failures.
+Onboarding friction remains high; reviewers must infer behaviour from code.
 
 ### Proposed Solution
-1. Generate `requirements.lock` or `uv.lock` capturing tested versions.
-2. Update contribution docs to instruct installation via lock.
-3. Configure CI to install from lock to verify reproducibility.
+- Prioritise documenting exported classes/functions in `src/townlet` and `src/townlet_ui`.
+- Add docstring coverage checks (e.g., `interrogate` or custom pytest plugin).
+- Update `docs/` with API reference sections for key services.
 
 ### Affected Components
-- pyproject.toml (optional adjustments)
-- New lock/constraints file
-- docs/CONTRIBUTING.md
-- CI workflows
+- src/townlet/**
+- src/townlet_ui/**
+- docs/
 
 ### Dependencies
-- None.
+- None
 
 ### Acceptance Criteria
-- [ ] Lock/constraints file committed and referenced in docs.
-- [ ] CI installs using locked versions.
-- [ ] Contribution guide updated with upgrade cadence.
+- [ ] Docstring coverage exceeds 60% for public APIs.
+- [ ] CI fails when new exported functions lack docstrings.
+- [ ] Documentation includes updated module overviews.
 
 ### Related Issues
-- AUDIT_SUMMARY (Best practice finding)
+- Supports mitigation of knowledge risks in R-006.
 
----
 
-## WP-008: Reduce Telemetry Payload Volume via Diffing/Channels
+## WP-308: Provide Reproducible Container & Secrets Model
 
-**Category**: Enhancement
+**Category**: BestPractice
 **Priority**: MEDIUM
 **Effort**: M (1-3 days)
 **Risk Level**: Medium
 
 ### Description
-Telemetry currently serialises full world snapshots every tick, even when most data is unchanged. This strains transports and downstream analytics.
+There is no Dockerfile or deployment manifest, complicating reproducibility and secret injection.
 
 ### Current State
-- `_build_stream_payload` copies large dictionaries each tick.
-- Buffer drops payloads when over capacity, but does not reduce churn.
+Project relies on manual virtualenv setup; docs reference TODO for containerization.
 
 ### Desired State
-- Emit incremental updates or split channels (e.g., high-frequency vs slow-changing metrics).
+Offer a container image (or devcontainer) bundling dependencies with secret management guidance for console tokens and TLS certs.
 
 ### Impact if Not Addressed
-- High bandwidth usage and larger telemetry logs.
-- Increased risk of buffer overflow/dropped messages under load.
+Environment drift and secret handling remain ad-hoc, increasing operational risk during rollout.
 
 ### Proposed Solution
-1. Identify frequently vs infrequently changing fields.
-2. Implement diffing or channel-based emission (e.g., state vs events).
-3. Provide config toggles and update downstream tooling to accept new schema.
+- Create Dockerfile/devcontainer configs with multi-stage build.
+- Document env var injection for console auth and TLS assets.
+- Update CI to build image for smoke testing if feasible.
 
 ### Affected Components
-- src/townlet/telemetry/publisher.py
-- Telemetry consumer tooling/scripts
-- docs on telemetry schema
+- New Dockerfile/devcontainer files
+- docs/ops/CONTAINER_GUIDE.md (new)
 
 ### Dependencies
-- WP-003 (transport review).
+- Builds on WP-302 for TLS documentation.
 
 ### Acceptance Criteria
-- [ ] Telemetry supports diff/channel mode with backward-compatible schema versioning.
-- [ ] Buffer utilisation drops in profiling scenarios.
-- [ ] Documentation updated for new schema.
+- [ ] Container builds and runs `scripts/run_simulation.py` with sample config.
+- [ ] Documentation explains secrets mounting and volume layout.
+- [ ] Optional CI job validates image build.
 
 ### Related Issues
-- AUDIT_SUMMARY (Performance/Enhancement finding)
+- Addresses deployment readiness noted in risk R-002.
 
-## Priority: LOW
 
-## WP-009: Clean Affordance Outcome Logging & Metadata Persistence
+## WP-310: Persist Affordance Outcome Metadata
 
 **Category**: TechnicalDebt
-**Priority**: LOW
-**Effort**: XS (< 2hrs)
-**Risk Level**: Low
-
-### Description
-`apply_affordance_outcome` appends metadata to `_affordance_outcomes` but contains duplicate trimming logic and drops affordance/object identifiers that would aid debugging.
-
-### Current State
-- Duplicate `if len(outcome_log) > 10: del outcome_log[0]` lines.
-- Metadata lacks affordance/object IDs due to TODO tracking.
-
-### Desired State
-- Single trimming block with configurable history length.
-- Outcome metadata includes identifiers for telemetry/debugging.
-
-### Impact if Not Addressed
-- Minor maintenance burden and reduced observability when diagnosing affordance failures.
-
-### Proposed Solution
-1. Consolidate trimming logic.
-2. Persist affordance/object IDs in metadata until schema evolves.
-3. Add unit test covering `apply_affordance_outcome` history retention.
-
-### Affected Components
-- src/townlet/world/affordances.py
-- tests/world affordance coverage (new)
-
-### Dependencies
-- None.
-
-### Acceptance Criteria
-- [ ] Outcome log retains bounded history without duplicate trimming.
-- [ ] Metadata includes identifiers verified by tests.
-
-### Related Issues
-- AUDIT_SUMMARY (Technical debt observation)
-
----
-
-## WP-010: Extend Telemetry Health Metrics with Worker Liveness
-
-**Category**: Enhancement
-**Priority**: LOW
+**Priority**: MEDIUM
 **Effort**: S (2-8hrs)
-**Risk Level**: Low
+**Risk Level**: Medium
 
 ### Description
-Telemetry health payload lacks explicit worker liveness, retry counters, or flush latency histograms, limiting operational insight.
+Affordance outcomes drop affordance/object IDs, limiting debugging after actions complete.
 
 ### Current State
-- Health metrics cover queue length, dropped messages, perturbation counts.
-- No gauge for worker thread status or retry frequency.
+`apply_affordance_outcome` logs metadata in an ad-hoc list with a TODO for richer fields (`src/townlet/world/affordances.py:120-156`).
 
 ### Desired State
-- Surface worker alive flag, last flush success age, retry counters.
-- Expose metrics to console/telemetry consumers for alerting.
+Include affordance/object identifiers and timestamps in agent snapshots or structured telemetry without relying on metadata lists.
 
 ### Impact if Not Addressed
-- Harder to diagnose stalled transports or silent failures.
+Operators lack context for recent actions, hampering post-incident analysis and delaying validation of affordance tweaks.
 
 ### Proposed Solution
-1. Track flush worker heartbeat timestamps and retry counts in `_transport_status`.
-2. Emit new fields in health payload and documentation.
-3. Update tests to assert metrics presence.
+- Extend `AgentSnapshot` to carry recent affordance summary with IDs.
+- Update telemetry and UI overlays to display the enriched metadata.
+- Add tests covering affordance completion paths.
 
 ### Affected Components
-- src/townlet/telemetry/publisher.py
-- Telemetry consumer scripts/tests
+- src/townlet/world/affordances.py:120-156
+- src/townlet/world/grid.py
+- tests/test_affordance_hooks.py
 
 ### Dependencies
-- WP-003 (shared telemetry workstream).
+- None
 
 ### Acceptance Criteria
-- [ ] Health payload contains worker liveness + retry counters.
-- [ ] Documentation updated describing new metrics.
-- [ ] Tests cover metric emission.
+- [ ] Snapshot includes affordance/object IDs without relying on TODO metadata.
+- [ ] Telemetry exposes the richer data and UI renders it.
+- [ ] Tests validate metadata persistence.
 
 ### Related Issues
-- AUDIT_SUMMARY (Enhancement optional #10)
+- Closes technical debt risk R-007.
+

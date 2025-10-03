@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 import secrets
+import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, ConsoleMode
 
 __all__ = ["AuthPrincipal", "ConsoleAuthenticationError", "ConsoleAuthenticator"]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -32,11 +35,19 @@ class ConsoleAuthenticationError(Exception):
 class ConsoleAuthenticator:
     """Authenticates console command payloads using configured tokens."""
 
+    _warned_disabled: bool = False
+
     def __init__(self, config: ConsoleAuthConfig) -> None:
         self._config = config
         self.enabled = bool(config.enabled)
         self.require_auth_for_viewer = bool(config.require_auth_for_viewer)
         self._token_table: dict[str, AuthPrincipal] = {}
+        if not self.enabled and not ConsoleAuthenticator._warned_disabled:
+            logger.warning(
+                "console_auth_disabled role=viewer "
+                "message='Admin commands require tokens; console auth is disabled.'"
+            )
+            ConsoleAuthenticator._warned_disabled = True
         if self.enabled:
             self._load_tokens(config.tokens)
 
@@ -108,8 +119,15 @@ class ConsoleAuthenticator:
         if not self.enabled:
             safe_payload = dict(payload)
             safe_payload.pop("auth", None)
-            safe_payload["mode"] = self._normalise_role(payload.get("mode"))
-            return safe_payload, None
+            requested = self._normalise_role(payload.get("mode"))
+            if requested == "admin":
+                logger.warning(
+                    "console_admin_request_blocked name=%s issuer=%s",
+                    identity.get("name"),
+                    identity.get("issuer"),
+                )
+            safe_payload["mode"] = "viewer"
+            return safe_payload, AuthPrincipal(role="viewer", label=None)
 
         auth_section = payload.get("auth")
         token_value: str | None = None

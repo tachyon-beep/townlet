@@ -67,6 +67,20 @@ def test_console_command_assigns_admin_role() -> None:
         publisher.close()
 
 
+def test_console_command_forces_viewer_when_auth_disabled() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    publisher = TelemetryPublisher(config)
+    try:
+        publisher.queue_console_command({"name": "telemetry_snapshot", "mode": "admin"})
+        queued = list(publisher.drain_console_buffer())
+        assert len(queued) == 1
+        payload = queued[0]
+        assert payload["mode"] == "viewer"
+        assert "auth" not in payload
+    finally:
+        publisher.close()
+
+
 def test_console_command_rejects_invalid_token() -> None:
     publisher = _config_with_auth()
     try:

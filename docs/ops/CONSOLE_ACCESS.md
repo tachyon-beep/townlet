@@ -19,7 +19,7 @@ console_auth:
       token: "local-admin-token"
 ```
 
-- `enabled`: toggles authentication. When false, behaviour matches the legacy permissive flow.
+- `enabled`: toggles authentication. When false, Townlet now coerces every command to viewer mode, logs a warning at startup, and rejects admin-only handlers. Enable auth before issuing admin commands.
 - `require_auth_for_viewer`: if true, even viewer commands must include a token. Set to false for transitional environments.
 - `tokens`: list of static tokens. Define exactly one of `token` (literal string) or `token_env` (environment variable containing the token). `label` populates the command issuer field for auditing.
 

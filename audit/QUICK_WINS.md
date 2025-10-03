@@ -1,17 +1,19 @@
-# Quick Wins (High Impact, < 1 Day)
+# Quick Wins
 
-1. **Iterate Simulation Loop in CLI (WP-001)**  
-   - Update `scripts/run_simulation.py` to loop over `SimulationLoop.run()` and emit a simple smoke test.  
-   - Restores core workflow immediately; estimated effort <2 hours.
+Sorted by estimated impact-to-effort ratio; all packages require <1 day of focused work.
 
-2. **Document Telemetry TCP Insecurity**  
-   - Add a prominent warning in `docs/ops` and README noting that TCP transport is plaintext and should not be used in untrusted networks until WP-003 lands.  
-   - Mitigates risk while engineering secure transport; effort ~1 hour.
+1. **WP-301 – Harden Console Auth Defaults**
+   - **Impact**: Critical security gap closes immediately for all deployments.
+   - **Effort**: S (simple guard + configuration update).
+   - **ROI Rationale**: Prevents unauthenticated admin access with minimal code changes and adds automated regression coverage.
 
-3. **Deduplicate Affordance Outcome Trimming (WP-009)**  
-   - Remove duplicated log trimming lines and include affordance/object IDs in metadata.  
-   - Improves debugging fidelity; effort <2 hours.
+2. **WP-303 – Guard Telemetry Flush Worker Failures**
+   - **Impact**: Restores observability when the flush thread crashes; prevents silent data loss.
+   - **Effort**: S (wrap loop, set health flag, add unit test).
+   - **ROI Rationale**: A handful of structured logs and health checks dramatically reduce MTTR for telemetry outages.
 
-4. **Add CLI Smoke Test to CI (WP-004 subset)**  
-   - Create a lightweight pytest invoking `run_simulation.main()` for a few ticks to guard future regressions.  
-   - Provides immediate regression coverage; effort ~2 hours.
+3. **WP-310 – Persist Affordance Outcome Metadata**
+   - **Impact**: Medium — richer telemetry unlocks faster debugging of player actions and affordance tuning.
+   - **Effort**: S (extend snapshot schema + tests).
+   - **ROI Rationale**: Provides immediate insight for designers with minimal schema and UI touches.
+
