@@ -40,6 +40,23 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Defer pending employment exit for the specified agent ID at start",
     )
+    parser.add_argument(
+        "--agent-page-size",
+        type=int,
+        default=6,
+        help="Number of agent cards to display per page (default 6)",
+    )
+    parser.add_argument(
+        "--agent-rotate-interval",
+        type=int,
+        default=12,
+        help="Ticks between automatic agent card rotations (0 to disable)",
+    )
+    parser.add_argument(
+        "--disable-agent-autorotate",
+        action="store_true",
+        help="Disable automatic pagination of agent cards",
+    )
     return parser.parse_args()
 
 
@@ -55,6 +72,9 @@ def main() -> None:
         defer=args.defer,
         focus_agent=args.focus_agent,
         show_coords=args.show_coordinates,
+        agent_page_size=args.agent_page_size,
+        agent_rotate_interval=args.agent_rotate_interval,
+        agent_autorotate=not args.disable_agent_autorotate,
     )
 
 

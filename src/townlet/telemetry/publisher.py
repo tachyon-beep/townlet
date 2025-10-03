@@ -6,6 +6,7 @@ import json
 import logging
 import threading
 import time
+import copy
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict
@@ -123,6 +124,7 @@ class TelemetryPublisher:
             "tls_enabled": bool(getattr(transport_cfg, "enable_tls", False)),
             "verify_hostname": bool(getattr(transport_cfg, "verify_hostname", True)),
             "allow_plaintext": bool(getattr(transport_cfg, "allow_plaintext", False)),
+            "worker_alive": True,
         }
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
@@ -131,6 +133,8 @@ class TelemetryPublisher:
         self._flush_event = threading.Event()
         self._stop_event = threading.Event()
         self._latest_enqueue_tick = 0
+        self._diff_enabled = bool(getattr(config.telemetry, "diff_enabled", False))
+        self._last_stream_payload: dict[str, Any] | None = None
         self._flush_thread = threading.Thread(
             target=self._flush_loop,
             name="telemetry-flush",
@@ -664,6 +668,7 @@ class TelemetryPublisher:
             pending = len(self._transport_buffer)
         if pending:
             self._flush_transport_buffer(tick)
+        self._transport_status["worker_alive"] = False
 
     def _enqueue_stream_payload(self, payload: Mapping[str, Any], *, tick: int) -> None:
         encoded = json.dumps(
@@ -748,6 +753,43 @@ class TelemetryPublisher:
             "kpi_history": self.kpi_history(),
         }
         return payload
+
+    def _prepare_stream_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self._diff_enabled:
+            return payload
+        return self._build_diff_payload(payload)
+
+    def _build_diff_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        snapshot = copy.deepcopy(payload)
+        if self._last_stream_payload is None:
+            self._last_stream_payload = snapshot
+            initial = dict(snapshot)
+            initial["payload_type"] = "snapshot"
+            return initial
+
+        previous = self._last_stream_payload
+        changes: dict[str, Any] = {}
+        for key, value in snapshot.items():
+            if key not in previous or previous[key] != value:
+                changes[str(key)] = value
+        removed = [str(key) for key in previous.keys() if key not in snapshot]
+
+        self._last_stream_payload = snapshot
+
+        # Schema version and tick live at the top level; don't include them in changes
+        changes.pop("schema_version", None)
+        changes.pop("tick", None)
+        changes.pop("payload_type", None)
+
+        diff_payload: dict[str, Any] = {
+            "schema_version": self.schema_version,
+            "tick": snapshot.get("tick"),
+            "payload_type": "diff",
+            "changes": changes,
+        }
+        if removed:
+            diff_payload["removed"] = removed
+        return diff_payload
 
     def close(self) -> None:
         self.stop_worker(wait=True)
@@ -1035,6 +1077,7 @@ class TelemetryPublisher:
             self.update_policy_identity(policy_identity)
 
         stream_payload = self._build_stream_payload(tick)
+        stream_payload = self._prepare_stream_payload(stream_payload)
         self._enqueue_stream_payload(stream_payload, tick=int(tick))
 
     def latest_queue_metrics(self) -> dict[str, int] | None:

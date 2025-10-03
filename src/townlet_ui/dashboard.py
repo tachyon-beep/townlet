@@ -6,13 +6,14 @@ import difflib
 import itertools
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 import numpy as np
 from rich.columns import Columns
 from rich.console import Console, Group, RenderableType
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -20,6 +21,7 @@ from rich.text import Text
 from townlet.console.handlers import ConsoleCommand
 from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.telemetry import (
+    AgentSummary,
     AnnealStatus,
     FriendSummary,
     PromotionSnapshot,
@@ -81,6 +83,55 @@ class PaletteState:
         if window is None:
             return
         self.history_limit = max(1, window // 2 or 1)
+
+
+@dataclass
+class AgentCardState:
+    """Mutable state for paginating and rotating agent card panels."""
+
+    page_size: int = 6
+    rotate: bool = True
+    rotate_interval: int = 12
+    page: int = 0
+    _last_rotate_tick: int | None = field(default=None, repr=False)
+
+    def update(
+        self,
+        tick: int,
+        agent_ids: Sequence[str],
+        *,
+        focus_agent: str | None = None,
+    ) -> int:
+        """Update pagination state and return total number of pages."""
+
+        total_agents = len(agent_ids)
+        page_size = max(1, self.page_size if self.page_size > 0 else total_agents or 1)
+        total_pages = max(1, math.ceil(total_agents / page_size)) if total_agents else 1
+
+        if focus_agent and focus_agent in agent_ids:
+            target_page = agent_ids.index(focus_agent) // page_size
+            if target_page != self.page:
+                self.page = target_page
+                self._last_rotate_tick = tick
+        elif self.rotate and total_pages > 1 and self.rotate_interval > 0:
+            if self._last_rotate_tick is None:
+                self._last_rotate_tick = tick
+            elif tick - self._last_rotate_tick >= self.rotate_interval:
+                self.page = (self.page + 1) % total_pages
+                self._last_rotate_tick = tick
+
+        if self.page >= total_pages:
+            self.page = total_pages - 1
+        if self.page < 0:
+            self.page = 0
+        return total_pages
+
+
+@dataclass
+class DashboardState:
+    """Top-level dashboard rendering state shared across ticks."""
+
+    agent_cards: AgentCardState = field(default_factory=AgentCardState)
 
 
 def _extract_palette_commands(snapshot: TelemetrySnapshot) -> list[PaletteCommandMeta]:
@@ -305,6 +356,8 @@ def render_snapshot(
     refreshed: str,
     *,
     palette: PaletteState | None = None,
+    state: DashboardState | None = None,
+    focus_agent: str | None = None,
 ) -> Iterable[Panel]:
     """Yield rich Panels representing the current telemetry snapshot."""
     panels: list[Panel] = []
@@ -372,11 +425,20 @@ def render_snapshot(
         if overlay is not None:
             panels.append(overlay)
 
+    banner = _build_perturbation_banner(snapshot)
+    if banner is not None:
+        panels.append(banner)
+
     perturbation_panel = _build_perturbation_panel(snapshot)
     if perturbation_panel is not None:
         panels.append(perturbation_panel)
 
-    agent_cards_panel = _build_agent_cards_panel(snapshot)
+    agent_cards_panel = _build_agent_cards_panel(
+        snapshot,
+        tick,
+        focus_agent=focus_agent,
+        state=state.agent_cards if state else None,
+    )
     if agent_cards_panel is not None:
         panels.append(agent_cards_panel)
 
@@ -673,24 +735,45 @@ def _build_social_panel(
     return Panel(Group(*renderables), title="Social", border_style=border)
 
 
-def _build_agent_cards_panel(snapshot: TelemetrySnapshot) -> Panel | None:
-    if not snapshot.agents:
+def _build_agent_cards_panel(
+    snapshot: TelemetrySnapshot,
+    tick: int,
+    *,
+    focus_agent: str | None = None,
+    state: AgentCardState | None = None,
+) -> Panel | None:
+    agents = snapshot.agents
+    if not agents:
         return None
 
-    summary_map = {}
-    if snapshot.relationship_summary is not None:
-        summary_map = snapshot.relationship_summary.per_agent
-
+    summary_map = snapshot.relationship_summary.per_agent if snapshot.relationship_summary else {}
     history = snapshot.history
+    sorted_agents = sorted(
+        agents,
+        key=lambda a: (not a.on_shift, a.attendance_ratio * -1, a.agent_id),
+    )
+    agent_ids = [agent.agent_id for agent in sorted_agents]
+
+    card_state = state
+    total_pages = 1
+    page_size = len(sorted_agents)
+    page_index = 0
+    if card_state is not None:
+        total_pages = card_state.update(tick, agent_ids, focus_agent=focus_agent)
+        page_size = max(1, card_state.page_size if card_state.page_size > 0 else len(sorted_agents))
+        page_index = card_state.page
+    start = page_index * page_size
+    end = start + page_size
+    visible_agents = sorted_agents[start:end] or sorted_agents[:page_size]
 
     cards: list[Panel] = []
-    for agent in snapshot.agents:
+    for agent in visible_agents:
         card_table = Table.grid(expand=True)
         subtitle_parts: list[str] = []
         if agent.job_id:
             subtitle_parts.append(agent.job_id)
         subtitle_parts.append(agent.shift_state)
-        subtitle = " • ".join(subtitle_parts)
+        subtitle = " • ".join(part for part in subtitle_parts if part)
 
         needs_history = (
             history.needs.get(agent.agent_id, {})
@@ -735,12 +818,11 @@ def _build_agent_cards_panel(snapshot: TelemetrySnapshot) -> Panel | None:
             style="cyan" if agent.wallet > 0 else "dim",
         )
 
-        attendance_line = Text(
+        attendance_text = Text(
             f"Attendance {agent.attendance_ratio:.0%} | Lateness {agent.lateness_counter}",
             style="green" if agent.attendance_ratio >= 0.75 else "yellow",
         )
-        if agent.exit_pending:
-            attendance_line.append(" • EXIT PENDING", style="bold red")
+        alerts_text = _build_agent_alerts_line(agent, snapshot)
 
         summary_entry = summary_map.get(agent.agent_id) if summary_map else None
         rival_line = Text("Rivalry: none", style="dim")
@@ -767,11 +849,13 @@ def _build_agent_cards_panel(snapshot: TelemetrySnapshot) -> Panel | None:
                 style="bold green" if trust_value >= 0.5 else "green",
             )
 
+        social_line = _build_agent_social_line(agent.agent_id, snapshot.social_events)
+
         card_table.add_row(needs_table)
         card_table.add_row(
             _row_with_sparkline(wallet_line, _sparkline_text(wallet_history, style="green"))
         )
-        card_table.add_row(attendance_line)
+        card_table.add_row(attendance_text)
         rivalry_series: Sequence[float] = ()
         if isinstance(rivalry_history, Mapping):
             if summary_entry and summary_entry.top_rivals:
@@ -783,25 +867,34 @@ def _build_agent_cards_panel(snapshot: TelemetrySnapshot) -> Panel | None:
             _row_with_sparkline(rival_line, _sparkline_text(rivalry_series, style="red"))
         )
         card_table.add_row(friend_line)
+        card_table.add_row(social_line)
+        card_table.add_row(alerts_text)
 
         border_style = "blue"
         if agent.exit_pending:
             border_style = "red"
         elif agent.on_shift:
             border_style = "cyan"
+        if focus_agent and agent.agent_id == focus_agent:
+            border_style = "bold magenta"
 
+        title = agent.agent_id
+        if subtitle:
+            title += f" • {subtitle}"
         cards.append(
             Panel(
                 card_table,
-                title=f"{agent.agent_id}"
-                + (f" • {subtitle}" if subtitle_parts else ""),
+                title=title,
                 border_style=border_style,
                 padding=(0, 1),
             )
         )
 
     columns = Columns(cards, equal=True, expand=True)
-    return Panel(columns, title="Agents", border_style="cyan")
+    title = "Agents"
+    if card_state is not None and total_pages > 1:
+        title += f" (Page {card_state.page + 1}/{total_pages})"
+    return Panel(columns, title=title, border_style="cyan")
 
 
 def _format_need_bar(name: str, value: float) -> Text:
@@ -855,6 +948,109 @@ def _row_with_sparkline(text: Text, sparkline: Text) -> Table:
     table.add_column(ratio=1, justify="right")
     table.add_row(text, sparkline)
     return table
+
+
+def _build_perturbation_banner(snapshot: TelemetrySnapshot) -> Panel | None:
+    perturbations = snapshot.perturbations
+    if not perturbations.active and not perturbations.pending:
+        health = snapshot.health
+        if health and (health.perturbations_pending or health.perturbations_active):
+            text = Text(
+                f"Health reports pending={health.perturbations_pending} active={health.perturbations_active}",
+                style="yellow",
+            )
+            return Panel(text, title="Perturbation Status", border_style="yellow", padding=(0, 1))
+        return None
+
+    lines: list[str] = []
+    border = "yellow"
+
+    if perturbations.active:
+        border = "red"
+        active_parts = []
+        for event_id, data in perturbations.active.items():
+            spec = str(data.get("spec", "")) if isinstance(data, Mapping) else ""
+            remaining = data.get("ticks_remaining") if isinstance(data, Mapping) else None
+            remaining_text = f"T-{remaining}" if isinstance(remaining, (int, float)) else "active"
+            active_parts.append(f"{event_id}:{spec or 'n/a'} ({remaining_text})")
+        lines.append("Active " + ", ".join(active_parts))
+
+    if perturbations.pending:
+        pending_parts = []
+        for entry in perturbations.pending[:3]:
+            if not isinstance(entry, Mapping):
+                continue
+            spec = str(entry.get("spec", "")) or "n/a"
+            starts_in = entry.get("starts_in")
+            label = f"{spec} in {starts_in}" if isinstance(starts_in, (int, float)) else spec
+            pending_parts.append(label)
+        extra = len(perturbations.pending) - len(pending_parts)
+        if extra > 0:
+            pending_parts.append(f"+{extra} more")
+        if pending_parts:
+            lines.append("Pending " + ", ".join(pending_parts))
+
+    if perturbations.cooldowns_agents:
+        affected = sorted(perturbations.cooldowns_agents.keys())[:3]
+        lines.append("Cooldowns " + ", ".join(affected))
+
+    text = Text(" • ".join(lines) if lines else "Perturbation activity detected", style="bold")
+    return Panel(text, title="Perturbation Status", border_style=border, padding=(0, 1))
+
+
+def _build_agent_alerts_line(agent: AgentSummary, snapshot: TelemetrySnapshot) -> Text:
+    alerts: list[str] = []
+    if agent.exit_pending:
+        alerts.append("[bold red]⚠ Exit Pending[/]")
+    if agent.late_ticks_today > 0:
+        alerts.append(f"[yellow]⏰ Late {agent.late_ticks_today}[/]")
+    cooldowns = snapshot.perturbations.cooldowns_agents.get(agent.agent_id, {})
+    if cooldowns:
+        ordered = sorted(cooldowns.items(), key=lambda item: item[1], reverse=True)
+        preview = ", ".join(f"{spec}:{ticks}" for spec, ticks in ordered[:2])
+        alerts.append(f"[cyan]🕑 Cooldown {preview}[/]")
+    if not alerts:
+        return Text("Alerts: none", style="dim")
+    return Text.from_markup("Alerts: " + " • ".join(alerts))
+
+
+def _build_agent_social_line(
+    agent_id: str,
+    events: Sequence[SocialEventEntry],
+) -> Text:
+    entry = _latest_social_event(agent_id, events)
+    if entry is None:
+        return Text("Last social: none", style="dim")
+    label = _format_event_type(entry.type)
+    summary = _summarise_social_event(entry)
+    return Text.from_markup(f"Last social: {label} • {summary}")
+
+
+def _latest_social_event(
+    agent_id: str,
+    events: Sequence[SocialEventEntry],
+) -> SocialEventEntry | None:
+    for entry in reversed(events):
+        if _event_involves_agent(entry.payload, agent_id):
+            return entry
+    return None
+
+
+def _event_involves_agent(payload: Mapping[str, Any], agent_id: str) -> bool:
+    for value in payload.values():
+        if _payload_contains_agent(value, agent_id):
+            return True
+    return False
+
+
+def _payload_contains_agent(value: Any, agent_id: str) -> bool:
+    if isinstance(value, str):
+        return value == agent_id
+    if isinstance(value, Mapping):
+        return any(_payload_contains_agent(item, agent_id) for item in value.values())
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Text)):
+        return any(_payload_contains_agent(item, agent_id) for item in value)
+    return False
 
 
 def _build_perturbation_panel(snapshot: TelemetrySnapshot) -> Panel | None:
@@ -1463,23 +1659,37 @@ def _build_kpi_panel(snapshot: TelemetrySnapshot) -> Panel:
     table.add_column("Latest", justify="right")
     table.add_column("Trend", justify="left")
 
-    for key in ("queue_conflict_intensity", "employment_lateness", "late_help_events"):
+    displayed = 0
+    priority = ("queue_conflict_intensity", "employment_lateness", "late_help_events")
+    seen: set[str] = set()
+    for key in priority:
+        if key in seen:
+            continue
         series = history.get(key, [])
         if not series:
             continue
         latest = series[-1]
         trend_symbol, colour = _trend_from_series(series)
         label = _humanize_kpi(key)
-        table.add_row(
-            label,
-            f"{latest:.2f}",
-            f"[{colour}]{trend_symbol}[/]",
-        )
+        table.add_row(label, f"{latest:.2f}", f"[{colour}]{trend_symbol}[/]")
+        displayed += 1
+        seen.add(key)
 
-    if not table.rows:
+    extra_keys = [key for key in sorted(history) if key not in seen]
+    for key in extra_keys:
+        series = history.get(key, [])
+        if not series:
+            continue
+        latest = series[-1]
+        trend_symbol, colour = _trend_from_series(series)
+        table.add_row(_humanize_kpi(key), f"{latest:.2f}", f"[{colour}]{trend_symbol}[/]")
+        displayed += 1
+
+    if displayed == 0:
         body = Text("No KPI history yet", style="dim")
         return Panel(body, title="KPIs", border_style="green")
-    return Panel(table, title="KPIs", border_style="blue")
+    border = "blue" if displayed <= 5 else "magenta"
+    return Panel(table, title="KPIs", border_style=border)
 
 
 def _trend_from_series(series: list[float]) -> tuple[str, str]:
@@ -1503,7 +1713,9 @@ def _humanize_kpi(key: str) -> str:
         "employment_lateness": "Lateness",
         "late_help_events": "Late Help",
     }
-    return mapping.get(key, key)
+    if key in mapping:
+        return mapping[key]
+    return key.replace("_", " ").title()
 
 
 def run_dashboard(
@@ -1517,6 +1729,9 @@ def run_dashboard(
     show_coords: bool = False,
     palette_state: PaletteState | None = None,
     on_tick: Callable[[SimulationLoop, ConsoleCommandExecutor, int], None] | None = None,
+    agent_page_size: int = 6,
+    agent_rotate_interval: int = 12,
+    agent_autorotate: bool = True,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
     from townlet.console.handlers import create_console_router
@@ -1544,6 +1759,17 @@ def run_dashboard(
     console = Console()
     executor = ConsoleCommandExecutor(router)
 
+    page_size = agent_page_size if agent_page_size > 0 else len(loop.world.agents) or 1
+    rotate_enabled = agent_autorotate and agent_rotate_interval != 0
+    rotate_interval = agent_rotate_interval if agent_rotate_interval > 0 else 0
+    dashboard_state = DashboardState(
+        agent_cards=AgentCardState(
+            page_size=max(1, page_size),
+            rotate=rotate_enabled,
+            rotate_interval=max(1, rotate_interval) if rotate_enabled else rotate_interval,
+        )
+    )
+
     if approve:
         executor.submit(
             ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={})
@@ -1552,28 +1778,38 @@ def run_dashboard(
         executor.submit(ConsoleCommand(name="employment_exit", args=("defer", defer), kwargs={}))
 
     tick = 0
+    refresh_rate = 1.0 / max(refresh_interval, 1e-3)
     try:
-        while max_ticks <= 0 or tick < max_ticks:
-            tick += 1
-            loop.step()
-            if on_tick is not None:
-                on_tick(loop, executor, loop.tick)
-            snapshot = client.from_console(router)
-            console.clear()
-            refreshed = time.strftime("%H:%M:%S")
-            for panel in render_snapshot(
-                snapshot,
-                tick=loop.tick,
-                refreshed=refreshed,
-                palette=palette_state,
-            ):
-                console.print(panel)
-            obs_batch = loop.observations.build_batch(loop.world, terminated={})
-            map_panel = _build_map_panel(snapshot, obs_batch, focus_agent, show_coords=show_coords)
-            if map_panel is not None:
-                console.print(map_panel)
-            console.print(f"Tick: {loop.tick}")
-            time.sleep(refresh_interval)
+        with Live(console=console, refresh_per_second=refresh_rate, transient=False) as live:
+            while max_ticks <= 0 or tick < max_ticks:
+                tick += 1
+                loop_start = time.monotonic()
+                loop.step()
+                if on_tick is not None:
+                    on_tick(loop, executor, loop.tick)
+                snapshot = client.from_console(router)
+                refreshed = time.strftime("%H:%M:%S")
+                panels = list(
+                    render_snapshot(
+                        snapshot,
+                        tick=loop.tick,
+                        refreshed=refreshed,
+                        palette=palette_state,
+                        state=dashboard_state,
+                        focus_agent=focus_agent,
+                    )
+                )
+                obs_batch = loop.observations.build_batch(loop.world, terminated={})
+                map_panel = _build_map_panel(snapshot, obs_batch, focus_agent, show_coords=show_coords)
+                if map_panel is not None:
+                    panels.append(map_panel)
+                footer = Text(f"Tick: {loop.tick}", style="dim")
+                panels.append(footer)
+                live.update(Group(*panels))
+                elapsed = time.monotonic() - loop_start
+                sleep_for = max(0.0, refresh_interval - elapsed)
+                if sleep_for:
+                    time.sleep(sleep_for)
     except KeyboardInterrupt:
         console.print("[yellow]Dashboard interrupted by user.[/yellow]")
     finally:

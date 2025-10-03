@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
@@ -342,8 +343,9 @@ class TelemetryClient:
     ) -> None:
         self.expected_schema_prefix = expected_schema_prefix
         self.history_window = history_window if history_window is None or history_window > 0 else None
+        self._state: dict[str, Any] | None = None
 
-    def parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
+    def _parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
         """Validate and convert a telemetry payload into dataclasses."""
 
         def _maybe_int(value: object) -> int | None:
@@ -989,7 +991,42 @@ class TelemetryClient:
         payload = command(_console_command("telemetry_snapshot"))
         if not isinstance(payload, Mapping):
             raise TypeError("Console returned non-mapping telemetry payload")
-        return self.parse_snapshot(payload)
+        return self.parse_payload(payload)
+
+    def parse_payload(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
+        payload_type = str(payload.get("payload_type", "snapshot") or "snapshot")
+        if payload_type == "diff":
+            if self._state is None:
+                raise SchemaMismatchError("Received telemetry diff before initial snapshot")
+            base = copy.deepcopy(self._state)
+            schema_version = payload.get("schema_version")
+            if schema_version is not None:
+                base["schema_version"] = schema_version
+            tick = payload.get("tick")
+            if tick is not None:
+                base["tick"] = tick
+            changes = payload.get("changes", {})
+            if not isinstance(changes, Mapping):
+                raise SchemaMismatchError("Telemetry diff payload missing 'changes' mapping")
+            for key, value in changes.items():
+                base[str(key)] = value
+            removed = payload.get("removed", ())
+            if isinstance(removed, Iterable):
+                for key in removed:
+                    base.pop(str(key), None)
+            self._state = base
+            return self._parse_snapshot(base)
+
+        if payload_type != "snapshot":
+            raise SchemaMismatchError(f"Unsupported telemetry payload_type '{payload_type}'")
+
+        snapshot = {str(key): value for key, value in payload.items() if key != "payload_type"}
+        self._state = copy.deepcopy(snapshot)
+        return self._parse_snapshot(snapshot)
+
+    def parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
+        """Backward-compatible wrapper for callers expecting snapshot payloads."""
+        return self.parse_payload(payload)
 
     # ------------------------------------------------------------------
     # Internal helpers

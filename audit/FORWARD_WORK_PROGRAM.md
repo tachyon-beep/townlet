@@ -26,23 +26,23 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Affected Components**: `src/townlet/observations/builder.py`, `tests/test_observation_builder*.py`, `docs/engineering/WORLDSTATE_REFACTOR.md`.
 - **Validation**: `pytest tests/test_observation_builder.py tests/test_observation_builder_compact.py tests/test_run_simulation_cli.py tests/test_training_cli.py`; ad-hoc timing showed ~226 → ~395 ticks/sec (10 agents) improvement in quick benchmark.
 
-## FWP-05 Telemetry Reliability & Diff Streaming
-- **Fix / Change**: Introduce diff or channel-filtered telemetry payloads, surface queue length and worker health metrics, and refine buffering.
-- **Risks**: Client compatibility (UI/third-party tools must handle new schema); risk of missing data if diffs are misordered; more complex recovery logic.
-- **Affected Components**: `src/townlet/telemetry/publisher.py`, `src/townlet/telemetry/transport.py`, `src/townlet_ui/telemetry.py`, dashboard tests (`tests/test_telemetry_stream_smoke.py`).
-- **Validation**: Telemetry smoke tests, dashboard integration runs, log inspection for drop metrics.
+## FWP-05 Telemetry Reliability & Diff Streaming *(Completed)*
+- **Fix / Change**: Telemetry publisher now supports diff-mode streaming (first payload snapshot, subsequent payloads `payload_type = diff` with `changes`/`removed` sections) and exposes worker/queue health metrics. UI clients merge diffs automatically.
+- **Risks**: Consumers must respect `payload_type` and apply diffs in order; large sections still emit whole-block changes when content shifts significantly.
+- **Affected Components**: `src/townlet/telemetry/publisher.py`, `src/townlet_ui/telemetry.py`, `tests/test_telemetry_stream_smoke.py`, `docs/telemetry/TELEMETRY_CHANGELOG.md`, `src/townlet/config/loader.py`.
+- **Validation**: `pytest tests/test_telemetry_stream_smoke.py tests/test_ui_telemetry.py tests/test_telemetry_client.py`; manual `run_simulation.py --stream-telemetry` spot-check; diff payloads verified to reduce repeated sections in file transport logs.
 
-## FWP-06 Finalize Observer Dashboard UI
-- **Fix / Change**: Complete Rich console panels (per-agent cards, overlays, audio toggle), ensure real-time refresh, and cover all KPIs.
-- **Risks**: Rendering performance drops if layouts become heavy; accessibility concerns for audio cues; UI tests may require terminal control adjustments.
-- **Affected Components**: `src/townlet_ui/dashboard.py`, `src/townlet_ui/commands.py`, `tests/test_dashboard_panels.py`, `docs/design/DASHBOARD_UI_ENHANCEMENT.md`.
-- **Validation**: Visual smoke test via `scripts/observer_ui.py`, snapshot tests for dashboard panels, documentation updates.
+## FWP-06 Finalize Observer Dashboard UI *(Completed)*
+- **Fix / Change**: Rich dashboard now paginates agent cards with sociability/alert overlays, surfaces a perturbation status banner, renders all KPI metrics, and exposes CLI pagination controls. Audio playback remains out-of-scope for CLI/Rich UI but documented for future web work.
+- **Risks**: Rendering performance acceptable in benchmarks; Rich Live refresh handles real-time updates. Coordinate with web observer initiative for audio accessibility.
+- **Affected Components**: `src/townlet_ui/dashboard.py`, `scripts/observer_ui.py`, `tests/test_dashboard_panels.py`, `tests/test_observer_ui_dashboard.py`, docs (`docs/design/DASHBOARD_UI_ENHANCEMENT.md`, `docs/guides/OBSERVER_UI_GUIDE.md`).
+- **Validation**: `pytest tests/test_dashboard_panels.py tests/test_observer_ui_dashboard.py tests/test_observer_ui_script.py`; manual `scripts/observer_ui.py --config configs/examples/poc_hybrid.yaml --ticks 10 --refresh 0.5` smoke run.
 
 ## FWP-07 Decide on Web GUI vs. Console
-- **Fix / Change**: Make a go/no-go decision for a web UI, prototype minimal telemetry viewer if approved, and update operators’ guide accordingly.
-- **Risks**: Resource diversion; web stack introduces new dependencies and security considerations; inconsistent UX if both UIs diverge.
-- **Affected Components**: New web frontend (if built), `docs/ops/CONSOLE_ACCESS.md`, telemetry schema documentations, potential additions under `scripts/`.
-- **Validation**: Decision record; if web UI built, end-to-end telemetry integration test; update runbooks.
+- **Fix / Change**: Decide whether to invest in a lightweight web observer, capturing requirements (audio cues, accessibility, remote viewing) and, if proceeding, outline telemetry bridge and deployment plan.
+- **Risks**: Parallel UI stacks risk diverging UX and doubling maintenance; web stack introduces auth/sandbox concerns.
+- **Affected Components**: Decision record under `docs/program_management/`, potential new `townlet_web/` prototype, ops guide updates if web UI lands.
+- **Validation**: Documented decision + spike results; if approved, initial telemetry echo test from browser.
 
 ## FWP-08 Demo Scenario Scripting & QA
 - **Fix / Change**: Script a narrative-driven demo using `DemoScheduler`, rehearse perturbations/console triggers, and ensure telemetry narrations tell the story.

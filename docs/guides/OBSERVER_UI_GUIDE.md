@@ -12,16 +12,17 @@ The observer dashboard provides a console-based view of Townlet’s employment K
    - **Telemetry** — schema version and compatibility warning.
    - **Employment** — queue length, exits, caps.
    - **Conflict** — queue cooldowns, ghost steps, rivalry edges.
+   - **Perturbation Status** — banner summarising active and pending system events before the detailed tables.
    - **Anneal Status** — latest BC/anneal gate metrics (accuracy vs threshold, drift flags, dataset).
    - **Policy Inspector** — per-agent selected action, probability, value estimate, and top action distribution.
    - **Relationship Overlay** — top trust ties with recent deltas (trust/fam/rivalry).
    - **KPI Panel** — rolling KPIs (queue intensity, lateness, late help) with colour-coded thresholds.
    - **Narrations** — recent narrated events with priority markers.
-   - **Agents** — per-agent wallet, shift state, attendance, wages withheld.
+   - **Agents** — paginated per-agent cards with needs sparklines, social heartbeat, rivalry trend, alerts (exit pending, cooldowns).
    - **Legend** — usage hints and colour semantics.
    - (Optional) **Local Map** — ASCII map derived from the hybrid observation tensor for the first agent.
 
-Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-agent` selects the map focus agent; `--approve/--defer` can trigger employment actions at startup.
+Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-agent` selects the map focus agent; `--approve/--defer` can trigger employment actions at startup. New pagination controls include `--agent-page-size` (default 6), `--agent-rotate-interval` (ticks between auto-rotation, 0 disables), and `--disable-agent-autorotate` to keep the current page static while presenting.
 
 For scripted demos, launch `scripts/demo_run.py` with the new `configs/demo/poc_demo.yaml` config, which writes telemetry to `logs/demo_stream.jsonl` so the Rich dashboard stays readable. For example:
 
@@ -43,6 +44,7 @@ enabled (`allow_plaintext: false`) so telemetry stays encrypted in transit.
 ## Console Operations
 - Approve or defer employment exits from the dashboard by issuing commands in a separate terminal (see `scripts/console_dry_run.py` for examples).
 - Future versions may add interactive controls; current MVP is read-only.
+- Audio cues remain out of scope for the Rich console; sound design will land with the web observer UI where accessibility affordances are richer.
 
 ## Anneal Panel Reference
 - **BC Accuracy / Threshold** — derived from the latest anneal run (telemetry version ≥1.2). The panel turns red if BC gate failed and yellow if drift flags trip.

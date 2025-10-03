@@ -108,7 +108,7 @@ def test_run_dashboard_advances_loop(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("townlet_ui.dashboard.time.sleep", fake_sleep)
     run_dashboard(loop, refresh_interval=0, max_ticks=2)
-    assert calls["sleep"] == 2
+    assert calls["sleep"] == 0
 
 
 def test_build_map_panel_produces_table() -> None:

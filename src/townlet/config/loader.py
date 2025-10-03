@@ -596,6 +596,7 @@ class TelemetryConfig(BaseModel):
     narration: NarrationThrottleConfig = NarrationThrottleConfig()
     transport: TelemetryTransportConfig = TelemetryTransportConfig()
     relationship_narration: RelationshipNarrationConfig = RelationshipNarrationConfig()
+    diff_enabled: bool = True
 
 
 class ConsoleAuthTokenConfig(BaseModel):

@@ -23,7 +23,23 @@
 - **Perturbations**: Health snapshot exposes pending/active counts; ops expect prominent alerting during demo runs.
 - **Social Stories**: Recent docs emphasise friendship/rivalry narrations and social event feeds for demo visibility.
 
-## 3. Proposed Enhancements (Wireframe Overview)
+## 3. Enhancement Rollout Summary
+
+- Rich agent cards ship with paginated columns (default page size 6) and auto-rotation every 12 ticks, configurable from the CLI.
+- Perturbation banner summarises active/pending events and cooldown heat before the detailed tables, matching operator escalation feedback.
+- Alerts surface employment exits, lateness spikes, and perturbation cooldowns using iconography; friendship/rivalry context stays in-card.
+- Social heartbeat line shows the latest event per agent (chat/rivalry avoidance) for quick story narration.
+- KPI panel now renders every metric delivered by telemetry, not just the legacy trio, highlighting MPL-specific additions.
+- Audio cues remain reserved for the upcoming web dashboard; the Rich console explicitly omits playback controls in favour of textual alerts.
+
+## 3.1 Interaction & Layout Details
+
+- **Agent Pagination**: default 6 cards per page, auto-rotates when more agents exist than a page; focus agent pin overrides rotation.
+- **CLI Flags**: `--agent-page-size`, `--agent-rotate-interval`, and `--disable-agent-autorotate` allow tuning during demos; documented under Observer UI guide.
+- **Perturbation Banner**: collapses when no activity is reported, otherwise uses red/yellow borders to distinguish active vs pending-only states.
+- **Audio Scope**: console build does not emit or control sound. Audio UX exploration continues for the web interface where accessible playback is viable.
+
+## 3.2 Proposed Enhancements (Wireframe Overview)
 - **Per-Agent Card Grid**
   - Placement: directly after header (two columns on standard terminal width, degrade to single column on narrow screens).
   - Scroll behaviour: vertical pager when agent count exceeds available height; keyboard toggle to focus on specific agent.
@@ -31,7 +47,7 @@
   - Sits above conflict panel; concise summary of active event id, timer, severity colour; secondary line for pending queue.
   - Banner collapses when no perturbations; optional key to expand for detail.
 
-### 3.1 Card Content
+### 3.3 Card Content
 - Needs spark bars (hunger/hygiene/energy) with threshold colouring.
 - Shift block (state, on_shift flag, attendance %, lateness counter).
 - Wallet & wages withheld summary.
@@ -39,7 +55,7 @@
 - Social heartbeat (last chat partner/result, friendship delta arrow).
 - Optional icons for alerts (employment exit pending, perturbation impact, being on cooldown).
 
-### 3.2 Perturbation Highlight Rules
+### 3.4 Perturbation Highlight Rules
 - **Active**: red border, countdown timer (ticks remaining) with event type (e.g., `price_spike: market (T-120)`).
 - **Pending**: yellow/gold accent, queued start tick, ability to cycle through multiple pending events.
 - **Cooldown**: muted teal, display cooldown spec remaining vs agent cooldowns.
@@ -51,4 +67,3 @@
 - Data volume: per-agent telemetry may become heavy for >12 agents; consider pagination or filter.
 - Accessibility: ensure colour choices meet contrast requirements; consider text alternatives for banner icons.
 - Future integration: command palette (Milestone M2) may share screen real estate—plan for toggleable overlay.
-

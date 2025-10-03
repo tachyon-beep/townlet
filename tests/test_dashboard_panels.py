@@ -8,6 +8,7 @@ from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet_ui.dashboard import (
+    AgentCardState,
     _build_agent_cards_panel,
     _build_palette_overlay,
     _build_perturbation_panel,
@@ -22,6 +23,7 @@ from townlet_ui.telemetry import (
     RelationshipSummaryEntry,
     RelationshipSummarySnapshot,
     RivalSummary,
+    SocialEventEntry,
     TelemetryHistory,
     TelemetryClient,
 )
@@ -101,6 +103,7 @@ def test_agent_cards_and_perturbation_banner_render() -> None:
     titles = [panel.title or "" for panel in panels]
     assert any(title.startswith("Agents") for title in titles)
     assert any(title.startswith("Perturbations") for title in titles)
+    assert any(title.startswith("Perturbation Status") for title in titles)
 
     agent_texts: list[str] = []
     console = Console(record=True, width=120)
@@ -172,8 +175,22 @@ def test_agent_cards_panel_renders_social_context() -> None:
         churn_metrics={},
     )
     snapshot.history = None
+    snapshot.social_events = (
+        SocialEventEntry(
+            type="chat_success",
+            payload={"speaker": "alice", "listener": "bob", "quality": 0.8},
+        ),
+    )
+    snapshot.perturbations = PerturbationSnapshot(
+        active={},
+        pending=(),
+        cooldowns_spec={},
+        cooldowns_agents={
+            "bob": {"utility_outage": 3},
+        },
+    )
 
-    panel = _build_agent_cards_panel(snapshot)
+    panel = _build_agent_cards_panel(snapshot, tick=5, focus_agent="bob")
     assert panel is not None
 
     console = Console(record=True, width=120)
@@ -185,7 +202,59 @@ def test_agent_cards_panel_renders_social_context() -> None:
     assert "top rival eve" in rendered_lower
     assert "hunger" in rendered_lower and "energy" in rendered_lower
     assert "exit pending" in rendered_lower
-    assert "n/a" in rendered_lower
+    assert "alerts:" in rendered_lower
+    assert "last social" in rendered_lower
+    assert "cooldown" in rendered_lower
+
+
+def test_agent_card_state_rotates_pages() -> None:
+    agents = [
+        AgentSummary(
+            agent_id=f"agent{i}",
+            wallet=1.0 + i,
+            shift_state="on_shift" if i % 2 == 0 else "off_shift",
+            attendance_ratio=0.8,
+            wages_withheld=0.0,
+            lateness_counter=0,
+            on_shift=i % 2 == 0,
+            job_id=None,
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            exit_pending=False,
+            late_ticks_today=0,
+            meals_cooked=0,
+            meals_consumed=0,
+            basket_cost=0.0,
+        )
+        for i in range(4)
+    ]
+    snapshot = SimpleNamespace(
+        agents=agents,
+        relationship_summary=None,
+        history=None,
+        social_events=(),
+        perturbations=PerturbationSnapshot(
+            active={},
+            pending=(),
+            cooldowns_spec={},
+            cooldowns_agents={},
+        ),
+    )
+    state = AgentCardState(page_size=2, rotate=True, rotate_interval=1)
+
+    panel_first = _build_agent_cards_panel(snapshot, tick=1, state=state)
+    assert panel_first is not None
+    console_first = Console(record=True, width=80)
+    console_first.print(panel_first)
+    rendered_first = console_first.export_text()
+    assert "agent0" in rendered_first and "agent2" in rendered_first
+    assert "agent1" not in rendered_first
+
+    panel_second = _build_agent_cards_panel(snapshot, tick=2, state=state)
+    assert panel_second is not None
+    console_second = Console(record=True, width=80)
+    console_second.print(panel_second)
+    rendered_second = console_second.export_text()
+    assert "agent1" in rendered_second or "agent3" in rendered_second
 
 
 def test_perturbation_panel_states() -> None:
@@ -273,8 +342,15 @@ def test_agent_cards_panel_renders_sparklines_from_history() -> None:
         wallet={"alice": (1.0, 1.2, 1.5)},
         rivalry={"alice": {"bob": (0.2, 0.3, 0.35)}},
     )
+    snapshot.social_events = ()
+    snapshot.perturbations = PerturbationSnapshot(
+        active={},
+        pending=(),
+        cooldowns_spec={},
+        cooldowns_agents={},
+    )
 
-    panel = _build_agent_cards_panel(snapshot)
+    panel = _build_agent_cards_panel(snapshot, tick=10)
     assert panel is not None
     console = Console(record=True, width=120)
     console.print(panel)
