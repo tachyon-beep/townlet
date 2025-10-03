@@ -181,15 +181,24 @@ class SimulationLoop:
     def run(self, max_ticks: int | None = None) -> Iterable[TickArtifacts]:
         """Run the loop until `max_ticks` or indefinitely."""
         while max_ticks is None or self.tick < max_ticks:
-            artifacts = self.step()
-            yield artifacts
+            yield self.step()
+
+    def run_for_ticks(self, max_ticks: int, *, collect: bool = False) -> list[TickArtifacts]:
+        """Advance the simulation by ``max_ticks`` and optionally collect artifacts."""
+
+        if max_ticks < 0:
+            raise ValueError("max_ticks must be non-negative")
+        artifacts: list[TickArtifacts] = []
+        for _ in range(max_ticks):
+            result = self.step()
+            if collect:
+                artifacts.append(result)
+        return artifacts
 
     def run_for(self, max_ticks: int) -> None:
         """Execute exactly ``max_ticks`` iterations of the simulation loop."""
-        if max_ticks < 0:
-            raise ValueError("max_ticks must be non-negative")
-        for _ in range(max_ticks):
-            self.step()
+
+        self.run_for_ticks(max_ticks, collect=False)
 
     def step(self) -> TickArtifacts:
         tick_start = time.perf_counter()

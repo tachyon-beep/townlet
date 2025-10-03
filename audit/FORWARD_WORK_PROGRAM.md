@@ -8,11 +8,11 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Affected Components**: `scripts/run_simulation.py`, `tests/test_run_simulation_cli.py`, quickstart docs (`README.md`, `docs/guides/CONSOLE_DRY_RUN.md`).
 - **Validation**: `pytest tests/test_run_simulation_cli.py`; manual runs for default, `--stream-telemetry`, and `--telemetry-path` modes.
 
-## FWP-02 Strengthen Core Loop Stability with Tests
-- **Fix / Change**: Add end-to-end CLI tests for simulation and training flows; introduce a safe wrapper such as `SimulationLoop.run_for_ticks()`; update docs on recommended usage.
-- **Risks**: Longer test suites; new helper could diverge from existing code paths if not reused; potential breakage in scripts expecting generator semantics.
-- **Affected Components**: `src/townlet/core/sim_loop.py`, `scripts/run_training.py`, `tests/test_training_cli.py`, docs under `docs/guides/`.
-- **Validation**: Execute new CLI integration tests, verify training harness still succeeds, and run `mypy` to ensure helper signatures propagate.
+## FWP-02 Strengthen Core Loop Stability with Tests *(Completed)*
+- **Fix / Change**: Added `SimulationLoop.run_for_ticks()` (used by tests and CLI helpers), expanded simulation/training CLI subprocess tests, and documented the helper in the console dry-run guide.
+- **Risks**: Minor—CLI tests increase runtime slightly; existing mypy variance warnings remain and should be addressed separately.
+- **Affected Components**: `src/townlet/core/sim_loop.py`, `tests/test_sim_loop_structure.py`, `tests/test_training_cli.py`, docs (`docs/guides/CONSOLE_DRY_RUN.md`).
+- **Validation**: `pytest tests/test_sim_loop_structure.py tests/test_run_simulation_cli.py tests/test_training_cli.py`; spot-checked CLI flows (`run_simulation`, `run_training --mode replay`); `mypy src/townlet/core/sim_loop.py` still flags pre-existing variance issues (not a regression).
 
 ## FWP-03 Complete Observation & Reward Plumbing
 - **Fix / Change**: Implement the compact observation variant (currently placeholder zeros) and verify reward clipping/termination guardrails align with design notes.

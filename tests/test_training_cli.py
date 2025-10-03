@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from argparse import Namespace
 from pathlib import Path
 
@@ -79,3 +81,26 @@ def test_apply_ppo_overrides_updates_existing_model() -> None:
     run_training._apply_ppo_overrides(config, overrides)
     assert config.ppo.learning_rate == 1e-4
     assert config.ppo.max_grad_norm == 1.0
+
+
+def test_run_training_cli_replay_mode() -> None:
+    config_path = Path("configs/examples/poc_hybrid.yaml")
+    sample = Path("data/bc_datasets/captures/idle_v1/idle_alice.npz")
+    meta = sample.with_suffix(".json")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_training.py",
+            str(config_path),
+            "--mode",
+            "replay",
+            "--replay-sample",
+            str(sample),
+            "--replay-meta",
+            str(meta),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "Replay sample loaded" in result.stdout

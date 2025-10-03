@@ -79,6 +79,11 @@ payload = {
 loop.telemetry.queue_console_command(payload)
 loop.step()
 print(loop.telemetry.latest_console_results()[-1])
+
+# Tip: In automated tests you can advance the simulation with
+# `SimulationLoop.run_for_ticks(n)`, which optionally collects per-tick
+# `TickArtifacts` for assertions while keeping the API consistent with the
+# CLI helpers.
 ```
 
 ## Checklist
