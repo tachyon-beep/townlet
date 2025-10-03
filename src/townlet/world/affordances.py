@@ -138,8 +138,9 @@ def apply_affordance_outcome(
     snapshot.last_action_id = outcome.kind
     snapshot.last_action_success = outcome.success
     snapshot.last_action_duration = outcome.duration
-    # TODO(@townlet): Persist richer outcome metadata (e.g., affordance/object ids) once
-    # snapshot schema evolves; keep attachments scoped to metadata until the refactor lands.
+    # TODO(@townlet-backlog): Persist richer outcome metadata (affordance/object ids)
+    # once the snapshot schema evolves; keep attachments scoped to metadata until the
+    # schema extension is scheduled.
     if outcome.metadata:
         outcome_log = snapshot.inventory.setdefault("_affordance_outcomes", [])
         outcome_log.append(outcome.metadata)
@@ -150,25 +151,24 @@ def apply_affordance_outcome(
 
 
 class AffordanceRuntime(Protocol):
-    """Protocol for the future affordance runtime implementation."""
+    """Protocol describing the affordance runtime contract."""
 
-    # TODO(@townlet): Bind runtime to world collections (agents/objects/affordances) on init.
-    def bind(self, *, context: AffordanceRuntimeContext) -> None: ...
+    def bind(self, *, context: AffordanceRuntimeContext) -> None:
+        """Attach the runtime to the provided world context."""
 
-    # TODO(@townlet): Accept agent action payloads and enqueue affordance starts.
-    def apply_actions(self, actions: Mapping[str, dict[str, object]], *, tick: int) -> None: ...
+    def apply_actions(
+        self, actions: Mapping[str, dict[str, object]], *, tick: int
+    ) -> None:
+        """Process agent actions that may start or queue affordances."""
 
-    # TODO(@townlet): Tick running affordances, dispatch hooks, and emit telemetry events.
-    def resolve(self, *, tick: int) -> None: ...
+    def resolve(self, *, tick: int) -> None:
+        """Advance running affordances and emit telemetry/hook events."""
 
-    # TODO(@townlet): Provide deterministic state for snapshots and tests.
-    def running_snapshot(self) -> dict[str, RunningAffordanceState]: ...
+    def running_snapshot(self) -> dict[str, RunningAffordanceState]:
+        """Return the serialisable state of all running affordances."""
 
-    # TODO(@townlet): Reset runtime state during world resets / snapshot loads.
-    def clear(self) -> None: ...
-
-
-# TODO(@townlet): Implement concrete `DefaultAffordanceRuntime` once responsibilities migrate from `world.grid`.
+    def clear(self) -> None:
+        """Reset runtime state (used on snapshot restore or world reset)."""
 
 
 class DefaultAffordanceRuntime:
@@ -179,9 +179,13 @@ class DefaultAffordanceRuntime:
         context: AffordanceRuntimeContext,
         *,
         running_cls: type,
+        instrumentation: str = "off",
+        options: Mapping[str, object] | None = None,
     ) -> None:
         self._ctx = context
         self._running_cls = running_cls
+        self._instrumentation_level = instrumentation
+        self._options = dict(options or {})
 
     @property
     def context(self) -> AffordanceRuntimeContext:
@@ -194,6 +198,14 @@ class DefaultAffordanceRuntime:
     @property
     def running_affordances(self) -> MutableMapping[str, Any]:
         return self._ctx.running_affordances
+
+    @property
+    def instrumentation_level(self) -> str:
+        return self._instrumentation_level
+
+    @property
+    def options(self) -> dict[str, object]:
+        return dict(self._options)
 
     def remove_agent(self, agent_id: str) -> None:
         """Drop any running affordances owned by `agent_id`."""
@@ -441,7 +453,7 @@ class DefaultAffordanceRuntime:
         objects = ctx.objects
         active_reservations = ctx.active_reservations
         record_queue_conflict = ctx.record_queue_conflict
-        debug_enabled = logger.isEnabledFor(logging.DEBUG)
+        debug_enabled = self._instrumentation_enabled()
         entry_running = 0
         entry_queued = 0
         if debug_enabled:
@@ -547,6 +559,9 @@ class DefaultAffordanceRuntime:
             )
 
         ctx.apply_need_decay()
+
+    def _instrumentation_enabled(self) -> bool:
+        return self._instrumentation_level == "timings" or logger.isEnabledFor(logging.DEBUG)
 
     def running_snapshot(self) -> dict[str, RunningAffordanceState]:
         return {

@@ -19,7 +19,7 @@ from townlet.agents.relationship_modifiers import (
     RelationshipEvent,
     apply_personality_modifiers,
 )
-from townlet.config import EmploymentConfig, SimulationConfig
+from townlet.config import AffordanceRuntimeConfig, EmploymentConfig, SimulationConfig
 from townlet.config.affordance_manifest import (
     AffordanceManifestError,
     load_affordance_manifest,
@@ -201,6 +201,7 @@ class WorldState:
     _rng_state: Optional[tuple[Any, ...]] = field(init=False, default=None)
     _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
     affordance_runtime_factory: Callable[["WorldState", AffordanceRuntimeContext], "DefaultAffordanceRuntime"] | None = None
+    affordance_runtime_config: AffordanceRuntimeConfig | None = None
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
     _console: ConsoleBridge = field(init=False)
@@ -216,12 +217,14 @@ class WorldState:
         *,
         rng: Optional[random.Random] = None,
         affordance_runtime_factory: Callable[["WorldState", AffordanceRuntimeContext], "DefaultAffordanceRuntime"] | None = None,
+        affordance_runtime_config: AffordanceRuntimeConfig | None = None,
     ) -> "WorldState":
         """Bootstrap the initial world from config."""
 
         instance = cls(
             config=config,
             affordance_runtime_factory=affordance_runtime_factory,
+            affordance_runtime_config=affordance_runtime_config,
         )
         instance.attach_rng(rng or random.Random())
         return instance
@@ -252,6 +255,13 @@ class WorldState:
             max_samples=8,
         )
         self._recent_meal_participants = {}
+        runtime_cfg = self.affordance_runtime_config
+        self._runtime_instrumentation_level = (
+            runtime_cfg.instrumentation if runtime_cfg is not None else "off"
+        )
+        self._runtime_options = (
+            dict(runtime_cfg.options) if runtime_cfg is not None else {}
+        )
         self._load_affordance_definitions()
         self._rng_seed = None
         if self._rng is None:
@@ -297,11 +307,17 @@ class WorldState:
             self._affordance_runtime = DefaultAffordanceRuntime(
                 context,
                 running_cls=RunningAffordance,
+                instrumentation=self._runtime_instrumentation_level,
+                options=self._runtime_options,
             )
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
         return self._affordance_runtime
+
+    @property
+    def runtime_instrumentation_level(self) -> str:
+        return getattr(self, "_runtime_instrumentation_level", "off")
 
     def generate_agent_id(self, base_id: str) -> str:
         base = base_id or "agent"
@@ -390,7 +406,10 @@ class WorldState:
         if not hook_names or spec is None:
             return True
         continue_execution = True
-        debug_enabled = logger.isEnabledFor(logging.DEBUG)
+        debug_enabled = (
+            self._runtime_instrumentation_level == "timings"
+            or logger.isEnabledFor(logging.DEBUG)
+        )
         for hook_name in hook_names:
             handlers = self._hook_registry.handlers_for(hook_name)
             if not handlers:

@@ -8,6 +8,7 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 from __future__ import annotations
 
 import hashlib
+from importlib import import_module
 import logging
 import random
 import time
@@ -16,7 +17,7 @@ from typing import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from townlet.config import SimulationConfig
+from townlet.config import AffordanceRuntimeConfig, SimulationConfig
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.observations.builder import ObservationBuilder
 from townlet.policy.runner import PolicyRuntime
@@ -57,7 +58,13 @@ class SimulationLoop:
     ) -> None:
         self.config = config
         self.config.register_snapshot_migrations()
-        self._affordance_runtime_factory = affordance_runtime_factory
+        self._runtime_config: AffordanceRuntimeConfig = self.config.affordances.runtime
+        if affordance_runtime_factory is not None:
+            self._affordance_runtime_factory = affordance_runtime_factory
+        else:
+            self._affordance_runtime_factory = self._load_affordance_runtime_factory(
+                self._runtime_config
+            )
         self._build_components()
 
     def _build_components(self) -> None:
@@ -68,6 +75,7 @@ class SimulationLoop:
             self.config,
             rng=self._rng_world,
             affordance_runtime_factory=self._affordance_runtime_factory,
+            affordance_runtime_config=self._runtime_config,
         )
         self.lifecycle = LifecycleManager(config=self.config)
         self.perturbations = PerturbationScheduler(
@@ -276,6 +284,33 @@ class SimulationLoop:
                 health_payload["employment_exit_queue"],
             )
         return TickArtifacts(observations=observations, rewards=rewards)
+
+    def _load_affordance_runtime_factory(
+        self, runtime_config: AffordanceRuntimeConfig
+    ) -> Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime] | None:
+        if not runtime_config.factory:
+            return None
+        factory_callable = self._import_symbol(runtime_config.factory)
+
+        def _factory(world: WorldState, context: AffordanceRuntimeContext):
+            return factory_callable(world=world, context=context, config=runtime_config)
+
+        return _factory
+
+    @staticmethod
+    def _import_symbol(path: str):
+        module_name, separator, attribute = path.partition(":")
+        if separator != ":" or not module_name or not attribute:
+            raise ValueError(
+                f"Invalid runtime factory path '{path}'. Use 'module:callable' format."
+            )
+        module = import_module(module_name)
+        try:
+            return getattr(module, attribute)
+        except AttributeError as exc:  # pragma: no cover - defensive
+            raise AttributeError(
+                f"Runtime factory '{attribute}' not found in module '{module_name}'"
+            ) from exc
 
     def _derive_seed(self, stream: str) -> int:
         digest = hashlib.sha256(f"{self.config.config_id}:{stream}".encode())

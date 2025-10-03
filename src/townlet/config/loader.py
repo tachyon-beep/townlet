@@ -402,8 +402,17 @@ class PerturbationSchedulerConfig(BaseModel):
         return list(self.events.values())
 
 
+class AffordanceRuntimeConfig(BaseModel):
+    factory: str | None = None
+    instrumentation: Literal["off", "timings"] = "off"
+    options: dict[str, object] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+
 class AffordanceConfig(BaseModel):
     affordances_file: str = Field("configs/affordances/core.yaml")
+    runtime: AffordanceRuntimeConfig = AffordanceRuntimeConfig()
 
 
 class EmploymentConfig(BaseModel):

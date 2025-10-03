@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .loader import (
     AffordanceConfig,
+    AffordanceRuntimeConfig,
     AnnealStage,
     ArrangedMeetEventConfig,
     BCTrainingSettings,
@@ -53,6 +54,7 @@ from .loader import (
 
 __all__ = [
     "AffordanceConfig",
+    "AffordanceRuntimeConfig",
     "AnnealStage",
     "ArrangedMeetEventConfig",
     "BCTrainingSettings",

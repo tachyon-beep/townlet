@@ -15,6 +15,26 @@
 - `DefaultAffordanceRuntime.running_snapshot()` — serialisable view (object → `RunningAffordanceState`).
 - `AffordanceRuntimeContext` carries shared dependencies (queue manager, object maps, event emitter, reservation sync). Custom runtimes can reuse the context via the `SimulationLoop` injection hook.
 
+## Configuration & Extension
+
+Runtime selection is configured under the `affordances.runtime` section in `SimulationConfig`:
+
+```yaml
+affordances:
+  affordances_file: configs/affordances/core.yaml
+  runtime:
+    instrumentation: timings  # or "off" to defer to logger levels
+    factory: "my_mod.runtime:build_runtime"  # optional custom factory
+    options:
+      scheduler: priority
+```
+
+- `instrumentation` forces runtime timing metrics even when the global logger is not in DEBUG mode.
+- `factory` (optional) points to a callable using `module:function` syntax. The callable receives `world`, `context`, and the validated runtime config object.
+- `options` is an open-ended dictionary passed through to the default runtime (and available to custom factories) for experiment-specific settings.
+
+Custom runtimes should accept the context dependencies and return an object implementing the `AffordanceRuntime` protocol. When integrating modules or mods, prefer registering additional hooks via `WorldState.register_affordance_hook` so that instrumentation and telemetry remain unified. The built-in factory loader raises clear errors for missing modules or attributes, making it safe to package third-party integrations without modifying core code.
+
 ## Developer Guidance
 
 ### Starting or Extending Hooks

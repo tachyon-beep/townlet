@@ -5,6 +5,12 @@
 - Category coverage: Security 2, Operational 2, CodeQuality 2, Enhancement 1, TechnicalDebt 1, BestPractice 1, Performance 1
 - Estimated effort by priority: CRITICAL ≈ L (3-10 days), HIGH ≈ M (1-3 days)+S (2-8hrs), MEDIUM ≈ L (3-10 days)+S (2-8hrs)+M (1-3 days)+M (1-3 days)+S (2-8hrs)+M (1-3 days)+S (2-8hrs)
 
+## Update 2025-10-16: Affordance Runtime Hardening
+
+- Added configurable runtime selection (`affordances.runtime`) with instrumentation toggles and factory hooks; documented extension guidelines in `docs/design/AFFORDANCE_RUNTIME.md`.
+- Delivered `scripts/inspect_affordances.py` CLI plus test fixtures/stubs for isolating runtime behaviour; scenario loader now logs synthetic affordance stubs for manifest follow-up.
+- Completed logging/TODO sweep for affordance runtime (missing-spec failures now emit structured events).
+
 ## Priority: CRITICAL
 
 ## WP-101: Secure Console & Telemetry Access Control
