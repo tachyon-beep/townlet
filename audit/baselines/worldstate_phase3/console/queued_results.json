@@ -1,0 +1,25 @@
+[
+  {
+    "name": "force_chat",
+    "status": "ok",
+    "cmd_id": "phase3-force-chat",
+    "issuer": null,
+    "tick": 121,
+    "latency_ms": null,
+    "result": {
+      "speaker": "alice#2",
+      "listener": "bob#2",
+      "quality": 0.75,
+      "speaker_tie": {
+        "trust": 0.037500000000000006,
+        "familiarity": 0.07500000000000001,
+        "rivalry": 0.41000000000000003
+      },
+      "listener_tie": {
+        "trust": 0.037500000000000006,
+        "familiarity": 0.07500000000000001,
+        "rivalry": 0.41000000000000003
+      }
+    }
+  }
+]

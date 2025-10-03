@@ -1,0 +1,24 @@
+[
+  {
+    "sample": "artifacts/m5/preflight/captures/idle_alice.npz",
+    "meta": "artifacts/m5/preflight/captures/idle_alice.json",
+    "metrics": {
+      "timesteps": 10,
+      "reward_sum": -2.0000000298023224,
+      "mean_reward": -0.20000000298023224,
+      "done_count": 0
+    },
+    "accepted": true
+  },
+  {
+    "sample": "artifacts/m5/preflight/captures/idle_bob.npz",
+    "meta": "artifacts/m5/preflight/captures/idle_bob.json",
+    "metrics": {
+      "timesteps": 10,
+      "reward_sum": -2.0000000298023224,
+      "mean_reward": -0.20000000298023224,
+      "done_count": 0
+    },
+    "accepted": true
+  }
+]

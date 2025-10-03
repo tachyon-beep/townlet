@@ -1,0 +1,311 @@
+{
+  "schema_version": "0.9.0",
+  "tick": 60,
+  "queue_metrics": {
+    "cooldown_events": 0,
+    "ghost_step_events": 40,
+    "rotation_events": 30
+  },
+  "rivalry_events_tail": [
+    {
+      "tick": 42,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 46,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 47,
+      "agent_a": "finn",
+      "agent_b": "gina",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 48,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 52,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 53,
+      "agent_a": "finn",
+      "agent_b": "gina",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 54,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 58,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 59,
+      "agent_a": "finn",
+      "agent_b": "gina",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 60,
+      "agent_a": "gina",
+      "agent_b": "finn",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    }
+  ],
+  "stability_alerts": [
+    "rivalry_spike"
+  ],
+  "stability_metrics": {
+    "queue_totals": {
+      "cooldown_events": 0,
+      "ghost_step_events": 40,
+      "rotation_events": 30
+    },
+    "queue_deltas": {
+      "cooldown_events": 0,
+      "ghost_step_events": 1,
+      "rotation_events": 1
+    },
+    "rivalry_events": [
+      {
+        "tick": 4,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 5,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 6,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 10,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 11,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 12,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 16,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 17,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 18,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 22,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 23,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 24,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 28,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 29,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 30,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 34,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 35,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 36,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 40,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 41,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 42,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 46,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 47,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 48,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 52,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 53,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 54,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 58,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 59,
+        "agent_a": "finn",
+        "agent_b": "gina",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 60,
+        "agent_a": "gina",
+        "agent_b": "finn",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      }
+    ],
+    "alerts": [
+      "rivalry_spike"
+    ]
+  }
+}

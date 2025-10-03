@@ -68,7 +68,25 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
         "queue_conflict_intensity_sum": [
             float(rec.get("queue_conflict_intensity_sum", 0.0)) for rec in records
         ],
+        "shared_meal_events": [float(rec.get("shared_meal_events", 0.0)) for rec in records],
+        "late_help_events": [float(rec.get("late_help_events", 0.0)) for rec in records],
+        "shift_takeover_events": [
+            float(rec.get("shift_takeover_events", 0.0)) for rec in records
+        ],
+        "chat_success_events": [float(rec.get("chat_success_events", 0.0)) for rec in records],
+        "chat_failure_events": [float(rec.get("chat_failure_events", 0.0)) for rec in records],
+        "chat_quality_mean": [float(rec.get("chat_quality_mean", 0.0)) for rec in records],
+        "utility_outage_events": [
+            float(rec.get("utility_outage_events", 0.0)) for rec in records
+        ],
+        "shower_complete_events": [
+            float(rec.get("shower_complete_events", 0.0)) for rec in records
+        ],
+        "sleep_complete_events": [
+            float(rec.get("sleep_complete_events", 0.0)) for rec in records
+        ],
     }
+    anneal_records = [rec for rec in records if rec.get("anneal_stage")]
     summary = {
         "epochs": int(recent.get("epoch", len(records))),
         "data_mode": recent.get("data_mode", "unknown"),
@@ -84,6 +102,15 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
             "rollout_ticks": float(recent.get("rollout_ticks", 0.0)),
             "queue_conflict_events": metrics["queue_conflict_events"][-1],
             "queue_conflict_intensity_sum": metrics["queue_conflict_intensity_sum"][-1],
+            "shared_meal_events": metrics["shared_meal_events"][-1],
+            "late_help_events": metrics["late_help_events"][-1],
+            "shift_takeover_events": metrics["shift_takeover_events"][-1],
+            "chat_success_events": metrics["chat_success_events"][-1],
+            "chat_failure_events": metrics["chat_failure_events"][-1],
+            "chat_quality_mean": metrics["chat_quality_mean"][-1],
+            "utility_outage_events": metrics["utility_outage_events"][-1],
+            "shower_complete_events": metrics["shower_complete_events"][-1],
+            "sleep_complete_events": metrics["sleep_complete_events"][-1],
         },
         "extremes": {
             "loss_total": {
@@ -102,8 +129,44 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
                 "min": min(metrics["queue_conflict_events"]),
                 "max": max(metrics["queue_conflict_events"]),
             },
+            "shared_meal_events": {
+                "min": min(metrics["shared_meal_events"]),
+                "max": max(metrics["shared_meal_events"]),
+            },
+            "chat_quality_mean": {
+                "min": min(metrics["chat_quality_mean"]),
+                "max": max(metrics["chat_quality_mean"]),
+            },
+            "utility_outage_events": {
+                "min": min(metrics["utility_outage_events"]),
+                "max": max(metrics["utility_outage_events"]),
+            },
+            "shower_complete_events": {
+                "min": min(metrics["shower_complete_events"]),
+                "max": max(metrics["shower_complete_events"]),
+            },
+            "sleep_complete_events": {
+                "min": min(metrics["sleep_complete_events"]),
+                "max": max(metrics["sleep_complete_events"]),
+            },
         },
     }
+    if anneal_records:
+        latest_anneal = anneal_records[-1]
+        summary["anneal"] = {
+            "stage": latest_anneal.get("anneal_stage"),
+            "cycle": latest_anneal.get("anneal_cycle"),
+            "dataset": latest_anneal.get("anneal_dataset"),
+            "bc_accuracy": latest_anneal.get("anneal_bc_accuracy"),
+            "bc_threshold": latest_anneal.get("anneal_bc_threshold"),
+            "bc_passed": latest_anneal.get("anneal_bc_passed"),
+            "loss_baseline": latest_anneal.get("anneal_loss_baseline"),
+            "queue_baseline": latest_anneal.get("anneal_queue_baseline"),
+            "intensity_baseline": latest_anneal.get("anneal_intensity_baseline"),
+            "loss_flag": latest_anneal.get("anneal_loss_flag"),
+            "queue_flag": latest_anneal.get("anneal_queue_flag"),
+            "intensity_flag": latest_anneal.get("anneal_intensity_flag"),
+        }
     if baseline:
         drift = {}
         for key, base_value in baseline.items():
@@ -117,6 +180,15 @@ def summarise(records: Sequence[dict[str, object]], baseline: dict[str, float] |
     return summary
 
 
+def _format_optional_float(value: object, precision: int = 3) -> str:
+    if value is None:
+        return "n/a"
+    try:
+        return f"{float(value):.{precision}f}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
 def render_text(summary: dict[str, object]) -> str:
     latest = summary["latest"]
     cycle = summary.get("cycle_id", "n/a")
@@ -128,7 +200,29 @@ def render_text(summary: dict[str, object]) -> str:
     if latest["rollout_ticks"]:
         lines.append(f"              rollout_ticks={latest['rollout_ticks']:.0f}")
     lines.append(
-        f"Queue conflicts: events={latest['queue_conflict_events']:.1f}, intensity_sum={latest['queue_conflict_intensity_sum']:.2f}"
+        "Queue conflicts: events={events:.1f}, intensity_sum={intensity:.2f}".format(
+            events=latest["queue_conflict_events"],
+            intensity=latest["queue_conflict_intensity_sum"],
+        )
+    )
+    lines.append(
+        "Social interactions: shared_meals={meals:.1f}, late_help={helped:.1f}, "
+        "shift_takeovers={takeovers:.1f}, chat_success={chat_s:.1f}, chat_failure={chat_f:.1f}, "
+        "chat_quality_mean={chat_q:.3f}".format(
+            meals=latest["shared_meal_events"],
+            helped=latest["late_help_events"],
+            takeovers=latest["shift_takeover_events"],
+            chat_s=latest["chat_success_events"],
+            chat_f=latest["chat_failure_events"],
+            chat_q=latest["chat_quality_mean"],
+        )
+    )
+    lines.append(
+        "Hygiene & rest: utility_outages={outages:.1f}, showers={showers:.1f}, sleeps={sleeps:.1f}".format(
+            outages=latest["utility_outage_events"],
+            showers=latest["shower_complete_events"],
+            sleeps=latest["sleep_complete_events"],
+        )
     )
     extremes = summary["extremes"]
     lines.append(
@@ -137,6 +231,25 @@ def render_text(summary: dict[str, object]) -> str:
         f"kl_divergence[min={extremes['kl_divergence']['min']:.6f}, max={extremes['kl_divergence']['max']:.6f}], "
         f"grad_norm[min={extremes['grad_norm']['min']:.6f}, max={extremes['grad_norm']['max']:.6f}]"
     )
+    anneal = summary.get("anneal")
+    if anneal:
+        lines.append(
+            "Anneal status: stage={stage} cycle={cycle}, dataset={dataset}, bc_accuracy={acc} (threshold={thr}), passed={passed}".format(
+                stage=anneal.get("stage"),
+                cycle=_format_optional_float(anneal.get("cycle"), precision=1),
+                dataset=anneal.get("dataset"),
+                acc=_format_optional_float(anneal.get("bc_accuracy")),
+                thr=_format_optional_float(anneal.get("bc_threshold")),
+                passed=anneal.get("bc_passed"),
+            )
+        )
+        lines.append(
+            "Anneal drift flags: loss={loss}, queue={queue}, intensity={intensity}".format(
+                loss=anneal.get("loss_flag"),
+                queue=anneal.get("queue_flag"),
+                intensity=anneal.get("intensity_flag"),
+            )
+        )
     drift = summary.get("baseline_drift")
     if drift:
         lines.append("Baseline drift:")
@@ -165,6 +278,19 @@ def render_markdown(summary: dict[str, object]) -> str:
         ),
         f"- Epoch duration: `{latest['epoch_duration_sec']:.4f}s`, roll-out ticks: `{latest['rollout_ticks']:.0f}`",
         f"- Queue conflicts: `{latest['queue_conflict_events']:.1f}` events (intensity sum `{latest['queue_conflict_intensity_sum']:.2f}`)",
+    ]
+    anneal = summary.get("anneal")
+    if anneal:
+        lines.append(
+            f"- Anneal status: stage `{anneal.get('stage')}`, cycle `{_format_optional_float(anneal.get('cycle'), precision=1)}`, "
+            f"dataset `{anneal.get('dataset')}`, bc_accuracy `{_format_optional_float(anneal.get('bc_accuracy'))}` "
+            f"(threshold `{_format_optional_float(anneal.get('bc_threshold'))}`), passed `{anneal.get('bc_passed')}`"
+        )
+        lines.append(
+            f"- Anneal drift flags: loss `{anneal.get('loss_flag')}`, queue `{anneal.get('queue_flag')}`, intensity `{anneal.get('intensity_flag')}`"
+        )
+    lines.extend(
+        [
         "",
         "| Metric | Min | Max |",
         "| --- | --- | --- |",
@@ -172,7 +298,13 @@ def render_markdown(summary: dict[str, object]) -> str:
         f"| kl_divergence | {summary['extremes']['kl_divergence']['min']:.6f} | {summary['extremes']['kl_divergence']['max']:.6f} |",
         f"| grad_norm | {summary['extremes']['grad_norm']['min']:.6f} | {summary['extremes']['grad_norm']['max']:.6f} |",
         f"| queue_conflict_events | {summary['extremes']['queue_conflict_events']['min']:.1f} | {summary['extremes']['queue_conflict_events']['max']:.1f} |",
-    ]
+        f"| shared_meal_events | {summary['extremes']['shared_meal_events']['min']:.1f} | {summary['extremes']['shared_meal_events']['max']:.1f} |",
+        f"| chat_quality_mean | {summary['extremes']['chat_quality_mean']['min']:.3f} | {summary['extremes']['chat_quality_mean']['max']:.3f} |",
+        f"| utility_outage_events | {summary['extremes']['utility_outage_events']['min']:.1f} | {summary['extremes']['utility_outage_events']['max']:.1f} |",
+        f"| shower_complete_events | {summary['extremes']['shower_complete_events']['min']:.1f} | {summary['extremes']['shower_complete_events']['max']:.1f} |",
+        f"| sleep_complete_events | {summary['extremes']['sleep_complete_events']['min']:.1f} | {summary['extremes']['sleep_complete_events']['max']:.1f} |",
+        ]
+    )
     drift = summary.get("baseline_drift")
     if drift:
         lines.append("\n#### Baseline Drift\n")

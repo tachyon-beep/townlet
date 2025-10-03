@@ -14,10 +14,17 @@ def test_event_stream_receives_published_events() -> None:
 
     world = WorldState.from_config(config)
     events = [
-        {"event": "affordance_start", "agent_id": "alice", "object_id": "shower", "affordance_id": "use_shower"}
+        {
+            "event": "affordance_start",
+            "agent_id": "alice",
+            "object_id": "shower",
+            "affordance_id": "use_shower",
+        }
     ]
 
-    publisher.publish_tick(tick=0, world=world, observations={}, rewards={}, events=events)
+    publisher.publish_tick(
+        tick=0, world=world, observations={}, rewards={}, events=events
+    )
     latest = stream.latest()
     assert latest and latest[0]["event"] == "affordance_start"
 

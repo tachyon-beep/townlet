@@ -1,0 +1,367 @@
+{
+  "schema_version": "0.9.0",
+  "tick": 80,
+  "queue_metrics": {
+    "cooldown_events": 22,
+    "ghost_step_events": 74,
+    "rotation_events": 28
+  },
+  "queue_history_tail": [
+    {
+      "tick": 76,
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 1,
+        "rotation_events": 1
+      },
+      "totals": {
+        "cooldown_events": 21,
+        "ghost_step_events": 69,
+        "rotation_events": 26
+      }
+    },
+    {
+      "tick": 77,
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 1,
+        "rotation_events": 1
+      },
+      "totals": {
+        "cooldown_events": 21,
+        "ghost_step_events": 70,
+        "rotation_events": 27
+      }
+    },
+    {
+      "tick": 78,
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 1,
+        "rotation_events": 1
+      },
+      "totals": {
+        "cooldown_events": 21,
+        "ghost_step_events": 71,
+        "rotation_events": 28
+      }
+    },
+    {
+      "tick": 79,
+      "delta": {
+        "cooldown_events": 1,
+        "ghost_step_events": 1,
+        "rotation_events": 0
+      },
+      "totals": {
+        "cooldown_events": 22,
+        "ghost_step_events": 72,
+        "rotation_events": 28
+      }
+    },
+    {
+      "tick": 80,
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 2,
+        "rotation_events": 0
+      },
+      "totals": {
+        "cooldown_events": 22,
+        "ghost_step_events": 74,
+        "rotation_events": 28
+      }
+    }
+  ],
+  "rivalry_events_tail": [
+    {
+      "tick": 54,
+      "agent_a": "cara",
+      "agent_b": "ben",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 60,
+      "agent_a": "ben",
+      "agent_b": "cara",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 61,
+      "agent_a": "cara",
+      "agent_b": "ben",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 67,
+      "agent_a": "ben",
+      "agent_b": "cara",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 68,
+      "agent_a": "cara",
+      "agent_b": "ben",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 74,
+      "agent_a": "anna",
+      "agent_b": "ben",
+      "intensity": 1.75,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 75,
+      "agent_a": "ben",
+      "agent_b": "cara",
+      "intensity": 1.75,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 76,
+      "agent_a": "anna",
+      "agent_b": "ben",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 77,
+      "agent_a": "ben",
+      "agent_b": "anna",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    },
+    {
+      "tick": 78,
+      "agent_a": "anna",
+      "agent_b": "ben",
+      "intensity": 1.5,
+      "reason": "ghost_step"
+    }
+  ],
+  "stability_alerts": [
+    "rivalry_spike",
+    "option_thrash_detected"
+  ],
+  "stability_metrics": {
+    "queue_totals": {
+      "cooldown_events": 22,
+      "ghost_step_events": 74,
+      "rotation_events": 28
+    },
+    "queue_deltas": {
+      "cooldown_events": 0,
+      "ghost_step_events": 2,
+      "rotation_events": 0
+    },
+    "option_switch_rate": 0.5875,
+    "rivalry_events": [
+      {
+        "tick": 4,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 5,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 11,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 12,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 18,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 19,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 25,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 26,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 32,
+        "agent_a": "anna",
+        "agent_b": "ben",
+        "intensity": 1.75,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 33,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.75,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 34,
+        "agent_a": "anna",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 35,
+        "agent_a": "ben",
+        "agent_b": "anna",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 36,
+        "agent_a": "anna",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 39,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 40,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 46,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 47,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 53,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 54,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 60,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 61,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 67,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 68,
+        "agent_a": "cara",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 74,
+        "agent_a": "anna",
+        "agent_b": "ben",
+        "intensity": 1.75,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 75,
+        "agent_a": "ben",
+        "agent_b": "cara",
+        "intensity": 1.75,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 76,
+        "agent_a": "anna",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 77,
+        "agent_a": "ben",
+        "agent_b": "anna",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 78,
+        "agent_a": "anna",
+        "agent_b": "ben",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      }
+    ],
+    "alerts": [
+      "rivalry_spike",
+      "option_thrash_detected"
+    ]
+  }
+}

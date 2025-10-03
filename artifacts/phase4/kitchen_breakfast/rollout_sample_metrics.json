@@ -1,0 +1,40 @@
+{
+  "rollout_sample_alice_001.npz": {
+    "timesteps": 40.0,
+    "reward_sum": -8.0,
+    "reward_mean": -0.20000000298023224,
+    "log_prob_mean": -1.0874706506729126,
+    "value_pred_last": 0.026714492589235306,
+    "rivalry_max_mean": 0.0,
+    "rivalry_max_max": 0.0,
+    "rivalry_avoid_count_mean": 0.0,
+    "rivalry_avoid_count_max": 0.0,
+    "lateness_mean": 0.0,
+    "action_nonzero": 3.0,
+    "action_total": 40.0,
+    "action_entropy": 1.0979923063985968,
+    "action_request_count": 14.0,
+    "action_wait_count": 13.0,
+    "action_unknown_count": 13.0,
+    "action_blocked_ratio": 0.0
+  },
+  "rollout_sample_bob_002.npz": {
+    "timesteps": 40.0,
+    "reward_sum": -8.0,
+    "reward_mean": -0.20000000298023224,
+    "log_prob_mean": -1.0900784730911255,
+    "value_pred_last": 0.029580088332295418,
+    "rivalry_max_mean": 0.0,
+    "rivalry_max_max": 0.0,
+    "rivalry_avoid_count_mean": 0.0,
+    "rivalry_avoid_count_max": 0.0,
+    "lateness_mean": 0.0,
+    "action_nonzero": 3.0,
+    "action_total": 40.0,
+    "action_entropy": 1.0979923063985968,
+    "action_request_count": 13.0,
+    "action_wait_count": 14.0,
+    "action_unknown_count": 13.0,
+    "action_blocked_ratio": 0.0
+  }
+}

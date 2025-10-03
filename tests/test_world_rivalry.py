@@ -32,6 +32,21 @@ def test_register_rivalry_conflict_updates_snapshot() -> None:
     assert snapshot["alice"]["bob"] == pytest.approx(0.2)
     assert snapshot["bob"]["alice"] == pytest.approx(0.2)
 
+def test_rivalry_events_record_reason() -> None:
+    world = _make_world()
+    world.tick = 42
+    world.register_rivalry_conflict("alice", "bob", intensity=1.5, reason="queue_conflict")
+    events = world.consume_rivalry_events()
+    assert events
+    event = events[0]
+    assert event["tick"] == 42
+    assert event["agent_a"] == "alice"
+    assert event["agent_b"] == "bob"
+    assert event["reason"] == "queue_conflict"
+    assert event["intensity"] == pytest.approx(1.5)
+    # Second call drains the buffer
+    assert world.consume_rivalry_events() == []
+
 
 def test_rivalry_decays_over_time() -> None:
     world = _make_world()
@@ -58,7 +73,7 @@ def test_rivalry_decays_over_time() -> None:
 def test_queue_conflict_event_emitted_with_intensity() -> None:
     world = _make_world()
     world.queue_manager._settings.ghost_step_after = 1
-    world.register_object("stove_1", "stove")
+    world.register_object(object_id="stove_1", object_type="stove")
     world.tick = 0
     world.apply_actions(
         {

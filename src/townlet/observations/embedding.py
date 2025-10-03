@@ -1,8 +1,8 @@
 """Embedding slot allocation with cooldown logging."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 from townlet.config import EmbeddingAllocatorConfig, SimulationConfig
 
@@ -19,12 +19,12 @@ class EmbeddingAllocator:
 
     def __init__(self, config: SimulationConfig) -> None:
         self._settings: EmbeddingAllocatorConfig = config.embedding_allocator
-        self._assignments: Dict[str, int] = {}
-        self._slot_state: Dict[int, _SlotState] = {
+        self._assignments: dict[str, int] = {}
+        self._slot_state: dict[int, _SlotState] = {
             slot: _SlotState() for slot in range(self._settings.max_slots)
         }
         self._available: set[int] = set(self._slot_state)
-        self._metrics: Dict[str, float] = {
+        self._metrics: dict[str, float] = {
             "allocations_total": 0,
             "forced_reuse_count": 0,
         }
@@ -58,7 +58,7 @@ class EmbeddingAllocator:
         """Return whether the allocator still tracks the agent."""
         return agent_id in self._assignments
 
-    def metrics(self) -> Dict[str, float]:
+    def metrics(self) -> dict[str, float]:
         """Expose allocation metrics for telemetry."""
         total = self._metrics["allocations_total"] or 1.0
         forced = self._metrics["forced_reuse_count"]
@@ -70,6 +70,59 @@ class EmbeddingAllocator:
             "forced_reuse_rate": rate,
             "reuse_warning": bool(warning_threshold and rate > warning_threshold),
         }
+
+    def export_state(self) -> dict[str, object]:
+        """Serialise allocator bookkeeping for snapshot persistence."""
+
+        return {
+            "assignments": dict(self._assignments),
+            "available": sorted(self._available),
+            "slot_state": {
+                slot: state.released_at_tick for slot, state in self._slot_state.items()
+            },
+            "metrics": dict(self._metrics),
+        }
+
+    def import_state(self, payload: dict[str, object]) -> None:
+        """Restore allocator bookkeeping from snapshot data."""
+
+        assignments = payload.get("assignments", {})
+        if isinstance(assignments, dict):
+            self._assignments = {
+                str(agent_id): int(slot) for agent_id, slot in assignments.items()
+            }
+        else:
+            self._assignments = {}
+
+        available = payload.get("available", [])
+        if isinstance(available, list):
+            self._available = set(int(slot) for slot in available)
+        else:
+            self._available = set(self._slot_state)
+        # Assigned slots should not remain in the available set.
+        for slot in self._assignments.values():
+            self._available.discard(slot)
+
+        slot_state = payload.get("slot_state", {})
+        if isinstance(slot_state, dict):
+            for slot, state in self._slot_state.items():
+                released = slot_state.get(str(slot))
+                state.released_at_tick = None if released is None else int(released)
+        else:
+            for state in self._slot_state.values():
+                state.released_at_tick = None
+
+        metrics = payload.get("metrics", {})
+        if isinstance(metrics, dict):
+            self._metrics = {
+                "allocations_total": float(metrics.get("allocations_total", 0.0)),
+                "forced_reuse_count": float(metrics.get("forced_reuse_count", 0.0)),
+            }
+        else:
+            self._metrics = {
+                "allocations_total": 0.0,
+                "forced_reuse_count": 0.0,
+            }
 
     # ------------------------------------------------------------------
     # Internal helpers

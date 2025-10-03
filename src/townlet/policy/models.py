@@ -1,8 +1,8 @@
 """Torch-based policy/value networks for Townlet PPO."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
 
 try:
     import torch
@@ -24,7 +24,7 @@ class TorchNotAvailableError(RuntimeError):
 @dataclass
 class ConflictAwarePolicyConfig:
     feature_dim: int
-    map_shape: Tuple[int, int, int]
+    map_shape: tuple[int, int, int]
     action_dim: int
     hidden_dim: int = 256
 
@@ -55,7 +55,9 @@ if torch_available():
             self.policy_head = nn.Linear(cfg.hidden_dim, cfg.action_dim)
             self.value_head = nn.Linear(cfg.hidden_dim, 1)
 
-        def forward(self, map_tensor: torch.Tensor, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
+        def forward(
+            self, map_tensor: torch.Tensor, features: torch.Tensor
+        ) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
             encoded_map = self.map_encoder(map_tensor)
             encoded_features = self.feature_encoder(features)
             hidden = torch.cat([encoded_map, encoded_features], dim=-1)
@@ -76,4 +78,6 @@ else:
             )
 
         def __call__(self, *args: object, **kwargs: object) -> None:
-            raise TorchNotAvailableError("PyTorch is required to call ConflictAwarePolicyNetwork.")
+            raise TorchNotAvailableError(
+                "PyTorch is required to call ConflictAwarePolicyNetwork."
+            )

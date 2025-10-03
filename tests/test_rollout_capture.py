@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
@@ -17,7 +18,9 @@ SCENARIO_CONFIGS = [
 ]
 
 GOLDEN_STATS_PATH = Path("docs/samples/rollout_scenario_stats.json")
-GOLDEN_STATS = json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
+GOLDEN_STATS = (
+    json.loads(GOLDEN_STATS_PATH.read_text()) if GOLDEN_STATS_PATH.exists() else {}
+)
 
 
 @pytest.mark.parametrize("config_path", SCENARIO_CONFIGS)
@@ -30,7 +33,7 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/capture_rollout.py",
             str(config_path),
             "--output",
@@ -45,7 +48,15 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     for npz_path in npz_files:
         data = np.load(npz_path)
-        for key in ("map", "features", "actions", "old_log_probs", "value_preds", "rewards", "dones"):
+        for key in (
+            "map",
+            "features",
+            "actions",
+            "old_log_probs",
+            "value_preds",
+            "rewards",
+            "dones",
+        ):
             assert key in data, f"missing {key} in {npz_path.name}"
         assert np.isfinite(data["old_log_probs"]).all()
         assert np.isfinite(data["value_preds"]).all()
@@ -55,8 +66,18 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     manifest = output_dir / "rollout_sample_manifest.json"
     assert manifest.exists()
-    entries = json.loads(manifest.read_text())
+    manifest_payload = json.loads(manifest.read_text())
+    if isinstance(manifest_payload, dict):
+        manifest_metadata = manifest_payload.get("metadata", {})
+        entries = manifest_payload.get("samples", [])
+    else:
+        manifest_metadata = {}
+        entries = manifest_payload
     assert entries, "Manifest empty"
+    if manifest_metadata:
+        expected_config = load_config(config_path).config_id
+        assert manifest_metadata.get("config_id") == expected_config
+        assert manifest_metadata.get("scenario_name") == config_path.stem
     for entry in entries:
         assert "sample" in entry and "meta" in entry
         sample_file = output_dir / entry["sample"]
@@ -64,8 +85,12 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
 
     metrics_file = output_dir / "rollout_sample_metrics.json"
     assert metrics_file.exists()
-    metrics_data = json.loads(metrics_file.read_text())
-    assert metrics_data, "Metrics file empty"
+    metrics_payload = json.loads(metrics_file.read_text())
+    assert metrics_payload, "Metrics file empty"
+    if isinstance(metrics_payload, dict) and "samples" in metrics_payload:
+        metrics_data = metrics_payload.get("samples", {})
+    else:
+        metrics_data = metrics_payload
 
     golden = GOLDEN_STATS.get(config_path.stem)
     if golden:
@@ -74,9 +99,11 @@ def test_capture_rollout_scenarios(tmp_path: Path, config_path: Path) -> None:
             metrics = golden.get(name)
             assert metrics is not None, f"Missing golden metrics for {name}"
             data = np.load(npz_path)
-            assert int(data['rewards'].shape[0]) == metrics['timesteps']
-            assert np.isclose(float(data['rewards'].sum()), metrics['reward_sum'])
-            assert np.isclose(float(data['old_log_probs'].mean()), metrics['log_prob_mean'])
+            assert int(data["rewards"].shape[0]) == metrics["timesteps"]
+            assert np.isclose(float(data["rewards"].sum()), metrics["reward_sum"])
+            assert np.isclose(
+                float(data["old_log_probs"].mean()), metrics["log_prob_mean"]
+            )
             sample_metrics = metrics_data.get(name)
             assert sample_metrics is not None
-            assert np.isclose(sample_metrics['reward_sum'], metrics['reward_sum'])
+            assert np.isclose(sample_metrics["reward_sum"], metrics["reward_sum"])

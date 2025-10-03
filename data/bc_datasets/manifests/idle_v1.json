@@ -1,0 +1,24 @@
+[
+  {
+    "sample": "data/bc_datasets/captures/idle_v1/idle_alice.npz",
+    "meta": "data/bc_datasets/captures/idle_v1/idle_alice.json",
+    "metrics": {
+      "timesteps": 200,
+      "reward_sum": -40.00000059604645,
+      "mean_reward": -0.20000000298023224,
+      "done_count": 174
+    },
+    "accepted": true
+  },
+  {
+    "sample": "data/bc_datasets/captures/idle_v1/idle_bob.npz",
+    "meta": "data/bc_datasets/captures/idle_v1/idle_bob.json",
+    "metrics": {
+      "timesteps": 200,
+      "reward_sum": -40.00000059604645,
+      "mean_reward": -0.20000000298023224,
+      "done_count": 144
+    },
+    "accepted": true
+  }
+]

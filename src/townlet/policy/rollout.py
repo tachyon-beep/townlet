@@ -1,4 +1,5 @@
 """Rollout buffer scaffolding for future live PPO integration."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,10 @@ import numpy as np
 
 from townlet.policy.metrics import compute_sample_metrics
 from townlet.policy.replay import ReplaySample, frames_to_replay_sample
-from townlet.policy.replay_buffer import InMemoryReplayDataset, InMemoryReplayDatasetConfig
+from townlet.policy.replay_buffer import (
+    InMemoryReplayDataset,
+    InMemoryReplayDatasetConfig,
+)
 
 
 @dataclass
@@ -33,6 +37,12 @@ class RolloutBuffer:
         self._tick_count = 0
         self._queue_conflict_count = 0
         self._queue_conflict_intensity = 0.0
+        self._shared_meal_count = 0
+        self._late_help_count = 0
+        self._shift_takeover_count = 0
+        self._chat_success_count = 0
+        self._chat_failure_count = 0
+        self._chat_quality_sum = 0.0
 
     def record_events(self, events: Iterable[dict[str, object]]) -> None:
         for event in events:
@@ -43,6 +53,22 @@ class RolloutBuffer:
                     self._queue_conflict_intensity += float(intensity)
                 except (TypeError, ValueError):
                     continue
+            elif event.get("event") == "queue_interaction":
+                continue
+            elif event.get("event") == "shared_meal":
+                self._shared_meal_count += 1
+            elif event.get("event") == "employment_helped_when_late":
+                self._late_help_count += 1
+            elif event.get("event") == "employment_took_my_shift":
+                self._shift_takeover_count += 1
+            elif event.get("event") == "chat_success":
+                self._chat_success_count += 1
+                try:
+                    self._chat_quality_sum += float(event.get("quality", 0.0))
+                except (TypeError, ValueError):
+                    pass
+            elif event.get("event") == "chat_failure":
+                self._chat_failure_count += 1
 
     def extend(self, frames: Iterable[dict[str, object]]) -> None:
         for frame in frames:
@@ -64,7 +90,9 @@ class RolloutBuffer:
             for agent_id, rollout in self.by_agent().items()
         }
 
-    def save(self, output_dir: Path, prefix: str = "rollout_sample", compress: bool = True) -> None:
+    def save(
+        self, output_dir: Path, prefix: str = "rollout_sample", compress: bool = True
+    ) -> None:
         output_dir.mkdir(parents=True, exist_ok=True)
         save_fn = np.savez_compressed if compress else np.savez
 
@@ -91,7 +119,9 @@ class RolloutBuffer:
             meta["metrics"] = sample_metrics
             metrics_map[sample_path.name] = sample_metrics
             meta_path.write_text(json.dumps(meta, indent=2))
-            manifest_entries.append({"sample": sample_path.name, "meta": meta_path.name})
+            manifest_entries.append(
+                {"sample": sample_path.name, "meta": meta_path.name}
+            )
 
         manifest_path = output_dir / f"{prefix}_manifest.json"
         manifest_path.write_text(json.dumps(manifest_entries, indent=2))
@@ -116,11 +146,22 @@ class RolloutBuffer:
             batch_size=batch_size,
             drop_last=drop_last,
             rollout_ticks=self._tick_count,
+            label="rollout_buffer",
         )
         dataset = InMemoryReplayDataset(config)
         dataset.baseline_metrics = self._aggregate_metrics(samples)
         dataset.queue_conflict_count = self._queue_conflict_count
         dataset.queue_conflict_intensity_sum = self._queue_conflict_intensity
+        dataset.shared_meal_count = self._shared_meal_count
+        dataset.late_help_count = self._late_help_count
+        dataset.shift_takeover_count = self._shift_takeover_count
+        dataset.chat_success_count = self._chat_success_count
+        dataset.chat_failure_count = self._chat_failure_count
+        dataset.chat_quality_mean = (
+            self._chat_quality_sum / self._chat_success_count
+            if self._chat_success_count
+            else 0.0
+        )
         return dataset
 
     def is_empty(self) -> bool:

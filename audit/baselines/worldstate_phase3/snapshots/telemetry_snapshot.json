@@ -1,0 +1,807 @@
+{
+  "schema_version": "0.9.0",
+  "schema_warning": null,
+  "jobs": {
+    "alice#2": {
+      "job_id": "grocer",
+      "on_shift": false,
+      "wallet": 0.0,
+      "lateness_counter": 0,
+      "wages_earned": 0,
+      "meals_cooked": 0,
+      "meals_consumed": 0,
+      "basket_cost": 0.62,
+      "shift_state": "idle",
+      "attendance_ratio": 0.0,
+      "late_ticks_today": 0,
+      "absent_shifts_7d": 0,
+      "wages_withheld": 0.0,
+      "exit_pending": false
+    },
+    "bob#2": {
+      "job_id": "grocer",
+      "on_shift": false,
+      "wallet": 0.0,
+      "lateness_counter": 0,
+      "wages_earned": 0,
+      "meals_cooked": 0,
+      "meals_consumed": 0,
+      "basket_cost": 0.62,
+      "shift_state": "idle",
+      "attendance_ratio": 0.0,
+      "late_ticks_today": 0,
+      "absent_shifts_7d": 0,
+      "wages_withheld": 0.0,
+      "exit_pending": false
+    }
+  },
+  "economy": {
+    "shower_1": {
+      "type": "shower",
+      "stock": {
+        "power_on": 1
+      }
+    },
+    "bed_1": {
+      "type": "bed",
+      "stock": {
+        "sleep_slots": 1,
+        "sleep_capacity": 1
+      }
+    },
+    "fridge_1": {
+      "type": "fridge",
+      "stock": {
+        "meals": 0
+      }
+    },
+    "stove_1": {
+      "type": "stove",
+      "stock": {
+        "raw_ingredients": 3
+      }
+    }
+  },
+  "employment": {
+    "pending": [],
+    "pending_count": 0,
+    "exits_today": 0,
+    "daily_exit_cap": 2,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "conflict": {
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 11,
+      "rotation_events": 11
+    },
+    "queue_history": [
+      {
+        "tick": 101,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 102,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 103,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 104,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 105,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 106,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 107,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 108,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 109,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 110,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 111,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 112,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 113,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 114,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 115,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 116,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 9,
+          "rotation_events": 9
+        }
+      },
+      {
+        "tick": 117,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 1,
+          "rotation_events": 1
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 10,
+          "rotation_events": 10
+        }
+      },
+      {
+        "tick": 118,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 10,
+          "rotation_events": 10
+        }
+      },
+      {
+        "tick": 119,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 10,
+          "rotation_events": 10
+        }
+      },
+      {
+        "tick": 120,
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 1,
+          "rotation_events": 1
+        },
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 11,
+          "rotation_events": 11
+        }
+      }
+    ],
+    "rivalry": {
+      "alice#2": {
+        "bob#2": 0.42999999999999994
+      },
+      "bob#2": {
+        "alice#2": 0.42999999999999994
+      }
+    },
+    "rivalry_events": [
+      {
+        "tick": 23,
+        "agent_a": "alice",
+        "agent_b": "bob",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 26,
+        "agent_a": "bob",
+        "agent_b": "alice",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 40,
+        "agent_a": "bob",
+        "agent_b": "alice#1",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 43,
+        "agent_a": "alice#1",
+        "agent_b": "bob",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 46,
+        "agent_a": "bob",
+        "agent_b": "alice#1",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 49,
+        "agent_a": "alice#1",
+        "agent_b": "bob",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 52,
+        "agent_a": "bob",
+        "agent_b": "alice#1",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 55,
+        "agent_a": "alice#1",
+        "agent_b": "bob",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 55,
+        "agent_a": "bob",
+        "agent_b": "alice#1",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 117,
+        "agent_a": "alice#2",
+        "agent_b": "bob#2",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      },
+      {
+        "tick": 120,
+        "agent_a": "bob#2",
+        "agent_b": "alice#2",
+        "intensity": 1.5,
+        "reason": "ghost_step"
+      }
+    ]
+  },
+  "relationships": {
+    "window_start": 0,
+    "window_end": 600,
+    "total": 4,
+    "owners": {
+      "bob": 2,
+      "alice#1": 2
+    },
+    "reasons": {
+      "removed": 4
+    },
+    "history": []
+  },
+  "relationship_snapshot": {
+    "alice#2": {
+      "bob#2": {
+        "trust": 0.0,
+        "familiarity": 0.0,
+        "rivalry": 0.41000000000000003
+      }
+    },
+    "bob#2": {
+      "alice#2": {
+        "trust": 0.0,
+        "familiarity": 0.0,
+        "rivalry": 0.41000000000000003
+      }
+    }
+  },
+  "relationship_updates": [
+    {
+      "owner": "alice#2",
+      "other": "bob#2",
+      "trust": 0.0,
+      "familiarity": 0.0,
+      "rivalry": 0.41000000000000003,
+      "status": "updated",
+      "delta": {
+        "trust": 0.0,
+        "familiarity": 0.0,
+        "rivalry": 0.21500000000000002
+      }
+    },
+    {
+      "owner": "bob#2",
+      "other": "alice#2",
+      "trust": 0.0,
+      "familiarity": 0.0,
+      "rivalry": 0.41000000000000003,
+      "status": "updated",
+      "delta": {
+        "trust": 0.0,
+        "familiarity": 0.0,
+        "rivalry": 0.21500000000000002
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "queue_conflict",
+      "tick": 120,
+      "object_id": "stove_1",
+      "actor": "bob#2",
+      "rival": "alice#2",
+      "reason": "ghost_step",
+      "queue_length": 1,
+      "intensity": 1.5
+    }
+  ],
+  "narrations": [],
+  "narration_state": {
+    "last_category_tick": {
+      "queue_conflict": 117
+    },
+    "last_global_tick": 117,
+    "recent_entries": {
+      "queue_conflict:stove_1:alice#2::bob#2": 117
+    },
+    "window_emissions": [
+      23,
+      40,
+      55,
+      117
+    ]
+  },
+  "anneal_status": null,
+  "policy_snapshot": {
+    "alice#2": {
+      "tick": 120,
+      "selected_action": "3",
+      "log_prob": -1.71624,
+      "value_pred": -0.020229,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 0.213477
+        },
+        {
+          "action": "1",
+          "probability": 0.205918
+        },
+        {
+          "action": "4",
+          "probability": 0.205225
+        },
+        {
+          "action": "2",
+          "probability": 0.195638
+        },
+        {
+          "action": "3",
+          "probability": 0.179741
+        }
+      ]
+    },
+    "bob#2": {
+      "tick": 120,
+      "selected_action": "3",
+      "log_prob": -1.706123,
+      "value_pred": -0.014461,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 0.217013
+        },
+        {
+          "action": "1",
+          "probability": 0.201946
+        },
+        {
+          "action": "4",
+          "probability": 0.200422
+        },
+        {
+          "action": "2",
+          "probability": 0.199051
+        },
+        {
+          "action": "3",
+          "probability": 0.181568
+        }
+      ]
+    }
+  },
+  "policy_identity": {
+    "config_id": "v1.3.0",
+    "policy_hash": null,
+    "observation_variant": "hybrid",
+    "anneal_ratio": null
+  },
+  "snapshot_migrations": [],
+  "affordance_manifest": {
+    "path": "configs/affordances/core.yaml",
+    "checksum": "fffd29ccf21edf1be92c455419ec0e8f9cfb94df2df74484e48ce3af23fbd93f",
+    "object_count": 3,
+    "affordance_count": 4
+  },
+  "reward_breakdown": {
+    "alice#2": {
+      "survival": 0.002,
+      "needs_penalty": -1.844079200000001,
+      "social": 0.0,
+      "wage": 0.0,
+      "punctuality": 0.0,
+      "terminal_penalty": 0.0,
+      "clip_adjustment": 1.6420792000000017,
+      "total": -0.1999999999999993
+    },
+    "bob#2": {
+      "survival": 0.002,
+      "needs_penalty": -0.9529472000000003,
+      "social": 0.0,
+      "wage": 0.0,
+      "punctuality": 0.0,
+      "terminal_penalty": 0.0,
+      "clip_adjustment": 0.7509472000000001,
+      "total": -0.20000000000000018
+    }
+  },
+  "stability": {
+    "alerts": [
+      "rivalry_spike"
+    ],
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.029166666666666667,
+      "option_samples": 120,
+      "reward_variance": 9.78885993067219e-32,
+      "reward_mean": -0.19999999999999998,
+      "reward_samples": 240,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 11,
+        "rotation_events": 11
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 1,
+        "rotation_events": 1
+      },
+      "rivalry_events": [
+        {
+          "tick": 23,
+          "agent_a": "alice",
+          "agent_b": "bob",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 26,
+          "agent_a": "bob",
+          "agent_b": "alice",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 40,
+          "agent_a": "bob",
+          "agent_b": "alice#1",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 43,
+          "agent_a": "alice#1",
+          "agent_b": "bob",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 46,
+          "agent_a": "bob",
+          "agent_b": "alice#1",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 49,
+          "agent_a": "alice#1",
+          "agent_b": "bob",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 52,
+          "agent_a": "bob",
+          "agent_b": "alice#1",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 55,
+          "agent_a": "alice#1",
+          "agent_b": "bob",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 55,
+          "agent_a": "bob",
+          "agent_b": "alice#1",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 117,
+          "agent_a": "alice#2",
+          "agent_b": "bob#2",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        },
+        {
+          "tick": 120,
+          "agent_a": "bob#2",
+          "agent_b": "alice#2",
+          "intensity": 1.5,
+          "reason": "ghost_step"
+        }
+      ],
+      "alerts": [
+        "rivalry_spike"
+      ],
+      "thresholds": {
+        "affordance_fail_threshold": 5,
+        "lateness_threshold": 3,
+        "starvation": {
+          "window_ticks": 1000,
+          "max_incidents": 0,
+          "hunger_threshold": 0.05,
+          "min_duration_ticks": 30
+        },
+        "reward_variance": {
+          "window_ticks": 1000,
+          "max_variance": 0.25,
+          "min_samples": 20
+        },
+        "option_thrash": {
+          "window_ticks": 600,
+          "max_switch_rate": 0.25,
+          "min_samples": 10
+        }
+      },
+      "promotion": {
+        "window_start": 0,
+        "window_end": 1000,
+        "window_ticks": 1000,
+        "pass_streak": 0,
+        "required_passes": 2,
+        "candidate_ready": false,
+        "last_result": null,
+        "last_evaluated_tick": null
+      },
+      "promotion_state": {
+        "state": "monitoring",
+        "pass_streak": 0,
+        "required_passes": 2,
+        "candidate_ready": false,
+        "candidate_ready_tick": null,
+        "last_result": null,
+        "last_evaluated_tick": null,
+        "current_release": {
+          "config_id": "v1.3.0"
+        },
+        "initial_release": {
+          "config_id": "v1.3.0"
+        },
+        "candidate": null,
+        "history": []
+      }
+    },
+    "promotion_state": {
+      "state": "monitoring",
+      "pass_streak": 0,
+      "required_passes": 2,
+      "candidate_ready": false,
+      "candidate_ready_tick": null,
+      "last_result": null,
+      "last_evaluated_tick": null,
+      "current_release": {
+        "config_id": "v1.3.0"
+      },
+      "initial_release": {
+        "config_id": "v1.3.0"
+      },
+      "candidate": null,
+      "history": []
+    }
+  },
+  "perturbations": {
+    "active": {},
+    "pending": [],
+    "cooldowns": {
+      "spec": {},
+      "agents": {}
+    }
+  },
+  "transport": {
+    "connected": false,
+    "dropped_messages": 0,
+    "last_error": null,
+    "last_failure_tick": null,
+    "last_success_tick": null,
+    "queue_length": 1,
+    "last_flush_duration_ms": null
+  },
+  "health": {
+    "tick": 120,
+    "tick_duration_ms": 0.8924399735406041,
+    "telemetry_queue": 1,
+    "telemetry_dropped": 0,
+    "perturbations_pending": 0,
+    "perturbations_active": 0,
+    "employment_exit_queue": 0
+  },
+  "console_results": [],
+  "possessed_agents": [],
+  "precondition_failures": []
+}

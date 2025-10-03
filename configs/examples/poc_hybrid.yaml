@@ -79,7 +79,29 @@ embedding_allocator:
   log_forced_reuse: true
   max_slots: 64
 affordances:
-  affordances_file: "configs/affordances/core.yaml"
+  affordances_file: configs/affordances/core.yaml
+  runtime:
+    instrumentation: "off"
+    hook_allowlist:
+      - townlet.world.hooks.default
+    allow_env_hooks: true
 stability:
   affordance_fail_threshold: 5
   lateness_threshold: 3
+telemetry:
+  transport:
+    type: stdout
+    buffer:
+      max_batch_size: 32
+      max_buffer_bytes: 256000
+      flush_interval_ticks: 1
+    retry:
+      max_attempts: 3
+      backoff_seconds: 0.5
+  narration:
+    global_cooldown_ticks: 30
+    category_cooldown_ticks:
+      queue_conflict: 30
+    dedupe_window_ticks: 20
+    global_window_ticks: 600
+    global_window_limit: 10

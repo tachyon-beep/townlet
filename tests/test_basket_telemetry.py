@@ -23,6 +23,10 @@ def test_basket_cost_in_telemetry_snapshot() -> None:
         loop.step()
 
     snapshot = publisher.latest_job_snapshot()
-    assert snapshot["alice"]["basket_cost"] == config.economy["meal_cost"] + config.economy[
-        "cook_energy_cost"
-    ] + config.economy["cook_hygiene_cost"] + config.economy["ingredients_cost"]
+    assert (
+        snapshot["alice"]["basket_cost"]
+        == config.economy["meal_cost"]
+        + config.economy["cook_energy_cost"]
+        + config.economy["cook_hygiene_cost"]
+        + config.economy["ingredients_cost"]
+    )

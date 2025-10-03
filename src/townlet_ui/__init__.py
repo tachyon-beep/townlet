@@ -1,17 +1,19 @@
 """Observer UI toolkit exports."""
 
+from .commands import ConsoleCommandExecutor
 from .telemetry import (
     AgentSummary,
     EmploymentMetrics,
     TelemetryClient,
     TelemetrySnapshot,
+    TransportStatus,
 )
-from .commands import ConsoleCommandExecutor
 
 __all__ = [
     "AgentSummary",
+    "ConsoleCommandExecutor",
     "EmploymentMetrics",
     "TelemetryClient",
     "TelemetrySnapshot",
-    "ConsoleCommandExecutor",
+    "TransportStatus",
 ]

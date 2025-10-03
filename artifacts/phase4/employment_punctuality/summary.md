@@ -12,3 +12,8 @@
 | kl_divergence | 0.000472 | 0.007935 |
 | grad_norm | 2.143541 | 2.365783 |
 | queue_conflict_events | 0.0 | 39.0 |
+| shared_meal_events | 0.0 | 0.0 |
+| chat_quality_mean | 0.000 | 0.000 |
+| utility_outage_events | 0.0 | 0.0 |
+| shower_complete_events | 0.0 | 0.0 |
+| sleep_complete_events | 0.0 | 0.0 |

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot, WorldState
@@ -9,10 +11,10 @@ def _make_world() -> WorldState:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = False
     world = WorldState.from_config(config)
-    world.register_object("shower", "shower")
-    world.register_object("fridge_1", "fridge")
-    world.register_object("stove_1", "stove")
-    world.register_object("bed_1", "bed")
+    world.register_object(object_id="shower", object_type="shower")
+    world.register_object(object_id="fridge_1", object_type="fridge")
+    world.register_object(object_id="stove_1", object_type="stove")
+    world.register_object(object_id="bed_1", object_type="bed")
     # Update the loaded affordance to known duration/effects for deterministic tests
     world.register_affordance(
         affordance_id="use_shower",
@@ -93,6 +95,69 @@ def test_affordance_completion_applies_effects() -> None:
     alice = world.agents["alice"]
     assert alice.needs["hygiene"] > 0.3
     assert alice.wallet < 1.0
+    assert world.queue_manager.active_agent("shower") is None
+
+
+def test_eat_meal_adjusts_needs_and_wallet() -> None:
+    world = _make_world()
+    alice = world.agents["alice"]
+    alice.needs["hunger"] = 0.3
+    alice.needs["energy"] = 0.2
+    initial_wallet = alice.wallet
+
+    world.tick = 0
+    world.apply_actions({"alice": {"kind": "request", "object": "fridge_1"}})
+    world.resolve_affordances(current_tick=world.tick)
+    world.config.rewards.decay_rates["hunger"] = 0.0
+    world.config.rewards.decay_rates["energy"] = 0.0
+    world.apply_actions(
+        {
+            "alice": {
+                "kind": "start",
+                "object": "fridge_1",
+                "affordance": "eat_meal",
+            }
+        }
+    )
+
+    for tick in range(1, 18):
+        world.tick = tick
+        world.resolve_affordances(current_tick=world.tick)
+
+    assert alice.needs["hunger"] > 0.3
+    assert alice.needs["energy"] > 0.2
+    assert alice.wallet < initial_wallet
+
+
+def test_affordance_failure_skips_effects() -> None:
+    world = _make_world()
+    world.tick = 0
+    world.apply_actions({"alice": {"kind": "request", "object": "shower"}})
+    world.resolve_affordances(current_tick=world.tick)
+    alice = world.agents["alice"]
+    baseline = alice.needs["hygiene"]
+
+    world.apply_actions(
+        {
+            "alice": {
+                "kind": "start",
+                "object": "shower",
+                "affordance": "use_shower",
+            }
+        }
+    )
+    world.apply_actions(
+        {
+            "alice": {
+                "kind": "release",
+                "object": "shower",
+                "success": False,
+                "reason": "cancelled",
+            }
+        }
+    )
+
+    assert alice.needs["hygiene"] == pytest.approx(baseline)
     assert world.queue_manager.active_agent("shower") is None
 
 
@@ -193,14 +258,23 @@ def test_stove_restock_event_emitted() -> None:
     world.resolve_affordances(current_tick=world.tick)
     events = world.drain_events()
     assert any(event.get("event") == "stock_replenish" for event in events)
+
+
 def test_scripted_behavior_handles_sleep() -> None:
     world = _make_world()
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
     loop.world = world
-    world.agents["alice"].needs["energy"] = 0.1
+    target = world.agents["alice"]
+    target.needs["energy"] = 0.1
 
     for _ in range(120):
         loop.step()
 
-    assert world.agents["alice"].needs["energy"] > 0.1
+    refreshed = None
+    for snapshot in loop.world.agents.values():
+        if getattr(snapshot, "origin_agent_id", snapshot.agent_id) == "alice":
+            refreshed = snapshot
+            break
+    assert refreshed is not None, "Alice should remain in the simulation"
+    assert refreshed.needs["energy"] > 0.1

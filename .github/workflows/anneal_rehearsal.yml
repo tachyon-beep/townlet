@@ -1,0 +1,46 @@
+name: Anneal Rehearsal Nightly
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run dataset audit
+        run: |
+          python scripts/audit_bc_datasets.py --exit-on-failure
+      - name: Run anneal rehearsal
+        run: |
+          python scripts/run_anneal_rehearsal.py --exit-on-failure --summary artifacts/m5/acceptance/summary_nightly.json
+      - name: Print rehearsal summary
+        if: always()
+        run: |
+          echo "### Anneal Rehearsal Summary" >> $GITHUB_STEP_SUMMARY
+          cat artifacts/m5/acceptance/summary_nightly.json >> $GITHUB_STEP_SUMMARY
+      - name: Evaluate promotion gate
+        if: always()
+        run: |
+          python scripts/promotion_evaluate.py --summary artifacts/m5/acceptance/summary_nightly.json --format json > artifacts/m5/acceptance/promotion_decision.json
+          python scripts/promotion_evaluate.py --summary artifacts/m5/acceptance/summary_nightly.json --format human --dry-run >> $GITHUB_STEP_SUMMARY
+          cat artifacts/m5/acceptance/promotion_decision.json >> $GITHUB_STEP_SUMMARY
+      - name: Upload artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anneal-nightly
+          path: |
+            artifacts/m5/acceptance/logs/anneal_results.json
+            artifacts/m5/acceptance/summary_nightly.json
+            artifacts/m5/acceptance/promotion_decision.json
+          if-no-files-found: error

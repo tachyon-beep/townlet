@@ -18,6 +18,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
+      - name: Affordance manifest validation
+        run: python scripts/validate_affordances.py --strict
       - name: Lint
         run: |
           ruff check src tests
@@ -25,12 +27,98 @@ jobs:
       - name: Unit tests
         run: pytest -k "not rollout_capture"
 
+      - name: CLI smoke tests
+        run: pytest tests/test_run_simulation_cli.py tests/test_demo_run_cli.py tests/test_observer_ui_cli.py
+
+      - name: Observation variant regressions
+        run: pytest tests/test_observation_builder_full.py tests/test_observation_builder_compact.py
+
+      - name: Social telemetry & UI tests
+        run: pytest tests/test_telemetry_narration.py tests/test_observer_ui_dashboard.py tests/test_telemetry_client.py
+
       - name: Telemetry schema tests
         run: pytest tests/test_training_replay.py::test_training_harness_ppo_conflict_telemetry
 
       - name: PPO telemetry validator
         run: |
           python scripts/validate_ppo_telemetry.py docs/samples/ppo_conflict_telemetry.jsonl
+
+      - name: BC dataset checksum guard
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib
+          checksums = json.loads(pathlib.Path('data/bc_datasets/checksums/idle_v1.json').read_text())
+          failures = []
+          for name, info in checksums.items():
+              sample = pathlib.Path(info['sample'])
+              meta = pathlib.Path(info['meta'])
+              digest = hashlib.sha256(sample.read_bytes() + meta.read_bytes()).hexdigest()
+              if digest != info['sha256']:
+                  failures.append(f"{name}: expected {info['sha256']} got {digest}")
+          if failures:
+              raise SystemExit('Checksum mismatch\n' + "\n".join(failures))
+          PY
+
+      - name: BC & anneal regression tests
+        run: pytest tests/test_bc_trainer.py tests/test_training_anneal.py tests/test_curate_trajectories.py tests/test_capture_scripted_cli.py tests/test_bc_capture_prototype.py
+
+      - name: Anneal acceptance smoke
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from townlet.config import load_config
+          from townlet.policy.runner import TrainingHarness
+          from townlet.policy.replay import ReplayDatasetConfig
+
+          log_dir = Path('tmp/ci_phase5')
+          log_dir.mkdir(parents=True, exist_ok=True)
+
+          config = load_config(Path('artifacts/m5/acceptance/config_idle_v1.yaml'))
+          manifest = Path('data/bc_datasets/manifests/idle_v1.json')
+
+          harness = TrainingHarness(config)
+          dataset = ReplayDatasetConfig.from_manifest(manifest)
+          results = harness.run_anneal(
+              dataset_config=dataset,
+              log_dir=log_dir,
+              bc_manifest=manifest,
+          )
+          status = harness.last_anneal_status or harness.evaluate_anneal_results(results)
+          promotion_snapshot = harness.promotion.snapshot()
+          summary = {
+              'status': status,
+              'results': results,
+              'promotion': promotion_snapshot,
+              'dataset': 'idle_v1_production',
+              'bc_stage': next((stage for stage in results if stage.get('mode') == 'bc'), {}),
+              'ppo_stage': results[-1] if results else {},
+          }
+          (log_dir / 'summary.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Promotion gate evaluation
+        run: |
+          python scripts/promotion_evaluate.py --summary tmp/ci_phase5/summary.json --format json > tmp/ci_phase5/promotion_decision.json
+
+      - name: Promotion gate summary
+        if: always()
+        run: |
+          echo "### Promotion Gate" >> $GITHUB_STEP_SUMMARY
+          python scripts/promotion_evaluate.py --summary tmp/ci_phase5/summary.json --format human --dry-run >> $GITHUB_STEP_SUMMARY
+          cat tmp/ci_phase5/promotion_decision.json >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload BC/anneal artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bc-anneal-acceptance
+          path: |
+            tmp/ci_phase5/anneal_results.json
+            tmp/ci_phase5/summary.json
+            tmp/ci_phase5/promotion_decision.json
+          if-no-files-found: error
 
       - name: Mixed-mode rollout validation
         run: |
@@ -53,3 +141,79 @@ jobs:
 
       - name: Rollout scenario tests
         run: pytest tests/test_rollout_capture.py
+
+      - name: Capture rollout goldens
+        run: |
+          python scripts/capture_rollout_suite.py configs/scenarios/kitchen_breakfast.yaml configs/scenarios/queue_conflict.yaml configs/scenarios/employment_punctuality.yaml configs/scenarios/rivalry_decay.yaml configs/scenarios/observation_baseline.yaml --output-root tmp/rollout_goldens --compress
+
+      - name: Verify rollout goldens drift
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('tmp/rollout_goldens')
+          golden_path = Path('docs/samples/rollout_scenario_stats.json')
+          golden = json.loads(golden_path.read_text())
+
+          rel_tolerance = 0.02
+          abs_tolerance = 1e-6
+          failures: list[str] = []
+
+          for scenario_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+              scenario = scenario_dir.name
+              metrics_file = scenario_dir / 'rollout_sample_metrics.json'
+              current_payload = json.loads(metrics_file.read_text())
+              current = current_payload.get('samples', current_payload) if isinstance(current_payload, dict) else current_payload
+              expected = golden.get(scenario)
+              if expected is None:
+                  failures.append(f'scenario {scenario} missing in golden metrics')
+                  continue
+              for sample, sample_metrics in current.items():
+                  expected_metrics = expected.get(sample)
+                  if expected_metrics is None:
+                      failures.append(f'{scenario}:{sample} missing in golden metrics')
+                      continue
+                  for key, value in sample_metrics.items():
+                      exp_value = expected_metrics.get(key)
+                      if exp_value is None:
+                          failures.append(f'{scenario}:{sample}:{key} missing in golden metrics')
+                          continue
+                      if isinstance(value, (int, float)) and isinstance(exp_value, (int, float)):
+                          diff = abs(float(value) - float(exp_value))
+                          denom = max(abs(float(exp_value)), 1.0)
+                          if diff > abs_tolerance and diff / denom > rel_tolerance:
+                              failures.append(
+                                  f'{scenario}:{sample}:{key} drift {value} vs {exp_value}'
+                              )
+                      else:
+                          if value != exp_value:
+                              failures.append(
+                                  f'{scenario}:{sample}:{key} mismatch {value} vs {exp_value}'
+                              )
+              missing_samples = set(expected.keys()) - set(current.keys())
+              for missing in missing_samples:
+                  failures.append(f'{scenario}:{missing} missing in capture output')
+
+          if failures:
+              print('Rollout metric drift detected:')
+              for item in failures:
+                  print(f' - {item}')
+              raise SystemExit(1)
+          print('Rollout metrics match goldens within tolerance.')
+          PY
+
+      - name: Upload rollout golden metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollout-golden-metrics
+          path: tmp/rollout_goldens
+          if-no-files-found: error
+      - name: Upload rollout goldens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollout-golden-metrics
+          path: tmp/rollout_goldens
+          if-no-files-found: error

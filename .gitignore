@@ -29,9 +29,13 @@ htmlcov/
 # Local data
 logs/
 outputs/
+certs/
 
 # OS files
 .DS_Store
 Thumbs.db
 
 tmp/
+
+# Vector and Graph databases
+.duskmantle/

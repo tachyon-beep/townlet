@@ -1,15 +1,31 @@
-perturbations:
+max_concurrent_events: 2
+global_cooldown_ticks: 240
+per_agent_cooldown_ticks: 360
+grace_window_ticks: 60
+window_ticks: 1440
+max_events_per_window: 2
+events:
   price_spike:
+    kind: price_spike
     prob_per_day: 0.3
+    cooldown_ticks: 480
+    duration: [60, 120]
     magnitude: [1.2, 1.8]
-    duration_min: 60
+    targets: ["grocer", "cafe"]
   blackout:
+    kind: blackout
     prob_per_day: 0.15
-    duration_min: [20, 60]
+    cooldown_ticks: 720
+    duration: [20, 60]
   outage:
+    kind: outage
     prob_per_day: 0.1
-    duration_min: [20, 60]
+    cooldown_ticks: 720
+    duration: [20, 60]
   arranged_meet:
+    kind: arranged_meet
     prob_per_day: 0.25
-    target: "top_rivals"
-    location: "cafe"
+    cooldown_ticks: 600
+    duration: [30, 45]
+    target: top_rivals
+    location: cafe

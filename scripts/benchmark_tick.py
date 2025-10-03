@@ -18,12 +18,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def benchmark(config_path: Path, ticks: int, enforce: bool) -> float:
+    if ticks <= 0:
+        raise ValueError("ticks must be positive for benchmarking")
     config = load_config(config_path)
     config.employment.enforce_job_loop = enforce
     loop = SimulationLoop(config)
     start = time.perf_counter()
-    for _ in loop.run(max_ticks=ticks):
-        pass
+    loop.run_for(ticks)
     duration = time.perf_counter() - start
     return duration / ticks
 

@@ -1,15 +1,22 @@
 """Policy orchestration scaffolding."""
+
 from __future__ import annotations
 
 import json
+import math
+import random
 import statistics
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
 
+from typing import Callable
+
 from townlet.config import PPOConfig, SimulationConfig
+from townlet.policy.bc import BCTrainer, BCTrajectoryDataset, load_bc_samples
+from townlet.policy.bc import BCTrainingConfig as BCTrainingParams
 from townlet.policy.behavior import AgentIntent, BehaviorController, build_behavior
 from townlet.policy.models import (
     ConflictAwarePolicyConfig,
@@ -35,9 +42,46 @@ from townlet.policy.replay import (
 )
 from townlet.policy.replay_buffer import InMemoryReplayDataset
 from townlet.policy.rollout import RolloutBuffer
+from townlet.stability.promotion import PromotionManager
 from townlet.world.grid import WorldState
 
-PPO_TELEMETRY_VERSION = 1.1
+PPO_TELEMETRY_VERSION = 1.2
+ANNEAL_BC_MIN_DEFAULT = 0.9
+ANNEAL_LOSS_TOLERANCE_DEFAULT = 0.10
+ANNEAL_QUEUE_TOLERANCE_DEFAULT = 0.15
+
+
+def _softmax(logits: np.ndarray) -> np.ndarray:
+    if logits.size == 0:
+        return logits
+    max_logit = float(np.max(logits))
+    shifted = logits - max_logit
+    exps = np.exp(shifted, dtype=np.float64)
+    denom = float(np.sum(exps))
+    if denom <= 0.0:
+        return np.full_like(logits, 1.0 / logits.size)
+    return (exps / denom).astype(np.float32)
+
+
+def _pretty_action(action_repr: str) -> str:
+    try:
+        data = json.loads(action_repr)
+    except json.JSONDecodeError:
+        return action_repr
+    if isinstance(data, dict):
+        kind = data.get("kind")
+        obj = data.get("object") or data.get("object_id")
+        aff = data.get("affordance") or data.get("affordance_id")
+        if kind and obj:
+            label = f"{kind}@{obj}"
+        elif kind:
+            label = str(kind)
+        else:
+            label = action_repr
+        if aff:
+            label = f"{label}:{aff}"
+        return label
+    return action_repr
 
 
 class PolicyRuntime:
@@ -51,26 +95,89 @@ class PolicyRuntime:
         self._tick: int = 0
         self._action_lookup: dict[str, int] = {}
         self._action_inverse: dict[int, str] = {}
+        self._anneal_ratio: float | None = None
+        self._anneal_blend_enabled: bool = False
+        self._policy_action_provider: (
+            Callable[[WorldState, str, AgentIntent], AgentIntent | None] | None
+        ) = None
+        self._anneal_rng = random.Random(8675309)
         self._policy_net: ConflictAwarePolicyNetwork | None = None
         self._policy_map_shape: tuple[int, int, int] | None = None
         self._policy_feature_dim: int | None = None
         self._policy_action_dim: int = 0
+        self._latest_policy_snapshot: dict[str, dict[str, object]] = {}
+        self._last_option: dict[str, str] = {}
+        self._option_switch_counts: dict[str, int] = {}
+        policy_cfg = getattr(config, "policy_runtime", None)
+        commit_ticks = 15
+        if policy_cfg is not None:
+            commit_ticks = int(getattr(policy_cfg, "option_commit_ticks", commit_ticks))
+        self._option_commit_ticks: int = max(commit_ticks, 0)
+        self._option_commit_until: dict[str, int] = {}
+        self._option_committed_intent: dict[str, AgentIntent] = {}
+        self._policy_hash: str | None = None
+        self._possessed_agents: set[str] = set()
+        self._ctx_reset_callback: Callable[[str], None] | None = None
+        config_policy_hash = getattr(self.config, "policy_hash", None)
+        if isinstance(config_policy_hash, str) and config_policy_hash:
+            self._policy_hash = config_policy_hash
+        self._anneal_ratio: float | None = None
+
+    def seed_anneal_rng(self, seed: int) -> None:
+        self._anneal_rng.seed(seed)
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            self._anneal_ratio = None
+        else:
+            self._anneal_ratio = max(0.0, min(1.0, float(ratio)))
+
+    def enable_anneal_blend(self, enabled: bool) -> None:
+        self._anneal_blend_enabled = bool(enabled)
+
+    def register_ctx_reset_callback(self, callback: Callable[[str], None] | None) -> None:
+        self._ctx_reset_callback = callback
+
+    def set_policy_action_provider(
+        self, provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None]
+    ) -> None:
+        self._policy_action_provider = provider
 
     def decide(self, world: WorldState, tick: int) -> dict[str, object]:
         """Return a primitive action per agent."""
         self._tick = tick
         actions: dict[str, object] = {}
         for agent_id in world.agents:
-            intent: AgentIntent = self.behavior.decide(world, agent_id)
-            if intent.kind == "wait":
+            if agent_id in self._possessed_agents:
                 actions[agent_id] = {"kind": "wait"}
+                continue
+            scripted_intent: AgentIntent = self.behavior.decide(world, agent_id)
+            selected_intent = self._select_intent_with_blend(world, agent_id, scripted_intent)
+            selected_intent = self._apply_relationship_guardrails(
+                world, agent_id, selected_intent
+            )
+            selected_intent, commit_enforced = self._enforce_option_commit(
+                agent_id, tick, selected_intent
+            )
+            if selected_intent.kind == "wait":
+                wait_payload: dict[str, object] = {"kind": "wait"}
+                if selected_intent.blocked:
+                    wait_payload["blocked"] = True
+                actions[agent_id] = wait_payload
             else:
-                actions[agent_id] = {
-                    "kind": intent.kind,
-                    "object": intent.object_id,
-                    "affordance": intent.affordance_id,
-                    "blocked": intent.blocked,
+                action_dict: dict[str, object | None] = {
+                    "kind": selected_intent.kind,
+                    "object": selected_intent.object_id,
+                    "affordance": selected_intent.affordance_id,
+                    "blocked": selected_intent.blocked,
                 }
+                if selected_intent.position is not None:
+                    action_dict["position"] = selected_intent.position
+                if selected_intent.target_agent is not None:
+                    action_dict["target"] = selected_intent.target_agent
+                if selected_intent.quality is not None:
+                    action_dict["quality"] = float(selected_intent.quality)
+                actions[agent_id] = action_dict
             action_payload = actions[agent_id]
             try:
                 action_key = json.dumps(action_payload, sort_keys=True)
@@ -82,8 +189,31 @@ class PolicyRuntime:
                 self._action_inverse[action_id] = action_key
             action_id = self._action_lookup[action_key]
             entry = self._transitions.setdefault(agent_id, {})
+            commit_until = self._option_commit_until.get(agent_id)
+            if commit_until is not None and commit_until > tick:
+                remaining = commit_until - tick
+                entry["option_commit_remaining"] = remaining
+                committed = self._option_committed_intent.get(agent_id)
+                if committed is not None:
+                    entry["option_commit_kind"] = committed.kind
+                entry["option_commit_enforced"] = bool(commit_enforced)
+            else:
+                entry.pop("option_commit_remaining", None)
+                entry.pop("option_commit_kind", None)
+                entry.pop("option_commit_enforced", None)
             entry["action"] = action_payload
             entry["action_id"] = action_id
+
+            new_option = selected_intent.kind
+            previous_option = self._last_option.get(agent_id)
+            if new_option != "wait":
+                if previous_option not in (None, "wait") and previous_option != new_option:
+                    self._option_switch_counts[agent_id] = (
+                        self._option_switch_counts.get(agent_id, 0) + 1
+                    )
+                self._last_option[agent_id] = new_option
+            else:
+                self._last_option[agent_id] = new_option
         return actions
 
     def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
@@ -92,6 +222,16 @@ class PolicyRuntime:
             entry = self._transitions.setdefault(agent_id, {})
             entry.setdefault("rewards", []).append(reward)
             entry.setdefault("dones", []).append(bool(terminated.get(agent_id, False)))
+            if terminated.get(agent_id, False):
+                self._last_option.pop(agent_id, None)
+                self._option_switch_counts.pop(agent_id, None)
+                self._option_commit_until.pop(agent_id, None)
+                self._option_committed_intent.pop(agent_id, None)
+
+        for agent_id, is_done in terminated.items():
+            if is_done and agent_id not in rewards:
+                self._option_commit_until.pop(agent_id, None)
+                self._option_committed_intent.pop(agent_id, None)
 
     def flush_transitions(
         self, observations: dict[str, dict[str, object]]
@@ -112,10 +252,15 @@ class PolicyRuntime:
                 "dones": entry.get("dones", []),
                 "action_lookup": dict(self._action_inverse),
             }
+            if "option_commit_remaining" in entry:
+                frame["option_commit_remaining"] = float(entry["option_commit_remaining"])
+                frame["option_commit_kind"] = entry.get("option_commit_kind")
+                frame["option_commit_enforced"] = bool(entry.get("option_commit_enforced", False))
             self._annotate_with_policy_outputs(frame)
             frames.append(frame)
         self._trajectory.extend(frames)
         self._transitions.clear()
+        self._update_policy_snapshot(frames)
         return frames
 
     def collect_trajectory(self, clear: bool = True) -> list[dict[str, object]]:
@@ -124,6 +269,148 @@ class PolicyRuntime:
         if clear:
             self._trajectory.clear()
         return result
+
+    def consume_option_switch_counts(self) -> dict[str, int]:
+        """Return per-agent option switch counts accumulated since last call."""
+
+        counts = dict(self._option_switch_counts)
+        self._option_switch_counts.clear()
+        return counts
+
+    def acquire_possession(self, agent_id: str) -> bool:
+        if agent_id in self._possessed_agents:
+            return False
+        self._possessed_agents.add(agent_id)
+        self._option_commit_until.pop(agent_id, None)
+        self._option_committed_intent.pop(agent_id, None)
+        if self._ctx_reset_callback is not None:
+            self._ctx_reset_callback(agent_id)
+        return True
+
+    def release_possession(self, agent_id: str) -> bool:
+        if agent_id not in self._possessed_agents:
+            return False
+        self._possessed_agents.discard(agent_id)
+        return True
+
+    def is_possessed(self, agent_id: str) -> bool:
+        return agent_id in self._possessed_agents
+
+    def possessed_agents(self) -> list[str]:
+        return sorted(self._possessed_agents)
+
+    def reset_state(self) -> None:
+        """Reset transient buffers so snapshot loads don’t duplicate data."""
+
+        self._transitions.clear()
+        self._trajectory.clear()
+        self._last_option.clear()
+        self._option_switch_counts.clear()
+        self._option_commit_until.clear()
+        self._option_committed_intent.clear()
+
+    def _select_intent_with_blend(
+        self,
+        world: WorldState,
+        agent_id: str,
+        scripted: AgentIntent,
+    ) -> AgentIntent:
+        if not self._anneal_blend_enabled or not self._anneal_ratio:
+            return scripted
+        alt_intent: AgentIntent | None = None
+        if self._policy_action_provider is not None:
+            try:
+                alt_intent = self._policy_action_provider(world, agent_id, scripted)
+            except Exception:  # pragma: no cover - defensive provider behaviour
+                alt_intent = None
+        if alt_intent is None:
+            return scripted
+        ratio = float(self._anneal_ratio)
+        if ratio >= 1.0:
+            return alt_intent
+        if ratio <= 0.0:
+            return scripted
+        if self._anneal_rng.random() < ratio:
+            return alt_intent
+        return scripted
+
+    def _apply_relationship_guardrails(
+        self,
+        world: WorldState,
+        agent_id: str,
+        intent: AgentIntent,
+    ) -> AgentIntent:
+        if intent.kind == "chat" and intent.target_agent:
+            if world.rivalry_should_avoid(agent_id, intent.target_agent):
+                world.record_chat_failure(agent_id, intent.target_agent)
+                world.record_relationship_guard_block(
+                    agent_id=agent_id,
+                    reason="chat_rival",
+                    target_agent=intent.target_agent,
+                )
+                cancel = getattr(self.behavior, "cancel_pending", None)
+                if callable(cancel):
+                    cancel(agent_id)
+                return AgentIntent(kind="wait", blocked=True)
+        if intent.kind in {"request", "start"} and intent.object_id:
+            guard = getattr(self.behavior, "_rivals_in_queue", None)
+            if callable(guard) and guard(world, agent_id, intent.object_id):
+                world.record_relationship_guard_block(
+                    agent_id=agent_id,
+                    reason="queue_rival",
+                    object_id=intent.object_id,
+                )
+                cancel = getattr(self.behavior, "cancel_pending", None)
+                if callable(cancel):
+                    cancel(agent_id)
+                return AgentIntent(kind="wait", blocked=True)
+        return intent
+
+    @staticmethod
+    def _clone_intent(intent: AgentIntent) -> AgentIntent:
+        return AgentIntent(
+            kind=intent.kind,
+            object_id=intent.object_id,
+            affordance_id=intent.affordance_id,
+            blocked=intent.blocked,
+            position=intent.position,
+            target_agent=intent.target_agent,
+            quality=intent.quality,
+        )
+
+    @staticmethod
+    def _intents_match(lhs: AgentIntent, rhs: AgentIntent) -> bool:
+        return (
+            lhs.kind == rhs.kind
+            and lhs.object_id == rhs.object_id
+            and lhs.affordance_id == rhs.affordance_id
+            and lhs.position == rhs.position
+            and lhs.blocked == rhs.blocked
+            and lhs.target_agent == rhs.target_agent
+            and (lhs.quality == rhs.quality or (lhs.quality is None and rhs.quality is None))
+        )
+
+    def _enforce_option_commit(
+        self, agent_id: str, tick: int, intent: AgentIntent
+    ) -> tuple[AgentIntent, bool]:
+        commit_until = self._option_commit_until.get(agent_id)
+        committed = self._option_committed_intent.get(agent_id)
+        commit_active = commit_until is not None and commit_until > tick
+        enforced = False
+
+        if commit_active and committed is not None:
+            if not self._intents_match(intent, committed):
+                intent = self._clone_intent(committed)
+                enforced = True
+            return intent, enforced
+
+        self._option_commit_until.pop(agent_id, None)
+        self._option_committed_intent.pop(agent_id, None)
+
+        if self._option_commit_ticks > 0 and intent.kind != "wait":
+            self._option_commit_until[agent_id] = tick + self._option_commit_ticks
+            self._option_committed_intent[agent_id] = self._clone_intent(intent)
+        return intent, enforced
 
     def _annotate_with_policy_outputs(self, frame: dict[str, object]) -> None:
         if not torch_available():  # pragma: no cover - torch optional
@@ -170,6 +457,74 @@ class PolicyRuntime:
         frame["log_prob"] = log_prob
         frame["value_pred"] = value_pred
         frame["logits"] = logits.squeeze(0).cpu().numpy()
+
+    def _update_policy_snapshot(self, frames: list[dict[str, object]]) -> None:
+        snapshot: dict[str, dict[str, object]] = {}
+        for frame in frames:
+            agent_id = str(frame.get("agent_id", "unknown"))
+            logits = frame.get("logits")
+            if logits is None:
+                continue
+            logits_array = np.asarray(logits, dtype=np.float32)
+            if logits_array.ndim != 1 or logits_array.size == 0:
+                continue
+            probabilities = _softmax(logits_array)
+            action_lookup_raw = frame.get("action_lookup", {})
+            action_lookup: dict[int, str] = {}
+            if isinstance(action_lookup_raw, Mapping):
+                for action_repr, action_index in action_lookup_raw.items():
+                    if isinstance(action_index, int):
+                        action_lookup[action_index] = _pretty_action(str(action_repr))
+            top_indices = np.argsort(probabilities)[::-1][:5]
+            top_actions: list[dict[str, object]] = []
+            for idx in top_indices:
+                if idx < 0 or idx >= probabilities.size:
+                    continue
+                top_actions.append(
+                    {
+                        "action": action_lookup.get(idx, str(idx)),
+                        "probability": float(round(float(probabilities[idx]), 6)),
+                    }
+                )
+            selected_idx = frame.get("action_id")
+            selected_label = action_lookup.get(selected_idx, str(selected_idx))
+            snapshot[agent_id] = {
+                "tick": int(frame.get("tick", self._tick)),
+                "selected_action": selected_label,
+                "log_prob": float(round(float(frame.get("log_prob", 0.0)), 6)),
+                "value_pred": float(round(float(frame.get("value_pred", 0.0)), 6)),
+                "top_actions": top_actions,
+            }
+        self._latest_policy_snapshot = snapshot
+
+    def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
+        return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
+
+    # ------------------------------------------------------------------
+    # Policy metadata helpers
+    # ------------------------------------------------------------------
+
+    def active_policy_hash(self) -> str | None:
+        """Return the configured policy hash, if any."""
+
+        return self._policy_hash
+
+    def set_policy_hash(self, value: str | None) -> None:
+        """Set the policy hash after loading a checkpoint."""
+
+        self._policy_hash = value if value else None
+
+    def current_anneal_ratio(self) -> float | None:
+        """Return the latest anneal ratio (0..1) if tracking available."""
+
+        return self._anneal_ratio
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            self._anneal_ratio = None
+            return
+        clamped = max(0.0, min(1.0, float(ratio)))
+        self._anneal_ratio = clamped
 
     def _ensure_policy_network(
         self,
@@ -228,12 +583,39 @@ class TrainingHarness:
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self._ppo_state = {"step": 0, "learning_rate": 1e-3}
-        # TODO(@townlet): Wire up PPO trainer, evaluators, and promotion hooks.
         self._capture_loop = None
+        self._apply_social_reward_stage(-1)
+        self._anneal_context: dict[str, object] | None = None
+        self._anneal_baselines: dict[str, dict[str, float]] = {}
+        self._anneal_ratio: float | None = None
+        self.promotion = PromotionManager(config=config, log_path=None)
+        self._promotion_eval_counter = 0
+        self._promotion_pass_streak = 0
+        self._last_anneal_status: str | None = None
 
     def run(self) -> None:
-        """Entry point for CLI training runs."""
-        raise NotImplementedError("Training harness not yet implemented")
+        """Entry point for CLI training runs based on config.training.source."""
+        mode = self.config.training.source
+        if mode == "bc":
+            self.run_bc_training()
+            return
+        if mode == "anneal":
+            self.run_anneal()
+            return
+        raise NotImplementedError(
+            "Training mode '%s' is not supported via run(); use scripts/run_training.py with --mode."
+            % mode
+        )
+
+    def current_anneal_ratio(self) -> float | None:
+        return self._anneal_ratio
+
+    def set_anneal_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            self._anneal_ratio = None
+        else:
+            clamped = max(0.0, min(1.0, float(ratio)))
+            self._anneal_ratio = clamped
 
     def run_replay(self, sample_path: Path, meta_path: Path | None = None) -> dict[str, float]:
         """Load a replay observation sample and surface conflict-aware stats."""
@@ -273,7 +655,9 @@ class TrainingHarness:
         if ticks <= 0:
             raise ValueError("ticks must be positive to capture a rollout")
 
-        from townlet.core.sim_loop import SimulationLoop  # delayed import to avoid cycles
+        from townlet.core.sim_loop import (
+            SimulationLoop,
+        )  # delayed import to avoid cycles
         from townlet.policy.scenario_utils import (
             apply_scenario,
             has_agents,
@@ -321,6 +705,8 @@ class TrainingHarness:
         log_frequency: int = 1,
         max_log_entries: int | None = None,
     ) -> dict[str, float]:
+        next_cycle = int(self._ppo_state.get("cycle_id", -1)) + 1
+        self._apply_social_reward_stage(next_cycle)
         buffer = self.capture_rollout(
             ticks=ticks,
             auto_seed_agents=auto_seed_agents,
@@ -337,6 +723,148 @@ class TrainingHarness:
             max_log_entries=max_log_entries,
             in_memory_dataset=dataset,
         )
+
+    def _load_bc_dataset(self, manifest: Path) -> BCTrajectoryDataset:
+        samples = load_bc_samples(manifest)
+        return BCTrajectoryDataset(samples)
+
+    def run_bc_training(
+        self,
+        *,
+        manifest: Path | None = None,
+        config: BCTrainingParams | None = None,
+    ) -> dict[str, float]:
+        if not torch_available():
+            raise TorchNotAvailableError("PyTorch is required for behaviour cloning training")
+
+        bc_settings = self.config.training.bc
+        manifest_path = Path(manifest) if manifest is not None else bc_settings.manifest
+        if manifest_path is None:
+            raise ValueError("BC manifest is required for behaviour cloning")
+
+        dataset = self._load_bc_dataset(manifest_path)
+        params = config or BCTrainingParams(
+            learning_rate=bc_settings.learning_rate,
+            batch_size=bc_settings.batch_size,
+            epochs=bc_settings.epochs,
+            weight_decay=bc_settings.weight_decay,
+            device=bc_settings.device,
+        )
+
+        policy_cfg = ConflictAwarePolicyConfig(
+            feature_dim=dataset.feature_dim,
+            map_shape=dataset.map_shape,
+            action_dim=dataset.action_dim,
+        )
+        trainer = BCTrainer(params, policy_cfg)
+        metrics = trainer.fit(dataset)
+        metrics.update(
+            {
+                "mode": "bc",
+                "manifest": str(manifest_path),
+            }
+        )
+        return metrics
+
+    def run_anneal(
+        self,
+        *,
+        dataset_config: ReplayDatasetConfig | None = None,
+        in_memory_dataset: InMemoryReplayDataset | None = None,
+        log_dir: Path | None = None,
+        bc_manifest: Path | None = None,
+    ) -> list[dict[str, object]]:
+        schedule = sorted(
+            self.config.training.anneal_schedule,
+            key=lambda stage: stage.cycle,
+        )
+        if not schedule:
+            raise ValueError(
+                "anneal_schedule is empty; configure training.anneal_schedule in config"
+            )
+
+        if dataset_config is None and in_memory_dataset is None:
+            replay_manifest = self.config.training.replay_manifest
+            if replay_manifest is None:
+                raise ValueError("Replay manifest required for PPO stages in anneal")
+            dataset_config = ReplayDatasetConfig.from_manifest(Path(replay_manifest))
+
+        bc_threshold = float(self.config.training.anneal_accuracy_threshold)
+        results: list[dict[str, object]] = []
+        last_bc_stage: dict[str, object] | None = None
+        dataset_label = None
+        if dataset_config is not None:
+            dataset_label = dataset_config.label
+        elif in_memory_dataset is not None:
+            dataset_label = getattr(in_memory_dataset, "label", None)
+        dataset_key = str(dataset_label or "anneal_dataset")
+
+        baselines = self._anneal_baselines.setdefault(dataset_key, {})
+
+        for stage in schedule:
+            if stage.mode == "bc":
+                self.set_anneal_ratio(float(stage.bc_weight))
+                metrics = self.run_bc_training(manifest=bc_manifest)
+                accuracy = float(metrics.get("accuracy", 0.0))
+                stage_result: dict[str, object] = {
+                    "cycle": float(stage.cycle),
+                    "mode": "bc",
+                    "accuracy": accuracy,
+                    "loss": float(metrics.get("loss", 0.0)),
+                    "threshold": bc_threshold,
+                    "passed": accuracy >= bc_threshold,
+                    "bc_weight": float(stage.bc_weight),
+                }
+                results.append(stage_result)
+                last_bc_stage = stage_result
+                if not stage_result["passed"]:
+                    stage_result["rolled_back"] = True
+                    break
+            else:
+                self.set_anneal_ratio(0.0)
+                context: dict[str, object] = {
+                    "cycle": float(stage.cycle),
+                    "stage": stage.mode,
+                    "dataset_label": dataset_key,
+                    "bc_accuracy": (last_bc_stage.get("accuracy") if last_bc_stage else None),
+                    "bc_threshold": bc_threshold,
+                    "bc_passed": (last_bc_stage.get("passed", True) if last_bc_stage else True),
+                    "loss_baseline": baselines.get("loss_total"),
+                    "queue_events_baseline": baselines.get("queue_conflict_events"),
+                    "queue_intensity_baseline": baselines.get("queue_conflict_intensity"),
+                    "loss_tolerance": ANNEAL_LOSS_TOLERANCE_DEFAULT,
+                    "queue_tolerance": ANNEAL_QUEUE_TOLERANCE_DEFAULT,
+                }
+                self._anneal_context = context
+                try:
+                    summary = self.run_ppo(
+                        dataset_config=dataset_config,
+                        in_memory_dataset=in_memory_dataset,
+                        epochs=stage.epochs,
+                    )
+                finally:
+                    self._anneal_context = None
+                baselines["loss_total"] = float(summary.get("loss_total", 0.0))
+                baselines["queue_conflict_events"] = float(
+                    summary.get("queue_conflict_events", 0.0)
+                )
+                baselines["queue_conflict_intensity"] = float(
+                    summary.get("queue_conflict_intensity_sum", 0.0)
+                )
+                summary_result = {
+                    "cycle": float(stage.cycle),
+                    "mode": "ppo",
+                    **summary,
+                }
+                results.append(summary_result)
+
+        if log_dir is not None:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            (log_dir / "anneal_results.json").write_text(json.dumps(results, indent=2))
+        status = self.evaluate_anneal_results(results)
+        self._last_anneal_status = status
+        self._record_promotion_evaluation(status=status, results=results)
+        return results
 
     def run_ppo(
         self,
@@ -397,6 +925,36 @@ class TrainingHarness:
         self._ppo_state["learning_rate"] = float(ppo_cfg.learning_rate)
         generator = torch.Generator(device=device)
 
+        dataset_label = getattr(dataset, "label", None)
+        dataset_label_str = str(
+            dataset_label
+            or (getattr(dataset_config, "label", None) if dataset_config is not None else None)
+            or "training_dataset"
+        )
+
+        def _ensure_finite(name: str, tensor: torch.Tensor, batch_index: int) -> None:
+            if torch.isnan(tensor).any() or torch.isinf(tensor).any():
+                raise ValueError(
+                    "PPO %s contained NaN/inf (dataset=%s, batch=%s)"
+                    % (name, dataset_label_str, batch_index)
+                )
+
+        def _update_advantage_health(
+            flat_advantages: torch.Tensor,
+            *,
+            batch_index: int,
+            stats: dict[str, float],
+        ) -> None:
+            batch_std = float(flat_advantages.std(unbiased=False).item())
+            if math.isnan(batch_std) or math.isinf(batch_std):
+                raise ValueError(
+                    "PPO advantages produced invalid std (dataset=%s, batch=%s)"
+                    % (dataset_label_str, batch_index)
+                )
+            stats["min_adv_std"] = min(stats["min_adv_std"], batch_std)
+            if batch_std < 1e-8:
+                stats["adv_zero_std_batches"] += 1
+
         log_frequency = max(1, int(log_frequency or 1))
         max_log_entries = max_log_entries if max_log_entries and max_log_entries > 0 else None
 
@@ -410,6 +968,7 @@ class TrainingHarness:
             self._ppo_state["cycle_id"] = cycle_id
         else:
             cycle_id = max(cycle_id, 0)
+        self._apply_social_reward_stage(cycle_id)
 
         data_mode = "replay"
         rollout_ticks = 0
@@ -452,6 +1011,12 @@ class TrainingHarness:
             kl_max = 0.0
             reward_buffer: list[float] = []
             advantage_buffer: list[float] = []
+            health_tracking = {
+                "adv_zero_std_batches": 0.0,
+                "clip_triggered_minibatches": 0.0,
+                "max_clip_fraction": 0.0,
+                "min_adv_std": math.inf,
+            }
 
             for batch_index, batch in enumerate(batches, start=1):
                 batch_summary = self._summarise_batch(batch, batch_index=batch_index)
@@ -481,20 +1046,22 @@ class TrainingHarness:
 
                 baseline = value_baseline_from_old_preds(value_preds_old, timesteps)
 
-                reward_buffer.extend(
-                    batch.rewards.astype(float).reshape(-1).tolist()
+                flat_advantages = advantages.reshape(-1)
+                flat_returns = returns.reshape(-1)
+                _ensure_finite("advantages", flat_advantages, batch_index)
+                _ensure_finite("returns", flat_returns, batch_index)
+                _update_advantage_health(
+                    flat_advantages, batch_index=batch_index, stats=health_tracking
                 )
-                advantage_buffer.extend(
-                    advantages.cpu().numpy().astype(float).reshape(-1).tolist()
-                )
+
+                reward_buffer.extend(batch.rewards.astype(float).reshape(-1).tolist())
+                advantage_buffer.extend(advantages.cpu().numpy().astype(float).reshape(-1).tolist())
 
                 batch_size, timestep_length = rewards.shape
                 flat_maps = maps.reshape(batch_size * timestep_length, *maps.shape[2:])
                 flat_features = features.reshape(batch_size * timestep_length, features.shape[2])
                 flat_actions = actions.reshape(-1)
                 flat_old_log_probs = old_log_probs.reshape(-1)
-                flat_advantages = advantages.reshape(-1)
-                flat_returns = returns.reshape(-1)
                 flat_old_values = baseline.reshape(-1)
 
                 total_transitions = flat_actions.shape[0]
@@ -553,7 +1120,7 @@ class TrainingHarness:
                         for param in policy.parameters():
                             if param.grad is not None:
                                 sq_sum += float(torch.sum(param.grad.detach() ** 2).item())
-                        grad_norm = float(sq_sum ** 0.5)
+                        grad_norm = float(sq_sum**0.5)
                     optimizer.step()
 
                     metrics["policy_loss"] += float(policy_loss.item())
@@ -562,23 +1129,33 @@ class TrainingHarness:
                     metrics["entropy"] += entropy_value
                     entropy_values.append(entropy_value)
                     metrics["total_loss"] += float(total_loss.item())
-                    metrics["clip_frac"] += float(clip_frac.item())
+                    clip_value = float(clip_frac.item())
+                    metrics["clip_frac"] += clip_value
                     metrics["adv_mean"] += float(mb_advantages.mean().item())
-                    metrics["adv_std"] += float(mb_advantages.std(unbiased=False).item())
+                    batch_adv_std = float(mb_advantages.std(unbiased=False).item())
+                    if math.isnan(batch_adv_std) or math.isinf(batch_adv_std):
+                        raise ValueError(
+                            "PPO mini-batch advantages produced invalid std (dataset=%s, batch=%s)"
+                            % (dataset_label_str, batch_index)
+                        )
+                    metrics["adv_std"] += batch_adv_std
                     metrics["grad_norm"] += float(grad_norm)
                     kl_value = float(torch.mean(mb_old_log_probs - new_log_probs).item())
                     metrics["kl_divergence"] += kl_value
                     grad_norm_max = max(grad_norm_max, float(grad_norm))
                     kl_max = max(kl_max, abs(kl_value))
+                    if clip_value > 0.0:
+                        health_tracking["clip_triggered_minibatches"] += 1.0
+                    health_tracking["max_clip_fraction"] = max(
+                        health_tracking["max_clip_fraction"], clip_value
+                    )
                     mini_batch_updates += 1
                     transitions_processed += int(idx.shape[0])
 
             if mini_batch_updates == 0:
                 raise ValueError("No PPO mini-batch updates were performed")
 
-            averaged_metrics = {
-                key: value / mini_batch_updates for key, value in metrics.items()
-            }
+            averaged_metrics = {key: value / mini_batch_updates for key, value in metrics.items()}
 
             if entropy_values:
                 epoch_entropy_mean = statistics.fmean(entropy_values)
@@ -620,6 +1197,30 @@ class TrainingHarness:
                 "steps": float(self._ppo_state["step"]),
             }
 
+            min_adv_std = health_tracking["min_adv_std"]
+            if math.isinf(min_adv_std):
+                min_adv_std = 0.0
+            epoch_summary.update(
+                {
+                    "adv_zero_std_batches": float(health_tracking["adv_zero_std_batches"]),
+                    "adv_min_std": float(min_adv_std),
+                    "clip_triggered_minibatches": float(
+                        health_tracking["clip_triggered_minibatches"]
+                    ),
+                    "clip_fraction_max": float(health_tracking["max_clip_fraction"]),
+                }
+            )
+
+            if health_tracking["adv_zero_std_batches"]:
+                print(
+                    "[WARN] Advantage std near zero in %s batch(es) (dataset=%s, epoch=%s)"
+                    % (
+                        int(health_tracking["adv_zero_std_batches"]),
+                        dataset_label_str,
+                        epoch + 1,
+                    )
+                )
+
             if PPO_TELEMETRY_VERSION >= 1.1:
                 epoch_summary.update(
                     {
@@ -637,9 +1238,89 @@ class TrainingHarness:
                         "queue_conflict_intensity_sum": float(
                             getattr(dataset, "queue_conflict_intensity_sum", 0.0)
                         ),
+                        "shared_meal_events": float(getattr(dataset, "shared_meal_count", 0)),
+                        "late_help_events": float(getattr(dataset, "late_help_count", 0)),
+                        "shift_takeover_events": float(getattr(dataset, "shift_takeover_count", 0)),
+                        "chat_success_events": float(getattr(dataset, "chat_success_count", 0)),
+                        "chat_failure_events": float(getattr(dataset, "chat_failure_count", 0)),
+                        "chat_quality_mean": float(getattr(dataset, "chat_quality_mean", 0.0)),
                     }
                 )
                 log_stream_offset += 1
+
+            anneal_context = getattr(self, "_anneal_context", None)
+            if PPO_TELEMETRY_VERSION >= 1.2 and anneal_context:
+                bc_accuracy_value = anneal_context.get("bc_accuracy")
+                bc_threshold_value = anneal_context.get("bc_threshold")
+                loss_baseline = anneal_context.get("loss_baseline")
+                queue_baseline = anneal_context.get("queue_events_baseline")
+                intensity_baseline = anneal_context.get("queue_intensity_baseline")
+                loss_tolerance = float(
+                    anneal_context.get("loss_tolerance", ANNEAL_LOSS_TOLERANCE_DEFAULT)
+                )
+                queue_tolerance = float(
+                    anneal_context.get("queue_tolerance", ANNEAL_QUEUE_TOLERANCE_DEFAULT)
+                )
+                loss_total_value = averaged_metrics["total_loss"]
+                queue_events_value = float(epoch_summary.get("queue_conflict_events", 0.0))
+                queue_intensity_value = float(
+                    epoch_summary.get("queue_conflict_intensity_sum", 0.0)
+                )
+
+                loss_flag = False
+                if isinstance(loss_baseline, (int, float)) and loss_baseline:
+                    loss_flag = (
+                        abs(loss_total_value - float(loss_baseline)) / abs(float(loss_baseline))
+                    ) > loss_tolerance
+
+                queue_flag = False
+                if isinstance(queue_baseline, (int, float)) and queue_baseline:
+                    queue_flag = queue_events_value < (1.0 - queue_tolerance) * float(
+                        queue_baseline
+                    )
+
+                intensity_flag = False
+                if isinstance(intensity_baseline, (int, float)) and intensity_baseline:
+                    intensity_flag = queue_intensity_value < (
+                        (1.0 - queue_tolerance) * float(intensity_baseline)
+                    )
+
+                epoch_summary.update(
+                    {
+                        "anneal_cycle": float(anneal_context.get("cycle", -1.0)),
+                        "anneal_stage": str(anneal_context.get("stage", "")),
+                        "anneal_dataset": str(anneal_context.get("dataset_label", "")),
+                        "anneal_bc_accuracy": (
+                            float(bc_accuracy_value)
+                            if isinstance(bc_accuracy_value, (int, float))
+                            else None
+                        ),
+                        "anneal_bc_threshold": (
+                            float(bc_threshold_value)
+                            if isinstance(bc_threshold_value, (int, float))
+                            else float(self.config.training.anneal_accuracy_threshold)
+                        ),
+                        "anneal_bc_passed": bool(anneal_context.get("bc_passed", True)),
+                        "anneal_loss_baseline": (
+                            float(loss_baseline)
+                            if isinstance(loss_baseline, (int, float))
+                            else None
+                        ),
+                        "anneal_queue_baseline": (
+                            float(queue_baseline)
+                            if isinstance(queue_baseline, (int, float))
+                            else None
+                        ),
+                        "anneal_intensity_baseline": (
+                            float(intensity_baseline)
+                            if isinstance(intensity_baseline, (int, float))
+                            else None
+                        ),
+                        "anneal_loss_flag": bool(loss_flag),
+                        "anneal_queue_flag": bool(queue_flag),
+                        "anneal_intensity_flag": bool(intensity_flag),
+                    }
+                )
             if baseline_metrics:
                 epoch_summary["baseline_sample_count"] = float(
                     baseline_metrics.get("sample_count", 0.0)
@@ -682,6 +1363,90 @@ class TrainingHarness:
         if PPO_TELEMETRY_VERSION >= 1.1:
             self._ppo_state["log_stream_offset"] = log_stream_offset
         return last_summary
+
+    def evaluate_anneal_results(self, results: list[dict[str, object]]) -> str:
+        status = "PASS"
+        for stage in results:
+            mode = stage.get("mode")
+            if mode == "bc" and not stage.get("passed", True):
+                return "FAIL"
+            if mode == "ppo" and (
+                bool(stage.get("anneal_loss_flag"))
+                or bool(stage.get("anneal_queue_flag"))
+                or bool(stage.get("anneal_intensity_flag"))
+            ):
+                status = "HOLD"
+        return status
+
+    @property
+    def last_anneal_status(self) -> str | None:
+        return self._last_anneal_status
+
+    def _record_promotion_evaluation(
+        self,
+        *,
+        status: str,
+        results: list[dict[str, object]],
+    ) -> None:
+        self._promotion_eval_counter += 1
+        evaluation_tick = self._promotion_eval_counter
+        required = self.config.stability.promotion.required_passes
+        if status == "PASS":
+            self._promotion_pass_streak += 1
+            last_result = "pass"
+        else:
+            self._promotion_pass_streak = 0
+            last_result = "fail"
+        candidate_ready = self._promotion_pass_streak >= required
+        promotion_metrics = {
+            "promotion": {
+                "pass_streak": self._promotion_pass_streak,
+                "required_passes": required,
+                "candidate_ready": candidate_ready,
+                "last_result": last_result,
+                "last_evaluated_tick": evaluation_tick,
+            }
+        }
+        self.promotion.update_from_metrics(
+            promotion_metrics,
+            tick=evaluation_tick,
+        )
+        if status == "PASS":
+            metadata = {
+                "status": status,
+                "cycle": results[-1].get("cycle") if results else None,
+                "mode": results[-1].get("mode") if results else None,
+            }
+            self.promotion.set_candidate_metadata(metadata)
+        else:
+            self.promotion.set_candidate_metadata(None)
+
+    def _select_social_reward_stage(self, cycle_id: int) -> str | None:
+        training_cfg = getattr(self.config, "training", None)
+        if training_cfg is None:
+            return None
+        stage = getattr(training_cfg, "social_reward_stage_override", None)
+        schedule = getattr(training_cfg, "social_reward_schedule", []) or []
+        try:
+            iterable = sorted(
+                schedule,
+                key=lambda entry: int(getattr(entry, "cycle", 0)),
+            )
+        except TypeError:
+            iterable = []
+        for entry in iterable:
+            entry_cycle = int(getattr(entry, "cycle", 0))
+            if cycle_id >= entry_cycle:
+                stage = getattr(entry, "stage", stage)
+        return stage
+
+    def _apply_social_reward_stage(self, cycle_id: int) -> None:
+        stage = self._select_social_reward_stage(cycle_id)
+        if stage is None:
+            return
+        current = getattr(self.config.features.stages, "social_rewards", None)
+        if stage != current:
+            self.config.features.stages.social_rewards = stage
 
     def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> dict[str, float]:
         summary = {

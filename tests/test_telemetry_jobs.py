@@ -4,6 +4,7 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.stability.monitor import StabilityMonitor
 from townlet.world.grid import AgentSnapshot
 
 
@@ -39,22 +40,16 @@ def test_telemetry_captures_job_snapshot() -> None:
 def test_stability_monitor_lateness_alert() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.stability.lateness_threshold = 0
-    loop = SimulationLoop(config)
+    monitor = StabilityMonitor(config)
 
-    if not loop.world.agents:
-        loop.world.agents["alice"] = AgentSnapshot(
-            agent_id="alice",
-            position=(0, 0),
-            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
-            wallet=1.0,
-        )
-        loop.world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    monitor.track(
+        tick=0,
+        rewards={},
+        terminated={},
+        job_snapshot={"alice": {"late_ticks_today": 2}},
+        queue_metrics={},
+        embedding_metrics={},
+        events=[],
+    )
 
-    agent_id = next(iter(loop.world.agents.keys()))
-    loop.world.agents[agent_id].position = (999, 999)
-
-    loop.tick = 175
-    for _ in range(10):
-        loop.step()
-
-    assert loop.stability.latest_alert == "lateness_spike"
+    assert monitor.latest_alert == "lateness_spike"

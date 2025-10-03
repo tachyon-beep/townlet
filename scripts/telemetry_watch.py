@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Iterator
 
+MODES = {"ppo", "health"}
+
 REQUIRED_KEYS = {
     "epoch",
     "loss_total",
@@ -19,11 +21,50 @@ REQUIRED_KEYS = {
     "data_mode",
     "queue_conflict_events",
     "queue_conflict_intensity_sum",
+    "shared_meal_events",
+    "late_help_events",
+    "shift_takeover_events",
+    "chat_success_events",
+    "chat_failure_events",
+    "chat_quality_mean",
+}
+
+OPTIONAL_NUMERIC_KEYS = {
+    "anneal_cycle",
+    "anneal_bc_accuracy",
+    "anneal_bc_threshold",
+    "anneal_loss_baseline",
+    "anneal_queue_baseline",
+    "anneal_intensity_baseline",
+}
+
+OPTIONAL_BOOL_KEYS = {
+    "anneal_bc_passed",
+    "anneal_loss_flag",
+    "anneal_queue_flag",
+    "anneal_intensity_flag",
+}
+
+OPTIONAL_TEXT_KEYS = {
+    "anneal_stage",
+    "anneal_dataset",
+}
+
+OPTIONAL_EVENT_KEYS = {
+    "utility_outage_events",
+    "shower_complete_events",
+    "sleep_complete_events",
 }
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Watch PPO telemetry logs for regressions")
+    parser.add_argument(
+        "--mode",
+        choices=sorted(MODES),
+        default="ppo",
+        help="Which log format to parse: 'ppo' (default) or 'health'",
+    )
     parser.add_argument("log", type=Path, help="Path to NDJSON PPO telemetry log")
     parser.add_argument("--follow", action="store_true", help="Continuously watch for new entries")
     parser.add_argument(
@@ -75,11 +116,122 @@ def parse_args() -> argparse.Namespace:
         help="Fail if queue_conflict_intensity_sum falls below this value",
     )
     parser.add_argument(
+        "--shared-meal-min",
+        type=float,
+        default=None,
+        help="Fail if shared_meal_events falls below this value",
+    )
+    parser.add_argument(
+        "--late-help-min",
+        type=float,
+        default=None,
+        help="Fail if late_help_events falls below this value",
+    )
+    parser.add_argument(
+        "--shift-takeover-max",
+        type=float,
+        default=None,
+        help="Fail if shift_takeover_events exceeds this value",
+    )
+    parser.add_argument(
+        "--chat-quality-min",
+        type=float,
+        default=None,
+        help="Fail if chat_quality_mean falls below this value",
+    )
+    parser.add_argument(
+        "--utility-outage-max",
+        type=float,
+        default=None,
+        help="Fail if utility_outage_events exceeds this value",
+    )
+    parser.add_argument(
+        "--shower-complete-min",
+        type=float,
+        default=None,
+        help="Fail if shower_complete_events falls below this value",
+    )
+    parser.add_argument(
+        "--sleep-complete-min",
+        type=float,
+        default=None,
+        help="Fail if sleep_complete_events falls below this value",
+    )
+    parser.add_argument(
+        "--anneal-bc-min",
+        type=float,
+        default=0.9,
+        help="Fail if anneal_bc_accuracy falls below this value (default: 0.9)",
+    )
+    parser.add_argument(
+        "--anneal-loss-max",
+        type=float,
+        default=0.1,
+        help="Fail if loss_total drifts beyond this fraction of baseline (default: 0.1 for ±10%)",
+    )
+    parser.add_argument(
+        "--anneal-queue-min",
+        type=float,
+        default=None,
+        help="Fail if queue_conflict_events falls below this value during anneal stages (default: baseline × (1 - queue-tolerance))",
+    )
+    parser.add_argument(
+        "--anneal-intensity-min",
+        type=float,
+        default=None,
+        help="Fail if queue_conflict_intensity_sum falls below this value during anneal stages (default: baseline × (1 - queue-tolerance))",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON lines instead of human-readable text",
     )
-    return parser.parse_args()
+    # Health mode thresholds
+    parser.add_argument(
+        "--tick-duration-max",
+        type=float,
+        default=None,
+        help="Fail if tick duration exceeds this many milliseconds (health mode)",
+    )
+    parser.add_argument(
+        "--telemetry-queue-max",
+        type=int,
+        default=None,
+        help="Fail if telemetry queue backlog exceeds this value (health mode)",
+    )
+    parser.add_argument(
+        "--telemetry-dropped-max",
+        type=int,
+        default=None,
+        help="Fail if dropped telemetry messages exceed this value (health mode)",
+    )
+    parser.add_argument(
+        "--perturbations-pending-max",
+        type=int,
+        default=None,
+        help="Fail if pending perturbations exceed this value (health mode)",
+    )
+    parser.add_argument(
+        "--perturbations-active-max",
+        type=int,
+        default=None,
+        help="Fail if active perturbations exceed this value (health mode)",
+    )
+    parser.add_argument(
+        "--exit-queue-max",
+        type=int,
+        default=None,
+        help="Fail if employment exit queue exceeds this value (health mode)",
+    )
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
+
+
+def parse_args_from_list(argv: list[str]) -> argparse.Namespace:
+    return build_parser().parse_args(argv[1:])
 
 
 def stream_records(path: Path, follow: bool, interval: float) -> Iterator[dict[str, float]]:
@@ -110,6 +262,79 @@ def stream_records(path: Path, follow: bool, interval: float) -> Iterator[dict[s
                 if key not in {"data_mode"}
             }
             record["data_mode"] = str(payload["data_mode"])
+            for key in OPTIONAL_NUMERIC_KEYS:
+                if key in payload:
+                    value = payload[key]
+                    record[key] = (
+                        None
+                        if value is None
+                        else float(value)
+                    )
+            for key in OPTIONAL_BOOL_KEYS:
+                if key in payload:
+                    record[key] = bool(payload[key])
+            for key in OPTIONAL_TEXT_KEYS:
+                if key in payload:
+                    record[key] = str(payload[key])
+            for key in OPTIONAL_EVENT_KEYS:
+                record[key] = float(payload.get(key, 0.0) or 0.0)
+            yield record
+
+
+def _parse_health_line(line: str) -> dict[str, float]:
+    if not line:
+        raise ValueError("empty log line")
+    tokens = line.strip().split()
+    if not tokens or tokens[0] != "tick_health":
+        raise ValueError("log line does not start with 'tick_health'")
+    record: dict[str, float] = {}
+    for token in tokens[1:]:
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        try:
+            if "." in value:
+                record[key] = float(value)
+            else:
+                record[key] = float(int(value))
+        except ValueError:
+            continue
+    required = {"tick", "duration_ms", "queue", "dropped"}
+    missing = required - record.keys()
+    if missing:
+        raise ValueError(f"health log missing fields: {sorted(missing)}")
+    record["telemetry_queue"] = record.get("queue", 0.0)
+    record["telemetry_dropped"] = record.get("dropped", 0.0)
+    return record
+
+
+def stream_health_records(path: Path, follow: bool, interval: float) -> Iterator[dict[str, float]]:
+    while not path.exists():
+        if not follow:
+            raise FileNotFoundError(path)
+        time.sleep(interval)
+
+    with path.open("r", encoding="utf-8") as handle:
+        while True:
+            position = handle.tell()
+            line = handle.readline()
+            if not line:
+                if follow:
+                    handle.seek(position)
+                    time.sleep(interval)
+                    continue
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = _parse_health_line(line)
+            except ValueError:
+                continue
             yield record
 
 
@@ -146,29 +371,149 @@ def check_thresholds(record: dict[str, object], args: argparse.Namespace) -> Non
             raise SystemExit(
                 f"Epoch {epoch}: queue_conflict_intensity_sum {record['queue_conflict_intensity_sum']:.2f} below threshold {args.queue_intensity_min}"
             )
+    if args.shared_meal_min is not None and is_rollout:
+        if record["shared_meal_events"] < args.shared_meal_min:
+            raise SystemExit(
+                f"Epoch {epoch}: shared_meal_events {record['shared_meal_events']:.1f} below threshold {args.shared_meal_min}"
+            )
+    if args.late_help_min is not None and is_rollout:
+        if record["late_help_events"] < args.late_help_min:
+            raise SystemExit(
+                f"Epoch {epoch}: late_help_events {record['late_help_events']:.1f} below threshold {args.late_help_min}"
+            )
+    if args.shift_takeover_max is not None and is_rollout:
+        if record["shift_takeover_events"] > args.shift_takeover_max:
+            raise SystemExit(
+                f"Epoch {epoch}: shift_takeover_events {record['shift_takeover_events']:.1f} exceeds threshold {args.shift_takeover_max}"
+            )
+    if args.chat_quality_min is not None and is_rollout:
+        if record["chat_quality_mean"] < args.chat_quality_min:
+            raise SystemExit(
+                f"Epoch {epoch}: chat_quality_mean {record['chat_quality_mean']:.3f} below threshold {args.chat_quality_min}"
+            )
+    if args.utility_outage_max is not None and is_rollout:
+        if record.get("utility_outage_events", 0.0) > args.utility_outage_max:
+            raise SystemExit(
+                f"Epoch {epoch}: utility_outage_events {record['utility_outage_events']:.1f} exceeds threshold {args.utility_outage_max}"
+            )
+    if args.shower_complete_min is not None and is_rollout:
+        if record.get("shower_complete_events", 0.0) < args.shower_complete_min:
+            raise SystemExit(
+                f"Epoch {epoch}: shower_complete_events {record['shower_complete_events']:.1f} below threshold {args.shower_complete_min}"
+            )
+    if args.sleep_complete_min is not None and is_rollout:
+        if record.get("sleep_complete_events", 0.0) < args.sleep_complete_min:
+            raise SystemExit(
+                f"Epoch {epoch}: sleep_complete_events {record['sleep_complete_events']:.1f} below threshold {args.sleep_complete_min}"
+            )
 
-
-def main() -> None:
-    args = parse_args()
-    try:
-        for record in stream_records(args.log, args.follow, args.interval):
-            check_thresholds(record, args)
-            if args.json:
-                import json
-
-                print(json.dumps(record))
-            else:
-                print(
-                    f"Epoch {int(record['epoch'])} ({record['data_mode']}): "
-                    f"loss_total={record['loss_total']:.6f}, "
-                    f"kl_divergence={record['kl_divergence']:.6f}, "
-                    f"grad_norm={record['grad_norm']:.6f}, "
-                    f"entropy_mean={record['batch_entropy_mean']:.6f}, "
-                    f"reward_adv_corr={record['reward_advantage_corr']:.6f}, "
-                    f"queue_events={record['queue_conflict_events']:.1f}, "
-                    f"queue_intensity_sum={record['queue_conflict_intensity_sum']:.2f}, "
-                    f"offset={record['log_stream_offset']:.0f}"
+    anneal_stage = record.get("anneal_stage")
+    if anneal_stage:
+        bc_accuracy = record.get("anneal_bc_accuracy")
+        if args.anneal_bc_min is not None and bc_accuracy is not None:
+            if bc_accuracy < args.anneal_bc_min:
+                raise SystemExit(
+                    f"Epoch {epoch}: anneal_bc_accuracy {bc_accuracy:.3f} below threshold {args.anneal_bc_min}"
                 )
+        loss_baseline = record.get("anneal_loss_baseline")
+        loss_limit = args.anneal_loss_max
+        if loss_baseline is not None and loss_limit is not None and loss_baseline:
+            if abs(record["loss_total"] - loss_baseline) / abs(loss_baseline) > loss_limit:
+                raise SystemExit(
+                    f"Epoch {epoch}: loss_total {record['loss_total']:.6f} drifts beyond ±{loss_limit*100:.1f}% of baseline {loss_baseline:.6f}"
+                )
+        queue_min = args.anneal_queue_min
+        if queue_min is None and is_rollout:
+            baseline = record.get("anneal_queue_baseline") or 0.0
+            queue_min = (1.0 - 0.15) * baseline if baseline else None
+        if queue_min is not None and is_rollout:
+            if record["queue_conflict_events"] < queue_min:
+                raise SystemExit(
+                    f"Epoch {epoch}: anneal queue_conflict_events {record['queue_conflict_events']:.1f} below threshold {queue_min}"
+                )
+        intensity_min = args.anneal_intensity_min
+        if intensity_min is None and is_rollout:
+            baseline = record.get("anneal_intensity_baseline") or 0.0
+            intensity_min = (1.0 - 0.15) * baseline if baseline else None
+        if intensity_min is not None and is_rollout:
+            if record["queue_conflict_intensity_sum"] < intensity_min:
+                raise SystemExit(
+                    f"Epoch {epoch}: anneal queue_conflict_intensity_sum {record['queue_conflict_intensity_sum']:.2f} below threshold {intensity_min}"
+                )
+
+
+def check_health_thresholds(record: dict[str, float], args: argparse.Namespace) -> None:
+    tick = int(record["tick"])
+    if args.tick_duration_max is not None and record["duration_ms"] > args.tick_duration_max:
+        raise SystemExit(
+            f"Tick {tick}: duration_ms {record['duration_ms']:.2f} exceeds threshold {args.tick_duration_max}"
+        )
+    if args.telemetry_queue_max is not None and record.get("queue", 0.0) > args.telemetry_queue_max:
+        raise SystemExit(
+            f"Tick {tick}: telemetry queue {record.get('queue', 0.0):.0f} exceeds threshold {args.telemetry_queue_max}"
+        )
+    if args.telemetry_dropped_max is not None and record.get("dropped", 0.0) > args.telemetry_dropped_max:
+        raise SystemExit(
+            f"Tick {tick}: dropped telemetry {record.get('dropped', 0.0):.0f} exceeds threshold {args.telemetry_dropped_max}"
+        )
+    if args.perturbations_pending_max is not None and record.get("perturbations_pending", 0.0) > args.perturbations_pending_max:
+        raise SystemExit(
+            f"Tick {tick}: pending perturbations {record.get('perturbations_pending', 0.0):.0f} exceeds threshold {args.perturbations_pending_max}"
+        )
+    if args.perturbations_active_max is not None and record.get("perturbations_active", 0.0) > args.perturbations_active_max:
+        raise SystemExit(
+            f"Tick {tick}: active perturbations {record.get('perturbations_active', 0.0):.0f} exceeds threshold {args.perturbations_active_max}"
+        )
+    if args.exit_queue_max is not None and record.get("exit_queue", 0.0) > args.exit_queue_max:
+        raise SystemExit(
+            f"Tick {tick}: employment exit queue {record.get('exit_queue', 0.0):.0f} exceeds threshold {args.exit_queue_max}"
+        )
+
+
+def main(args: list[str] | None = None) -> None:
+    parsed = parse_args() if args is None else parse_args_from_list(args)
+    try:
+        if parsed.mode == "ppo":
+            records = stream_records(parsed.log, parsed.follow, parsed.interval)
+            for record in records:
+                check_thresholds(record, parsed)
+                if parsed.json:
+                    print(json.dumps(record))
+                else:
+                    print(
+                        f"Epoch {int(record['epoch'])} ({record['data_mode']}): "
+                        f"loss_total={record['loss_total']:.6f}, "
+                        f"kl_divergence={record['kl_divergence']:.6f}, "
+                        f"grad_norm={record['grad_norm']:.6f}, "
+                        f"entropy_mean={record['batch_entropy_mean']:.6f}, "
+                        f"reward_adv_corr={record['reward_advantage_corr']:.6f}, "
+                        f"queue_events={record['queue_conflict_events']:.1f}, "
+                        f"queue_intensity_sum={record['queue_conflict_intensity_sum']:.2f}, "
+                        f"shared_meals={record['shared_meal_events']:.1f}, "
+                        f"late_help={record['late_help_events']:.1f}, "
+                        f"shift_takeovers={record['shift_takeover_events']:.1f}, "
+                        f"chat_success={record['chat_success_events']:.1f}, "
+                        f"chat_failure={record['chat_failure_events']:.1f}, "
+                        f"chat_quality_mean={record['chat_quality_mean']:.3f}, "
+                        f"utility_outages={record.get('utility_outage_events', 0.0):.1f}, "
+                        f"shower_complete={record.get('shower_complete_events', 0.0):.1f}, "
+                        f"sleep_complete={record.get('sleep_complete_events', 0.0):.1f}, "
+                        f"offset={record['log_stream_offset']:.0f}"
+                    )
+        else:
+            records = stream_health_records(parsed.log, parsed.follow, parsed.interval)
+            for record in records:
+                check_health_thresholds(record, parsed)
+                if parsed.json:
+                    print(json.dumps(record))
+                else:
+                    print(
+                        f"Tick {int(record['tick'])}: duration={record['duration_ms']:.2f} ms, "
+                        f"queue={int(record.get('queue', 0.0))}, dropped={int(record.get('dropped', 0.0))}, "
+                        f"perturbations pending={int(record.get('perturbations_pending', 0.0))}, "
+                        f"active={int(record.get('perturbations_active', 0.0))}, "
+                        f"exit_queue={int(record.get('exit_queue', 0.0))}"
+                    )
     except SystemExit:
         raise
     except Exception as exc:  # noqa: BLE001

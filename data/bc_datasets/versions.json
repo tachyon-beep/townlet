@@ -1,0 +1,51 @@
+{
+  "preflight_idle_v0": {
+    "manifest": "artifacts/m5/preflight/manifest_preflight.json",
+    "checksums": "artifacts/m5/preflight/checksums_preflight.json",
+    "captures_dir": "artifacts/m5/preflight/captures",
+    "created": "2025-09-30",
+    "tags": [
+      "preflight",
+      "synthetic",
+      "idle"
+    ],
+    "samples": {
+      "idle_alice": {
+        "sample": "artifacts/m5/preflight/captures/idle_alice.npz",
+        "meta": "artifacts/m5/preflight/captures/idle_alice.json",
+        "sha256": "df15fec9dc08066a2965723c031516046006025c3d3a7449f0ea6fa1f1a865ef"
+      },
+      "idle_bob": {
+        "sample": "artifacts/m5/preflight/captures/idle_bob.npz",
+        "meta": "artifacts/m5/preflight/captures/idle_bob.json",
+        "sha256": "1ee7991bd0eb58245c6f4a8626a60bb11e9eec77e47e1e314e65c82e71b7cebe"
+      }
+    },
+    "status": "deprecated"
+  },
+  "idle_v1_production": {
+    "manifest": "data/bc_datasets/manifests/idle_v1.json",
+    "checksums": "data/bc_datasets/checksums/idle_v1.json",
+    "captures_dir": "data/bc_datasets/captures/idle_v1",
+    "created": "2025-09-30",
+    "tags": [
+      "idle",
+      "baseline",
+      "production"
+    ],
+    "samples": {
+      "idle_alice": {
+        "sample": "data/bc_datasets/captures/idle_v1/idle_alice.npz",
+        "meta": "data/bc_datasets/captures/idle_v1/idle_alice.json",
+        "sha256": "1b21db5c71db166dcaca45b14572733d7c3a983e860eeab20682b53663f2d9ae"
+      },
+      "idle_bob": {
+        "sample": "data/bc_datasets/captures/idle_v1/idle_bob.npz",
+        "meta": "data/bc_datasets/captures/idle_v1/idle_bob.json",
+        "sha256": "fe8de3731087901ada060d7b9e1a650ae22f36272ff99eb8d3acc97e229b5758"
+      }
+    },
+    "notes": "Initial production idle dataset generated via scripts/capture_scripted.py (200 ticks).",
+    "status": "active"
+  }
+}

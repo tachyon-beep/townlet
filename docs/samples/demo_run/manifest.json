@@ -1,0 +1,34 @@
+{
+  "artifacts": [
+    {
+      "filename": "command_log.txt",
+      "sha256": "TBD",
+      "description": "Console output from demo_run execution."
+    },
+    {
+      "filename": "telemetry_snapshot.json",
+      "sha256": "TBD",
+      "description": "Telemetry snapshot captured during demo run."
+    },
+    {
+      "filename": "agents.png",
+      "sha256": "TBD",
+      "description": "Rich dashboard Agents panel screenshot."
+    },
+    {
+      "filename": "social.png",
+      "sha256": "TBD",
+      "description": "Social section showing ties and event feed."
+    },
+    {
+      "filename": "perturbations.png",
+      "sha256": "TBD",
+      "description": "Perturbation banner with active/pending events."
+    },
+    {
+      "filename": "palette.png",
+      "sha256": "TBD",
+      "description": "Command palette overlay with status banner."
+    }
+  ]
+}

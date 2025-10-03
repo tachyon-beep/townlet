@@ -1,8 +1,8 @@
 """Utility functions for PPO advantage and loss computation."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
 
 import torch
 
@@ -56,7 +56,11 @@ def compute_gae(
         gae = torch.zeros(1, dtype=rewards.dtype, device=rewards.device)
         for t in reversed(range(timesteps)):
             mask = 1.0 - dones[b, t]
-            next_value = value_preds[b, t + 1] if value_steps == timesteps + 1 else value_preds[b, t]
+            next_value = (
+                value_preds[b, t + 1]
+                if value_steps == timesteps + 1
+                else value_preds[b, t]
+            )
             delta = rewards[b, t] + gamma * next_value * mask - value_preds[b, t]
             gae = delta + gamma * gae_lambda * mask * gae
             advantages[b, t] = gae
@@ -75,7 +79,9 @@ def normalize_advantages(advantages: torch.Tensor, eps: float = 1e-8) -> torch.T
     return (advantages - mean) / (std + eps)
 
 
-def value_baseline_from_old_preds(value_preds: torch.Tensor, timesteps: int) -> torch.Tensor:
+def value_baseline_from_old_preds(
+    value_preds: torch.Tensor, timesteps: int
+) -> torch.Tensor:
     """Extract baseline values aligned with each timestep from stored predictions."""
 
     if value_preds.ndim != 2:
@@ -98,10 +104,14 @@ def clipped_value_loss(
     """Compute the clipped value loss term."""
 
     if new_values.shape != returns.shape or new_values.shape != old_values.shape:
-        raise ValueError("new_values, returns, and old_values must share the same shape")
+        raise ValueError(
+            "new_values, returns, and old_values must share the same shape"
+        )
 
     if value_clip > 0.0:
-        value_pred_clipped = old_values + torch.clamp(new_values - old_values, -value_clip, value_clip)
+        value_pred_clipped = old_values + torch.clamp(
+            new_values - old_values, -value_clip, value_clip
+        )
         value_losses = torch.max(
             (new_values - returns).pow(2),
             (value_pred_clipped - returns).pow(2),
@@ -116,7 +126,7 @@ def policy_surrogate(
     old_log_probs: torch.Tensor,
     advantages: torch.Tensor,
     clip_param: float,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute PPO clipped policy loss and clip fraction."""
 
     if not (new_log_probs.shape == old_log_probs.shape == advantages.shape):

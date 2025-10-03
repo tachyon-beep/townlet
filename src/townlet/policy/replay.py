@@ -1,17 +1,19 @@
 """Utilities for replaying observation/telemetry samples."""
+
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Optional
 
-import json
 import numpy as np
 import yaml
 
-REQUIRED_CONFLICT_FEATURES: Tuple[str, ...] = ("rivalry_max", "rivalry_avoid_count")
-STEP_ARRAY_FIELDS: Tuple[str, ...] = ("actions", "old_log_probs", "rewards", "dones")
-TRAINING_ARRAY_FIELDS: Tuple[str, ...] = STEP_ARRAY_FIELDS + ("value_preds",)
+REQUIRED_CONFLICT_FEATURES: tuple[str, ...] = ("rivalry_max", "rivalry_avoid_count")
+STEP_ARRAY_FIELDS: tuple[str, ...] = ("actions", "old_log_probs", "rewards", "dones")
+TRAINING_ARRAY_FIELDS: tuple[str, ...] = STEP_ARRAY_FIELDS + ("value_preds",)
 
 
 @dataclass
@@ -25,7 +27,7 @@ class ReplaySample:
     value_preds: np.ndarray
     rewards: np.ndarray
     dones: np.ndarray
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     def __post_init__(self) -> None:
         timesteps = None
@@ -36,7 +38,9 @@ class ReplaySample:
             if value.ndim == 0:
                 setattr(self, field_name, value.reshape(1))
             elif value.ndim > 2:
-                raise ValueError(f"ReplaySample.{field_name} must be 1D or 2D, got shape {value.shape}")
+                raise ValueError(
+                    f"ReplaySample.{field_name} must be 1D or 2D, got shape {value.shape}"
+                )
             if field_name in STEP_ARRAY_FIELDS:
                 step_len = getattr(self, field_name).shape[0]
                 if timesteps is None:
@@ -84,17 +88,17 @@ class ReplaySample:
         self.metadata.setdefault("value_pred_steps", int(value_steps))
 
     @property
-    def feature_names(self) -> Optional[List[str]]:
+    def feature_names(self) -> Optional[list[str]]:
         names = self.metadata.get("feature_names")
         if isinstance(names, list):
             return list(names)
         return None
 
-    def conflict_stats(self) -> Dict[str, float]:
+    def conflict_stats(self) -> dict[str, float]:
         names = self.feature_names
         if not names:
             return {}
-        stats: Dict[str, float] = {}
+        stats: dict[str, float] = {}
         for key in REQUIRED_CONFLICT_FEATURES:
             if key in names:
                 index = names.index(key)
@@ -103,16 +107,20 @@ class ReplaySample:
         return stats
 
 
-def _ensure_conflict_features(metadata: Dict[str, Any]) -> None:
+def _ensure_conflict_features(metadata: dict[str, Any]) -> None:
     names = metadata.get("feature_names")
     if not isinstance(names, list):
         raise ValueError("Replay sample metadata missing feature_names list")
-    missing = [feature for feature in REQUIRED_CONFLICT_FEATURES if feature not in names]
+    missing = [
+        feature for feature in REQUIRED_CONFLICT_FEATURES if feature not in names
+    ]
     if missing:
         raise ValueError(f"Replay sample missing conflict feature(s): {missing}")
 
 
-def load_replay_sample(sample_path: Path, meta_path: Optional[Path] = None) -> ReplaySample:
+def load_replay_sample(
+    sample_path: Path, meta_path: Optional[Path] = None
+) -> ReplaySample:
     """Load observation tensors and metadata for replay-driven training scaffolds."""
     if not sample_path.exists():
         raise FileNotFoundError(sample_path)
@@ -132,7 +140,7 @@ def load_replay_sample(sample_path: Path, meta_path: Optional[Path] = None) -> R
     rewards = payload["rewards"]
     dones = payload["dones"]
 
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
     resolved_meta = meta_path or sample_path.with_suffix(".json")
     if resolved_meta.exists():
         metadata = json.loads(resolved_meta.read_text())
@@ -160,14 +168,15 @@ class ReplayBatch:
     value_preds: np.ndarray
     rewards: np.ndarray
     dones: np.ndarray
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     def __post_init__(self) -> None:
         if self.maps.ndim == 4:
             self.maps = self.maps[:, np.newaxis, ...]
         elif self.maps.ndim != 5:
             raise ValueError(
-                "maps must have shape (batch, channels, height, width) or (batch, timesteps, channels, height, width)"
+                "maps must have shape (batch, channels, height, width) or "
+                "(batch, timesteps, channels, height, width)"
             )
 
         if self.features.ndim == 2:
@@ -218,11 +227,11 @@ class ReplayBatch:
                 "value_preds must have length matching timesteps or timesteps + 1 in batch"
             )
 
-    def conflict_stats(self) -> Dict[str, float]:
+    def conflict_stats(self) -> dict[str, float]:
         names = self.metadata.get("feature_names")
         if not isinstance(names, list):
             return {}
-        stats: Dict[str, float] = {}
+        stats: dict[str, float] = {}
         for key in REQUIRED_CONFLICT_FEATURES:
             if key in names:
                 idx = names.index(key)
@@ -247,7 +256,9 @@ def build_batch(samples: Sequence[ReplaySample]) -> ReplayBatch:
     metadata = {
         "feature_names": samples[0].metadata.get("feature_names"),
         "map_shape": samples[0].metadata.get("map_shape"),
-        "training_arrays": samples[0].metadata.get("training_arrays", list(TRAINING_ARRAY_FIELDS)),
+        "training_arrays": samples[0].metadata.get(
+            "training_arrays", list(TRAINING_ARRAY_FIELDS)
+        ),
         "timesteps": samples[0].metadata.get("timesteps"),
         "value_pred_steps": samples[0].metadata.get("value_pred_steps"),
         "metrics": [sample.metadata.get("metrics") for sample in samples],
@@ -268,13 +279,14 @@ def build_batch(samples: Sequence[ReplaySample]) -> ReplayBatch:
 class ReplayDatasetConfig:
     """Configuration for building replay datasets."""
 
-    entries: List[Tuple[Path, Optional[Path]]]
+    entries: list[tuple[Path, Optional[Path]]]
     batch_size: int = 1
     shuffle: bool = False
     seed: Optional[int] = None
     drop_last: bool = False
     streaming: bool = False
-    metrics_map: Optional[Dict[str, Dict[str, float]]] = None
+    metrics_map: Optional[dict[str, dict[str, float]]] = None
+    label: Optional[str] = None
 
     @classmethod
     def from_manifest(
@@ -294,6 +306,7 @@ class ReplayDatasetConfig:
             seed=seed,
             drop_last=drop_last,
             streaming=streaming,
+            label=manifest_path.stem,
         )
 
     @classmethod
@@ -313,7 +326,11 @@ class ReplayDatasetConfig:
         metrics_path = capture_dir / "rollout_sample_metrics.json"
         metrics_map = None
         if metrics_path.exists():
-            metrics_map = json.loads(metrics_path.read_text())
+            payload = json.loads(metrics_path.read_text())
+            if isinstance(payload, dict):
+                metrics_map = payload.get("samples") or {}
+            else:
+                metrics_map = payload
         return cls(
             entries=entries,
             batch_size=batch_size,
@@ -322,10 +339,28 @@ class ReplayDatasetConfig:
             drop_last=drop_last,
             streaming=streaming,
             metrics_map=metrics_map,
+            label=capture_dir.name,
         )
 
 
-def _load_manifest(manifest_path: Path) -> List[Tuple[Path, Optional[Path]]]:
+def _resolve_manifest_path(path_spec: Path, base: Path) -> Path:
+    """Resolve manifest path specs that may be absolute or repo-relative."""
+
+    candidates = []
+    if path_spec.is_absolute():
+        candidates.append(path_spec)
+    else:
+        candidates.append(base / path_spec)
+        candidates.append(Path.cwd() / path_spec)
+        candidates.append(path_spec)
+    for candidate in candidates:
+        candidate_path = Path(candidate)
+        if candidate_path.exists():
+            return candidate_path
+    return (base / path_spec).resolve()
+
+
+def _load_manifest(manifest_path: Path) -> list[tuple[Path, Optional[Path]]]:
     if not manifest_path.exists():
         raise FileNotFoundError(manifest_path)
     data: Any
@@ -334,20 +369,33 @@ def _load_manifest(manifest_path: Path) -> List[Tuple[Path, Optional[Path]]]:
         data = json.loads(text)
     else:
         data = yaml.safe_load(text)
-    if not isinstance(data, list):
-        raise ValueError("Replay manifest must be a list of entries")
-    entries: List[Tuple[Path, Optional[Path]]] = []
+    if isinstance(data, dict):
+        samples = data.get("samples")
+        if not isinstance(samples, list):
+            raise ValueError("Replay manifest payload missing 'samples' list")
+        manifest_entries = samples
+    elif isinstance(data, list):
+        manifest_entries = data
+    else:
+        raise ValueError("Replay manifest must be a list or mapping with 'samples'")
+    entries: list[tuple[Path, Optional[Path]]] = []
     base = manifest_path.parent
-    for item in data:
+    for item in manifest_entries:
         if isinstance(item, str):
-            sample = base / item
+            sample_spec = Path(item)
+            sample = _resolve_manifest_path(sample_spec, base)
             meta = sample.with_suffix(".json")
         elif isinstance(item, dict):
             if "sample" not in item:
                 raise ValueError("Manifest entry missing 'sample' field")
-            sample = base / Path(item["sample"])
+            sample_spec = Path(item["sample"])
+            sample = _resolve_manifest_path(sample_spec, base)
             meta_value = item.get("meta")
-            meta = base / Path(meta_value) if meta_value else None
+            if meta_value:
+                meta_spec = Path(meta_value)
+                meta = _resolve_manifest_path(meta_spec, base)
+            else:
+                meta = None
         else:
             raise ValueError("Manifest entry must be string or mapping")
         entries.append((sample.resolve(), meta.resolve() if meta else None))
@@ -366,27 +414,31 @@ class ReplayDataset:
         self._entries = config.entries
         self._rng = np.random.default_rng(config.seed) if config.shuffle else None
         self._streaming = config.streaming
-        self._cached_samples: Optional[List[ReplaySample]] = None
+        self._cached_samples: Optional[list[ReplaySample]] = None
         self.metrics_map = config.metrics_map or {}
         if self._streaming:
             first_sample = load_replay_sample(*self._entries[0])
             self._map_shape = first_sample.map.shape
             self._feature_dim = first_sample.features.shape[0]
             self._array_shapes = {
-                field: getattr(first_sample, field).shape for field in TRAINING_ARRAY_FIELDS
+                field: getattr(first_sample, field).shape
+                for field in TRAINING_ARRAY_FIELDS
             }
             self._timesteps = first_sample.metadata.get("timesteps")
             self._value_steps = first_sample.metadata.get("value_pred_steps")
             self._ensure_sample_metrics(first_sample, self._entries[0])
         else:
-            self._cached_samples = [load_replay_sample(sample, meta) for sample, meta in self._entries]
+            self._cached_samples = [
+                load_replay_sample(sample, meta) for sample, meta in self._entries
+            ]
             self._ensure_homogeneous(self._cached_samples)
             for sample, entry in zip(self._cached_samples, self._entries):
                 self._ensure_sample_metrics(sample, entry)
             self._map_shape = self._cached_samples[0].map.shape
             self._feature_dim = self._cached_samples[0].features.shape[0]
             self._array_shapes = {
-                field: getattr(self._cached_samples[0], field).shape for field in TRAINING_ARRAY_FIELDS
+                field: getattr(self._cached_samples[0], field).shape
+                for field in TRAINING_ARRAY_FIELDS
             }
             self._timesteps = self._cached_samples[0].metadata.get("timesteps")
             self._value_steps = self._cached_samples[0].metadata.get("value_pred_steps")
@@ -395,7 +447,9 @@ class ReplayDataset:
     def _ensure_homogeneous(self, samples: Sequence[ReplaySample]) -> None:
         base_map = samples[0].map.shape
         base_feat = samples[0].features.shape[0]
-        base_arrays = {field: getattr(samples[0], field).shape for field in TRAINING_ARRAY_FIELDS}
+        base_arrays = {
+            field: getattr(samples[0], field).shape for field in TRAINING_ARRAY_FIELDS
+        }
         for sample in samples[1:]:
             if sample.map.shape != base_map or sample.features.shape[0] != base_feat:
                 raise ValueError("Replay samples have mismatched shapes; cannot batch")
@@ -427,7 +481,10 @@ class ReplayDataset:
         if self._cached_samples is not None:
             return self._cached_samples[index]
         sample = load_replay_sample(*self._entries[index])
-        if sample.map.shape != self._map_shape or sample.features.shape[0] != self._feature_dim:
+        if (
+            sample.map.shape != self._map_shape
+            or sample.features.shape[0] != self._feature_dim
+        ):
             raise ValueError("Replay samples have mismatched shapes; cannot batch")
         for field_name, shape in self._array_shapes.items():
             if getattr(sample, field_name).shape != shape:
@@ -437,15 +494,24 @@ class ReplayDataset:
         if self._timesteps is not None:
             sample_steps = sample.metadata.get("timesteps")
             if sample_steps is not None and sample_steps != self._timesteps:
-                raise ValueError("Replay samples have mismatched timestep length; cannot batch")
+                raise ValueError(
+                    "Replay samples have mismatched timestep length; cannot batch"
+                )
         if self._value_steps is not None:
             sample_value_steps = sample.metadata.get("value_pred_steps")
-            if sample_value_steps is not None and sample_value_steps != self._value_steps:
-                raise ValueError("Replay samples have mismatched value baseline length; cannot batch")
+            if (
+                sample_value_steps is not None
+                and sample_value_steps != self._value_steps
+            ):
+                raise ValueError(
+                    "Replay samples have mismatched value baseline length; cannot batch"
+                )
         self._ensure_sample_metrics(sample, self._entries[index])
         return sample
 
-    def _ensure_sample_metrics(self, sample: ReplaySample, entry: Tuple[Path, Optional[Path]]) -> None:
+    def _ensure_sample_metrics(
+        self, sample: ReplaySample, entry: tuple[Path, Optional[Path]]
+    ) -> None:
         existing = sample.metadata.get("metrics")
         if isinstance(existing, dict) and existing:
             return
@@ -453,8 +519,8 @@ class ReplayDataset:
         if metrics is not None:
             sample.metadata["metrics"] = metrics
 
-    def _aggregate_metrics(self) -> Dict[str, float]:
-        metrics_sources: List[Dict[str, float]] = []
+    def _aggregate_metrics(self) -> dict[str, float]:
+        metrics_sources: list[dict[str, float]] = []
         if self.metrics_map:
             metrics_sources = [dict(values) for values in self.metrics_map.values()]
         elif self._cached_samples is not None:
@@ -466,8 +532,8 @@ class ReplayDataset:
         if not metrics_sources:
             return {}
 
-        totals: Dict[str, float] = {}
-        counts: Dict[str, int] = {}
+        totals: dict[str, float] = {}
+        counts: dict[str, int] = {}
         for metrics in metrics_sources:
             for key, value in metrics.items():
                 if not isinstance(value, (int, float)):
@@ -479,7 +545,7 @@ class ReplayDataset:
             return {}
 
         sample_count = float(len(metrics_sources))
-        aggregate: Dict[str, float] = {"sample_count": sample_count}
+        aggregate: dict[str, float] = {"sample_count": sample_count}
         for key, total in totals.items():
             occurrences = counts.get(key, 0)
             if occurrences == 0:
@@ -490,25 +556,33 @@ class ReplayDataset:
             else:
                 aggregate[key] = total / occurrences
         return aggregate
-def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
+
+
+def frames_to_replay_sample(frames: Sequence[dict[str, Any]]) -> ReplaySample:
     """Convert collected trajectory frames into a replay sample."""
 
     if not frames:
         raise ValueError("frames sequence cannot be empty")
 
     timesteps = len(frames)
-    map_seq = np.stack([np.asarray(frame["map"], dtype=np.float32) for frame in frames], axis=0)
+    map_seq = np.stack(
+        [np.asarray(frame["map"], dtype=np.float32) for frame in frames], axis=0
+    )
     feature_seq = np.stack(
         [np.asarray(frame["features"], dtype=np.float32) for frame in frames], axis=0
     )
 
-    raw_lookup = dict(frames[0].get("action_lookup", {})) if frames[0].get("action_lookup") else {}
-    action_lookup: Dict[str, int]
+    raw_lookup = (
+        dict(frames[0].get("action_lookup", {}))
+        if frames[0].get("action_lookup")
+        else {}
+    )
+    action_lookup: dict[str, int]
     if raw_lookup and all(isinstance(key, int) for key in raw_lookup):
         action_lookup = {value: int(key) for key, value in raw_lookup.items()}
     else:
         action_lookup = raw_lookup
-    action_ids: List[int] = []
+    action_ids: list[int] = []
     for frame in frames:
         if frame.get("action_id") is not None:
             action_ids.append(int(frame["action_id"]))
@@ -529,7 +603,8 @@ def frames_to_replay_sample(frames: Sequence[Dict[str, Any]]) -> ReplaySample:
     )
 
     rewards = np.asarray(
-        [float((frame.get("rewards") or [0.0])[-1]) for frame in frames], dtype=np.float32
+        [float((frame.get("rewards") or [0.0])[-1]) for frame in frames],
+        dtype=np.float32,
     )
     dones = np.asarray(
         [bool((frame.get("dones") or [False])[-1]) for frame in frames], dtype=np.bool_

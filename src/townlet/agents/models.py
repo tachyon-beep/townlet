@@ -1,8 +1,8 @@
 """Agent-related dataclasses and helpers."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict
 
 
 @dataclass
@@ -25,7 +25,7 @@ class AgentState:
     """Canonical agent state used across modules."""
 
     agent_id: str
-    needs: Dict[str, float]
+    needs: dict[str, float]
     wallet: float
     personality: Personality
     relationships: list[RelationshipEdge] = field(default_factory=list)

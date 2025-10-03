@@ -1,9 +1,10 @@
+
 config_id: "scenario_queue_conflict"
 seed: 5252
 
 features:
   stages:
-    relationships: "OFF"
+    relationships: "B"
     social_rewards: "OFF"
   systems:
     lifecycle: "on"
@@ -39,45 +40,57 @@ behavior:
   job_arrival_buffer: 5
 
 queue_fairness:
-  cooldown_ticks: 1
+  cooldown_ticks: 4
   ghost_step_after: 1
   age_priority_weight: 0.0
 
 conflict:
   rivalry:
-    increment_per_conflict: 0.15
+    increment_per_conflict: 0.2
     decay_per_tick: 0.01
     avoid_threshold: 0.4
     max_edges: 4
 
 scenario:
-  description: "Three agents compete for a single checkout, triggering ghost-step handoffs and rivalry increases."
-  ticks: 60
+  description: "Three agents contest a single shower, forcing ghost-steps and rotation cooldowns."
+  ticks: 80
   objects:
-    - id: checkout_1
-      type: checkout
+    - id: shower_conflict
+      type: shower
       position: [12, 12]
   agents:
     - id: anna
       position: [10, 12]
-      needs: {hunger: 0.5, hygiene: 0.5, energy: 0.5}
+      needs: {hunger: 0.6, hygiene: 0.2, energy: 0.6}
       wallet: 2.0
       schedule:
-        - {kind: request, object: checkout_1, affordance: checkout, blocked: false}
-        - {kind: start, object: checkout_1, affordance: checkout, blocked: false}
+        - {kind: move, position: [12, 12], blocked: false}
+        - {kind: request, object: shower_conflict, affordance: use_shower, blocked: false}
+        - {kind: start, object: shower_conflict, affordance: use_shower, blocked: false}
+        - {kind: wait, object: null, affordance: null, blocked: false}
+        - {kind: release, object: shower_conflict}
+        - {kind: wait, object: null, affordance: null, blocked: false}
     - id: ben
       position: [14, 12]
-      needs: {hunger: 0.6, hygiene: 0.6, energy: 0.6}
+      needs: {hunger: 0.6, hygiene: 0.3, energy: 0.6}
       wallet: 2.0
       schedule:
-        - {kind: request, object: checkout_1, affordance: checkout, blocked: true}
+        - {kind: move, position: [13, 12], blocked: false}
+        - {kind: request, object: shower_conflict, affordance: use_shower, blocked: true}
+        - {kind: blocked, object: shower_conflict, blocked: true}
+        - {kind: request, object: shower_conflict, affordance: use_shower, blocked: false}
+        - {kind: start, object: shower_conflict, affordance: use_shower, blocked: false}
+        - {kind: release, object: shower_conflict}
         - {kind: wait, object: null, affordance: null, blocked: false}
-        - {kind: request, object: checkout_1, affordance: checkout, blocked: false}
     - id: cara
       position: [12, 14]
-      needs: {hunger: 0.6, hygiene: 0.6, energy: 0.6}
+      needs: {hunger: 0.6, hygiene: 0.25, energy: 0.6}
       wallet: 2.0
       schedule:
-        - {kind: wait, object: null, affordance: null, blocked: false}
-        - {kind: request, object: checkout_1, affordance: checkout, blocked: false}
+        - {kind: move, position: [12, 13], blocked: false}
+        - {kind: request, object: shower_conflict, affordance: use_shower, blocked: true}
+        - {kind: blocked, object: shower_conflict, blocked: true}
+        - {kind: request, object: shower_conflict, affordance: use_shower, blocked: false}
+        - {kind: start, object: shower_conflict, affordance: use_shower, blocked: false}
+        - {kind: release, object: shower_conflict}
         - {kind: wait, object: null, affordance: null, blocked: false}

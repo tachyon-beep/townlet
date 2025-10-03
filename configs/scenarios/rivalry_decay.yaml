@@ -3,7 +3,7 @@ seed: 7171
 
 features:
   stages:
-    relationships: "OFF"
+    relationships: "B"
     social_rewards: "OFF"
   systems:
     lifecycle: "on"
