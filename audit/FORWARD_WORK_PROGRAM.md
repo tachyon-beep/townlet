@@ -121,6 +121,7 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 
 **Progress:**
 - ✅ Phase 2.1 Command Dispatch – operator WebSocket auth, command palette UI hooks, status mirroring, and dispatch tests delivered (`tests/test_web_operator.py`).
+- ✅ Phase 2.2 Perturbation & Overlay Panels – spectator overlays (perturbations, economy/employment, conflict, KPIs, relationships, social, legend) implemented with selectors, vitest coverage (`townlet_web/src/utils/selectors.test.ts`), and Storybook stories.
 
 ## FWP-08 Demo Scenario Scripting & QA
 - **Fix / Change**: Script a narrative-driven demo using `DemoScheduler`, rehearse perturbations/console triggers, and ensure telemetry narrations tell the story.

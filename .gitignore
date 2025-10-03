@@ -39,3 +39,4 @@ tmp/
 
 # Vector and Graph databases
 .duskmantle/
+**/node_modules/**

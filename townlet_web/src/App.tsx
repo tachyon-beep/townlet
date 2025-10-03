@@ -2,8 +2,26 @@ import { useMemo } from "react";
 import { HeaderStatus } from "./components/HeaderStatus";
 import { AgentSummaryGrid } from "./components/AgentSummaryGrid";
 import { NarrationFeed } from "./components/NarrationFeed";
+import { PerturbationBanner } from "./components/PerturbationBanner";
+import { EconomyUtilitiesPanel } from "./components/EconomyUtilitiesPanel";
+import { EmploymentSummary } from "./components/EmploymentSummary";
+import { ConflictMetrics } from "./components/ConflictMetrics";
+import { KpiPanel } from "./components/KpiPanel";
+import { RelationshipOverlay } from "./components/RelationshipOverlay";
+import { SocialPanel } from "./components/SocialPanel";
+import { LegendPanel } from "./components/LegendPanel";
 import { useTelemetryClient } from "./hooks/useTelemetryClient";
 import { tokens } from "./theme/tokens";
+import {
+  selectConflict,
+  selectEconomy,
+  selectEmployment,
+  selectKpis,
+  selectPerturbations,
+  selectRelationshipOverlays,
+  selectSocialEvents,
+  selectTransport
+} from "./utils/selectors";
 
 export interface AppProps {
   initialSnapshot?: Record<string, unknown> | null;
@@ -15,9 +33,16 @@ export function App({ initialSnapshot = null }: AppProps) {
     initialSnapshot: initialSnapshot as any
   });
 
-  const transport = snapshot?.transport as { connected?: boolean } | undefined;
+  const transport = selectTransport(snapshot);
   const agents = (snapshot?.agents as Array<Record<string, unknown>>) ?? [];
   const narrations = (snapshot?.narrations as Array<Record<string, unknown>>) ?? [];
+  const perturbations = selectPerturbations(snapshot);
+  const economy = selectEconomy(snapshot);
+  const employment = selectEmployment(snapshot);
+  const conflict = selectConflict(snapshot);
+  const kpis = selectKpis(snapshot);
+  const relationships = selectRelationshipOverlays(snapshot);
+  const socialEvents = selectSocialEvents(snapshot);
 
   const agentSummaries = useMemo(
     () =>
@@ -56,19 +81,43 @@ export function App({ initialSnapshot = null }: AppProps) {
         paddingBottom: tokens.spacing.xl
       }}
     >
-      <HeaderStatus
-        schemaVersion={schemaVersion}
-        tick={tick}
-        transportConnected={transport?.connected ?? null}
-      />
-      <main style={{ padding: `0 ${tokens.spacing.lg}px`, display: "grid", gap: tokens.spacing.lg }}>
-        <section>
-          <h2 style={{ fontFamily: tokens.typography.fontFamily, marginBottom: tokens.spacing.md }}>
-            Agents
-          </h2>
+      <HeaderStatus schemaVersion={schemaVersion} tick={tick} transportConnected={transport.connected} />
+      <main
+        style={{
+          padding: `0 ${tokens.spacing.lg}px`,
+          display: "grid",
+          gap: tokens.spacing.lg,
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))"
+        }}
+      >
+        <PerturbationBanner
+          active={perturbations.active}
+          pending={perturbations.pending}
+          cooldowns={perturbations.cooldowns}
+        />
+        <EconomyUtilitiesPanel settings={economy.settings} utilities={economy.utilities} />
+        <EmploymentSummary
+          pending={employment.pending}
+          pendingCount={employment.pendingCount}
+          exitsToday={employment.exitsToday}
+          queueLimit={employment.queueLimit}
+          reviewWindow={employment.reviewWindow}
+        />
+        <ConflictMetrics
+          cooldownEvents={conflict.cooldownEvents}
+          ghostStepEvents={conflict.ghostStepEvents}
+          rotationEvents={conflict.rotationEvents}
+          rivalryEvents={conflict.rivalryEvents}
+        />
+        <KpiPanel kpis={kpis} />
+        <section style={{ gridColumn: "1 / -1" }}>
+          <h2 style={{ fontFamily: tokens.typography.fontFamily, marginBottom: tokens.spacing.md }}>Agents</h2>
           <AgentSummaryGrid agents={agentSummaries} />
         </section>
         <NarrationFeed entries={narrationEntries} />
+        <RelationshipOverlay overlays={relationships} />
+        <SocialPanel events={socialEvents} />
+        <LegendPanel />
       </main>
     </div>
   );
