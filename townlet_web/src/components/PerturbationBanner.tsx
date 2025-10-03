@@ -21,7 +21,7 @@ export function PerturbationBanner({ active, pending, cooldowns }: PerturbationB
         color: tokens.color.textPrimary
       }}
     >
-      <strong>Perturbations</strong>
+      <h2 style={{ margin: `0 0 ${tokens.spacing.xs}px 0` }}>Perturbations</h2>
       {hasActivity ? (
         <div style={{ marginTop: tokens.spacing.xs }}>
           {active.length > 0 && (

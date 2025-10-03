@@ -122,7 +122,7 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 **Progress:**
 - ✅ Phase 2.1 Command Dispatch – operator WebSocket auth, command palette UI hooks, status mirroring, and dispatch tests delivered (`tests/test_web_operator.py`).
 - ✅ Phase 2.2 Perturbation & Overlay Panels – spectator overlays (perturbations, economy/employment, conflict, KPIs, relationships, social, legend) implemented with selectors, vitest coverage (`townlet_web/src/utils/selectors.test.ts`), and Storybook stories.
-- ✅ Phase 2.3 Accessibility & Audio – Added skip-link navigation, ARIA-friendly structure, optional audio cues for high-priority narrations, axe smoke test via Storybook, and unit tests for audio hook (`townlet_web/src/hooks/useAudioCue.test.ts`).
+- ✅ Phase 2.3 Accessibility & Audio – Added skip-link navigation, ARIA-friendly structure, optional audio cues for high-priority narrations, axe smoke test via Storybook, unit tests for audio hook (`townlet_web/src/hooks/useAudioCue.test.ts`), and Playwright e2e smoke tests for spectator/operator flows (`townlet_web/tests/e2e`).
 
 ## FWP-08 Demo Scenario Scripting & QA
 - **Fix / Change**: Script a narrative-driven demo using `DemoScheduler`, rehearse perturbations/console triggers, and ensure telemetry narrations tell the story.

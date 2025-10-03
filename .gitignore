@@ -40,3 +40,4 @@ tmp/
 # Vector and Graph databases
 .duskmantle/
 **/node_modules/**
+townlet_web/test-results/

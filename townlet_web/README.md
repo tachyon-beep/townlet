@@ -6,18 +6,20 @@ Milestone 1 (Phase 1.2) scaffold for the spectator dashboard.
 
 ```bash
 npm install
-e npm run dev     # Start Vite dev server
-npm run test      # Run Vitest unit tests
-npm run storybook # Launch Storybook for component review
+npm run dev           # Start Vite dev server
+npm run test          # Run Vitest unit tests
+npm run storybook     # Launch Storybook for component review
+npm run playwright:test # Run Playwright end-to-end suite
 ```
 
 ## Structure
 
 - `src/hooks/useTelemetryClient.ts` — WebSocket diff-merging hook shared by app/tests.
-- `src/components/` — Presentational components for header, agent grid, narration feed.
+- `src/components/` — Presentational components for header, agent grid, overlays, narration feed.
 - `src/theme/tokens.ts` — Shared design tokens in sync with docs/design/web_ui_tokens.json.
 - `.storybook/` — Storybook configuration for rapid UI review.
 - `vite.config.ts` / `vitest.setup.ts` — Tooling for build + tests.
+- `playwright.config.ts` / `tests/e2e/` — End-to-end smoke tests against the mock gateway.
 
 ### Testing Fixtures
 

@@ -33,8 +33,15 @@ export function applyTelemetryDiff(
   return merged;
 }
 
-const DEFAULT_STREAM_FACTORY: TelemetryStreamFactory = () =>
-  new WebSocket("ws://localhost:8000/ws/telemetry");
+const DEFAULT_STREAM_FACTORY: TelemetryStreamFactory = () => {
+  if (typeof window === "undefined") {
+    return new WebSocket("ws://localhost:8000/ws/telemetry");
+  }
+  const envUrl = import.meta.env.VITE_GATEWAY_URL as string | undefined;
+  const base = envUrl ?? window.location.origin.replace(/^http/, "ws");
+  const url = base.includes("/ws") ? base : `${base.replace(/\/$/, "")}/ws/telemetry`;
+  return new WebSocket(url);
+};
 
 export interface UseTelemetryOptions {
   streamFactory?: TelemetryStreamFactory;

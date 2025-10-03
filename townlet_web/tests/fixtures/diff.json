@@ -1,0 +1,27 @@
+{
+  "payload_type": "diff",
+  "tick": 51,
+  "changes": {
+    "narrations": [
+      {
+        "tick": 51,
+        "category": "queue_conflict",
+        "message": "Bob yielded the shower queue",
+        "priority": true
+      }
+    ],
+    "perturbations": {
+      "active": {
+        "outage": {
+          "severity": "high"
+        }
+      },
+      "pending": []
+    },
+    "kpis": {
+      "queue_conflict_intensity": [0.1, 0.3],
+      "employment_lateness": [0.05, 0.04]
+    }
+  },
+  "removed": []
+}

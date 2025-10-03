@@ -6,3 +6,23 @@ body {
   margin: 0;
   background-color: #0d1117;
 }
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.skip-link:focus {
+  left: 16px;
+  top: 16px;
+  width: auto;
+  height: auto;
+  padding: 4px 8px;
+  background: #161b22;
+  color: #c9d1d9;
+  border-radius: 4px;
+}

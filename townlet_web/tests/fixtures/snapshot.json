@@ -1,0 +1,66 @@
+{
+  "schema_version": "0.9.7",
+  "payload_type": "snapshot",
+  "tick": 50,
+  "transport": {
+    "connected": true,
+    "dropped_messages": 0,
+    "queue_length": 0
+  },
+  "agents": [
+    {
+      "agent_id": "alice",
+      "wallet": 2.5,
+      "attendance_ratio": 0.9,
+      "shift_state": "on_shift"
+    },
+    {
+      "agent_id": "bob",
+      "wallet": 1.8,
+      "attendance_ratio": 0.7,
+      "shift_state": "off_shift"
+    }
+  ],
+  "narrations": [
+    {
+      "tick": 49,
+      "category": "utility_outage",
+      "message": "Power restored to block A",
+      "priority": false
+    }
+  ],
+  "perturbations": {
+    "active": {},
+    "pending": [],
+    "cooldowns": {}
+  },
+  "economy_settings": {
+    "meal_cost": 0.4,
+    "cook_energy_cost": 0.05
+  },
+  "utilities": {
+    "power": true,
+    "water": true
+  },
+  "employment": {
+    "pending": [],
+    "pending_count": 0,
+    "exits_today": 0,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "conflict": {
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "rivalry_events": []
+  },
+  "kpis": {
+    "queue_conflict_intensity": [0.1],
+    "employment_lateness": [0.05]
+  },
+  "relationship_overlay": {},
+  "social_events": []
+}

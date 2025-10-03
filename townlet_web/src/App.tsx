@@ -31,7 +31,7 @@ export interface AppProps {
 export function App({ initialSnapshot = null }: AppProps) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const { snapshot, tick, schemaVersion } = useTelemetryClient({
-    autoConnect: false,
+    autoConnect: true,
     initialSnapshot: initialSnapshot as any
   });
 
@@ -97,32 +97,7 @@ export function App({ initialSnapshot = null }: AppProps) {
         paddingBottom: tokens.spacing.xl
       }}
     >
-      <a
-        href="#main"
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: "auto",
-          width: "1px",
-          height: "1px",
-          overflow: "hidden"
-        }}
-        onFocus={(event) => {
-          event.currentTarget.style.left = "16px";
-          event.currentTarget.style.top = "16px";
-          event.currentTarget.style.width = "auto";
-          event.currentTarget.style.height = "auto";
-          event.currentTarget.style.padding = "4px 8px";
-          event.currentTarget.style.background = tokens.color.surface;
-        }}
-        onBlur={(event) => {
-          event.currentTarget.style.left = "-9999px";
-          event.currentTarget.style.top = "auto";
-          event.currentTarget.style.width = "1px";
-          event.currentTarget.style.height = "1px";
-          event.currentTarget.style.padding = "0";
-        }}
-      >
+      <a href="#main" className="skip-link">
         Skip to content
       </a>
       <HeaderStatus schemaVersion={schemaVersion} tick={tick} transportConnected={transport.connected} />
@@ -138,6 +113,7 @@ export function App({ initialSnapshot = null }: AppProps) {
       </div>
       <main
         id="main"
+        tabIndex={-1}
         style={{
           padding: `0 ${tokens.spacing.lg}px`,
           display: "grid",
