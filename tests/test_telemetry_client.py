@@ -57,6 +57,10 @@ def test_telemetry_client_parses_console_snapshot() -> None:
     assert isinstance(transport.connected, bool)
     assert transport.dropped_messages >= 0
     assert transport.last_success_tick is None or transport.last_success_tick >= 0
+    assert snapshot.economy_settings
+    assert "meal_cost" in snapshot.economy_settings
+    assert "power" in snapshot.utilities
+    assert isinstance(snapshot.price_spikes, tuple)
 
 
 def test_telemetry_client_warns_on_newer_schema(

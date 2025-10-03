@@ -1,7 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from townlet.config import (
     ArrangedMeetEventConfig,
+    BlackoutEventConfig,
     FloatRange,
     IntRange,
     PerturbationSchedulerConfig,
@@ -39,6 +42,11 @@ def _base_config() -> SimulationConfig:
                 duration=IntRange(min=1, max=1),
                 max_participants=2,
             ),
+            "blackout": BlackoutEventConfig(
+                probability_per_day=0.0,
+                cooldown_ticks=0,
+                duration=IntRange(min=2, max=2),
+            ),
         },
     )
     config.observations_config.hybrid.time_ticks_per_day = 1
@@ -47,8 +55,10 @@ def _base_config() -> SimulationConfig:
 
 def test_manual_event_activation_and_expiry() -> None:
     config = _base_config()
+    config.perturbations.events["price_spike"].probability_per_day = 0.0
     scheduler = PerturbationScheduler(config)
     world = WorldState.from_config(config)
+    base_meal_cost = world.config.economy.get("meal_cost", 0.0)
     event = scheduler.schedule_manual(
         world,
         spec_name="price_spike",
@@ -58,13 +68,17 @@ def test_manual_event_activation_and_expiry() -> None:
 
     scheduler.tick(world, 0)
     tick_events = world.drain_events()
+    assert world.config.economy.get("meal_cost") == pytest.approx(base_meal_cost * 1.2)
     assert any(e.get("event") == "perturbation_price_spike" for e in tick_events)
     assert event.event_id in scheduler.active
 
-    scheduler.tick(world, 3)
+    scheduler.tick(world, event.ends_at)
     end_events = world.drain_events()
     assert any(e.get("event") == "perturbation_ended" for e in end_events)
     assert event.event_id not in scheduler.active
+    scheduler.tick(world, event.ends_at + 1)
+    world.drain_events()
+    assert world.config.economy.get("meal_cost") == pytest.approx(base_meal_cost)
 
     exported = scheduler.export_state()
     restored = PerturbationScheduler(config)
@@ -104,3 +118,62 @@ def test_cancel_event_removes_from_active() -> None:
     cancelled = scheduler.cancel_event(world, event.event_id)
     assert cancelled is True
     assert event.event_id not in scheduler.active
+
+
+def test_blackout_toggles_power_status() -> None:
+    config = _base_config()
+    scheduler = PerturbationScheduler(config)
+    world = WorldState.from_config(config)
+    world.register_object(object_id="stove#1", object_type="stove", position=(0, 0))
+    stoves = [obj for obj in world.objects.values() if obj.object_type == "stove"]
+    assert stoves, "expected stove objects for blackout test"
+
+    event = scheduler.schedule_manual(
+        world,
+        spec_name="blackout",
+        current_tick=0,
+        duration=2,
+        payload_overrides={"utility": "power"},
+    )
+
+    scheduler.tick(world, 0)
+    world.drain_events()
+    assert world.utility_online("power") is False
+    assert all(obj.stock.get("power_on", 1.0) == 0.0 for obj in stoves)
+
+    scheduler.tick(world, event.ends_at)
+    world.drain_events()
+    scheduler.tick(world, event.ends_at + 1)
+    world.drain_events()
+    assert world.utility_online("power") is True
+    assert all(obj.stock.get("power_on", 0.0) == 1.0 for obj in stoves)
+
+
+def test_arranged_meet_relocates_agents() -> None:
+    config = _base_config()
+    scheduler = PerturbationScheduler(config)
+    world = WorldState.from_config(config)
+
+    world.respawn_agent({"agent_id": "alice", "position": [0, 0]})
+    world.respawn_agent({"agent_id": "bob", "position": [1, 0]})
+    world.register_object(object_id="meet_square", object_type="plaza", position=(5, 5))
+    meet_location = None
+    for candidate in world.objects.values():
+        if candidate.position is not None:
+            meet_location = candidate
+            break
+    assert meet_location is not None, "expected object with position for arranged meet"
+
+    event = scheduler.schedule_manual(
+        world,
+        spec_name="arranged_meet",
+        current_tick=0,
+        targets=["alice", "bob"],
+        payload_overrides={"location": meet_location.object_id},
+    )
+
+    scheduler.tick(world, 0)
+    world.drain_events()
+    pos = (int(meet_location.position[0]), int(meet_location.position[1]))  # type: ignore[index]
+    assert world.agents["alice"].position == pos
+    assert world.agents["bob"].position == pos

@@ -89,6 +89,11 @@ class TelemetryPublisher:
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._console_audit_path = Path("logs/console/commands.jsonl")
         self._latest_health_status: dict[str, object] = {}
+        self._latest_economy_settings: dict[str, float] = {
+            str(key): float(value) for key, value in self.config.economy.items()
+        }
+        self._latest_price_spikes: dict[str, dict[str, object]] = {}
+        self._latest_utilities: dict[str, bool] = {"power": True, "water": True}
         self._console_auth = ConsoleAuthenticator(config.console_auth)
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
@@ -169,6 +174,15 @@ class TelemetryPublisher:
             "relationship_metrics": dict(self._latest_relationship_metrics or {}),
             "job_snapshot": dict(getattr(self, "_latest_job_snapshot", {})),
             "economy_snapshot": dict(getattr(self, "_latest_economy_snapshot", {})),
+            "economy_settings": dict(self._latest_economy_settings),
+            "price_spikes": {
+                event_id: {
+                    "magnitude": float(data.get("magnitude", 0.0)),
+                    "targets": list(data.get("targets", ())),
+                }
+                for event_id, data in self._latest_price_spikes.items()
+            },
+            "utilities": {key: bool(value) for key, value in self._latest_utilities.items()},
             "employment_metrics": dict(self._latest_employment_metrics or {}),
             "events": list(self._latest_events),
             "affordance_runtime": self.latest_affordance_runtime(),
@@ -237,6 +251,40 @@ class TelemetryPublisher:
 
         self._latest_job_snapshot = dict(payload.get("job_snapshot", {}))
         self._latest_economy_snapshot = dict(payload.get("economy_snapshot", {}))
+        economy_settings = payload.get("economy_settings", {})
+        if isinstance(economy_settings, Mapping):
+            self._latest_economy_settings = {
+                str(key): float(value) for key, value in economy_settings.items()
+            }
+        else:
+            self._latest_economy_settings = {
+                str(key): float(value) for key, value in self.config.economy.items()
+            }
+        price_spikes_payload = payload.get("price_spikes", {})
+        if isinstance(price_spikes_payload, Mapping):
+            converted: dict[str, dict[str, object]] = {}
+            for event_id, data in price_spikes_payload.items():
+                if not isinstance(data, Mapping):
+                    continue
+                targets = data.get("targets", [])
+                if isinstance(targets, (list, tuple)):
+                    target_list = [str(entry) for entry in targets]
+                else:
+                    target_list = [str(targets)] if targets is not None else []
+                converted[str(event_id)] = {
+                    "magnitude": float(data.get("magnitude", 0.0)),
+                    "targets": target_list,
+                }
+            self._latest_price_spikes = converted
+        else:
+            self._latest_price_spikes = {}
+        utilities_payload = payload.get("utilities", {})
+        if isinstance(utilities_payload, Mapping):
+            self._latest_utilities = {
+                str(key): bool(value) for key, value in utilities_payload.items()
+            }
+        else:
+            self._latest_utilities = {"power": True, "water": True}
         self._latest_employment_metrics = dict(payload.get("employment_metrics", {}))
         self._latest_events = list(payload.get("events", []))
         runtime_payload = payload.get("affordance_runtime") or {}
@@ -646,6 +694,15 @@ class TelemetryPublisher:
             "economy": {
                 object_id: dict(obj) for object_id, obj in self._latest_economy_snapshot.items()
             },
+            "economy_settings": dict(self._latest_economy_settings),
+            "price_spikes": {
+                event_id: {
+                    "magnitude": float(data.get("magnitude", 0.0)),
+                    "targets": list(data.get("targets", ())),
+                }
+                for event_id, data in self._latest_price_spikes.items()
+            },
+            "utilities": {key: bool(value) for key, value in self._latest_utilities.items()},
             "affordance_manifest": dict(self._latest_affordance_manifest),
             "reward_breakdown": self.latest_reward_breakdown(),
             "stability": {
@@ -875,6 +932,20 @@ class TelemetryPublisher:
             }
             for object_id, obj in world.objects.items()
         }
+        if hasattr(world, "economy_settings"):
+            self._latest_economy_settings = world.economy_settings()
+        else:
+            self._latest_economy_settings = {
+                str(key): float(value) for key, value in self.config.economy.items()
+            }
+        if hasattr(world, "active_price_spikes"):
+            self._latest_price_spikes = world.active_price_spikes()
+        else:
+            self._latest_price_spikes = {}
+        if hasattr(world, "utility_snapshot"):
+            self._latest_utilities = world.utility_snapshot()
+        else:
+            self._latest_utilities = {"power": True, "water": True}
         self._latest_employment_metrics = world.employment_queue_snapshot()
         if reward_breakdown is not None:
             self._latest_reward_breakdown = {
@@ -1188,6 +1259,21 @@ class TelemetryPublisher:
 
     def latest_economy_snapshot(self) -> dict[str, dict[str, object]]:
         return getattr(self, "_latest_economy_snapshot", {})
+
+    def latest_economy_settings(self) -> dict[str, float]:
+        return dict(self._latest_economy_settings)
+
+    def latest_price_spikes(self) -> dict[str, dict[str, object]]:
+        return {
+            event_id: {
+                "magnitude": float(data.get("magnitude", 0.0)),
+                "targets": list(data.get("targets", [])),
+            }
+            for event_id, data in self._latest_price_spikes.items()
+        }
+
+    def latest_utilities(self) -> dict[str, bool]:
+        return {key: bool(value) for key, value in self._latest_utilities.items()}
 
     def latest_employment_metrics(self) -> dict[str, object]:
         return dict(getattr(self, "_latest_employment_metrics", {}))

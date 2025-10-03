@@ -92,6 +92,54 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
         )
     panels.append(Panel(header_table, title="Telemetry"))
 
+    economy_table = Table(title="Economy Settings", expand=True)
+    economy_table.add_column("Key")
+    economy_table.add_column("Value", justify="right")
+    for key in sorted(snapshot.economy_settings):
+        value = snapshot.economy_settings[key]
+        economy_table.add_row(key, f"{value:.2f}")
+
+    utilities_table = Table(title="Utilities", expand=True)
+    utilities_table.add_column("Utility")
+    utilities_table.add_column("Status")
+    any_outage = False
+    for name, online in sorted(snapshot.utilities.items()):
+        if online:
+            status_render = "[green]ONLINE[/green]"
+        else:
+            status_render = "[bold red]OFFLINE[/bold red]"
+            any_outage = True
+        utilities_table.add_row(name.title(), status_render)
+
+    spikes_renderables: list[RenderableType] = []
+    if snapshot.price_spikes:
+        spikes_table = Table(title="Active Price Spikes", expand=True)
+        spikes_table.add_column("Event")
+        spikes_table.add_column("Magnitude", justify="right")
+        spikes_table.add_column("Targets")
+        for entry in snapshot.price_spikes:
+            targets = ", ".join(entry.targets) if entry.targets else "global"
+            spikes_table.add_row(entry.event_id, f"{entry.magnitude:.2f}", targets)
+        spikes_renderables.append(spikes_table)
+
+    economy_renderables: list[RenderableType] = [economy_table, utilities_table]
+    if spikes_renderables:
+        economy_renderables.extend(spikes_renderables)
+
+    economy_border = "green"
+    if any_outage:
+        economy_border = "bold red"
+    elif snapshot.price_spikes:
+        economy_border = "yellow"
+
+    panels.append(
+        Panel(
+            Group(*economy_renderables),
+            title="Economy & Utilities",
+            border_style=economy_border,
+        )
+    )
+
     employment = snapshot.employment
     emp_table = Table(title="Employment Queue", expand=True)
     emp_table.add_column("Pending", justify="left")

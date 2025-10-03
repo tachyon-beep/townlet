@@ -1,27 +1,17 @@
-# Quick Wins
+# Quick Wins (High Impact, < 1 Day)
 
-These tasks deliver meaningful improvements within a day while aligning with the broader work packages.
+1. **Iterate Simulation Loop in CLI (WP-001)**  
+   - Update `scripts/run_simulation.py` to loop over `SimulationLoop.run()` and emit a simple smoke test.  
+   - Restores core workflow immediately; estimated effort <2 hours.
 
-## WP-103: Expose Telemetry Buffer Health & Dropped Payload Alerts
-- Impact: High (restores observability for transport failures)
-- Effort: S (2-8hrs)
-- ROI: High
-- Rationale: One-day change surfaces existing drop counters through health payloads and console alerts, preventing silent data loss.
+2. **Document Telemetry TCP Insecurity**  
+   - Add a prominent warning in `docs/ops` and README noting that TCP transport is plaintext and should not be used in untrusted networks until WP-003 lands.  
+   - Mitigates risk while engineering secure transport; effort ~1 hour.
 
-## WP-105: Implement Compact Observation Variant
-- Impact: Medium (unblocks compact-observation experiments)
-- Effort: S (2-8hrs)
-- ROI: High
-- Rationale: Completing the TODO converts placeholder tensors into actionable inputs, unlocking config variants without touching core loop.
+3. **Deduplicate Affordance Outcome Trimming (WP-009)**  
+   - Remove duplicated log trimming lines and include affordance/object IDs in metadata.  
+   - Improves debugging fidelity; effort <2 hours.
 
-## WP-108: Adopt Structured Logging for Stability & Telemetry
-- Impact: Medium (makes tick health machine-readable)
-- Effort: S (2-8hrs)
-- ROI: Medium
-- Rationale: Key/value logs immediately enable log aggregation tooling and faster incident triage.
-
-## WP-110: Raise Documentation & Docstring Coverage
-- Impact: Medium (improves developer velocity)
-- Effort: S (2-8hrs)
-- ROI: Medium
-- Rationale: Targeted docstrings across exported APIs reduce onboarding time and future review churn with low implementation cost.
+4. **Add CLI Smoke Test to CI (WP-004 subset)**  
+   - Create a lightweight pytest invoking `run_simulation.main()` for a few ticks to guard future regressions.  
+   - Provides immediate regression coverage; effort ~2 hours.

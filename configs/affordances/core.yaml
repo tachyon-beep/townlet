@@ -10,6 +10,7 @@
   preconds:
     - "occupied == false"
     - "power_on == true"
+    - "water_on == true"
   duration: 30
   effects:
     hygiene: 0.45
@@ -37,6 +38,8 @@
     after: ["on_finish_eat"]
 - id: cook_meal
   object_type: stove
+  preconds:
+    - "power_on == true"
   duration: 40
   effects:
     hunger: 0.1

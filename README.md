@@ -45,6 +45,10 @@ Townlet is a small-town life simulation that explores emergent behaviour in a po
    pytest
    ```
 3. Explore config examples in `configs/examples/` and align `config_id` before running simulations.
+4. Execute a short simulation loop to sanity-check behaviour:
+   ```bash
+   python scripts/run_simulation.py --config configs/examples/base.yml --ticks 100
+   ```
 
 Implementation TODOs are captured with `# TODO(@townlet)` markers inside the package. Each module outlines its responsibilities, inputs, and integration points with the rest of the system.
 

@@ -1,62 +1,57 @@
-# Audit Summary
+## Executive Summary
 
-## Executive Overview
-Townlet delivers a rich simulation scaffold with comprehensive telemetry and promotion tooling, but key security and operational guardrails remain unimplemented. Admin console commands trust client-provided metadata, telemetry travels over plaintext TCP, and the monolithic `WorldState` makes high-risk changes difficult to review. Completing the highlighted work packages will unlock safer multi-user operations, better observability, and unlock pending feature flags (compact observations, affordance hooks).
+Townlet’s codebase is well-structured into domain-focused modules with strong typing and configuration models, but several critical gaps block real-world execution. The flagship simulation CLI never advances the loop because `SimulationLoop.run()` is used as a generator without iteration. Telemetry streams are feature rich yet unencrypted, and affordance hooks can import arbitrary modules via environment variables without checks. These issues, combined with unbounded dependency ranges and performance hot spots in world/observation builders, shape the current risk profile.
+
+Overall system health is **6/10**: architecture and typing are solid, but operational readiness and security hardening require immediate attention. The highest-impact remediations (see WP-001, WP-002, WP-003) are achievable within the next sprint and would unblock simulation workflows while reducing attack surface.
 
 ## Key Metrics
-- Source modules: 59 (`src/`), 27 CLI modules, 78 test modules
-- Lines of code: 16807 (src) + 4233 (scripts) + 9509 (tests) = 30549
-- Unit test coverage: Not measured (no coverage reports in repo)
-- Docstring coverage: 11.0% (only 135 of 1225 callables documented)
-- TODO markers: 3 active TODO(@townlet) markers (grid + observations)
+
+| Metric | Value |
+| --- | --- |
+| Python modules analysed | 174 |
+| Source (`src/`) LOC | 18,523 |
+| Tests (`tests/`) LOC | 10,003 |
+| Scripts (`scripts/`) LOC | 4,409 |
+| TODO markers | 2 outstanding (`world/affordances.py`, `observations/builder.py`) |
+| Background threads | 1 (telemetry flush worker per `TelemetryPublisher`) |
 
 ## Findings by Category
 
-**Security**
-- Console/telemetry pipeline lacks authentication and trusts `mode` supplied by clients, enabling privilege escalation (`src/townlet/console/command.py:82-110`, `src/townlet/console/handlers.py:124-911`).
-- Telemetry TCP transport is plaintext without endpoint trust (`src/townlet/telemetry/transport.py:56-183`).
-
-**Operational**
-- Telemetry buffer drops payloads after repeated send failures without emitting actionable alerts (`src/townlet/telemetry/publisher.py:430-520`).
-- Logging for tick health is unstructured, limiting ingestion into monitoring tools (`src/townlet/telemetry/publisher.py:243-265`).
-
-**Performance**
-- Tick loop and world affordance resolution repeatedly traverse global agent collections, risking superlinear runtime as agent counts grow (`src/townlet/core/sim_loop.py:167-266`, `src/townlet/world/grid.py:1200-1500`).
-
-**Code Quality**
-- `WorldState` spans 2700 lines with 104 methods and TODO markers, obscuring affordance/economy responsibilities (`src/townlet/world/grid.py:51-2701`).
-- Docstring coverage below 11%, leaving exported APIs undocumented.
-
-**Best Practice**
-- No Docker/container assets or deployment guides; runtime assumes local venv with implicit filesystem layout.
-
-**Enhancement**
-- Compact observation variant is stubbed out, preventing compact-flag configs from functioning (`src/townlet/observations/builder.py:285-303`).
-
-**Technical Debt**
-- Affordance hook registry defined but unused; TODO markers block extension points (`src/townlet/world/grid.py:1297-1330`).
+- **Security**: Dynamic affordance hook imports execute arbitrary modules from `TOWNLET_AFFORDANCE_HOOK_MODULES` (WP-002). Telemetry’s TCP transport ships plaintext payloads without authentication (WP-003).
+- **Operational**: `scripts/run_simulation.py` does not iterate the simulation generator, so no ticks ever run (WP-001). No automated regression tests cover CLI entry points (WP-004).
+- **Performance**: `WorldState.local_view` and `_build_single` rebuild neighbour maps per agent, yielding O(n²) work each tick (WP-005). Telemetry payloads deep-copy large structures every tick (WP-008).
+- **Code Quality**: Core orchestration methods lack docstrings and integration tests, increasing onboarding cost (WP-004). Duplicate log trimming logic in `apply_affordance_outcome` hints at copy/paste debt (WP-009).
+- **Best Practice**: Dependencies specify only lower bounds; no lock file or reproducible environment guidance exists (WP-007).
+- **Enhancement**: Telemetry pipeline already computes rich metrics; incremental payload emission and policy identity diffs would ease downstream processing (WP-008).
+- **Technical Debt**: Compact observation variant remains unimplemented despite tests referencing it (WP-006). Affordance outcome metadata is truncated due to duplicated trimming logic (WP-009).
 
 ## Top 10 Priorities
-1. WP-101 – Secure Console & Telemetry Access Control
-2. WP-102 – Encrypt Telemetry Transport & Add Endpoint Trust
-3. WP-103 – Expose Telemetry Buffer Health & Dropped Payload Alerts
-4. WP-104 – Decompose WorldState Into Focused Modules
-5. WP-105 – Implement Compact Observation Variant
-6. WP-106 – Wire Affordance Hooks Into World Execution
-7. WP-107 – Add Container & Deployment Tooling
-8. WP-108 – Adopt Structured Logging for Stability & Telemetry
-9. WP-109 – Profile Tick Loop & Optimise Hot Paths
-10. WP-110 – Raise Documentation & Docstring Coverage
+
+1. **WP-001** — Fix `run_simulation.py` so ticks execute and add a smoke test (Critical, XS).
+2. **WP-002** — Restrict or validate affordance hook module imports (High, S).
+3. **WP-003** — Provide TLS/authenticated telemetry transport or disable insecure TCP by default (High, M).
+4. **WP-004** — Add executable CLI regression tests and harden `SimulationLoop.run()` API contract (High, S).
+5. **WP-005** — Optimise `WorldState.local_view`/observation builder to avoid redundant O(n²) scans (Medium, M).
+6. **WP-006** — Implement compact observation variant end-to-end and cover with tests (Medium, M).
+7. **WP-007** — Introduce dependency pinning/lock files and document supported Python/Torch combos (Medium, S).
+8. **WP-008** — Add telemetry payload diffing or channel-based throttling to reduce bandwidth (Medium, M).
+9. **WP-009** — Clean up `apply_affordance_outcome` duplication and persist affordance IDs alongside metadata (Low, XS).
+10. **WP-010** — (Optional) Expand telemetry health metrics with worker liveness & retry counters for ops visibility (Low, S).
 
 ## System Health Score
-- **Overall score: 5/10**
-    - Security: 3/10 (no auth, plaintext transport)
-    - Operational readiness: 5/10 (buffered telemetry, but weak alerting)
-    - Performance outlook: 6/10 (baseline in place, but scaling concerns)
-    - Code quality: 5/10 (type hints solid, but large monolith + missing docs)
-    - Documentation: 4/10 (docs exist, but API docstrings lacking)
+
+- **Architecture**: 8/10 — clear layering, dataclass-driven state, strong config validation.
+- **Security**: 4/10 — dynamic imports and plaintext telemetry are notable risks.
+- **Operational readiness**: 5/10 — primary CLI broken; no regression tests for entry points.
+- **Performance**: 6/10 — acceptable for small agent counts but quadratic hot paths will bite scale goals.
+- **Quality & Testing**: 6/10 — abundant unit tests, yet integration gaps and missing docstrings remain.
+
+Weighted average (architecture 30%, security 25%, operations 20%, performance 15%, quality 10%) yields **6/10**.
 
 ## Recommended Immediate Actions
-1. Implement WP-101 and WP-102 to close the most severe security gaps before multi-user access.
-2. Ship quick wins (WP-103, WP-105) to stabilise observability and unblock compact observation experiments.
-3. Kick off WP-104 discovery to plan WorldState decomposition, reducing risk for subsequent behavioural features.
+
+1. Ship WP-001 in the next patch release so simulation smoke tests run end-to-end.
+2. Begin WP-002 and WP-003 in parallel: locking hook imports and planning telemetry TLS both reduce exposure with modest effort.
+3. Schedule WP-004 to add CLI integration tests; gate merges on those checks.
+4. Plan WP-005/WP-006 for the upcoming sprint to stabilise observation outputs before scaling agent counts or integrating PPO.
+5. Publish an interim runbook documenting current telemetry insecurity and environmental trust assumptions until mitigations land.

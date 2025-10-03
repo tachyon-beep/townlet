@@ -1,119 +1,125 @@
-# System Documentation
+## System Architecture Overview
 
-## 1. Architecture Overview
-
-Townlet is organised around a tick-based orchestrator that wires together configuration, world simulation, policy control, telemetry, and stability services. All runtime components are built from a single `SimulationConfig` loaded from YAML.
+Townlet is organised as a simulation core with tightly-scoped service modules that expose training, telemetry, and console surfaces. The centre of the system is the tick-based simulation loop which orchestrates the world state, behavioural policy, rewards, stability monitors, and telemetry fan-out.
 
 ```mermaid
 graph TD
-    Config[SimulationConfig<br>configs/*.yml] --> Loop[SimulationLoop]
-    Loop --> World[WorldState
-(world/grid.py)]
-    Loop --> Lifecycle[LifecycleManager
-(lifecycle/manager.py)]
-    Loop --> Scheduler[PerturbationScheduler
-(scheduler/perturbations.py)]
-    Loop --> Observations[ObservationBuilder
-(observations/builder.py)]
-    Loop --> Policy[PolicyRuntime
-(policy/runner.py)]
-    Loop --> Rewards[RewardEngine
-(rewards/engine.py)]
-    Loop --> Telemetry[TelemetryPublisher
-(telemetry/publisher.py)]
-    Loop --> Stability[StabilityMonitor + PromotionManager]
-    Telemetry --> Transport[TransportBuffer + TransportClient]
-    Telemetry --> ConsoleRouter[Console Router
-(console/handlers.py)]
-    Transport --> Outputs[Stdout/File/TCP streams]
-    ConsoleRouter --> UI[townlet_ui dashboard]
-    World --> Snapshots[SnapshotManager]
-    Snapshots --> Storage[Snapshot files]
-    Policy --> Training[scripts/run_training.py]
+  ConfigLoader[Config Loader] --> SimLoop[SimulationLoop]
+  SimLoop --> World[WorldState]
+  SimLoop --> Obs[ObservationBuilder]
+  SimLoop --> Policy[PolicyRuntime]
+  SimLoop --> Rewards[RewardEngine]
+  SimLoop --> Perturbations[PerturbationScheduler]
+  SimLoop --> Stability[StabilityMonitor]
+  SimLoop --> Promotion[PromotionManager]
+  SimLoop --> Telemetry[TelemetryPublisher]
+  World --> Affordances[AffordanceRuntime]
+  World --> Employment[EmploymentEngine]
+  World --> Queues[QueueManager]
+  World --> Relationships[Relationship & Rivalry Ledgers]
+  Policy --> Behaviour[Behaviour Controller & Scripted Options]
+  Policy --> PPO[ConflictAwarePolicyNetwork]
+  Telemetry --> Transport[Stdout/File/TCP Transport]
+  Telemetry --> Console[Console Bridge & Auth]
+  Snapshots[SnapshotManager] --> SimLoop
+  Snapshots --> Telemetry
 ```
 
-* **Core loop** (`src/townlet/core/sim_loop.py`): builds RNG streams, world state, perturbation scheduler, observation builders, policies, rewards, telemetry, and stability/promotion managers, then advances ticks.
-* **World subsystem** (`src/townlet/world`): `WorldState` manages agents, affordances, queues, rivalry, employment flows, and console hookups. Queue and relationship ledgers live in sibling modules.
-* **Policy subsystem** (`src/townlet/policy`): wraps scripted agents, replay datasets, behaviour cloning trainer, and PPO scaffolding behind `PolicyRuntime`.
-* **Telemetry & console** (`src/townlet/telemetry`, `src/townlet/console`): collect per-tick metrics, publish JSON payloads via transports, and expose console handlers for admin actions.
-* **Snapshots & recovery** (`src/townlet/snapshots`): serialise world, telemetry, RNG state, and promotion metadata; support migrations between config versions.
-* **UI & tooling** (`src/townlet_ui`, `scripts/`): observer dashboard consumes telemetry snapshots; CLI utilities orchestrate simulations, training, replay capture, telemetry summarisation, and dataset audits.
-* **Process model**: single Python process hosting the simulation loop, console router, and telemetry flush worker threads; no container or service decomposition defined yet.
+* `SimulationLoop` drives ticks: it seeds RNG streams, asks `PolicyRuntime` for actions, forwards them to `WorldState`, records rewards, and publishes telemetry snapshots.
+* `WorldState` owns mutable state (agents, interactive objects, affordances, employment queues, relationships) and coordinates runtime sub-systems such as queue management, rivalry ledgers, and affordance execution.
+* `ObservationBuilder` converts the world snapshot into feature tensors (hybrid/full variants) and manages embedding slot reuse.
+* `PolicyRuntime` hosts scripted decision logic, optional PPO models, anneal blending, and rollout capture hooks.
+* `RewardEngine` and `StabilityMonitor` compute per-tick metrics; `PromotionManager` evaluates release criteria against stability data.
+* `TelemetryPublisher` packages tick data for streaming, processes console commands, and manages background flush threads and command audit trails.
+* `SnapshotManager` persists/loads cohesive world state, telemetry, scheduler status, and RNG data for reproducible runs.
 
-## 2. Technology Stack
+## Technology Stack
 
-| Layer | Technology & Version | Notes |
+| Layer | Technology | Notes |
 | --- | --- | --- |
-| Language | Python 3.11 (strict mypy config) | Ensure compatibility before upgrading to 3.12+. |
-| Core libraries | `pydantic>=2.11`, `numpy>=2.3`, `pettingzoo>=1.24`, `pyyaml>=6.0`, `rich>=13.7`, `typer>=0.9` | PettingZoo integration currently stubbed in policy layer. |
-| Optional | `torch` (PPO models), `pytest`, `ruff`, `mypy` | Torch import guarded; PPO unusable without GPU/CPU wheel present. |
-| Tooling | GitHub Actions, CLI scripts, Rich TUI | No Docker/Kubernetes assets supplied. |
-| Storage | Local filesystem snapshots/logs, BC datasets under `data/` | `.duskmantle/*` directories reserved for future Neo4j/Qdrant integration but unused. |
+| Language | Python ≥ 3.11 | Strict typing enabled via `mypy` (strict mode). |
+| Core libraries | numpy 2.3, pydantic 2.11, pyyaml 6.0, rich 13.7, typer 0.9 | Provide numeric processing, validation, CLI UX, and config ingestion. |
+| RL / Env | PettingZoo 1.24, optional PyTorch | PettingZoo integration is stubbed; PyTorch is loaded conditionally for PPO networks. |
+| Tooling | pytest, mypy, ruff | Installed via `[dev]` extras for testing and linting. |
+| Persistence | Local filesystem (snapshots, telemetry logs) | JSON/JSONL storage, no database. |
 
-Upgrade considerations: pin upper bounds once features stabilise; evaluate moving to `pydantic` profiles for runtime validation cost; adopt dependency lock files for reproducible builds.
+Upgrade considerations:
+- Pinning for runtime deps is loose (lower bounds only). Introduce upper bounds or lockfiles to prevent breaking upstream releases.
+- PyTorch is optional; document exact versions tested once PPO is wired up.
 
-## 3. Key Features & Capabilities
+## Key Features & Capabilities
 
-- **Tick-driven world simulation** with employment loops, affordance queues, rivalry tracking, nightly resets, and configurable perturbations.
-- **Policy orchestration** supporting scripted controllers, behaviour cloning replay, annealed policy blending, and placeholder PPO networks.
-- **Rich telemetry surface** capturing queue metrics, rivalry events, stability KPIs, promotion state, anneal progress, and policy metadata.
-- **Snapshot lifecycle** with identity enforcement, RNG stream persistence, and migration hooks to keep saves forward-compatible.
-- **Operational scripts** for simulation runs, long-form soak tests, dataset audits, telemetry summarisation, and promotion rehearsals.
-- **Observer dashboard (`townlet_ui`)** that renders telemetry panels, KPIs, promotion history, and issues console commands in real time.
+- Tick-based small-town simulation with affordances, employment, and rivalry mechanics.
+- Policy runtime that blends scripted behaviour with PPO rollouts, including anneal and behaviour-cloning workflows.
+- Observation builder supporting hybrid/full variants, social snippets, and embedding slot management.
+- Telemetry publisher with buffered streaming to stdout/file/TCP, console command ingestion, and promotion guardrail metrics.
+- Snapshot/restore pipeline covering world state, scheduler state, telemetry artifacts, RNG streams, and stability snapshots.
+- CLI tools for simulation, replay capture, behaviour-cloning metrics, anneal rehearsals, telemetry inspection, and promotion drills.
 
-## 4. Data Architecture
+## Data Architecture
 
-- **Configuration layer**: YAML files validated by `SimulationConfig` and nested Pydantic models (`src/townlet/config/loader.py`). Feature flags, rewards, telemetry transport, stability guardrails, and snapshot rules are centrally defined.
-- **In-memory domain models**: dataclasses such as `AgentSnapshot`, `InteractiveObject`, `RunningAffordance`, `RelationshipLedger`, and `QueueManager` manage mutable simulation entities. `WorldState` aggregates them per tick.
-- **Telemetry payloads**: dictionaries emitted on each tick contain metrics, event histories, console results, and health stats. `TelemetryPublisher.export_state()` produces canonical snapshots for storage/UI.
-- **Persistence**: `SnapshotState` serialises world/telemetry/promotion/lifecycle data to disk; RNG streams stored as encoded tuples; promotion history written to `logs/promotion_history.jsonl`.
-- **Datasets**: Behaviour cloning datasets live under `data/bc_datasets`; catalogue metadata checked by `scripts/audit_bc_datasets.py`.
+- **WorldState**: in-memory dataclasses (`AgentSnapshot`, `InteractiveObject`, ledgers) encode agent needs, inventory, jobs, and running affordances. Queue/reservation maps and ledger structures support conflict resolution.
+- **Snapshots**: `SnapshotManager` serialises world, telemetry, perturbations, stability, promotion, and RNG streams to JSON stored under configurable roots. Migration registry enforces schema evolution (current schema v1.6).
+- **Telemetry**: JSON payloads flushed via buffered transports (stdout/file/TCP). Health dashboards derived from `TelemetryPublisher.latest_*` caches.
+- **Training Data**: Replay datasets and BC captures are described via manifests/NPZ samples; `ReplayDatasetConfig` and `BCTrajectoryDataset` load data lazily or via streaming.
+- **Embedding Allocator**: Maintains slot reuse and cooldown metadata for observation embeddings.
 
-## 5. API & Interface Layer
+## API & Interface Layer
 
-- **Console API** (`src/townlet/console/handlers.py`): command router registers telemetry/status handlers for all users and privileged actions (possess, kill, promote, snapshot migrate) when operating in `admin` mode. Commands return JSON-compatible dictionaries consumed by UI tests.
-- **Telemetry transport** (`src/townlet/telemetry/transport.py`): stdout, file append, or raw TCP clients implement a `send`/`close` protocol. The TCP client lacks TLS or authentication today.
-- **Observer UI** (`src/townlet_ui`): `TelemetryClient` parses telemetry snapshots, `ConsoleCommandExecutor` wraps router dispatch, and `dashboard.py` renders Rich tables/cards.
-- **CLI entry points** (`scripts/`): `run_simulation.py`, `run_training.py`, `capture_rollout.py`, `run_anneal_rehearsal.py`, etc. expose operations via argparse. Inputs are YAML configs or metrics files; outputs are logs, JSON summaries, or zipped artefacts.
-- **Policy API** (`policy/runner.py`): provides `decide`, `post_step`, `flush_transitions`, `register_ctx_reset_callback`, and anneal toggles. Scripted controllers and replay buffers plug into this interface.
+- **Console commands**: Sanitised via `ConsoleAuthenticator` tokens, routed through `ConsoleBridge` and `ConsoleRouter`. Admin commands gated by mode; snapshot operations restricted to configured roots.
+- **Telemetry stream**: Exposes tick snapshots, promotion state, stability metrics, queue histories, and console results. Consumers subscribe through event subscribers or poll `TelemetryBridge`.
+- **CLI scripts**: Located in `scripts/` (`run_simulation.py`, `run_training.py`, `capture_rollout.py`, etc.) and wrap loaders/harnesses.
+- **Policy interfaces**: Behaviour controllers implement `decide` returning intents; PPO utilities expose standard advantage/value helpers.
 
-## 6. Configuration & Deployment
+## Configuration & Deployment
 
-- **Environment management**: repository expects a local venv (`python -m venv .venv`) and editable install (`pip install -e .[dev]`). No Dockerfile or compose manifest is supplied.
-- **Runtime configuration**: `SimulationConfig` resolves snapshot roots, transport buffers, promotion thresholds, and perturbation rules. Console handlers fetch allow-listed snapshot roots via `config.snapshot_allowed_roots()`.
-- **Environment variables**: minimal usage; telemetry file transport path defaults to `logs/telemetry.jsonl`; promotion history path hard-coded (`logs/promotion_history.jsonl`).
-- **Deployment gap**: absence of containerization, orchestration manifests, or secrets management makes cloud deployment non-trivial. Introduce images and IaC before production exposure.
+- Simulation YAMLs live in `configs/` (examples, affordances, perturbations, scenarios). Loader uses `pydantic` models to validate flags, reward caps, queue fairness, rivalry limits, console auth, telemetry transport, and snapshot guardrails.
+- Environment variables:
+  - `TOWNLET_AFFORDANCE_HOOK_MODULES`: comma-separated module list dynamically imported to register affordance hooks.
+  - Console tokens can be injected via per-token `token_env` values.
+- Telemetry transport options: `stdout`, `file` (ensures parent directories), `tcp` (no TLS/auth yet). Buffer thresholds configurable per config.
+- No Docker or compose manifests are present; execution assumed in local virtualenv (`python -m venv .venv && source .venv/bin/activate`).
+- Deployment sequence: install deps (`pip install -e .[dev]`), select config (`configs/examples/*.yml`), run CLI (`scripts/run_simulation.py` or training flow).
 
-## 7. Data Flow Highlights
+## Data Flow Narratives
 
-### Simulation Tick
-1. `SimulationLoop.step()` (src/townlet/core/sim_loop.py:167) advances the global tick, processes console commands, ticks perturbations, retrieves policy actions, applies world affordances, and evaluates lifecycle termination.
-2. Rewards are computed (`RewardEngine.compute`), observations built (`ObservationBuilder.build_batch`), and policy transitions flushed.
-3. Telemetry payload assembled with rewards, events, stability inputs, and perturbation state before publishing.
+1. **Simulation Tick**:
+   - Config loader materialises `SimulationConfig` -> `SimulationLoop` seeds RNGs and constructs world/telemetry/schedulers.
+   - `PolicyRuntime.decide` produces per-agent actions (scripted/PPO) -> `WorldState` applies actions, resolves affordances, updates ledgers and employment.
+   - `RewardEngine` computes reward vectors; `ObservationBuilder` builds features; policy updates transitions and anneal context.
+   - `TelemetryPublisher.publish_tick` captures queue metrics, rivalry snapshots, rewards, perturbations, and promotion state, enqueuing payloads for background flush.
+   - `StabilityMonitor` ingests reward samples, queue metrics, embedding reuse; `PromotionManager` updates release posture.
 
-### Telemetry Pipeline
-1. `TelemetryPublisher.publish_tick()` (telemetry/publisher.py:612) updates metrics and serialises a payload.
-2. `_enqueue_stream_payload()` encodes JSON and queues it in `TransportBuffer`; if buffer overflows, oldest payloads are dropped with warnings.
-3. Background `_flush_loop()` drains the buffer, using `_send_with_retry()` to deliver via configured transport (stdout/file/TCP). Transport health metrics updated per flush.
+2. **Snapshot Lifecycle**:
+   - `SimulationLoop.save_snapshot` consolidates world state, telemetry caches, scheduler and promotion metadata, plus RNG streams.
+   - `SimulationLoop.load_snapshot` restores via `SnapshotManager`, rehydrates world/telemetry/perturbations, and synchronises RNG streams.
 
-### Snapshot Save/Load
-1. `SimulationLoop.save_snapshot()` (core/sim_loop.py:88) collects world, telemetry, perturbations, stability, and RNG state into `SnapshotState`.
-2. `SnapshotManager.save()` writes JSONL under snapshot root; `PromotionManager` history appended separately.
-3. `SimulationLoop.load_snapshot()` (core/sim_loop.py:106) restores state, resets policy/scheduler, and reapplies RNG streams via `decode_rng_state`.
+3. **Training Pipeline**:
+   - `run_training.py` loads config, applies PPO overrides, chooses mode (`replay`, `rollout`, `mixed`, `bc`, `anneal`).
+   - Replay datasets created from manifests, capture directories, or capture buffers; PPO harness iterates batches, logging metrics via JSONL.
+   - Anneal workflows compare BC baselines with PPO rollouts, updating promotion state and optionally exiting non-zero.
 
-### Training Rollout Capture
-1. `scripts/run_training.py` builds config, instantiates `PolicyRuntime`, and executes training loops using the same observation builder and reward engine.
-2. Replay buffers (`policy/replay_buffer.py`) persist trajectories; `scripts/capture_rollout.py` collects rollouts for offline analysis.
+4. **Telemetry Transport**:
+   - Buffered payloads serialised as compact JSON lines.
+   - Flush thread pulls batches according to `flush_interval_ticks` or buffer thresholds, retrying on failure with exponential backoff.
 
-## 8. Dependencies & Integration
+5. **Console Command Flow**:
+   - External caller posts command -> `TelemetryPublisher.queue_console_command` authenticates -> `WorldState` applies operations before tick -> Results recorded and broadcast via telemetry.
 
-- **Internal coupling**: `WorldState` depends on queue manager, relationship/rivalry ledgers, telemetry metrics, and affordance manifests. `SimulationLoop` depends on nearly every subsystem; stability and promotion managers rely on telemetry for metrics.
-- **External services**: No live integration yet, but `.duskmantle/neo4j` and `.duskmantle/qdrant` directories indicate planned graph/vector stores. Current code assumes filesystem-only persistence.
-- **Python packages**: PettingZoo env placeholders, PyTorch (optional) for PPO, Rich/typer for CLI/UI. Behaviour cloning tools expect NumPy-compatible datasets.
+## Dependencies & Integration
 
-## 9. Development & Operations
+- Internal modules are encapsulated per domain (`world`, `policy`, `telemetry`, `rewards`, `scheduler`, `snapshots`). Cross-cutting utilities include RNG state encoding and console helpers.
+- External services: none presently. Telemetry expects downstream collector via stdout/file/TCP. Training harness optionally depends on PyTorch for PPO.
+- Dynamic hook system imports user-provided affordance modules, enabling experimentation but requiring trust of module paths.
 
-- **Local setup**: create venv, install editable package with `pip install -e .[dev]`, then run `ruff check src tests`, `mypy src`, and `pytest`.
-- **Testing**: Suites cover config loading, queue fairness, rivalry events, telemetry streams, promotion CLI, and snapshot migrations. Long-running simulations should be marked with `@pytest.mark.slow`.
-- **Operations**: No monitoring stack provided. Telemetry transport exposes dropped-message counters via `TelemetryPublisher.latest_transport_status()`. Promotion lifecycle writes history to disk but lacks alerting or dashboards.
-- **Release process**: Promotion manager tracks candidate state, but automation for policy promotion/release is incomplete. Behaviour cloning/training scripts require manual orchestration.
+## Development & Operations
+
+- **Environment setup**: create virtualenv, `pip install -e .[dev]` to install runtime plus tooling.
+- **Testing**: `pytest` executes suites under `tests/` covering config loading, world mechanics, telemetry, policy harness, etc. Use markers (`@pytest.mark.slow`) to exclude heavy runs.
+- **Lint & type-check**: `ruff check src tests` and `mypy src` per contributor guidelines.
+- **Simulation CLI**: `python scripts/run_simulation.py --config configs/examples/base.yml --ticks 1000` (currently requires iteration of returned generator; see audit).
+- **Training CLI**: `python scripts/run_training.py --config <config> [mode overrides...]` for PPO/BC workflows.
+- **Telemetry inspection**: Tools in `scripts/telemetry_*` summarise captures; `observer_ui.py` seeds UI scaffolding.
+- **Observability**: Telemetry health metrics include queue depth, dropped messages, perturbation counts, employment exit queue size; output stored under `logs/`.
+
+Future operational enhancements should instrument telemetry transport TLS, automate CLI validation tests, and harden dynamic hook imports.

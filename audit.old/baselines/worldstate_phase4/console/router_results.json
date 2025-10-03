@@ -1,0 +1,35 @@
+[
+  {
+    "command": {
+      "name": "employment_exit",
+      "args": [
+        "review"
+      ],
+      "kwargs": {}
+    },
+    "result": {
+      "pending": [],
+      "pending_count": 0,
+      "exits_today": 0,
+      "daily_exit_cap": 2,
+      "queue_limit": 8,
+      "review_window": 1440
+    }
+  },
+  {
+    "command": {
+      "name": "employment_exit",
+      "args": [
+        "approve",
+        "alice#2"
+      ],
+      "kwargs": {
+        "cmd_id": "phase4-approve"
+      }
+    },
+    "result": {
+      "approved": true,
+      "agent_id": "alice#2"
+    }
+  }
+]

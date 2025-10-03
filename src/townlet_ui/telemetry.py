@@ -164,6 +164,13 @@ class PolicyInspectorEntry:
 
 
 @dataclass(frozen=True)
+class PriceSpikeEntry:
+    event_id: str
+    magnitude: float
+    targets: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class AnnealStatus:
     stage: str
     cycle: float | None
@@ -243,6 +250,9 @@ class TelemetrySnapshot:
     kpis: Mapping[str, list[float]]
     transport: TransportStatus
     health: HealthStatus | None
+    economy_settings: Mapping[str, float]
+    price_spikes: tuple[PriceSpikeEntry, ...]
+    utilities: Mapping[str, bool]
     raw: Mapping[str, Any]
 
 
@@ -289,6 +299,52 @@ class TelemetryClient:
         relationship_updates_payload = payload.get("relationship_updates", [])
         narrations_payload = payload.get("narrations", [])
         narration_state_payload = payload.get("narration_state", {})
+
+        economy_settings_payload = payload.get("economy_settings", {})
+        if isinstance(economy_settings_payload, Mapping):
+            economy_settings = {
+                str(key): float(value)
+                for key, value in economy_settings_payload.items()
+                if isinstance(value, (int, float)) or _maybe_float(value) is not None
+            }
+            # handle non numeric values gracefully
+            for key, value in economy_settings_payload.items():
+                if key not in economy_settings:
+                    try:
+                        economy_settings[str(key)] = float(value)
+                    except (TypeError, ValueError):
+                        economy_settings[str(key)] = 0.0
+        else:
+            economy_settings = {}
+
+        utilities_payload = payload.get("utilities", {})
+        if isinstance(utilities_payload, Mapping):
+            utilities = {str(key): bool(value) for key, value in utilities_payload.items()}
+        else:
+            utilities = {}
+
+        price_spikes_payload = payload.get("price_spikes", {})
+        price_spikes: list[PriceSpikeEntry] = []
+        if isinstance(price_spikes_payload, Mapping):
+            for event_id, data in price_spikes_payload.items():
+                if not isinstance(data, Mapping):
+                    continue
+                magnitude = float(_maybe_float(data.get("magnitude")) or 0.0)
+                targets_field = data.get("targets", ())
+                if isinstance(targets_field, (list, tuple)):
+                    targets = tuple(str(target) for target in targets_field)
+                elif targets_field is None:
+                    targets = tuple()
+                else:
+                    targets = (str(targets_field),)
+                price_spikes.append(
+                    PriceSpikeEntry(
+                        event_id=str(event_id),
+                        magnitude=magnitude,
+                        targets=targets,
+                    )
+                )
+
 
         employment = EmploymentMetrics(
             pending=list(employment_payload.get("pending", [])),
@@ -683,6 +739,9 @@ class TelemetryClient:
             kpis=kpi_history,
             transport=transport,
             health=health_snapshot,
+            economy_settings=economy_settings,
+            price_spikes=tuple(price_spikes),
+            utilities=utilities,
             raw=dict(payload),
         )
 

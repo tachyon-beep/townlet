@@ -1,18 +1,27 @@
 # Quick Wins
 
-Ranked by highest impact-to-effort ratio (eligible tasks require < 1 day of work and deliver high or medium impact).
+These tasks deliver meaningful improvements within a day while aligning with the broader work packages.
 
-1. **WP-002: Sandbox Snapshot & Console File Operations**  
-   - Effort: XS (<2hrs)  
-   - Impact: High (prevents arbitrary file read/write)  
-   - ROI: **5/5** — simple guardrails eliminate a major security exposure immediately.
+## WP-103: Expose Telemetry Buffer Health & Dropped Payload Alerts
+- Impact: High (restores observability for transport failures)
+- Effort: S (2-8hrs)
+- ROI: High
+- Rationale: One-day change surfaces existing drop counters through health payloads and console alerts, preventing silent data loss.
 
-2. **WP-006: Defensive Copying in World Snapshots**  
-   - Effort: S (single sprint day)  
-   - Impact: Medium (removes class of heisenbugs and telemetry-induced corruption)  
-   - ROI: **4/5** — targeted code change with high stability payoff.
+## WP-105: Implement Compact Observation Variant
+- Impact: Medium (unblocks compact-observation experiments)
+- Effort: S (2-8hrs)
+- ROI: High
+- Rationale: Completing the TODO converts placeholder tensors into actionable inputs, unlocking config variants without touching core loop.
 
-3. **WP-007: Add Health Monitoring & Structured Logging**  
-   - Effort: S (single sprint day)  
-   - Impact: Medium (improves incident detection and debugging speed)  
-   - ROI: **4/5** — lightweight instrumentation yields immediate operational visibility.
+## WP-108: Adopt Structured Logging for Stability & Telemetry
+- Impact: Medium (makes tick health machine-readable)
+- Effort: S (2-8hrs)
+- ROI: Medium
+- Rationale: Key/value logs immediately enable log aggregation tooling and faster incident triage.
+
+## WP-110: Raise Documentation & Docstring Coverage
+- Impact: Medium (improves developer velocity)
+- Effort: S (2-8hrs)
+- ROI: Medium
+- Rationale: Targeted docstrings across exported APIs reduce onboarding time and future review churn with low implementation cost.

@@ -24,7 +24,8 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     loop = SimulationLoop(config=config)
-    loop.run(max_ticks=args.ticks)
+    for _ in loop.run(max_ticks=args.ticks):
+        pass
 
 
 if __name__ == "__main__":
