@@ -37,6 +37,7 @@
 - Prefer staging refactor changes behind short-lived feature branches to keep rebases manageable.
 - Capture before/after telemetry snapshots when extracting subsystems to detect behavioural drift early.
 - Temporary DEBUG instrumentation has landed in `resolve_affordances`/`_dispatch_affordance_hooks`; coordinate before altering those code paths so timing probes remain consistent through Phase 3.
+- October 2025 update: Observation builders now construct per-tick caches (agent/object/reservation lookup) so `local_view` scopes run in O(radius²) instead of O(n_agents). Compact variant metadata carries `local_summary` totals for downstream debug tooling.
 
 _Last updated: Phase 0 instrumentation refresh (2025-10-03)._
 

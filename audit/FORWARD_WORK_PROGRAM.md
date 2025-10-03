@@ -20,11 +20,11 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Affected Components**: `src/townlet/observations/builder.py`, `tests/test_observation_builder_compact.py`, `docs/design/OBSERVATION_TENSOR_SPEC.md`, `tests/test_reward_engine.py`.
 - **Validation**: `pytest tests/test_observation_builder_compact.py tests/test_observation_builder.py tests/test_reward_engine.py`.
 
-## FWP-04 Optimize Performance for Longer Runs
-- **Fix / Change**: Remove O(n²) local-view scans by caching spatial indices; share observation inputs across agents where possible.
-- **Risks**: Cache invalidation bugs leading to stale world views; increased memory usage; interplay with queue manager and hooks must remain correct.
-- **Affected Components**: `src/townlet/world/grid.py`, `src/townlet/observations/builder.py`, `src/townlet/world/queue_manager.py`, profiling scripts under `scripts/benchmark_tick.py`.
-- **Validation**: Microbenchmarks for tick throughput, soak tests (`scripts/run_mixed_soak.py`), ensure deterministic outputs remain unchanged.
+## FWP-04 Optimize Performance for Longer Runs *(Completed)*
+- **Fix / Change**: Observation builder now caches agent/object/reservation lookups per tick and reuses them to build map tensors and local summaries in O(radius²). Compact metadata exposes `local_summary` for debugging.
+- **Risks**: Cache rebuild happens once per batch; regenerate caches if future workflows mutate agents mid-build. Telemetry stdout still noisy unless muted via CLI flags.
+- **Affected Components**: `src/townlet/observations/builder.py`, `tests/test_observation_builder*.py`, `docs/engineering/WORLDSTATE_REFACTOR.md`.
+- **Validation**: `pytest tests/test_observation_builder.py tests/test_observation_builder_compact.py tests/test_run_simulation_cli.py tests/test_training_cli.py`; ad-hoc timing showed ~226 → ~395 ticks/sec (10 agents) improvement in quick benchmark.
 
 ## FWP-05 Telemetry Reliability & Diff Streaming
 - **Fix / Change**: Introduce diff or channel-filtered telemetry payloads, surface queue length and worker health metrics, and refine buffering.
