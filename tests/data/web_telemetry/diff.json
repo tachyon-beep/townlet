@@ -1,0 +1,214 @@
+{
+  "payload_type": "diff",
+  "schema_version": "0.9.7",
+  "tick": null,
+  "changes": {
+    "economy": {
+      "shower_1": {
+        "type": "shower",
+        "stock": {
+          "power_on": 1,
+          "water_on": 1
+        }
+      },
+      "bed_1": {
+        "type": "bed",
+        "stock": {
+          "sleep_slots": 1,
+          "sleep_capacity": 1
+        }
+      },
+      "fridge_1": {
+        "type": "fridge",
+        "stock": {
+          "meals": 5
+        }
+      }
+    },
+    "employment": {
+      "pending": [],
+      "pending_count": 0,
+      "exits_today": 0,
+      "daily_exit_cap": 2,
+      "queue_limit": 8,
+      "review_window": 1440
+    },
+    "conflict": {
+      "queues": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_history": [
+        {
+          "tick": 1,
+          "delta": {
+            "cooldown_events": 0,
+            "ghost_step_events": 0,
+            "rotation_events": 0
+          },
+          "totals": {
+            "cooldown_events": 0,
+            "ghost_step_events": 0,
+            "rotation_events": 0
+          }
+        }
+      ],
+      "rivalry": {},
+      "rivalry_events": []
+    },
+    "relationships": {
+      "window_start": 0,
+      "window_end": 600,
+      "total": 0,
+      "owners": {},
+      "reasons": {},
+      "history": []
+    },
+    "relationship_summary": {
+      "churn": {
+        "window_start": 0,
+        "window_end": 600,
+        "total": 0,
+        "owners": {},
+        "reasons": {},
+        "history": []
+      }
+    },
+    "policy_identity": {
+      "config_id": "v1.3.0",
+      "policy_hash": null,
+      "observation_variant": "hybrid",
+      "anneal_ratio": null
+    },
+    "affordance_manifest": {
+      "path": "configs/affordances/core.yaml",
+      "checksum": "227b9902504bd06b6d2b2abe6409a1c34f41fcc632c4d160ac8190e7311452cb",
+      "object_count": 3,
+      "affordance_count": 4
+    },
+    "affordance_runtime": {
+      "tick": 1,
+      "running_count": 0,
+      "running": {},
+      "active_reservations": {},
+      "event_counts": {
+        "start": 0,
+        "finish": 0,
+        "fail": 0,
+        "precondition_fail": 0
+      }
+    },
+    "stability": {
+      "alerts": [],
+      "metrics": {
+        "starvation_incidents": 0,
+        "starvation_window_ticks": 1000,
+        "option_switch_rate": 0.0,
+        "option_samples": 1,
+        "reward_variance": null,
+        "reward_mean": null,
+        "reward_samples": 0,
+        "queue_totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "queue_deltas": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "rivalry_events": [],
+        "alerts": [],
+        "thresholds": {
+          "affordance_fail_threshold": 5,
+          "lateness_threshold": 3,
+          "starvation": {
+            "window_ticks": 1000,
+            "max_incidents": 0,
+            "hunger_threshold": 0.05,
+            "min_duration_ticks": 30
+          },
+          "reward_variance": {
+            "window_ticks": 1000,
+            "max_variance": 0.25,
+            "min_samples": 20
+          },
+          "option_thrash": {
+            "window_ticks": 600,
+            "max_switch_rate": 0.25,
+            "min_samples": 10
+          }
+        },
+        "promotion": {
+          "window_start": 0,
+          "window_end": 1000,
+          "window_ticks": 1000,
+          "pass_streak": 0,
+          "required_passes": 2,
+          "candidate_ready": false,
+          "last_result": null,
+          "last_evaluated_tick": null
+        },
+        "promotion_state": {
+          "state": "monitoring",
+          "pass_streak": 0,
+          "required_passes": 2,
+          "candidate_ready": false,
+          "candidate_ready_tick": null,
+          "last_result": null,
+          "last_evaluated_tick": null,
+          "current_release": {
+            "config_id": "v1.3.0"
+          },
+          "initial_release": {
+            "config_id": "v1.3.0"
+          },
+          "candidate": null,
+          "history": []
+        }
+      },
+      "promotion_state": {
+        "state": "monitoring",
+        "pass_streak": 0,
+        "required_passes": 2,
+        "candidate_ready": false,
+        "candidate_ready_tick": null,
+        "last_result": null,
+        "last_evaluated_tick": null,
+        "current_release": {
+          "config_id": "v1.3.0"
+        },
+        "initial_release": {
+          "config_id": "v1.3.0"
+        },
+        "candidate": null,
+        "history": []
+      }
+    },
+    "transport": {
+      "connected": false,
+      "dropped_messages": 0,
+      "last_error": null,
+      "last_failure_tick": null,
+      "last_success_tick": null,
+      "queue_length": 1,
+      "last_flush_duration_ms": null,
+      "tls_enabled": false,
+      "verify_hostname": true,
+      "allow_plaintext": false,
+      "worker_alive": true
+    },
+    "health": {
+      "tick": 1,
+      "tick_duration_ms": 0.2281769411638379,
+      "telemetry_queue": 1,
+      "telemetry_dropped": 0,
+      "perturbations_pending": 0,
+      "perturbations_active": 0,
+      "employment_exit_queue": 0
+    }
+  },
+  "removed": []
+}

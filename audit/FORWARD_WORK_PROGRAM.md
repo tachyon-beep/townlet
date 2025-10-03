@@ -38,11 +38,82 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Affected Components**: `src/townlet_ui/dashboard.py`, `scripts/observer_ui.py`, `tests/test_dashboard_panels.py`, `tests/test_observer_ui_dashboard.py`, docs (`docs/design/DASHBOARD_UI_ENHANCEMENT.md`, `docs/guides/OBSERVER_UI_GUIDE.md`).
 - **Validation**: `pytest tests/test_dashboard_panels.py tests/test_observer_ui_dashboard.py tests/test_observer_ui_script.py`; manual `scripts/observer_ui.py --config configs/examples/poc_hybrid.yaml --ticks 10 --refresh 0.5` smoke run.
 
-## FWP-07 Decide on Web GUI vs. Console
-- **Fix / Change**: Decide whether to invest in a lightweight web observer, capturing requirements (audio cues, accessibility, remote viewing) and, if proceeding, outline telemetry bridge and deployment plan.
-- **Risks**: Parallel UI stacks risk diverging UX and doubling maintenance; web stack introduces auth/sandbox concerns.
-- **Affected Components**: Decision record under `docs/program_management/`, potential new `townlet_web/` prototype, ops guide updates if web UI lands.
-- **Validation**: Documented decision + spike results; if approved, initial telemetry echo test from browser.
+## FWP-07 Decide on Web GUI vs. Console *(In Progress – Web UI Chosen)*
+- **Fix / Change**: Proceed with a two-tier web experience: (1) a lightweight read-only spectator UI for demos and remote viewing, and (2) a richer operator console mirroring/augmenting the Rich dashboard (command palette, palette queue, perturbation controls). Establish a shared telemetry bridge (WebSocket + diff snapshots) and UI design tokens to keep parity with the console.
+- **Risks**: Dual UI surfaces must stay in sync; authentication/authorization for operator view required; browser rendering load must not exceed telemetry cadence; need to budget for accessibility (audio cues, high-contrast mode) to avoid regressions.
+- **Affected Components**: New `townlet_web/` package (React/Vite or similar), telemetry gateway service (FastAPI/FastAPI WebSocket), deployment scripts under `scripts/` or `infra/`, docs updates (`docs/design/WEB_UI_ROADMAP.md`, operator handbook), potential adjustments to `townlet_ui/telemetry.py` for JSON schemas.
+- **Validation**: Spike deliverables—telemetry echo in browser and parity checklist vs. Rich dashboard; end-to-end smoke test capturing command dispatch from operator UI; load test of spectator client at demo scale; documentation of rollout plan and fallback (console) procedure.
+
+### Execution Plan
+
+| Milestone | Phase | Goal | Key Deliverables |
+|-----------|-------|------|------------------|
+| **M0 – Risk Reduction & Foundations** | Phase 0.1 Telemetry Contract | Lock down JSON schema for web transport | Versioned schema doc, unit tests, diff replay fixtures |
+| | Phase 0.2 Security & Ops | Baseline auth decision, threat model | Auth requirement brief, OWASP checklist, ops runbook outline |
+| | Phase 0.3 UX Alignment | Shared design tokens & layout skeletons | Figma/MD components, console parity checklist |
+| **M1 – Spectator Web Viewer MVP** | Phase 1.1 Transport Gateway | WebSocket bridge serving snapshots/diffs | FastAPI service, integration tests |
+| | Phase 1.2 Frontend Shell | Static viewer (tick header, agent KPIs, narration feed) | React/Vite project, Storybook stories |
+| | Phase 1.3 Demo Hardening | Deployable container + CDN caching | Dockerfile, Terraform/Helm stub, latency metrics |
+| **M2 – Operator Console Parity** | Phase 2.1 Command Dispatch | Secure palette queue, command status feed | Web UI command panel, e2e dispatch tests |
+| | Phase 2.2 Perturbation & Overlay Panels | Interactive overlays mirroring Rich dashboard | Components + snapshot tests |
+| | Phase 2.3 Accessibility & Audio | Screen-reader labels, audio cues | WCAG checklist, audio toggle docs |
+| **M3 – Production Readiness** | Phase 3.1 Load & Chaos | Multi-client soak, failover drills | k6 report, chaos test logs |
+| | Phase 3.2 Rollout & Training | Ops handbook, feature flags | Updated operator guide, go/no-go checklist |
+
+#### Milestone 0 Tasks (Risk Reduction)
+- [x] Establish telemetry schema contract (diff payload examples, versioning strategy, backward-compat tests).
+- [x] Author security baseline: auth provider selection (e.g., Auth0 / OAuth proxy), session handling, CSRF plan.
+- [x] Draft threat model & mitigations (XSS, WS hijacking, replay, DoS) with mitigation tickets.
+- [x] Produce shared design tokens (colours, typography, spacing) and UI parity matrix vs. Rich dashboard panels.
+- [x] Build mocked telemetry fixtures for web prototyping (JSON replay, WebSocket simulator).
+- [x] Spin up CI scaffold for `townlet_web` (lint, unit, smoke jobs) using placeholder app to validate pipeline.
+- [x] Document rollback/fallback plan to Rich console if web stack unavailable.
+
+#### Risk Mitigation Strategy
+1. **Parity Drift** – Maintain automated parity tests comparing web snapshots to Rich dashboard render expectations; enforce shared schema via typed client. (Milestone 0: schema contract + design tokens)
+2. **Security/Access Control** – Integrate auth at gateway before feature work; apply least-privilege scopes for operator actions. (Milestone 0: security baseline, threat model)
+3. **Performance/Lag** – Benchmark WebSocket throughput early, introduce adaptive throttling & caching. (Milestone 0: mocked telemetry fixtures for load testing)
+4. **Accessibility** – Bake accessibility requirements into tokens/components before UI build to avoid retrofits. (Milestone 0: design tokens & parity matrix)
+5. **Operational Complexity** – Prepare deployment templates and rollback plan before MVP launch. (Milestone 0: CI scaffold, rollback doc)
+
+### Milestone 1 Detailed Plan – Spectator Web Viewer MVP
+
+**Phase 1.1 – Transport Gateway**
+- Tasks
+  - [ ] Draft API contract for `/ws/telemetry` (handshake params, heartbeat cadence).
+  - [ ] Implement FastAPI-based gateway translating internal pub/sub queue to WebSocket (snapshot + diff streaming).
+  - [ ] Add tick monotonicity & auth stubs (spectator mode: optional token, operator mode: rejected).
+  - [ ] Write integration test harness replaying fixtures from `tests/data/web_telemetry` and asserting client merge parity.
+  - [ ] Instrument gateway with Prometheus metrics (connected clients, messages/sec).
+- Dependencies: Milestone 0 schema fixtures, existing telemetry publisher.
+- Exit Criteria: Gateway runs locally via `uvicorn`, passes integration tests, emits metrics; documented in `docs/design/WEB_TELEMETRY_SCHEMA.md` appendix.
+
+**Phase 1.2 – Frontend Shell**
+- Tasks
+  - [ ] Scaffold React/Vite app (TypeScript) using tokens from `docs/design/web_ui_tokens.json`.
+  - [ ] Implement telemetry client hook applying diff merges (unit tests with Jest using fixtures).
+  - [ ] Build core read-only components: header status bar, agent KPI grid (summary only), narration list, perturbation banner.
+  - [ ] Set up Storybook/Chromatic to capture component snapshots.
+  - [ ] Add accessibility smoke tests (axe-core) for key screens.
+- Dependencies: tokens, parity checklist, gateway contract (mocked if gateway not ready).
+- Exit Criteria: `npm run build` produces static bundle; Storybook stories for each component; CI runs lint/test/build.
+
+**Phase 1.3 – Demo Hardening**
+- Tasks
+  - [ ] Containerize gateway + static frontend (Dockerfile + docker-compose sample).
+  - [ ] Create Helm (or Terraform) stub for demo deployment with config toggles (spectator URL, rate limits).
+  - [ ] Add CDN caching headers for spectator assets; ensure no caching of auth endpoints (future operator view).
+  - [ ] Run k6 (or Locust) load test simulating 50 concurrent spectators, collect latency metrics.
+  - [ ] Document deployment/runbook in `docs/ops/WEB_SPECTATOR_DEPLOY.md`.
+- Dependencies: Gateway & frontend phases complete; ops baseline from Milestone 0.
+- Exit Criteria: Container images build in CI; load test report meets <250 ms p95 update latency; deployment guide published.
+
+### Milestone 2 Detailed Plan – Operator Console Parity
+(to begin after Milestone 1)
+- **Phase 2.1 Command Dispatch** – Implement authenticated WebSocket channels for command palette, mirror console queue status/history, add e2e tests dispatching against a sandbox SimulationLoop.
+- **Phase 2.2 Perturbation & Overlay Panels** – Render interactive overlays (relationships, social, KPIs) using parity checklist; write snapshot/unit tests.
+- **Phase 2.3 Accessibility & Audio** – Add keyboard navigation, ARIA labels, optional audio cues consistent with console docs.
+- Exit Criteria: Operator UI achieves parity checklist, passes e2e command dispatch test suite, accessibility audit complete.
 
 ## FWP-08 Demo Scenario Scripting & QA
 - **Fix / Change**: Script a narrative-driven demo using `DemoScheduler`, rehearse perturbations/console triggers, and ensure telemetry narrations tell the story.

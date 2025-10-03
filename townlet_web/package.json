@@ -1,0 +1,11 @@
+{
+  "name": "townlet-web",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "lint": "echo 'TODO: add eslint/pnpm lint'",
+    "test": "node ./scripts/smoke.js",
+    "build": "echo 'TODO: build spectator bundle'"
+  },
+  "devDependencies": {}
+}

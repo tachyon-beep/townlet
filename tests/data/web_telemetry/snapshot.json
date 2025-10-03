@@ -1,0 +1,108 @@
+{
+  "schema_version": "0.9.7",
+  "schema_warning": null,
+  "console_commands": {
+    "relationship_summary": {
+      "mode": "viewer",
+      "usage": "relationship_summary",
+      "description": "Return per-agent friends/rivals plus churn aggregates"
+    },
+    "relationship_detail": {
+      "mode": "admin",
+      "usage": "relationship_detail <agent_id>",
+      "description": "Inspect detailed ledger ties and recent updates for an agent"
+    },
+    "social_events": {
+      "mode": "viewer",
+      "usage": "social_events [--limit N]",
+      "description": "List recent chat and rivalry avoidance events (newest first)"
+    }
+  },
+  "jobs": {},
+  "economy": {},
+  "economy_settings": {
+    "meal_cost": 0.4,
+    "cook_energy_cost": 0.05,
+    "cook_hygiene_cost": 0.02,
+    "wage_income": 0.02,
+    "ingredients_cost": 0.15,
+    "stove_stock_replenish": 2.0
+  },
+  "price_spikes": {},
+  "utilities": {
+    "power": true,
+    "water": true
+  },
+  "employment": {},
+  "conflict": {
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "queue_history": [],
+    "rivalry": {},
+    "rivalry_events": []
+  },
+  "relationships": {},
+  "relationship_snapshot": {},
+  "relationship_updates": [],
+  "relationship_summary": {},
+  "social_events": [],
+  "events": [],
+  "narrations": [],
+  "narration_state": {
+    "last_category_tick": {},
+    "last_global_tick": -10000,
+    "recent_entries": {},
+    "window_emissions": []
+  },
+  "anneal_status": null,
+  "policy_snapshot": {},
+  "policy_identity": {},
+  "snapshot_migrations": [],
+  "affordance_manifest": {},
+  "affordance_runtime": {
+    "tick": 0,
+    "running_count": 0,
+    "running": {},
+    "active_reservations": {},
+    "event_counts": {
+      "start": 0,
+      "finish": 0,
+      "fail": 0,
+      "precondition_fail": 0
+    }
+  },
+  "reward_breakdown": {},
+  "stability": {
+    "alerts": [],
+    "metrics": {},
+    "promotion_state": null
+  },
+  "perturbations": {
+    "active": {},
+    "pending": [],
+    "cooldowns": {
+      "spec": {},
+      "agents": {}
+    }
+  },
+  "transport": {
+    "connected": false,
+    "dropped_messages": 0,
+    "last_error": null,
+    "last_failure_tick": null,
+    "last_success_tick": null,
+    "queue_length": 0,
+    "last_flush_duration_ms": null,
+    "tls_enabled": false,
+    "verify_hostname": true,
+    "allow_plaintext": false,
+    "worker_alive": true
+  },
+  "health": {},
+  "console_results": [],
+  "possessed_agents": [],
+  "precondition_failures": []
+}
