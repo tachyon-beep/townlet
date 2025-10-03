@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  telemetry-gateway:
+    build:
+      context: .
+      dockerfile: townlet_web/Dockerfile
+    environment:
+      WEB_OBSERVER_ENABLED: "1"
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./tests/data/web_telemetry:/app/tests/data/web_telemetry:ro
+    command: ["uvicorn", "townlet.web.gateway:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+  static-viewer:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./townlet_web/dist:/usr/share/nginx/html:ro
+      - ./infra/nginx/spectator.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"

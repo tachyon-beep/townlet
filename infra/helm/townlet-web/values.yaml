@@ -1,0 +1,27 @@
+image:
+  repository: ghcr.io/townlet/townlet-web
+  tag: latest
+  pullPolicy: IfNotPresent
+
+gateway:
+  enabled: true
+  replicaCount: 1
+  resources: {}
+  env:
+    WEB_OBSERVER_ENABLED: "1"
+  service:
+    type: ClusterIP
+    port: 8000
+
+spectator:
+  enabled: true
+  replicaCount: 1
+  resources: {}
+  service:
+    type: ClusterIP
+    port: 80
+  cacheControl: "public, max-age=600"
+
+rateLimits:
+  connectionsPerIp: 50
+  burstPerMinute: 600

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "townlet-web.fullname" . }}-spectator-config
+  labels:
+    app: {{ include "townlet-web.name" . }}
+    component: spectator
+data:
+  default.conf: |
+    server {
+      listen 80;
+      location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
+        add_header Cache-Control "{{ .Values.spectator.cacheControl }}";
+      }
+      location /ws/telemetry {
+        proxy_pass http://{{ include "townlet-web.fullname" . }}-gateway:{{ .Values.gateway.service.port }}/ws/telemetry;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        add_header Cache-Control "no-store";
+      }
+      location /metrics {
+        proxy_pass http://{{ include "townlet-web.fullname" . }}-gateway:{{ .Values.gateway.service.port }}/metrics;
+        add_header Cache-Control "no-store";
+      }
+    }
