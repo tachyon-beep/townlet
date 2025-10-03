@@ -2,11 +2,11 @@
 
 Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, this document re-casts each forward work package with actionable detail, risk highlights, and the primary components we expect to modify.
 
-## FWP-01 Restore Simulation Loop Execution & Smoke Tests
-- **Fix / Change**: Ensure `scripts/run_simulation.py` actually iterates the simulation loop (e.g. invoke `SimulationLoop.run()` or a new `run_for_ticks()` helper). Add a CLI smoke test that asserts ticks advance and telemetry is emitted.
-- **Risks**: Regression in existing CLI behaviour; potential infinite loops if termination conditions mishandled; increased CI time due to new smoke test.
-- **Affected Components**: `scripts/run_simulation.py`, `src/townlet/core/sim_loop.py`, `tests/test_run_simulation_cli.py`, telemetry fixtures in `tests/test_console_dispatcher.py`.
-- **Validation**: Run smoke CLI test, targeted telemetry tests, and ensure `pytest -k run_simulation_cli` passes in CI.
+## FWP-01 Restore Simulation Loop Execution & Smoke Tests *(Completed)*
+- **Fix / Change**: CLI now runs `loop.run_for(...)`, closes telemetry, reports tick statistics, and exposes `--stream-telemetry` / `--telemetry-path` flags for output control. Smoke tests cover default, streaming, and file sink cases.
+- **Risks**: Verified minimal—default runs stay quiet, telemetry flags tested; no outstanding issues.
+- **Affected Components**: `scripts/run_simulation.py`, `tests/test_run_simulation_cli.py`, quickstart docs (`README.md`, `docs/guides/CONSOLE_DRY_RUN.md`).
+- **Validation**: `pytest tests/test_run_simulation_cli.py`; manual runs for default, `--stream-telemetry`, and `--telemetry-path` modes.
 
 ## FWP-02 Strengthen Core Loop Stability with Tests
 - **Fix / Change**: Add end-to-end CLI tests for simulation and training flows; introduce a safe wrapper such as `SimulationLoop.run_for_ticks()`; update docs on recommended usage.
@@ -79,4 +79,3 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Risks**: Schedule pressure as this work is open-ended; risk of chasing emergent edge cases; documentation drift if not maintained.
 - **Affected Components**: Cross-cutting (reward configs, telemetry KPIs, docs in `docs/ops/`, `docs/program_management/`), CI scripts.
 - **Validation**: Extended soak tests (`pytest -m slow` where applicable), KPI monitoring, final doc review.
-

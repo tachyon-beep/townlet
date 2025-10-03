@@ -25,6 +25,7 @@
   ```
 - Commands executed via Python harness (simulating Typer CLI integration until CLI ships).
 - Run `source .venv/bin/activate && PYTHONPATH=src python scripts/console_dry_run.py` (script below) or follow manual steps.
+- For a headless check before launching the dashboard, run `python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 50`. Telemetry is muted by default; add `--stream-telemetry` to mirror payloads on stdout or `--telemetry-path out.jsonl` to capture them for later inspection.
 
 ## Manual Command Script (Python)
 ```python

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,17 +16,21 @@ def test_run_simulation_cli_iterates_ticks(monkeypatch):
         def __init__(self, config):
             self.config = config
             self.iterations = 0
+            self.tick = 0
+            self.telemetry = type("TelemetryStub", (), {"close": staticmethod(lambda: None)})()
             instances.append(self)
 
         def run(self, max_ticks=None):
             ticks = int(max_ticks or 0)
             for _ in range(ticks):
                 self.iterations += 1
+                self.tick += 1
                 yield None
 
         def run_for(self, max_ticks: int) -> None:
             for _ in range(int(max_ticks)):
                 self.iterations += 1
+                self.tick += 1
 
     monkeypatch.setattr(run_simulation, "SimulationLoop", StubLoop)
 
@@ -44,3 +49,76 @@ def test_simulation_loop_run_for_advances_ticks():
     loop = SimulationLoop(config)
     loop.run_for(2)
     assert loop.tick == 2
+
+
+def test_run_simulation_cli_smoke(tmp_path):
+    config_path = Path("configs/examples/poc_hybrid.yaml")
+    result = subprocess.run(
+        [sys.executable, "scripts/run_simulation.py", str(config_path), "--ticks", "5"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "Completed 5 ticks" in result.stdout
+    assert "schema_version" not in result.stdout
+
+
+def test_run_simulation_cli_streams_when_requested():
+    config_path = Path("configs/examples/poc_hybrid.yaml")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_simulation.py",
+            str(config_path),
+            "--ticks",
+            "2",
+            "--stream-telemetry",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "schema_version" in result.stdout
+    assert "Completed 2 ticks" in result.stdout
+
+
+def test_run_simulation_cli_writes_telemetry_file(tmp_path):
+    config_path = Path("configs/examples/poc_hybrid.yaml")
+    telemetry_path = tmp_path / "telemetry.jsonl"
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_simulation.py",
+            str(config_path),
+            "--ticks",
+            "3",
+            "--telemetry-path",
+            str(telemetry_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert telemetry_path.exists()
+    contents = telemetry_path.read_text()
+    assert "schema_version" in contents
+
+
+def test_run_simulation_cli_stream_and_path_are_mutually_exclusive():
+    config_path = Path("configs/examples/poc_hybrid.yaml")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_simulation.py",
+            str(config_path),
+            "--ticks",
+            "1",
+            "--stream-telemetry",
+            "--telemetry-path",
+            str(config_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "cannot be combined" in result.stderr

@@ -47,8 +47,9 @@ Townlet is a small-town life simulation that explores emergent behaviour in a po
 3. Explore config examples in `configs/examples/` and align `config_id` before running simulations.
 4. Execute a short simulation loop to sanity-check behaviour:
    ```bash
-   python scripts/run_simulation.py --config configs/examples/base.yml --ticks 100
+   python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 100
    ```
+   The runner now reports how many ticks completed and the effective tick rate. Telemetry is muted by default; add `--stream-telemetry` to mirror the live stream on stdout or `--telemetry-path` to write it to a file.
 
 Implementation TODOs are captured with `# TODO(@townlet)` markers inside the package. Each module outlines its responsibilities, inputs, and integration points with the rest of the system.
 
