@@ -1,6 +1,11 @@
 from dataclasses import replace
 from pathlib import Path
 
+import json
+import threading
+
+import pytest
+
 from townlet.config import (
     ArrangedMeetEventConfig,
     FloatRange,
@@ -15,6 +20,150 @@ from townlet.snapshots import SnapshotManager
 from townlet.snapshots.migrations import clear_registry, register_migration
 from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import AgentSnapshot
+from townlet_ui.commands import (
+    CommandQueueFull,
+    ConsoleCommandExecutor,
+    PaletteCommandRequest,
+)
+
+
+def _load_palette_fixture(name: str) -> dict[str, object]:
+    with Path("tests/data/palette_commands.json").open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    for group in (payload.get("viewer", []), payload.get("admin", []), payload.get("backlog", [])):
+        for entry in group:
+            if entry.get("name") == name:
+                return entry
+    raise KeyError(name)
+
+
+def _load_palette_error_fixture(name: str) -> dict[str, object]:
+    with Path("tests/data/palette_command_errors.json").open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    for entry in payload.get("invalid", []):
+        if entry.get("name") == name:
+            return entry
+    raise KeyError(name)
+
+
+def test_palette_command_request_from_payload_normalises() -> None:
+    payload = _load_palette_fixture("queue_inspect")
+    request = PaletteCommandRequest.from_payload(payload)
+    assert request.name == "queue_inspect"
+    assert request.args == ("coffee_shop_1",)
+    assert request.kwargs == {}
+
+    console_command = request.to_console_command()
+    assert isinstance(console_command, ConsoleCommand)
+    assert console_command.name == request.name
+    assert console_command.args == request.args
+    assert console_command.kwargs == request.kwargs
+
+
+@pytest.mark.parametrize(
+    "payload, message",
+    [
+        ({"args": []}, "name"),
+        ({"name": " ", "args": []}, "name"),
+        ({"name": "test", "args": "invalid"}, "args"),
+        ({"name": "test", "kwargs": "invalid"}, "kwargs"),
+    ],
+)
+def test_palette_command_request_from_payload_validation(payload: dict[str, object], message: str) -> None:
+    with pytest.raises(ValueError) as exc:
+        PaletteCommandRequest.from_payload(payload)
+    assert message in str(exc.value)
+
+
+def test_console_executor_submit_payload_enqueues_and_returns_command() -> None:
+    class _Router:
+        def __init__(self) -> None:
+            self.commands: list[ConsoleCommand] = []
+            self.event = threading.Event()
+
+        def dispatch(self, command: ConsoleCommand) -> None:
+            self.commands.append(command)
+            self.event.set()
+
+    router = _Router()
+    executor = ConsoleCommandExecutor(router)
+    payload = _load_palette_fixture("social_events")
+
+    command = executor.submit_payload(payload)
+    assert router.event.wait(timeout=0.5)
+    assert router.commands == [command]
+
+    executor.shutdown()
+
+
+def test_console_executor_submit_payload_dry_run_only() -> None:
+    class _Router:
+        def __init__(self) -> None:
+            self.commands: list[ConsoleCommand] = []
+            self.event = threading.Event()
+
+        def dispatch(self, command: ConsoleCommand) -> None:
+            self.commands.append(command)
+            self.event.set()
+
+    router = _Router()
+    executor = ConsoleCommandExecutor(router, autostart=False)
+    payload = _load_palette_fixture("social_events")
+
+    command = executor.submit_payload(payload, enqueue=False)
+    assert command.name == "social_events"
+    assert not router.event.wait(timeout=0.1)
+    assert executor.pending_count() == 0
+
+    executor.shutdown()
+
+
+def test_console_executor_queue_limit_guard() -> None:
+    class _Router:
+        def dispatch(self, command: ConsoleCommand) -> None:
+            pass
+
+    router = _Router()
+    executor = ConsoleCommandExecutor(router, autostart=False, max_pending=1)
+    payload = _load_palette_fixture("social_events")
+
+    executor.submit_payload(payload)
+    assert executor.pending_count() == 1
+
+    with pytest.raises(CommandQueueFull):
+        executor.submit_payload(payload)
+
+    executor.shutdown()
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["queue_inspect", "social_events", "set_spawn_delay", "relationship_detail"],
+)
+def test_console_error_fixture_alignment(fixture_name: str) -> None:
+    entry = _load_palette_error_fixture(fixture_name)
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        promotion=loop.promotion,
+        policy=loop.policy,
+        config=config,
+        lifecycle=loop.lifecycle,
+        mode=str(entry.get("mode", "viewer")),
+    )
+
+    command = ConsoleCommand(
+        name=entry["name"],
+        args=tuple(entry.get("args", [])),
+        kwargs=entry.get("kwargs", {}),
+    )
+    result = router.dispatch(command)
+    expected = entry["expected_error"]
+    assert result["error"] == expected["code"]
+    assert result["message"] == expected["message"]
 
 
 def _seed_relationship_state(loop: SimulationLoop) -> None:
@@ -132,6 +281,9 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
     runtime_payload = result.get("affordance_runtime")
     assert isinstance(runtime_payload, dict)
     assert "running_count" in runtime_payload
+    alice_job = result["jobs"]["alice"]
+    assert "needs" in alice_job and isinstance(alice_job["needs"], dict)
+    assert isinstance(result.get("perturbations"), dict)
     command_metadata = result.get("console_commands")
     assert isinstance(command_metadata, dict)
     assert "relationship_summary" in command_metadata

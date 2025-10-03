@@ -1,0 +1,43 @@
+{
+  "viewer": [
+    {
+      "name": "queue_inspect",
+      "args": ["coffee_shop_1"],
+      "kwargs": {}
+    },
+    {
+      "name": "social_events",
+      "args": [],
+      "kwargs": {"limit": 10}
+    }
+  ],
+  "admin": [
+    {
+      "name": "set_spawn_delay",
+      "args": [120],
+      "kwargs": {}
+    },
+    {
+      "name": "perturbation_trigger",
+      "args": ["price_spike"],
+      "kwargs": {"starts_in": 5, "magnitude": 1.2}
+    }
+  ],
+  "backlog": [
+    {
+      "name": "spawn_agent",
+      "args": [],
+      "kwargs": {"template": "default", "spawn_at": "square_1"}
+    },
+    {
+      "name": "set_need",
+      "args": ["alice"],
+      "kwargs": {"need": "hunger", "value": 0.75}
+    },
+    {
+      "name": "force_chat",
+      "args": ["alice", "bob"],
+      "kwargs": {"topic": "gossip"}
+    }
+  ]
+}

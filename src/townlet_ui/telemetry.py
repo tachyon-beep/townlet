@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Iterable, cast
+from typing import Any, cast
 
 
 def _maybe_float(value: object) -> float | None:
@@ -42,6 +42,17 @@ def _coerce_history_entries(value: object) -> tuple[Mapping[str, Any], ...]:
                 entry["previous_release"] = dict(previous_release)
             entries.append(entry)
     return tuple(entries)
+
+
+def _coerce_series(value: object) -> tuple[float, ...]:
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray)):
+        series: list[float] = []
+        for item in value:
+            maybe = _maybe_float(item)
+            if maybe is not None:
+                series.append(maybe)
+        return tuple(series)
+    return ()
 
 
 SUPPORTED_SCHEMA_PREFIX = "0.9"
@@ -134,6 +145,13 @@ class AgentSummary:
     wages_withheld: float
     lateness_counter: int
     on_shift: bool
+    job_id: str | None
+    needs: Mapping[str, float]
+    exit_pending: bool
+    late_ticks_today: int
+    meals_cooked: int
+    meals_consumed: int
+    basket_cost: float
 
 
 @dataclass(frozen=True)
@@ -262,6 +280,21 @@ class PromotionSnapshot:
 
 
 @dataclass(frozen=True)
+class PerturbationSnapshot:
+    active: Mapping[str, Mapping[str, Any]]
+    pending: tuple[Mapping[str, Any], ...]
+    cooldowns_spec: Mapping[str, int]
+    cooldowns_agents: Mapping[str, Mapping[str, int]]
+
+
+@dataclass(frozen=True)
+class TelemetryHistory:
+    needs: Mapping[str, Mapping[str, tuple[float, ...]]]
+    wallet: Mapping[str, tuple[float, ...]]
+    rivalry: Mapping[str, Mapping[str, tuple[float, ...]]]
+
+
+@dataclass(frozen=True)
 class TelemetrySnapshot:
     schema_version: str
     schema_warning: str | None
@@ -287,6 +320,10 @@ class TelemetrySnapshot:
     utilities: Mapping[str, bool]
     relationship_summary: RelationshipSummarySnapshot | None
     social_events: tuple[SocialEventEntry, ...]
+    perturbations: PerturbationSnapshot
+    console_commands: Mapping[str, Mapping[str, Any]]
+    console_results: tuple[Mapping[str, Any], ...]
+    history: TelemetryHistory | None
     raw: Mapping[str, Any]
 
 
@@ -297,8 +334,14 @@ class SchemaMismatchError(RuntimeError):
 class TelemetryClient:
     """Lightweight helper to parse telemetry payloads for the observer UI."""
 
-    def __init__(self, *, expected_schema_prefix: str = SUPPORTED_SCHEMA_PREFIX) -> None:
+    def __init__(
+        self,
+        *,
+        expected_schema_prefix: str = SUPPORTED_SCHEMA_PREFIX,
+        history_window: int | None = 30,
+    ) -> None:
         self.expected_schema_prefix = expected_schema_prefix
+        self.history_window = history_window if history_window is None or history_window > 0 else None
 
     def parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:
         """Validate and convert a telemetry payload into dataclasses."""
@@ -335,6 +378,10 @@ class TelemetryClient:
         social_events_payload = payload.get("social_events")
         narrations_payload = payload.get("narrations", [])
         narration_state_payload = payload.get("narration_state", {})
+        perturbations_payload = payload.get("perturbations", {})
+        console_commands_payload = payload.get("console_commands", {})
+        console_results_payload = payload.get("console_results", [])
+        history_payload = payload.get("history")
 
         economy_settings_payload = payload.get("economy_settings", {})
         if isinstance(economy_settings_payload, Mapping):
@@ -370,7 +417,7 @@ class TelemetryClient:
                 if isinstance(targets_field, (list, tuple)):
                     targets = tuple(str(target) for target in targets_field)
                 elif targets_field is None:
-                    targets = tuple()
+                    targets = ()
                 else:
                     targets = (str(targets_field),)
                 price_spikes.append(
@@ -558,6 +605,13 @@ class TelemetryClient:
 
         agents: list[AgentSummary] = []
         for agent_id, info in jobs_payload.items():
+            needs_payload = info.get("needs", {})
+            needs: dict[str, float] = {}
+            if isinstance(needs_payload, Mapping):
+                needs = {
+                    str(key): _coerce_float(value)
+                    for key, value in needs_payload.items()
+                }
             agents.append(
                 AgentSummary(
                     agent_id=agent_id,
@@ -567,6 +621,13 @@ class TelemetryClient:
                     wages_withheld=float(info.get("wages_withheld", 0.0)),
                     lateness_counter=int(info.get("lateness_counter", 0)),
                     on_shift=bool(info.get("on_shift", False)),
+                    job_id=str(info.get("job_id")) if info.get("job_id") else None,
+                    needs=needs,
+                    exit_pending=bool(info.get("exit_pending", False)),
+                    late_ticks_today=int(info.get("late_ticks_today", 0)),
+                    meals_cooked=int(info.get("meals_cooked", 0)),
+                    meals_consumed=int(info.get("meals_consumed", 0)),
+                    basket_cost=_coerce_float(info.get("basket_cost", 0.0)),
                 )
             )
 
@@ -652,6 +713,8 @@ class TelemetryClient:
                 social_events.append(
                     SocialEventEntry(type=event_type, payload=payload_copy)
                 )
+
+        perturbations = self._parse_perturbations(perturbations_payload)
 
         narrations: list[NarrationEntry] = []
         if isinstance(narrations_payload, list):
@@ -815,6 +878,77 @@ class TelemetryClient:
                 raw=dict(health_payload),
             )
 
+        if isinstance(console_commands_payload, Mapping):
+            console_commands = {
+                str(name): dict(meta)
+                for name, meta in console_commands_payload.items()
+                if isinstance(meta, Mapping)
+            }
+        else:
+            console_commands = {}
+
+        console_results: list[Mapping[str, Any]] = []
+        if isinstance(console_results_payload, list):
+            for entry in console_results_payload:
+                if isinstance(entry, Mapping):
+                    console_results.append(dict(entry))
+
+        history_snapshot: TelemetryHistory | None = None
+        if isinstance(history_payload, Mapping) and history_payload:
+            limit = self.history_window
+
+            def _trim(series: tuple[float, ...]) -> tuple[float, ...]:
+                if limit is None or len(series) <= limit:
+                    return series
+                return series[-limit:]
+
+            needs_history: dict[str, Mapping[str, tuple[float, ...]]] = {}
+            needs_section = history_payload.get("needs", {})
+            if isinstance(needs_section, Mapping):
+                for agent_id, values in needs_section.items():
+                    agent_key = str(agent_id)
+                    if isinstance(values, Mapping):
+                        per_need: dict[str, tuple[float, ...]] = {}
+                        for need_name, series_values in values.items():
+                            series = _trim(_coerce_series(series_values))
+                            if series:
+                                per_need[str(need_name)] = series
+                        if per_need:
+                            needs_history[agent_key] = per_need
+                    else:
+                        series = _trim(_coerce_series(values))
+                        if series:
+                            needs_history[agent_key] = {"composite": series}
+
+            wallet_history: dict[str, tuple[float, ...]] = {}
+            wallet_section = history_payload.get("wallet", {})
+            if isinstance(wallet_section, Mapping):
+                for agent_id, values in wallet_section.items():
+                    series = _trim(_coerce_series(values))
+                    if series:
+                        wallet_history[str(agent_id)] = series
+
+            rivalry_history: dict[str, dict[str, tuple[float, ...]]] = {}
+            rivalry_section = history_payload.get("rivalry", {})
+            if isinstance(rivalry_section, Mapping):
+                for key, values in rivalry_section.items():
+                    series = _trim(_coerce_series(values))
+                    if not series:
+                        continue
+                    if isinstance(key, str) and "|" in key:
+                        owner, other = key.split("|", 1)
+                    else:
+                        owner, other = str(key), ""
+                    owner_map = rivalry_history.setdefault(owner, {})
+                    owner_map[other or "*"] = series
+
+            if needs_history or wallet_history or rivalry_history:
+                history_snapshot = TelemetryHistory(
+                    needs=needs_history,
+                    wallet=wallet_history,
+                    rivalry=rivalry_history,
+                )
+
         return TelemetrySnapshot(
             schema_version=schema_version,
             schema_warning=schema_warning,
@@ -840,6 +974,10 @@ class TelemetryClient:
             utilities=utilities,
             relationship_summary=summary_snapshot,
             social_events=tuple(social_events),
+            perturbations=perturbations,
+            console_commands=console_commands,
+            console_results=tuple(console_results),
+            history=history_snapshot,
             raw=dict(payload),
         )
 
@@ -866,6 +1004,69 @@ class TelemetryClient:
         if version.split(".")[0] != self.expected_schema_prefix.split(".")[0]:
             raise SchemaMismatchError(message)
         return message
+
+    def _parse_perturbations(self, payload: object) -> PerturbationSnapshot:
+        if not isinstance(payload, Mapping):
+            return PerturbationSnapshot(
+                active={},
+                pending=(),
+                cooldowns_spec={},
+                cooldowns_agents={},
+            )
+
+        def _to_int(value: object) -> int:
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                candidate = value.strip()
+                if not candidate:
+                    return 0
+                try:
+                    return int(candidate)
+                except ValueError:
+                    return 0
+            return 0
+
+        active_payload = payload.get("active", {})
+        active: dict[str, Mapping[str, Any]] = {}
+        if isinstance(active_payload, Mapping):
+            for event_id, data in active_payload.items():
+                if isinstance(data, Mapping):
+                    active[str(event_id)] = {str(key): value for key, value in data.items()}
+
+        pending_payload = payload.get("pending", [])
+        pending: list[Mapping[str, Any]] = []
+        if isinstance(pending_payload, Iterable):
+            for entry in pending_payload:
+                if isinstance(entry, Mapping):
+                    pending.append({str(key): value for key, value in entry.items()})
+
+        cooldowns_payload = payload.get("cooldowns", {})
+        cooldowns_spec: dict[str, int] = {}
+        cooldowns_agents: dict[str, dict[str, int]] = {}
+        if isinstance(cooldowns_payload, Mapping):
+            spec_section = cooldowns_payload.get("spec", {})
+            if isinstance(spec_section, Mapping):
+                cooldowns_spec = {
+                    str(name): _to_int(value)
+                    for name, value in spec_section.items()
+                }
+            agents_section = cooldowns_payload.get("agents", {})
+            if isinstance(agents_section, Mapping):
+                for agent_id, entries in agents_section.items():
+                    if not isinstance(entries, Mapping):
+                        continue
+                    cooldowns_agents[str(agent_id)] = {
+                        str(key): _to_int(value)
+                        for key, value in entries.items()
+                    }
+
+        return PerturbationSnapshot(
+            active=active,
+            pending=tuple(pending),
+            cooldowns_spec=cooldowns_spec,
+            cooldowns_agents=cooldowns_agents,
+        )
 
     @staticmethod
     def _get_section(payload: Mapping[str, Any], key: str, expected: type) -> Mapping[str, Any]:

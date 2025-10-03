@@ -1,0 +1,42 @@
+{
+  "invalid": [
+    {
+      "name": "queue_inspect",
+      "args": [],
+      "kwargs": {},
+      "expected_error": {
+        "code": "usage",
+        "message": "queue_inspect <object_id>"
+      }
+    },
+    {
+      "name": "social_events",
+      "args": [],
+      "kwargs": {"limit": -1},
+      "expected_error": {
+        "code": "invalid_args",
+        "message": "limit must be non-negative"
+      }
+    },
+    {
+      "name": "set_spawn_delay",
+      "args": ["invalid"],
+      "kwargs": {},
+      "mode": "admin",
+      "expected_error": {
+        "code": "usage",
+        "message": "set_spawn_delay <ticks>"
+      }
+    },
+    {
+      "name": "relationship_detail",
+      "args": ["unknown"],
+      "kwargs": {},
+      "mode": "viewer",
+      "expected_error": {
+        "code": "forbidden",
+        "message": "command requires admin mode"
+      }
+    }
+  ]
+}

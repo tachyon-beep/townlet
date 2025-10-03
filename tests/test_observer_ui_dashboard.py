@@ -13,6 +13,7 @@ from townlet_ui.dashboard import (
     run_dashboard,
     _promotion_border_style,
     _derive_promotion_reason,
+    PaletteState,
 )
 from townlet_ui.telemetry import TelemetryClient, AnnealStatus, PromotionSnapshot
 from rich.console import Console
@@ -74,6 +75,28 @@ def test_render_snapshot_produces_panels() -> None:
         (title or "").startswith("Relationship Overlay") for title in panel_titles
     )
     assert any("Legend" in (title or "") for title in panel_titles)
+
+
+def test_render_snapshot_includes_palette_overlay_when_visible() -> None:
+    loop = make_loop()
+    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    for _ in range(2):
+        loop.step()
+    snapshot = TelemetryClient().from_console(router)
+
+    palette = PaletteState(visible=True, query="queue", mode_filter="viewer")
+    panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00", palette=palette))
+
+    titles = [panel.title or "" for panel in panels]
+    assert any(title == "Command Palette" for title in titles)
+
+    palette_panel = next(panel for panel in panels if (panel.title or "") == "Command Palette")
+    console = Console(record=True, width=100)
+    console.print(palette_panel)
+    rendered = console.export_text().lower()
+    assert "search:" in rendered
+    assert "pending:" in rendered
+    assert "ctrl+p" in rendered
 
 
 def test_run_dashboard_advances_loop(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -957,6 +957,10 @@ class TelemetryPublisher:
                 "absent_shifts_7d": snapshot.absent_shifts_7d,
                 "wages_withheld": snapshot.wages_withheld,
                 "exit_pending": snapshot.exit_pending,
+                "needs": {
+                    str(need): float(value)
+                    for need, value in snapshot.needs.items()
+                },
             }
             for agent_id, snapshot in world.agents.items()
         }

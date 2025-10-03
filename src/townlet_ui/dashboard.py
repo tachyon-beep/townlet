@@ -2,23 +2,29 @@
 
 from __future__ import annotations
 
+import difflib
+import itertools
 import math
 import time
+from dataclasses import dataclass
 from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 import numpy as np
+from rich.columns import Columns
 from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 from townlet.console.handlers import ConsoleCommand
-from townlet_ui.commands import ConsoleCommandExecutor
+from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.telemetry import (
+    AnnealStatus,
+    FriendSummary,
+    PromotionSnapshot,
     RelationshipChurn,
     RelationshipSummarySnapshot,
-    FriendSummary,
     RivalSummary,
     SocialEventEntry,
     TelemetryClient,
@@ -40,8 +46,266 @@ NARRATION_CATEGORY_STYLES: dict[str, tuple[str, str]] = {
     "queue_conflict": ("Queue Conflict", "magenta"),
 }
 
+NEED_SPARK_STYLES: Mapping[str, str] = {
+    "hunger": "magenta",
+    "hygiene": "cyan",
+    "energy": "yellow",
+}
 
-def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> Iterable[Panel]:
+
+@dataclass(frozen=True)
+class PaletteCommandMeta:
+    """Metadata describing a console command for palette display."""
+
+    name: str
+    mode: str
+    usage: str
+    description: str
+
+
+@dataclass
+class PaletteState:
+    """Represents the rendered state of the palette overlay."""
+
+    visible: bool = False
+    query: str = ""
+    mode_filter: str = "all"  # "viewer", "admin", or "all"
+    max_results: int = 7
+    highlight_index: int = 0
+    history_limit: int = 5
+    pending: int = 0
+    status_message: str | None = None
+    status_style: str = "dim"
+
+    def clamp_history(self, window: int | None) -> None:
+        if window is None:
+            return
+        self.history_limit = max(1, window // 2 or 1)
+
+
+def _extract_palette_commands(snapshot: TelemetrySnapshot) -> list[PaletteCommandMeta]:
+    commands: list[PaletteCommandMeta] = []
+    metadata = getattr(snapshot, "console_commands", {})
+    if isinstance(metadata, Mapping):
+        for name, entry in metadata.items():
+            if not isinstance(entry, Mapping):
+                continue
+            mode = str(entry.get("mode", "viewer"))
+            usage = str(entry.get("usage", name))
+            description = str(entry.get("description", "")).strip()
+            commands.append(
+                PaletteCommandMeta(
+                    name=str(name),
+                    mode=mode.lower() or "viewer",
+                    usage=usage,
+                    description=description,
+                )
+            )
+    commands.sort(key=lambda item: item.name)
+    return commands
+
+
+def _score_palette_match(command: PaletteCommandMeta, query: str) -> float:
+    if not query:
+        return 1.0
+    query_norm = query.lower().strip()
+    if not query_norm:
+        return 1.0
+    name_ratio = difflib.SequenceMatcher(None, query_norm, command.name.lower()).ratio()
+    usage_ratio = difflib.SequenceMatcher(None, query_norm, command.usage.lower()).ratio()
+    description_ratio = (
+        difflib.SequenceMatcher(None, query_norm, command.description.lower()).ratio()
+        if command.description
+        else 0.0
+    )
+    return max(name_ratio, usage_ratio, description_ratio * 0.85)
+
+
+def _search_palette_commands(
+    commands: list[PaletteCommandMeta],
+    palette: PaletteState,
+) -> list[PaletteCommandMeta]:
+    filtered: list[tuple[float, PaletteCommandMeta]] = []
+    mode_filter = palette.mode_filter.lower()
+    for command in commands:
+        if mode_filter in {"viewer", "admin"} and command.mode != mode_filter:
+            continue
+        score = _score_palette_match(command, palette.query)
+        filtered.append((score, command))
+    if not filtered:
+        return []
+    filtered.sort(key=lambda item: (-item[0], item[1].name))
+    results = [entry[1] for entry in filtered[: max(1, palette.max_results)]]
+    return results
+
+
+def _format_palette_filter_label(mode_filter: str) -> str:
+    lowered = mode_filter.lower()
+    if lowered == "viewer":
+        return "viewer"
+    if lowered == "admin":
+        return "admin"
+    return "all"
+
+
+def _build_palette_overlay(
+    snapshot: TelemetrySnapshot,
+    palette: PaletteState,
+) -> Panel | None:
+    if not palette.visible:
+        return None
+
+    commands = _extract_palette_commands(snapshot)
+    results = _search_palette_commands(commands, palette)
+    highlight_index = (
+        palette.highlight_index if results else -1
+    )
+    if highlight_index >= len(results):
+        highlight_index = len(results) - 1
+    if highlight_index < 0:
+        highlight_index = 0
+
+    header = Table.grid(expand=True)
+    header.add_column(justify="left")
+    header.add_column(justify="center")
+    header.add_column(justify="right")
+    query_text = palette.query.strip() or "[dim](all commands)[/]"
+    header.add_row(
+        f"[bold]Search:[/bold] {query_text}",
+        f"[bold]Pending:[/bold] {palette.pending}",
+        f"[bold]Filter:[/bold] {_format_palette_filter_label(palette.mode_filter)}",
+    )
+
+    suggestion_table = Table.grid(padding=(0, 1), expand=True)
+    suggestion_table.add_column(width=2)
+    suggestion_table.add_column(ratio=2)
+    suggestion_table.add_column(ratio=3)
+
+    if results:
+        for idx, command in enumerate(results):
+            marker = "›" if idx == highlight_index else " "
+            marker_style = "bold cyan" if idx == highlight_index else "dim"
+            label = f"{command.name} [{command.mode}]"
+            description = command.description or command.usage
+            if idx == highlight_index:
+                label = f"[bold]{label}[/]"
+                description = f"[dim]{description}[/]"
+            suggestion_table.add_row(
+                f"[{marker_style}]{marker}[/]",
+                label,
+                description,
+            )
+    else:
+        suggestion_table.add_row("", "[dim]No commands match current search.[/]", "")
+
+    instructions = Text(
+        "Ctrl+P toggle • Tab cycles fields • Enter dispatch • Esc close",
+        style="dim",
+    )
+
+    status_text: Text | None = None
+    if palette.status_message:
+        status_text = Text(palette.status_message, style=palette.status_style)
+
+    history_limit = max(1, palette.history_limit)
+    history_entries = list(getattr(snapshot, "console_results", ()))
+    history_rows: list[Mapping[str, Any]] = []
+    if history_entries:
+        history_rows = history_entries[-history_limit:][::-1]
+
+    history_table = Table.grid(padding=(0, 1), expand=True)
+    history_table.add_column(width=2)
+    history_table.add_column(ratio=2)
+    history_table.add_column(ratio=3)
+    if history_rows:
+        for entry in history_rows:
+            status = str(entry.get("status", ""))
+            icon = "✓" if status == "ok" else "⚠"
+            style = "green" if status == "ok" else "yellow"
+            name = str(entry.get("name", ""))
+            if status == "ok":
+                result_payload = entry.get("result", {})
+                summary = (
+                    str(result_payload) if isinstance(result_payload, Mapping) else "ok"
+                )
+            else:
+                error_payload = entry.get("error", {})
+                if isinstance(error_payload, Mapping):
+                    summary = str(error_payload.get("message")) or str(
+                        error_payload.get("code", "error")
+                    )
+                else:
+                    summary = str(error_payload)
+            history_table.add_row(
+                f"[{style}]{icon}[/]",
+                f"{name}",
+                summary,
+            )
+    else:
+        history_table.add_row("", "[dim]No recent command activity.[/]", "")
+
+    body_renderables = [header]
+    if status_text is not None:
+        body_renderables.append(status_text)
+    body_renderables.extend([suggestion_table, instructions, history_table])
+    body = Group(*body_renderables)
+    return Panel(body, title="Command Palette", border_style="cyan", expand=True)
+
+
+def dispatch_palette_selection(
+    snapshot: TelemetrySnapshot,
+    palette: PaletteState,
+    executor: ConsoleCommandExecutor,
+    *,
+    payload_override: Mapping[str, Any] | None = None,
+    enqueue: bool = True,
+) -> ConsoleCommand:
+    """Dispatch the highlighted palette command via the executor.
+
+    Returns the normalised `ConsoleCommand` produced by the executor so callers
+    can preview or log the outgoing payload. When the executor queue is
+    saturated, updates palette state with a warning banner and re-raises the
+    `CommandQueueFull` error so the caller can react (e.g. show dialog).
+    """
+
+    commands = _search_palette_commands(_extract_palette_commands(snapshot), palette)
+    if not commands:
+        raise ValueError("No palette commands available for current selection")
+
+    index = min(max(palette.highlight_index, 0), len(commands) - 1)
+    selected = commands[index]
+    payload: Mapping[str, Any]
+    if payload_override is not None:
+        payload = payload_override
+    else:
+        payload = {"name": selected.name, "args": (), "kwargs": {}}
+
+    try:
+        command = executor.submit_payload(payload, enqueue=enqueue)
+    except CommandQueueFull as exc:
+        max_pending = exc.max_pending or exc.pending
+        palette.status_message = f"Queue saturated ({exc.pending}/{max_pending})"
+        palette.status_style = "yellow"
+        palette.pending = exc.pending
+        raise
+
+    palette.pending = executor.pending_count()
+    if enqueue:
+        palette.status_message = f"Dispatched {selected.name}"
+        palette.status_style = "green"
+    else:
+        palette.status_message = f"Preview {selected.name}"
+        palette.status_style = "cyan"
+    return command
+
+
+def render_snapshot(
+    snapshot: TelemetrySnapshot,
+    tick: int,
+    refreshed: str,
+    *,
+    palette: PaletteState | None = None,
+) -> Iterable[Panel]:
     """Yield rich Panels representing the current telemetry snapshot."""
     panels: list[Panel] = []
 
@@ -79,8 +343,11 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
             f"[bold]Queue backlog:[/bold] {health.telemetry_queue}",
             f"[bold]Tick duration:[/bold] {tick_duration_text}",
         )
+        perturbation_status = (
+            f"pending {health.perturbations_pending} / active {health.perturbations_active}"
+        )
         header_table.add_row(
-            f"[bold]Perturbations:[/bold] pending {health.perturbations_pending} / active {health.perturbations_active}",
+            f"[bold]Perturbations:[/bold] {perturbation_status}",
             f"[bold]Exit queue:[/bold] {health.employment_exit_queue}",
         )
     else:
@@ -99,6 +366,19 @@ def render_snapshot(snapshot: TelemetrySnapshot, tick: int, refreshed: str) -> I
             str(transport.last_error),
         )
     panels.append(Panel(header_table, title="Telemetry"))
+
+    if palette is not None:
+        overlay = _build_palette_overlay(snapshot, palette)
+        if overlay is not None:
+            panels.append(overlay)
+
+    perturbation_panel = _build_perturbation_panel(snapshot)
+    if perturbation_panel is not None:
+        panels.append(perturbation_panel)
+
+    agent_cards_panel = _build_agent_cards_panel(snapshot)
+    if agent_cards_panel is not None:
+        panels.append(agent_cards_panel)
 
     economy_table = Table(title="Economy Settings", expand=True)
     economy_table.add_column("Key")
@@ -393,6 +673,241 @@ def _build_social_panel(
     return Panel(Group(*renderables), title="Social", border_style=border)
 
 
+def _build_agent_cards_panel(snapshot: TelemetrySnapshot) -> Panel | None:
+    if not snapshot.agents:
+        return None
+
+    summary_map = {}
+    if snapshot.relationship_summary is not None:
+        summary_map = snapshot.relationship_summary.per_agent
+
+    history = snapshot.history
+
+    cards: list[Panel] = []
+    for agent in snapshot.agents:
+        card_table = Table.grid(expand=True)
+        subtitle_parts: list[str] = []
+        if agent.job_id:
+            subtitle_parts.append(agent.job_id)
+        subtitle_parts.append(agent.shift_state)
+        subtitle = " • ".join(subtitle_parts)
+
+        needs_history = (
+            history.needs.get(agent.agent_id, {})
+            if history and isinstance(history.needs, Mapping)
+            else {}
+        )
+        wallet_history = (
+            history.wallet.get(agent.agent_id, ())
+            if history and isinstance(history.wallet, Mapping)
+            else ()
+        )
+        rivalry_history = (
+            history.rivalry.get(agent.agent_id, {})
+            if history and isinstance(history.rivalry, Mapping)
+            else {}
+        )
+
+        needs_table = Table.grid(expand=True)
+        needs_table.add_column(ratio=3)
+        needs_table.add_column(ratio=1, justify="right")
+        for need_name in ("hunger", "hygiene", "energy"):
+            value = agent.needs.get(need_name, 0.0)
+            series: Sequence[float] = ()
+            if isinstance(needs_history, Mapping):
+                need_series = needs_history.get(need_name)
+                if isinstance(need_series, Sequence):
+                    series = need_series
+                elif isinstance(need_series, tuple):
+                    series = need_series
+                else:
+                    composite = needs_history.get("composite")
+                    if isinstance(composite, Sequence):
+                        series = composite
+            spark_style = NEED_SPARK_STYLES.get(need_name, "cyan")
+            needs_table.add_row(
+                _format_need_bar(need_name, value),
+                _sparkline_text(series, style=spark_style),
+            )
+
+        wallet_line = Text(
+            f"Wallet {agent.wallet:.2f} | Wages withheld {agent.wages_withheld:.2f}",
+            style="cyan" if agent.wallet > 0 else "dim",
+        )
+
+        attendance_line = Text(
+            f"Attendance {agent.attendance_ratio:.0%} | Lateness {agent.lateness_counter}",
+            style="green" if agent.attendance_ratio >= 0.75 else "yellow",
+        )
+        if agent.exit_pending:
+            attendance_line.append(" • EXIT PENDING", style="bold red")
+
+        summary_entry = summary_map.get(agent.agent_id) if summary_map else None
+        rival_line = Text("Rivalry: none", style="dim")
+        if summary_entry and summary_entry.top_rivals:
+            top_rival = summary_entry.top_rivals[0]
+            rivalry_value = top_rival.rivalry
+            if rivalry_value >= 0.7:
+                rival_style = "red"
+            elif rivalry_value >= 0.4:
+                rival_style = "yellow"
+            else:
+                rival_style = "green"
+            rival_line = Text(
+                f"Top rival {top_rival.agent} ({rivalry_value:.2f})",
+                style=f"bold {rival_style}",
+            )
+
+        friend_line = Text("Friendship: none", style="dim")
+        if summary_entry and summary_entry.top_friends:
+            top_friend = summary_entry.top_friends[0]
+            trust_value = top_friend.trust
+            friend_line = Text(
+                f"Top friend {top_friend.agent} ({trust_value:.2f})",
+                style="bold green" if trust_value >= 0.5 else "green",
+            )
+
+        card_table.add_row(needs_table)
+        card_table.add_row(
+            _row_with_sparkline(wallet_line, _sparkline_text(wallet_history, style="green"))
+        )
+        card_table.add_row(attendance_line)
+        rivalry_series: Sequence[float] = ()
+        if isinstance(rivalry_history, Mapping):
+            if summary_entry and summary_entry.top_rivals:
+                rival_target = summary_entry.top_rivals[0].agent
+                rivalry_series = rivalry_history.get(rival_target) or rivalry_history.get("*") or ()
+            elif rivalry_history:
+                rivalry_series = next(iter(rivalry_history.values()))
+        card_table.add_row(
+            _row_with_sparkline(rival_line, _sparkline_text(rivalry_series, style="red"))
+        )
+        card_table.add_row(friend_line)
+
+        border_style = "blue"
+        if agent.exit_pending:
+            border_style = "red"
+        elif agent.on_shift:
+            border_style = "cyan"
+
+        cards.append(
+            Panel(
+                card_table,
+                title=f"{agent.agent_id}"
+                + (f" • {subtitle}" if subtitle_parts else ""),
+                border_style=border_style,
+                padding=(0, 1),
+            )
+        )
+
+    columns = Columns(cards, equal=True, expand=True)
+    return Panel(columns, title="Agents", border_style="cyan")
+
+
+def _format_need_bar(name: str, value: float) -> Text:
+    filled = max(0, min(10, round(value * 10)))
+    empty = 10 - filled
+    bar = "█" * filled + "·" * empty
+    if value < 0.3:
+        style = "red"
+    elif value < 0.6:
+        style = "yellow"
+    else:
+        style = "green"
+    text = Text(f"{name.title():<7} {value:>5.0%} ")
+    text.append(bar, style=style)
+    return text
+
+
+_SPARKLINE_CHARS = " .:-=+*#%@"
+
+
+def _sparkline_text(
+    series: Sequence[float] | tuple[float, ...],
+    *,
+    style: str = "cyan",
+    width: int = 12,
+) -> Text:
+    if not series:
+        return Text("n/a", style="dim")
+    trimmed = tuple(series)[-width:]
+    if not trimmed:
+        return Text("n/a", style="dim")
+    low = min(trimmed)
+    high = max(trimmed)
+    if math.isclose(high, low):
+        normalized = [0.5] * len(trimmed)
+    else:
+        span = high - low
+        normalized = [(value - low) / span for value in trimmed]
+    glyphs = "".join(
+        _SPARKLINE_CHARS[
+            min(int(value * (len(_SPARKLINE_CHARS) - 1)), len(_SPARKLINE_CHARS) - 1)
+        ]
+        for value in normalized
+    )
+    return Text(glyphs, style=style)
+
+
+def _row_with_sparkline(text: Text, sparkline: Text) -> Table:
+    table = Table.grid(expand=True)
+    table.add_column(ratio=3)
+    table.add_column(ratio=1, justify="right")
+    table.add_row(text, sparkline)
+    return table
+
+
+def _build_perturbation_panel(snapshot: TelemetrySnapshot) -> Panel | None:
+    perturbations = snapshot.perturbations
+    if not perturbations.active and not perturbations.pending:
+        body = Text("No active perturbations", style="dim")
+        return Panel(body, title="Perturbations", border_style="green")
+
+    renderables: list[RenderableType] = []
+    if perturbations.active:
+        active_table = Table(title="Active", expand=True)
+        active_table.add_column("Event")
+        active_table.add_column("Spec")
+        active_table.add_column("Details")
+        for event_id, data in perturbations.active.items():
+            spec = str(data.get("spec", "")) if isinstance(data, Mapping) else ""
+            details_parts: list[str] = []
+            for key in ("ticks_remaining", "magnitude", "location", "targets"):
+                if key in data:
+                    details_parts.append(f"{key}={data[key]}")
+            details = ", ".join(details_parts) if details_parts else "—"
+            active_table.add_row(event_id, spec or "—", details)
+        renderables.append(active_table)
+
+    if perturbations.pending:
+        pending_table = Table(title="Pending", expand=True)
+        pending_table.add_column("Spec")
+        pending_table.add_column("Starts In", justify="right")
+        pending_table.add_column("Metadata")
+        for entry in perturbations.pending:
+            spec = str(entry.get("spec", "")) if isinstance(entry, Mapping) else ""
+            starts_in = entry.get("starts_in") if isinstance(entry, Mapping) else None
+            metadata_parts: list[str] = []
+            for key, value in entry.items():
+                if key in {"spec", "starts_in"}:
+                    continue
+                metadata_parts.append(f"{key}={value}")
+            metadata = ", ".join(metadata_parts) if metadata_parts else "—"
+            pending_table.add_row(spec or "—", str(starts_in or "—"), metadata)
+        renderables.append(pending_table)
+
+    if perturbations.cooldowns_spec:
+        cooldown_table = Table(title="Cooldowns", expand=True)
+        cooldown_table.add_column("Spec")
+        cooldown_table.add_column("Ticks", justify="right")
+        for spec, ticks in perturbations.cooldowns_spec.items():
+            cooldown_table.add_row(spec, str(ticks))
+        renderables.append(cooldown_table)
+
+    border_style = "red" if perturbations.active else "yellow"
+    return Panel(Group(*renderables), title="Perturbations", border_style=border_style)
+
+
 def _build_social_status_panel(
     summary: RelationshipSummarySnapshot | None,
 ) -> Panel | None:
@@ -425,7 +940,7 @@ def _build_social_cards_panel(
     rows_added = 0
 
     max_agents = 6
-    for agent_id, entry in list(sorted(summary.per_agent.items()))[:max_agents]:
+    for agent_id, entry in itertools.islice(sorted(summary.per_agent.items()), max_agents):
         friends_text = _format_friends(entry.top_friends)
         rivals_text = _format_rivals(entry.top_rivals)
         table.add_row(agent_id, friends_text, rivals_text)
@@ -766,7 +1281,10 @@ def _promotion_border_style(promotion: PromotionSnapshot | None) -> str:
     return "yellow"
 
 
-def _derive_promotion_reason(promotion: PromotionSnapshot, status: AnnealStatus | None) -> str:
+def _derive_promotion_reason(
+    promotion: PromotionSnapshot,
+    status: AnnealStatus | None,
+) -> str:
     if promotion.candidate_ready:
         return "Candidate ready for promotion review."
     if promotion.last_result == "fail":
@@ -997,6 +1515,8 @@ def run_dashboard(
     defer: str | None = None,
     focus_agent: str | None = None,
     show_coords: bool = False,
+    palette_state: PaletteState | None = None,
+    on_tick: Callable[[SimulationLoop, ConsoleCommandExecutor, int], None] | None = None,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
     from townlet.console.handlers import create_console_router
@@ -1036,10 +1556,17 @@ def run_dashboard(
         while max_ticks <= 0 or tick < max_ticks:
             tick += 1
             loop.step()
+            if on_tick is not None:
+                on_tick(loop, executor, loop.tick)
             snapshot = client.from_console(router)
             console.clear()
             refreshed = time.strftime("%H:%M:%S")
-            for panel in render_snapshot(snapshot, tick=loop.tick, refreshed=refreshed):
+            for panel in render_snapshot(
+                snapshot,
+                tick=loop.tick,
+                refreshed=refreshed,
+                palette=palette_state,
+            ):
                 console.print(panel)
             obs_batch = loop.observations.build_batch(loop.world, terminated={})
             map_panel = _build_map_panel(snapshot, obs_batch, focus_agent, show_coords=show_coords)

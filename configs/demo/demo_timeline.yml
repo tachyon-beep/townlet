@@ -1,0 +1,30 @@
+# Sample timeline for the scripted demo run. Ticks are absolute simulation ticks.
+timeline:
+  - tick: 5
+    action: spawn_agent
+    kwargs:
+      agent_id: guest_1
+      position: [2, 1]
+      wallet: 8.0
+  - tick: 8
+    action: set_need
+    kwargs:
+      agent_id: guest_1
+      need: hunger
+      value: 0.2
+  - tick: 10
+    action: force_chat
+    kwargs:
+      speaker: guest_1
+      listener: demo_1
+      quality: 0.95
+  - tick: 20
+    command: perturbation_trigger
+    args: [price_spike]
+    kwargs:
+      magnitude: 1.4
+      starts_in: 0
+  - tick: 30
+    command: social_events
+    kwargs:
+      limit: 8

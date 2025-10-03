@@ -77,3 +77,24 @@
 - `docs/ops/OPS_HANDBOOK.md` (Social telemetry tooling section)
 - `docs/design/OBSERVATION_TENSOR_SPEC.md`
 - `docs/telemetry/TELEMETRY_CHANGELOG.md`
+
+# Release Notes — Command Palette & Sparklines (2025-10-24)
+
+## Highlights
+- Introduced a Rich command palette with fuzzy search, queue saturation warnings, and recent result history so ops can execute validated console commands without leaving the dashboard.
+- Observer agent cards now display configurable needs/wallet/rivalry sparklines sourced from the telemetry history buffer, improving situational awareness during demos.
+- `TelemetryClient` gained optional history parsing with window trimming plus console metadata exposure (`console_commands`, `console_results`).
+
+## Required Actions
+1. **Dashboard configuration**: Set `ui.history.enabled=true` (or adjust the new `history_window`) to enable sparklines in demo environments. Document the chosen retention in scenario READMEs.
+2. **Ops runbooks**: Add palette shortcuts (Ctrl+P, Ctrl+L) and queue saturation handling to readiness checklists; capture screenshots of the pending/status banner in preflight logs.
+3. **Console automation**: Update any tooling that deserialises telemetry snapshots to tolerate the new `console_commands`, `console_results`, and optional `history` sections.
+
+## Compatibility Notes
+- Palette overlay degrades gracefully when telemetry omits metadata; the dashboard hides the panel until commands are available.
+- History buffers are optional; disabling them restores the previous behaviour with `n/a` placeholders.
+
+## References
+- `docs/design/COMMAND_PALETTE.md`
+- `docs/ops/COMMAND_PALETTE_SHORTCUTS.md`
+- `docs/testing/COMMAND_PALETTE_QA.md`
