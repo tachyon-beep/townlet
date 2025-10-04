@@ -8,6 +8,8 @@ checks such as observation variant validation and reward guardrails.
 from __future__ import annotations
 
 import importlib
+import hashlib
+import random
 import re
 from collections.abc import Mapping
 from enum import Enum
@@ -15,7 +17,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 ObservationVariant = Literal["full", "hybrid", "compact"]
 RelationshipStage = Literal["OFF", "A", "B", "C1", "C2", "C3"]
@@ -56,6 +58,79 @@ class FeatureFlags(BaseModel):
     console: ConsoleFlags
     relationship_modifiers: bool = False
 
+
+class PersonalityAssignmentConfig(BaseModel):
+    """Configure personality profile distribution and overrides."""
+
+    distribution: dict[str, float] = Field(default_factory=lambda: {"balanced": 1.0})
+    overrides: dict[str, str] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    _cumulative_weights: list[tuple[str, float]] = PrivateAttr(default_factory=list)
+
+    @model_validator(mode="after")
+    def _normalise(self) -> "PersonalityAssignmentConfig":
+        from townlet.agents.models import PersonalityProfiles
+
+        normalized: dict[str, float] = {}
+        for name, weight in self.distribution.items():
+            key = str(name).lower()
+            value = float(weight)
+            if value < 0.0:
+                raise ValueError(
+                    f"Personality distribution weight for {name!r} must be non-negative"
+                )
+            normalized[key] = normalized.get(key, 0.0) + value
+
+        total = sum(normalized.values())
+        if total <= 0.0:
+            raise ValueError("Personality distribution must sum to a positive value")
+
+        valid_profiles = set(PersonalityProfiles.names())
+        if set(normalized) - valid_profiles:
+            unknown = ", ".join(sorted(set(normalized) - valid_profiles))
+            raise ValueError(f"Unknown personality profiles in distribution: {unknown}")
+
+        cleaned_overrides: dict[str, str] = {}
+        for agent_id, profile in self.overrides.items():
+            profile_key = str(profile).lower()
+            if profile_key not in valid_profiles:
+                raise ValueError(
+                    f"Override for agent {agent_id!r} references unknown profile {profile!r}"
+                )
+            cleaned_overrides[str(agent_id)] = profile_key
+
+        cumulative = 0.0
+        cumulative_weights: list[tuple[str, float]] = []
+        for key, value in sorted(normalized.items()):
+            cumulative += value / total
+            cumulative_weights.append((key, min(cumulative, 1.0)))
+
+        object.__setattr__(self, "distribution", normalized)
+        object.__setattr__(self, "overrides", cleaned_overrides)
+        self._cumulative_weights = cumulative_weights
+        return self
+
+    def resolve(self, agent_id: str, *, seed: int | None) -> str:
+        override = self.overrides.get(agent_id)
+        if override:
+            return override
+        if not self._cumulative_weights:
+            return "balanced"
+        base = f"{seed}:{agent_id}" if seed is not None else agent_id
+        digest = hashlib.sha256(base.encode("utf-8")).digest()
+        rng = random.Random(int.from_bytes(digest[:8], "big", signed=False))
+        value = rng.random()
+        for name, threshold in self._cumulative_weights:
+            if value <= threshold:
+                return name
+        return self._cumulative_weights[-1][0]
+
+    def available_profiles(self) -> tuple[str, ...]:
+        if not self._cumulative_weights:
+            return ("balanced",)
+        return tuple(name for name, _ in self._cumulative_weights)
 
 class NeedsWeights(BaseModel):
     hunger: float = Field(1.0, ge=0.5, le=2.0)
@@ -806,6 +881,7 @@ class SimulationConfig(BaseModel):
     behavior: BehaviorConfig = BehaviorConfig()
     policy_runtime: PolicyRuntimeConfig = PolicyRuntimeConfig()
     employment: EmploymentConfig = EmploymentConfig()
+    personalities: PersonalityAssignmentConfig = PersonalityAssignmentConfig()
     telemetry: TelemetryConfig = TelemetryConfig()
     console_auth: ConsoleAuthConfig = ConsoleAuthConfig()
     snapshot: SnapshotConfig = SnapshotConfig()
@@ -842,6 +918,14 @@ class SimulationConfig(BaseModel):
     def snapshot_root(self) -> Path:
         root = Path(self.snapshot.storage.root)
         return root.expanduser().resolve()
+
+    def resolve_personality_profile(
+        self, agent_id: str, profile_name: str | None = None
+    ) -> str:
+        if profile_name:
+            return str(profile_name).lower()
+        seed_value = getattr(self, "seed", None)
+        return self.personalities.resolve(agent_id, seed=seed_value)
 
     def snapshot_allowed_roots(self) -> tuple[Path, ...]:
         roots: list[Path] = [self.snapshot_root()]

@@ -37,11 +37,18 @@ def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
         agent_id = agent["id"]
         position = tuple(agent.get("position", (0, 0)))  # type: ignore[arg-type]
         needs = dict(agent.get("needs", {}))
+        profile_field = agent.get("personality_profile")
+        profile_name, resolved_personality = loop.world.select_personality_profile(
+            agent_id,
+            profile_field if isinstance(profile_field, str) else None,
+        )
         snapshot = AgentSnapshot(
             agent_id,
             position,
             needs,
             wallet=float(agent.get("wallet", 0.0)),
+            personality=resolved_personality,
+            personality_profile=profile_name,
         )
         if agent.get("job"):
             snapshot.job_id = agent["job"]
@@ -108,18 +115,19 @@ def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
 
 def seed_default_agents(loop: SimulationLoop) -> None:
     loop.world.register_object(object_id="stove_1", object_type="stove")
-    loop.world.agents["alice"] = AgentSnapshot(
-        "alice",
-        (0, 0),
-        {"hunger": 0.3, "hygiene": 0.4, "energy": 0.5},
-        wallet=2.0,
-    )
-    loop.world.agents["bob"] = AgentSnapshot(
-        "bob",
-        (1, 0),
-        {"hunger": 0.6, "hygiene": 0.7, "energy": 0.8},
-        wallet=3.0,
-    )
+    for agent_id, position, needs, wallet in (
+        ("alice", (0, 0), {"hunger": 0.3, "hygiene": 0.4, "energy": 0.5}, 2.0),
+        ("bob", (1, 0), {"hunger": 0.6, "hygiene": 0.7, "energy": 0.8}, 3.0),
+    ):
+        profile_name, resolved_personality = loop.world.select_personality_profile(agent_id)
+        loop.world.agents[agent_id] = AgentSnapshot(
+            agent_id,
+            position,
+            needs,
+            wallet=wallet,
+            personality=resolved_personality,
+            personality_profile=profile_name,
+        )
 
 
 def has_agents(loop: SimulationLoop) -> bool:

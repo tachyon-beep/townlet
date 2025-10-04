@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from townlet.agents.models import Personality
+from townlet.agents.models import Personality, personality_from_profile
 from townlet.config import SimulationConfig
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.scheduler.perturbations import PerturbationScheduler
@@ -296,6 +296,7 @@ def snapshot_from_world(
                 "forgiveness": float(snapshot.personality.forgiveness),
                 "ambition": float(snapshot.personality.ambition),
             },
+            "personality_profile": snapshot.personality_profile,
             "inventory": dict(snapshot.inventory),
             "job_id": snapshot.job_id,
             "on_shift": bool(snapshot.on_shift),
@@ -416,17 +417,32 @@ def apply_snapshot_to_world(
         position = tuple(payload.get("position", (0, 0)))
         needs = dict(payload.get("needs", {}))
         personality_data = payload.get("personality", {})
-        personality = Personality(
+        fallback_personality = Personality(
             extroversion=float(personality_data.get("extroversion", 0.0)),
             forgiveness=float(personality_data.get("forgiveness", 0.0)),
             ambition=float(personality_data.get("ambition", 0.0)),
         )
+        profile_field = payload.get("personality_profile")
+        try:
+            profile_name, resolved_personality = personality_from_profile(
+                profile_field if isinstance(profile_field, str) else None
+            )
+        except KeyError:
+            fallback_name = "custom" if profile_field else "balanced"
+            logger.warning(
+                "snapshot.unknown_personality_profile name=%s fallback=%s",
+                profile_field,
+                fallback_name,
+            )
+            profile_name = fallback_name
+            resolved_personality = fallback_personality
         agent = AgentSnapshot(
             agent_id=agent_id,
             position=position,
             needs=needs,
             wallet=float(payload.get("wallet", 0.0)),
-            personality=personality,
+            personality=resolved_personality,
+            personality_profile=profile_name,
             inventory=dict(payload.get("inventory", {})),
             job_id=payload.get("job_id"),
             on_shift=bool(payload.get("on_shift", False)),

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from townlet.agents.models import Personality
+from townlet.agents.models import Personality, personality_from_profile
 from townlet.agents.relationship_modifiers import (
     RelationshipDelta,
     RelationshipEvent,
@@ -83,10 +83,32 @@ class HookRegistry:
         self._handlers.pop(name, None)
 
 
+_DEFAULT_PROFILE_NAME = "balanced"
+
+
 def _default_personality() -> Personality:
     """Provide a neutral personality for agents lacking explicit traits."""
 
-    return Personality(extroversion=0.0, forgiveness=0.0, ambition=0.0)
+    return personality_from_profile(_DEFAULT_PROFILE_NAME)[1]
+
+
+def _resolve_personality_profile(name: str | None) -> tuple[str, Personality]:
+    try:
+        return personality_from_profile(name)
+    except KeyError:
+        logger.warning(
+            "unknown_personality_profile name=%s fallback=%s",
+            name,
+            _DEFAULT_PROFILE_NAME,
+        )
+        return personality_from_profile(_DEFAULT_PROFILE_NAME)
+
+
+def _normalize_profile_name(name: str | None) -> str | None:
+    if name is None:
+        return None
+    trimmed = str(name).strip()
+    return trimmed.lower() if trimmed else None
 
 
 _BASE_NEEDS: tuple[str, ...] = ("hunger", "hygiene", "energy")
@@ -103,6 +125,7 @@ class AgentSnapshot:
     home_position: tuple[int, int] | None = None
     origin_agent_id: str | None = None
     personality: Personality = field(default_factory=_default_personality)
+    personality_profile: str = _DEFAULT_PROFILE_NAME
     inventory: dict[str, int] = field(default_factory=dict)
     job_id: str | None = None
     on_shift: bool = False
@@ -135,6 +158,11 @@ class AgentSnapshot:
             self.home_position = (x, y)
         if self.origin_agent_id is None:
             self.origin_agent_id = self.agent_id
+        profile_name = (self.personality_profile or "").strip().lower()
+        if profile_name:
+            resolved_name, resolved = _resolve_personality_profile(profile_name)
+            self.personality_profile = resolved_name
+            self.personality = resolved
 
 
 @dataclass
@@ -760,6 +788,7 @@ class WorldState:
             "agent_id": snapshot.agent_id,
             "origin_agent_id": snapshot.origin_agent_id or snapshot.agent_id,
             "personality": snapshot.personality,
+            "personality_profile": snapshot.personality_profile,
             "job_id": snapshot.job_id,
             "position": snapshot.position,
             "home_position": snapshot.home_position,
@@ -805,6 +834,14 @@ class WorldState:
             home_tuple = (int(home_position[0]), int(home_position[1]))
         else:
             home_tuple = None
+        profile_field = blueprint.get("personality_profile")
+        resolved_profile, resolved_personality = self._choose_personality_profile(
+            agent_id,
+            profile_field if isinstance(profile_field, str) else None,
+        )
+        personality_override = blueprint.get("personality")
+        if isinstance(personality_override, Personality):
+            resolved_personality = personality_override
         snapshot = AgentSnapshot(
             agent_id=agent_id,
             position=position_tuple,
@@ -812,10 +849,9 @@ class WorldState:
             wallet=0.0,
             home_position=home_tuple,
             origin_agent_id=origin_agent_id,
+            personality=resolved_personality,
+            personality_profile=resolved_profile,
         )
-        personality = blueprint.get("personality")
-        if personality is not None:
-            snapshot.personality = personality
         job_id = blueprint.get("job_id")
         if isinstance(job_id, str):
             snapshot.job_id = job_id
@@ -893,12 +929,19 @@ class WorldState:
         hygiene = float(needs.get("hygiene", 0.5))
         energy = float(needs.get("energy", 0.5))
         wallet = float(payload.get("wallet", 0.0))
+        profile_field = payload.get("personality_profile")
+        profile_name, resolved_personality = self._choose_personality_profile(
+            agent_id,
+            profile_field if isinstance(profile_field, str) else None,
+        )
         snapshot = AgentSnapshot(
             agent_id=agent_id,
             position=(x, y),
             needs={"hunger": hunger, "hygiene": hygiene, "energy": energy},
             wallet=wallet,
             home_position=home_tuple,
+            personality=resolved_personality,
+            personality_profile=profile_name,
         )
         self.agents[agent_id] = snapshot
         job_override = payload.get("job_id")
@@ -911,6 +954,7 @@ class WorldState:
             "position": [x, y],
             "job_id": snapshot.job_id,
             "home_position": list(home_tuple),
+            "personality_profile": profile_name,
         }
         return ConsoleCommandResult.ok(envelope, result_payload, tick=self.tick)
 
@@ -1668,6 +1712,27 @@ class WorldState:
 
     def _relationship_parameters(self) -> RelationshipParameters:
         return RelationshipParameters(max_edges=self.config.conflict.rivalry.max_edges)
+
+    def _choose_personality_profile(
+        self, agent_id: str, profile_name: str | None = None
+    ) -> tuple[str, Personality]:
+        candidate = _normalize_profile_name(profile_name)
+        config = getattr(self, "config", None)
+        if config is not None and hasattr(config, "resolve_personality_profile"):
+            try:
+                chosen = config.resolve_personality_profile(agent_id, candidate)
+            except Exception:  # pragma: no cover - defensive fallback
+                chosen = candidate
+        else:
+            chosen = candidate
+        return _resolve_personality_profile(chosen)
+
+    def select_personality_profile(
+        self, agent_id: str, profile_name: str | None = None
+    ) -> tuple[str, Personality]:
+        """Public helper for modules assigning agent personalities."""
+
+        return self._choose_personality_profile(agent_id, profile_name)
 
     def _personality_for(self, agent_id: str) -> Personality:
         snapshot = self.agents.get(agent_id)

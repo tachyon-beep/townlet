@@ -124,7 +124,7 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - ✅ Phase 2.2 Perturbation & Overlay Panels – spectator overlays (perturbations, economy/employment, conflict, KPIs, relationships, social, legend) implemented with selectors, vitest coverage (`townlet_web/src/utils/selectors.test.ts`), and Storybook stories.
 - ✅ Phase 2.3 Accessibility & Audio – Added skip-link navigation, ARIA-friendly structure, optional audio cues for high-priority narrations, axe smoke test via Storybook, unit tests for audio hook (`townlet_web/src/hooks/useAudioCue.test.ts`), and Playwright e2e smoke tests for spectator/operator flows (`townlet_web/tests/e2e`).
 
-## FWP-08 Demo Scenario Scripting & QA
+## FWP-08 Demo Scenario Scripting & QA *(Completed)*
 - **Fix / Change**: Locked the narrative storyline (`demo_story_arc`) behind hashed assets (config `c3ebb8fbfc9bc6ab793aeb3784a6bf1cf044c8b0`, timeline `dafe8f3298f62e1ddeaf0fd40c7907fc3507b2d6`), published an operator playbook (`docs/ops/DEMO_SCENARIO_PLAYBOOK.md`), wired rehearsal automation (`scripts/demo_rehearsal.sh`), and expanded narrative tests (state mutation + golden narration fixture).
 - **Risks**: Time-sensitive scripts can flake; heavy scheduling might strain stability; demo drift if config changes are untracked. Mitigation: hashes documented in the playbook, regression test compares narration stream to golden JSON.
 - **Affected Components**: `src/townlet/demo/timeline.py`, `src/townlet/demo/runner.py`, `scripts/demo_run.py`, `scripts/demo_rehearsal.sh`, `configs/scenarios/`, `tests/test_demo_storyline.py`, `tests/test_demo_timeline.py`, `tests/data/demo_story_arc_narrations.json`, docs (`docs/ops/DEMO_SCENARIO_PLAYBOOK.md`, `docs/guides/OBSERVER_UI_GUIDE.md`).

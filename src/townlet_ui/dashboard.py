@@ -1738,11 +1738,16 @@ def run_dashboard(
     from townlet.world.grid import AgentSnapshot
 
     if not loop.world.agents:
+        profile_name, resolved_personality = loop.world.select_personality_profile(
+            "observer_demo"
+        )
         loop.world.agents["observer_demo"] = AgentSnapshot(
             agent_id="observer_demo",
             position=(0, 0),
             needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
             wallet=1.0,
+            personality=resolved_personality,
+            personality_profile=profile_name,
         )
         assign_jobs = getattr(loop.world, "_assign_jobs_to_agents", None)
         if callable(assign_jobs):

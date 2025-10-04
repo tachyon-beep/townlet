@@ -58,6 +58,9 @@ behavior:
   hygiene_threshold: 0.4
   energy_threshold: 0.4
   job_arrival_buffer: 20
+personalities:
+  distribution:
+    balanced: 1.0
 employment:
   enforce_job_loop: true
 shaping:

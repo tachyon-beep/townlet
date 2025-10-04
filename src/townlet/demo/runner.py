@@ -85,11 +85,18 @@ class DemoScheduler:
             position = kwargs.get("position", (0, 0))
             if not isinstance(position, (tuple, list)) or len(position) != 2:
                 position = (0, 0)
+            profile_field = kwargs.get("personality_profile")
+            profile_name, resolved_personality = world.select_personality_profile(
+                agent_id,
+                profile_field if isinstance(profile_field, str) else None,
+            )
             snapshot = AgentSnapshot(
                 agent_id=agent_id,
                 position=(int(position[0]), int(position[1])),
                 needs=dict(needs),
                 wallet=wallet,
+                personality=resolved_personality,
+                personality_profile=profile_name,
             )
             world.agents[agent_id] = snapshot
             assign_jobs = getattr(world, "_assign_jobs_to_agents", None)
@@ -206,6 +213,7 @@ def seed_demo_state(
     if not world.agents:
         for index in range(agents_required):
             agent_id = f"demo_{index+1}"
+            profile_name, resolved_personality = world.select_personality_profile(agent_id)
             world.agents[agent_id] = AgentSnapshot(
                 agent_id=agent_id,
                 position=(index, 0),
@@ -215,6 +223,8 @@ def seed_demo_state(
                     "energy": 0.5,
                 },
                 wallet=5.0 + index,
+                personality=resolved_personality,
+                personality_profile=profile_name,
             )
         seeded = True
 

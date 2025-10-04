@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from .models import AgentState, Personality, RelationshipEdge
+from .models import (
+    AgentState,
+    Personality,
+    PersonalityProfile,
+    PersonalityProfiles,
+    RelationshipEdge,
+    personality_from_profile,
+)
 from .relationship_modifiers import (
     RelationshipDelta,
     RelationshipEvent,
@@ -12,6 +19,9 @@ from .relationship_modifiers import (
 __all__ = [
     "AgentState",
     "Personality",
+    "PersonalityProfile",
+    "PersonalityProfiles",
+    "personality_from_profile",
     "RelationshipDelta",
     "RelationshipEdge",
     "RelationshipEvent",

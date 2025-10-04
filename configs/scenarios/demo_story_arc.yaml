@@ -26,6 +26,15 @@ features:
 world:
   grid_size: [24, 24]
   weather_seed: 707
+personalities:
+  distribution:
+    balanced: 0.4
+    socialite: 0.35
+    industrious: 0.25
+  overrides:
+    avery: socialite
+    kai: industrious
+    blair: socialite
 
 rewards:
   needs_weights:
