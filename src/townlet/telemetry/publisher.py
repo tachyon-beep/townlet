@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import threading
 import time
-import copy
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
@@ -104,6 +105,7 @@ class TelemetryPublisher:
         self._console_auth = ConsoleAuthenticator(config.console_auth)
         self._social_event_history: deque[dict[str, object]] = deque(maxlen=60)
         self._latest_relationship_summary: dict[str, object] = {}
+        self._latest_personality_snapshot: dict[str, object] = {}
         self._current_tick: int = 0
         self._pending_manual_narrations: list[dict[str, object]] = []
         self._manual_narration_lock = threading.Lock()
@@ -217,6 +219,8 @@ class TelemetryPublisher:
         }
         if self._latest_affordance_manifest:
             state["affordance_manifest"] = dict(self._latest_affordance_manifest)
+        if self._latest_personality_snapshot:
+            state["personalities"] = copy.deepcopy(self._latest_personality_snapshot)
         if self._latest_anneal_status is not None:
             state["anneal_status"] = dict(self._latest_anneal_status)
         if self._latest_policy_snapshot:
@@ -969,6 +973,15 @@ class TelemetryPublisher:
                     payload = dict(event)
                     self._social_event_history.append(payload)
                     latest_social_events.append(payload)
+        personality_enabled = False
+        try:
+            personality_enabled = self.config.personality_channels_enabled()
+        except Exception:  # pragma: no cover - defensive
+            personality_enabled = False
+        if personality_enabled or self.config.personality_profiles_enabled():
+            self._latest_personality_snapshot = self._build_personality_snapshot(world)
+        else:
+            self._latest_personality_snapshot = {}
         self._capture_affordance_runtime(
             world=world,
             events=self._latest_events,
@@ -1171,6 +1184,9 @@ class TelemetryPublisher:
 
     def latest_social_events(self) -> list[dict[str, object]]:
         return [dict(event) for event in self._social_event_history]
+
+    def latest_personality_snapshot(self) -> dict[str, object]:
+        return copy.deepcopy(self._latest_personality_snapshot)
 
     def latest_relationship_summary(self) -> dict[str, object]:
         return dict(self._latest_relationship_summary)
@@ -1625,6 +1641,146 @@ class TelemetryPublisher:
         summary["churn"] = dict(self._latest_relationship_metrics or {})
         return summary
 
+    def _build_personality_snapshot(
+        self,
+        world: WorldState,
+    ) -> dict[str, object]:
+        snapshot = world.snapshot()
+        payload: dict[str, object] = {}
+        for agent_id, agent in snapshot.items():
+            profile_name = str(getattr(agent, "personality_profile", "") or "balanced")
+            personality = getattr(agent, "personality", None)
+            traits = {
+                "extroversion": float(getattr(personality, "extroversion", 0.0)),
+                "forgiveness": float(getattr(personality, "forgiveness", 0.0)),
+                "ambition": float(getattr(personality, "ambition", 0.0)),
+            }
+            entry: dict[str, object] = {
+                "profile": profile_name,
+                "traits": traits,
+            }
+            try:
+                profile = PersonalityProfiles.get(profile_name)
+            except KeyError:
+                profile = None
+            if profile is not None:
+                entry["multipliers"] = {
+                    "needs": dict(profile.need_multipliers),
+                    "rewards": dict(profile.reward_bias),
+                    "behaviour": dict(profile.behaviour_bias),
+                }
+            payload[str(agent_id)] = entry
+        return payload
+
+    def _emit_personality_event_narrations(
+        self,
+        events: Iterable[Mapping[str, object]],
+        tick: int,
+    ) -> None:
+        if not self._latest_personality_snapshot:
+            return
+        for event in events:
+            etype = str(event.get("type", ""))
+            if etype == "chat_success":
+                speaker = str(event.get("speaker") or "")
+                if not speaker:
+                    continue
+                listener = str(event.get("listener") or "")
+                profile = self._latest_personality_snapshot.get(speaker)
+                if not isinstance(profile, Mapping):
+                    continue
+                traits = profile.get("traits", {})
+                try:
+                    extroversion = float(traits.get("extroversion", 0.0))
+                except (TypeError, ValueError):
+                    extroversion = 0.0
+                if extroversion < 0.5:
+                    continue
+                quality = float(event.get("quality", 0.0) or 0.0)
+                message = (
+                    f"{speaker}'s extroversion ({extroversion:+.2f}) sparked a high-energy chat"
+                )
+                if listener:
+                    message += f" with {listener}"
+                if quality:
+                    message += f" (quality {quality:.2f})"
+                message += "."
+                dedupe_key = f"personality_chat:{speaker}:{listener}"
+                priority = extroversion >= 0.75
+                if self._narration_limiter.allow(
+                    "personality_event",
+                    message=message,
+                    priority=priority,
+                    dedupe_key=dedupe_key,
+                ):
+                    self._latest_narrations.append(
+                        {
+                            "tick": int(tick),
+                            "category": "personality_event",
+                            "message": message,
+                            "priority": priority,
+                            "data": {
+                                "agent": speaker,
+                                "listener": listener,
+                                "trait": "extroversion",
+                                "value": extroversion,
+                                "quality": quality,
+                            },
+                            "dedupe_key": dedupe_key,
+                        }
+                    )
+            elif etype == "rivalry_avoidance":
+                agent = str(event.get("agent") or "")
+                if not agent:
+                    continue
+                profile = self._latest_personality_snapshot.get(agent)
+                if not isinstance(profile, Mapping):
+                    continue
+                multipliers = profile.get("multipliers", {})
+                behaviour = {}
+                if isinstance(multipliers, Mapping):
+                    behaviour = multipliers.get("behaviour", {})
+                try:
+                    tolerance = float(behaviour.get("conflict_tolerance", 1.0))
+                except (TypeError, ValueError):
+                    tolerance = 1.0
+                if tolerance >= 1.0:
+                    continue
+                location = str(event.get("object") or "the area")
+                reason = str(event.get("reason") or "conflict avoidance")
+                message = (
+                    f"{agent} stayed composed (conflict tolerance {tolerance:.2f}) "
+                    "and avoided trouble"
+                )
+                if location:
+                    message += f" near {location}"
+                if reason:
+                    message += f" ({reason})"
+                message += "."
+                dedupe_key = f"personality_avoid:{agent}:{location}"
+                if self._narration_limiter.allow(
+                    "personality_event",
+                    message=message,
+                    priority=False,
+                    dedupe_key=dedupe_key,
+                ):
+                    self._latest_narrations.append(
+                        {
+                            "tick": int(tick),
+                            "category": "personality_event",
+                            "message": message,
+                            "priority": False,
+                            "data": {
+                                "agent": agent,
+                                "trait": "conflict_tolerance",
+                                "value": tolerance,
+                                "location": location,
+                                "reason": reason,
+                            },
+                            "dedupe_key": dedupe_key,
+                        }
+                    )
+
     def _process_narrations(
         self,
         events: Iterable[dict[str, object]],
@@ -1649,6 +1805,8 @@ class TelemetryPublisher:
         )
         self._emit_relationship_rivalry_narrations(tick)
         self._emit_social_alert_narrations(social_events_snapshot, tick)
+        self._emit_personality_event_narrations(social_events_snapshot, tick)
+        self._emit_personality_event_narrations(social_events_snapshot, tick)
 
     def _emit_relationship_friendship_narrations(
         self,

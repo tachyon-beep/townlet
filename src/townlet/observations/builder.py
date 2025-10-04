@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from townlet.config import ObservationVariant, SimulationConfig
+from townlet.agents.models import PersonalityProfiles
 
 if TYPE_CHECKING:
     from townlet.world.grid import AgentSnapshot, WorldState
@@ -33,6 +34,14 @@ class ObservationBuilder:
         self.config = config
         self.variant: ObservationVariant = config.observation_variant
         self.hybrid_cfg = config.observations_config.hybrid
+        self._include_personality_channels = False
+        if hasattr(config, "personality_channels_enabled"):
+            try:
+                self._include_personality_channels = bool(
+                    config.personality_channels_enabled()
+                )
+            except Exception:  # pragma: no cover - defensive fallback
+                self._include_personality_channels = False
         # Precompute hybrid target landmarks (optional).
         self._landmarks: list[str] = [
             "fridge",
@@ -131,6 +140,15 @@ class ObservationBuilder:
             self._social_aggregate_names = []
         social_feature_names.extend(self._social_aggregate_names)
 
+        self._personality_feature_names: list[str] = []
+        if self._include_personality_channels:
+            self._personality_feature_names = [
+                "personality_extroversion",
+                "personality_forgiveness",
+                "personality_ambition",
+            ]
+            base_feature_names.extend(self._personality_feature_names)
+
         self._feature_names = base_feature_names + social_feature_names
         self._feature_index = {
             name: idx for idx, name in enumerate(self._feature_names)
@@ -149,6 +167,14 @@ class ObservationBuilder:
         self._local_summary_indices = {
             name: self._feature_index[name] for name in self._local_summary_names
         }
+
+        if self._personality_feature_names:
+            self._personality_feature_indices = {
+                name: self._feature_index[name]
+                for name in self._personality_feature_names
+            }
+        else:
+            self._personality_feature_indices = {}
 
     def build_batch(
         self, world: "WorldState", terminated: dict[str, bool]
@@ -452,6 +478,51 @@ class ObservationBuilder:
 
         return summary
 
+    def _encode_personality_features(
+        self,
+        features: np.ndarray,
+        snapshot: "AgentSnapshot",
+    ) -> dict[str, object] | None:
+        if not self._personality_feature_indices:
+            return None
+
+        personality = getattr(snapshot, "personality", None)
+        extroversion = float(getattr(personality, "extroversion", 0.0))
+        forgiveness = float(getattr(personality, "forgiveness", 0.0))
+        ambition = float(getattr(personality, "ambition", 0.0))
+
+        features[self._personality_feature_indices["personality_extroversion"]] = (
+            extroversion
+        )
+        features[self._personality_feature_indices["personality_forgiveness"]] = (
+            forgiveness
+        )
+        features[self._personality_feature_indices["personality_ambition"]] = ambition
+
+        profile_name = str(getattr(snapshot, "personality_profile", "") or "balanced")
+        metadata: dict[str, object] = {
+            "profile": profile_name,
+            "traits": {
+                "extroversion": extroversion,
+                "forgiveness": forgiveness,
+                "ambition": ambition,
+            },
+        }
+
+        try:
+            profile = PersonalityProfiles.get(profile_name)
+        except KeyError:
+            profile = None
+
+        if profile is not None:
+            metadata["multipliers"] = {
+                "needs": dict(profile.need_multipliers),
+                "rewards": dict(profile.reward_bias),
+                "behaviour": dict(profile.behaviour_bias),
+            }
+
+        return metadata
+
     def _initialise_feature_vector(
         self,
         world: "WorldState",
@@ -459,7 +530,7 @@ class ObservationBuilder:
         slot: int,
         cache: _LocalCache,
         local_summary: dict[str, float] | None = None,
-    ) -> tuple[np.ndarray, dict[str, object], dict[str, float]]:
+    ) -> tuple[np.ndarray, dict[str, object], dict[str, float], dict[str, object] | None]:
         features = np.zeros(len(self._feature_names), dtype=np.float32)
         context = world.agent_context(snapshot.agent_id)
         self._encode_common_features(
@@ -494,7 +565,9 @@ class ObservationBuilder:
             features[self._social_slice] = social_vector
             social_context.update(slot_context)
 
-        return features, social_context, local_summary
+        personality_context = self._encode_personality_features(features, snapshot)
+
+        return features, social_context, local_summary, personality_context
 
     def _build_metadata(
         self,
@@ -551,7 +624,12 @@ class ObservationBuilder:
             self.MAP_CHANNELS, snapshot, radius, cache
         )
 
-        features, social_context, local_summary = self._initialise_feature_vector(
+        (
+            features,
+            social_context,
+            local_summary,
+            personality_context,
+        ) = self._initialise_feature_vector(
             world, snapshot, slot, cache, local_summary
         )
         metadata = self._build_metadata(
@@ -561,6 +639,8 @@ class ObservationBuilder:
             social_context=social_context,
             local_summary=local_summary,
         )
+        if personality_context is not None:
+            metadata["personality"] = personality_context
 
         return {
             "map": map_tensor,
@@ -581,7 +661,12 @@ class ObservationBuilder:
             self.full_channels, snapshot, radius, cache
         )
 
-        features, social_context, local_summary = self._initialise_feature_vector(
+        (
+            features,
+            social_context,
+            local_summary,
+            personality_context,
+        ) = self._initialise_feature_vector(
             world, snapshot, slot, cache, local_summary
         )
         metadata = self._build_metadata(
@@ -591,6 +676,8 @@ class ObservationBuilder:
             social_context=social_context,
             local_summary=local_summary,
         )
+        if personality_context is not None:
+            metadata["personality"] = personality_context
 
         return {
             "map": map_tensor,
@@ -608,7 +695,12 @@ class ObservationBuilder:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         _, local_summary = self._map_with_summary((), snapshot, radius, cache)
-        features, social_context, _ = self._initialise_feature_vector(
+        (
+            features,
+            social_context,
+            _,
+            personality_context,
+        ) = self._initialise_feature_vector(
             world, snapshot, slot, cache, local_summary
         )
         map_tensor = np.zeros((0, 0, 0), dtype=np.float32)
@@ -619,6 +711,8 @@ class ObservationBuilder:
             social_context=social_context,
             local_summary=local_summary,
         )
+        if personality_context is not None:
+            metadata["personality"] = personality_context
 
         return {
             "map": map_tensor,

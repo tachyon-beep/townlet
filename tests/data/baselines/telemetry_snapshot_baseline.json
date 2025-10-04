@@ -1,0 +1,77 @@
+{
+  "config": "configs/scenarios/demo_story_arc.yaml",
+  "kpi_history": {
+    "queue_conflict_intensity": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "employment_lateness": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "late_help_events": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "queue_rotation_events": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "queue_ghost_step_events": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "queue_metrics": {
+    "cooldown_events": 0,
+    "ghost_step_events": 0,
+    "rotation_events": 0
+  },
+  "embedding_metrics": {
+    "allocations_total": 3.0,
+    "forced_reuse_count": 0.0,
+    "forced_reuse_rate": 0.0,
+    "reuse_warning": 0.0
+  },
+  "narrations_count": 0
+}

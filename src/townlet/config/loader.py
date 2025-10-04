@@ -64,6 +64,10 @@ class BehaviorFlags(BaseModel):
     reward_multipliers: bool = False
 
 
+class ObservationFeatureFlags(BaseModel):
+    personality_channels: bool = False
+
+
 class FeatureFlags(BaseModel):
     stages: StageFlags
     systems: SystemFlags
@@ -71,6 +75,7 @@ class FeatureFlags(BaseModel):
     console: ConsoleFlags
     relationship_modifiers: bool = False
     behavior: BehaviorFlags = BehaviorFlags()
+    observations: ObservationFeatureFlags = ObservationFeatureFlags()
 
 
 class PersonalityAssignmentConfig(BaseModel):
@@ -946,6 +951,10 @@ class SimulationConfig(BaseModel):
 
     def reward_personality_scaling_enabled(self) -> bool:
         return bool(getattr(self.features.behavior, "reward_multipliers", False))
+
+    def personality_channels_enabled(self) -> bool:
+        observations = getattr(self.features, "observations", None)
+        return bool(getattr(observations, "personality_channels", False))
 
     @model_validator(mode="after")
     def _validate_personality_bias_keys(self) -> "SimulationConfig":

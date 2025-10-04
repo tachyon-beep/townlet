@@ -124,6 +124,7 @@ class TelemetryBridge:
             "affordance_manifest": self._publisher.latest_affordance_manifest(),
             "affordance_runtime": self._publisher.latest_affordance_runtime(),
             "reward_breakdown": self._publisher.latest_reward_breakdown(),
+            "personalities": self._publisher.latest_personality_snapshot(),
             "stability": {
                 "alerts": self._publisher.latest_stability_alerts(),
                 "metrics": self._publisher.latest_stability_metrics(),

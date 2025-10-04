@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from townlet.agents.models import PersonalityProfiles
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.telemetry.publisher import TelemetryPublisher
@@ -51,3 +54,63 @@ def test_planning_payload_consistency() -> None:
         assert isinstance(obj_info.get("type"), str)
         for value in obj_info.get("stock", {}).values():
             assert isinstance(value, int)
+
+
+def test_personality_snapshot_respects_flag() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.features.observations.personality_channels = False
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.clear()
+    world.agents["avery"] = AgentSnapshot(
+        agent_id="avery",
+        position=(0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.6, "energy": 0.7},
+        wallet=3.0,
+    )
+    loop.step()
+    publisher: TelemetryPublisher = loop.telemetry
+    assert publisher.latest_personality_snapshot() == {}
+
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.features.observations.personality_channels = True
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.clear()
+    world.agents["avery"] = AgentSnapshot(
+        agent_id="avery",
+        position=(0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.6, "energy": 0.7},
+        wallet=3.0,
+        personality_profile="socialite",
+        personality=PersonalityProfiles.get("socialite").personality,
+    )
+    loop.step()
+    publisher = loop.telemetry
+    snapshot = publisher.latest_personality_snapshot()
+    assert "avery" in snapshot
+    entry = snapshot["avery"]
+    assert entry["profile"] == "socialite"
+    assert entry["traits"]["extroversion"] == pytest.approx(0.6)
+    assert "multipliers" in entry
+
+
+def test_export_state_includes_personalities_when_available() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.features.observations.personality_channels = True
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.clear()
+    world.agents["avery"] = AgentSnapshot(
+        agent_id="avery",
+        position=(0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.6, "energy": 0.7},
+        wallet=3.0,
+        personality_profile="socialite",
+        personality=PersonalityProfiles.get("socialite").personality,
+    )
+    loop.step()
+    state = loop.telemetry.export_state()
+    personalities = state.get("personalities")
+    assert personalities is not None
+    assert "avery" in personalities

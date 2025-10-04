@@ -1,0 +1,30 @@
+{
+  "config": "configs/scenarios/demo_story_arc.yaml",
+  "agent_count": 3,
+  "agents": {
+    "demo_1": {
+      "keys": [
+        "features",
+        "map",
+        "metadata"
+      ],
+      "feature_length": 81
+    },
+    "demo_2": {
+      "keys": [
+        "features",
+        "map",
+        "metadata"
+      ],
+      "feature_length": 81
+    },
+    "demo_3": {
+      "keys": [
+        "features",
+        "map",
+        "metadata"
+      ],
+      "feature_length": 81
+    }
+  }
+}

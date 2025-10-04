@@ -24,6 +24,11 @@ All variants emit the following scalars in the order shown:
 - Path hint logits: `path_hint_north`, `path_hint_south`, `path_hint_east`, `path_hint_west`
 - Landmark bearings/distances (optional): for each of `fridge`, `stove`, `bed`, `shower`
   we append `<name>_dx`, `<name>_dy`, `<name>_dist`
+- Personality traits (optional): when `features.observations.personality_channels`
+  is enabled the builder appends `personality_extroversion`,
+  `personality_forgiveness`, and `personality_ambition` to expose the live trait
+  vector. Metadata also carries the resolved profile name plus configured
+  multipliers for quick inspection.
 - Social snippet: `social_slot{n}_d{m}` entries plus aggregates when
   `include_aggregates` is enabled. Each slot packs the hashed agent embedding
   followed by trust, familiarity, and rivalry scores derived from the relationship
@@ -40,7 +45,7 @@ world processes actions (request/move/start/release/blocked).
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
 | Local map | Egocentric 11×11 window with 4 channels: `self`, `agents`, `objects`, `reservations` | `WorldState.local_view()` | (4, 11, 11) |
-| Scalars | Shared bundle (§1) | Observation builder | ~70 |
+| Scalars | Shared bundle (§1) | Observation builder | ~70 (`+3` when personality channels enabled) |
 | Social snippet | Optional top friends/rivals embeddings | Relationships ledger | configurable |
 
 Reference sample: `docs/samples/observation_hybrid_sample.npz` (metadata JSON alongside).
@@ -50,7 +55,7 @@ Reference sample: `docs/samples/observation_hybrid_sample.npz` (metadata JSON al
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
 | Local map | Egocentric 11×11 window with 6 channels: `self`, `agents`, `objects`, `reservations`, `path_dx`, `path_dy` | `WorldState.local_view()` | (6, 11, 11) |
-| Scalars | Shared bundle (§1) | Observation builder | ~74 |
+| Scalars | Shared bundle (§1) | Observation builder | ~74 (`+3` when personality channels enabled) |
 | Social snippet | Optional | Relationships ledger | configurable |
 
 `path_dx/path_dy` encode normalized directional vectors per tile based on relative offsets.
@@ -61,7 +66,7 @@ Reference sample: `docs/samples/observation_hybrid_sample.npz` (metadata JSON al
 
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
-| Feature vector | Shared bundle (§1) plus local summary scalars (`neighbor_agent_ratio`, `neighbor_object_ratio`, `reserved_tile_ratio`, `nearest_agent_distance`) | Observation builder | ~84 |
+| Feature vector | Shared bundle (§1) plus local summary scalars (`neighbor_agent_ratio`, `neighbor_object_ratio`, `reserved_tile_ratio`, `nearest_agent_distance`) | Observation builder | ~84 (`+3` when personality channels enabled) |
 | Map tensor | Not used (placeholder zeros) | — | (0, 0, 0) |
 
 Compact omits the spatial map entirely. Instead, the builder encodes a coarse
@@ -101,6 +106,8 @@ metadata rather than hard-coded indices when interpreting social values.
 ## 6. Configuration Knobs
 
 - `features.systems.observations`: `hybrid` (default), `full`, or `compact`
+- `features.observations.personality_channels`: gate the personality trait channel
+  and metadata bundle (defaults to `false` for backward compatibility)
 - `observations.hybrid.local_window`: odd integer ≥3 (hybrid/full map size)
 - `observations.hybrid.include_targets`: whether to append landmark bearings/distances
 - Social snippet controls: `observations.social_snippet.*`

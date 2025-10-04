@@ -7,6 +7,7 @@ from townlet.core.sim_loop import SimulationLoop
 from townlet.observations.builder import ObservationBuilder
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.world.grid import AgentSnapshot
+from townlet.agents.models import PersonalityProfiles
 
 
 def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
@@ -204,3 +205,47 @@ def test_ctx_reset_flag_on_teleport_and_possession() -> None:
     feature_names = bob_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
     assert bob_obs["features"][idx] == 0.0
+
+
+def test_personality_channels_append_when_enabled() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.features.observations.personality_channels = True
+    loop = SimulationLoop(config)
+    world = loop.world
+    world.agents.clear()
+
+    socialite = PersonalityProfiles.get("socialite")
+    world.agents["avery"] = AgentSnapshot(
+        agent_id="avery",
+        position=(0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.6, "energy": 0.7},
+        wallet=4.0,
+        personality=socialite.personality,
+        personality_profile="socialite",
+    )
+
+    builder = ObservationBuilder(config)
+    observations = builder.build_batch(world, terminated={})
+    obs = observations["avery"]
+    feature_names = obs["metadata"]["feature_names"]
+
+    assert "personality_extroversion" in feature_names
+    assert "personality_forgiveness" in feature_names
+    assert "personality_ambition" in feature_names
+
+    ext_idx = feature_names.index("personality_extroversion")
+    forgive_idx = feature_names.index("personality_forgiveness")
+    ambition_idx = feature_names.index("personality_ambition")
+
+    features = obs["features"]
+    assert np.isclose(features[ext_idx], socialite.personality.extroversion)
+    assert np.isclose(features[forgive_idx], socialite.personality.forgiveness)
+    assert np.isclose(features[ambition_idx], socialite.personality.ambition)
+
+    metadata = obs["metadata"].get("personality")
+    assert metadata is not None
+    assert metadata.get("profile") == "socialite"
+    traits = metadata.get("traits", {})
+    assert traits.get("extroversion") == socialite.personality.extroversion
+    assert traits.get("forgiveness") == socialite.personality.forgiveness
+    assert traits.get("ambition") == socialite.personality.ambition
