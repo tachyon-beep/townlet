@@ -6,7 +6,6 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 
@@ -17,10 +16,15 @@ from townlet.policy.scripted import ScriptedPolicyAdapter, get_scripted_policy
 from townlet.policy.scenario_utils import seed_default_agents
 
 
-def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Capture scripted trajectories for BC datasets")
     parser.add_argument("config", type=Path, help="Simulation config YAML")
-    parser.add_argument("--scenario", type=str, default="idle", help="Scripted policy scenario name")
+    parser.add_argument(
+        "--scenario",
+        type=str,
+        default="idle",
+        help="Scripted policy scenario name",
+    )
     parser.add_argument("--ticks", type=int, default=50, help="Number of ticks to simulate")
     parser.add_argument("--output", type=Path, required=True, help="Directory to write trajectories")
     parser.add_argument(
@@ -35,13 +39,13 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
 def _build_frame(
     adapter: ScriptedPolicyAdapter,
     agent_id: str,
-    observation: Dict[str, np.ndarray],
+    observation: dict[str, np.ndarray],
     reward: float,
     terminated: bool,
     trajectory_id: str,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     observation_meta = dict(observation.get("metadata", {}) or {})
-    frame_meta: Dict[str, object] = {
+    frame_meta: dict[str, object] = {
         **observation_meta,
         "agent_id": agent_id,
         "trajectory_id": trajectory_id,
@@ -66,7 +70,7 @@ def _build_frame(
     }
 
 
-def main(argv: List[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     config = load_config(args.config)
     loop = SimulationLoop(config)
@@ -80,7 +84,7 @@ def main(argv: List[str] | None = None) -> None:
     output_dir = args.output
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    frames_by_agent: Dict[str, List[Dict[str, object]]] = defaultdict(list)
+    frames_by_agent: dict[str, list[dict[str, object]]] = defaultdict(list)
     trajectory_prefix = scripted_policy.trajectory_prefix
 
     for _ in range(max(0, args.ticks)):

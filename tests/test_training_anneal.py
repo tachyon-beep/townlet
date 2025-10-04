@@ -8,7 +8,7 @@ import pytest
 
 from townlet.config import AnnealStage, load_config
 from townlet.policy.models import torch_available
-from townlet.policy.replay import ReplayDatasetConfig, frames_to_replay_sample
+from townlet.policy.replay import frames_to_replay_sample
 from townlet.policy.runner import TrainingHarness
 
 

@@ -48,7 +48,9 @@ def test_admin_mode_required(caplog: pytest.LogCaptureFixture, bridge: ConsoleBr
     assert not caplog.records  # no unexpected logging
 
 
-def test_handler_exception_emits_internal_error(caplog: pytest.LogCaptureFixture, bridge: ConsoleBridge) -> None:
+def test_handler_exception_emits_internal_error(
+    caplog: pytest.LogCaptureFixture, bridge: ConsoleBridge
+) -> None:
     def boom(_envelope):
         raise RuntimeError("boom")
 

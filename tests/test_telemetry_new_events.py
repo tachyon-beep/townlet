@@ -244,7 +244,12 @@ def test_relationship_summary_and_social_events() -> None:
         possessed_agents=[],
         social_events=[
             {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
-            {"type": "rivalry_avoidance", "agent": "alice", "object": "stove_1", "reason": "queue_rival"},
+            {
+                "type": "rivalry_avoidance",
+                "agent": "alice",
+                "object": "stove_1",
+                "reason": "queue_rival",
+            },
         ],
     )
 

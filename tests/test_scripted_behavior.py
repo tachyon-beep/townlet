@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.behavior import AgentIntent, BehaviorController

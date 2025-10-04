@@ -5,7 +5,6 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 from townlet.config.loader import load_config
 
@@ -66,7 +65,7 @@ def run_capture(
 ) -> None:
     load_config(config)  # validation only
     output.mkdir(parents=True, exist_ok=True)
-    cmd: List[str] = [
+    cmd: list[str] = [
         sys.executable,
         "scripts/capture_rollout.py",
         str(config),

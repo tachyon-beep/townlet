@@ -47,7 +47,7 @@ def test_diff_fixture_applies_cleanly() -> None:
     assert diff_payload.get("payload_type") == "diff"
 
     client = TelemetryClient()
-    baseline = client.parse_payload(snapshot_payload)
+    client.parse_payload(snapshot_payload)
     incremental = client.parse_payload(diff_payload)
 
     recomposed_payload = _apply_diff(snapshot_payload, diff_payload)

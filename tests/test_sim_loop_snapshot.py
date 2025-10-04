@@ -186,7 +186,7 @@ def test_policy_transitions_resume(tmp_path: Path, base_config) -> None:
     )
     loop.step()
 
-    trajectory_before = loop.policy.collect_trajectory(clear=True)
+    loop.policy.collect_trajectory(clear=True)
     snapshot_path = loop.save_snapshot(tmp_path)
 
     resumed = SimulationLoop(base_config)

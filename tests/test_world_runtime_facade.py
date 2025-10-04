@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
@@ -64,7 +64,9 @@ class _StubPerturbations(PerturbationScheduler):
         self.calls.append(("tick", current_tick))
 
 
-def _make_runtime(ticks_per_day: int) -> tuple[WorldRuntime, _StubWorld, _StubLifecycle, _StubPerturbations]:
+def _make_runtime(
+    ticks_per_day: int,
+) -> tuple[WorldRuntime, _StubWorld, _StubLifecycle, _StubPerturbations]:
     world = _StubWorld()
     lifecycle = _StubLifecycle()
     perturbations = _StubPerturbations()
@@ -110,7 +112,7 @@ def test_runtime_tick_invokes_dependencies_in_order() -> None:
 
 @pytest.mark.parametrize("tick", [1, 4])
 def test_runtime_handles_buffered_inputs_and_nightly_reset(tick: int) -> None:
-    runtime, world, lifecycle, perturbations = _make_runtime(ticks_per_day=4)
+    runtime, world, _lifecycle, _perturbations = _make_runtime(ticks_per_day=4)
 
     buffered_ops = [ConsoleCommandEnvelope(name="noop", metadata={"source": "buffer"})]
     runtime.queue_console(buffered_ops)

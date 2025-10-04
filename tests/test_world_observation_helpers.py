@@ -51,7 +51,8 @@ def test_local_view_includes_neighbouring_agents_and_objects() -> None:
 
 def test_agent_context_exposes_core_metrics() -> None:
     world = _make_world()
-    world._employment_exit_queue.append("alice")  # noqa: SLF001 - legacy structure access
+    # Transitional access until employment queue extraction lands.
+    world._employment_exit_queue.append("alice")
     context = agent_context(world, "alice")
 
     expected_keys = {
@@ -78,7 +79,8 @@ def test_find_nearest_object_of_type_returns_closest_position() -> None:
 
 def test_build_local_cache_matches_world_state() -> None:
     world = _make_world()
-    world._active_reservations["bed_1"] = "alice"  # noqa: SLF001 - transitional access
+    # Transitional access until reservation refactor completes.
+    world._active_reservations["bed_1"] = "alice"
     snapshots = world.snapshot()
     agent_lookup, object_lookup, reservation_tiles = build_local_cache(world, snapshots)
 

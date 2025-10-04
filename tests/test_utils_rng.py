@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import binascii
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ def test_encode_decode_rng_state_round_trip() -> None:
 
 
 def test_decode_rng_state_invalid_payload() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(binascii.Error):
         decode_rng_state("not-base64!")
 
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-
-from pathlib import Path
+from starlette.websockets import WebSocketDisconnect
 
 from townlet.config import load_config
 from townlet.console.handlers import ConsoleCommand, create_console_router
@@ -21,7 +21,13 @@ def simulation_loop() -> SimulationLoop:
 
 
 def _dispatch_factory(loop: SimulationLoop) -> dict[str, Any]:
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, promotion=loop.promotion, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        promotion=loop.promotion,
+        config=loop.config,
+    )
 
     def dispatch(payload: dict[str, Any]) -> dict[str, Any]:
         command = ConsoleCommand(
@@ -69,7 +75,7 @@ def test_operator_requires_token(simulation_loop: SimulationLoop) -> None:
     )
     client = TestClient(app)
 
-    with pytest.raises(Exception):
+    with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect("/ws/operator?token=wrong"):
             pass
 

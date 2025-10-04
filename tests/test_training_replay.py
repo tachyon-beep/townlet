@@ -558,7 +558,7 @@ def test_run_ppo_rejects_nan_advantages(tmp_path: Path) -> None:
         InMemoryReplayDatasetConfig(entries=[sample], batch_size=1, label="nan_adv")
     )
     harness = TrainingHarness(load_config(Path("configs/examples/poc_hybrid.yaml")))
-    with pytest.raises(ValueError, match="advantages.*NaN/inf"):
+    with pytest.raises(ValueError, match=r"advantages.*NaN/inf"):
         harness.run_ppo(dataset_config=None, in_memory_dataset=dataset, epochs=1)
 
 

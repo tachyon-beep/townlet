@@ -39,7 +39,9 @@ def test_simulation_loop_uses_legacy_runtime_when_requested(base_config: object)
         _close_loop(loop)
 
 
-def test_simulation_loop_follows_environment_flag(monkeypatch: pytest.MonkeyPatch, base_config: object) -> None:
+def test_simulation_loop_follows_environment_flag(
+    monkeypatch: pytest.MonkeyPatch, base_config: object
+) -> None:
     monkeypatch.setenv("TOWNLET_LEGACY_RUNTIME", "1")
     loop = SimulationLoop(base_config.model_copy(deep=True))
     try:

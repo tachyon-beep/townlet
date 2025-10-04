@@ -2,12 +2,12 @@
 """Audit behaviour cloning datasets for checksum and metadata freshness."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 import argparse
 import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Mapping
 
 DEFAULT_VERSIONS_PATH = Path("data/bc_datasets/versions.json")
 REQUIRED_VERSION_KEYS = {"manifest", "checksums", "captures_dir"}
@@ -40,7 +40,7 @@ def load_versions(path: Path) -> Mapping[str, Mapping[str, object]]:
 
 def audit_dataset(name: str, payload: Mapping[str, object]) -> dict[str, object]:
     missing_keys = [key for key in REQUIRED_VERSION_KEYS if key not in payload]
-    findings: List[str] = []
+    findings: list[str] = []
     status = "PASS"
 
     manifest_path = Path(payload.get("manifest", ""))
@@ -64,7 +64,7 @@ def audit_dataset(name: str, payload: Mapping[str, object]) -> dict[str, object]
         findings.append(f"Captures dir missing: {captures_dir}")
         status = "WARN"
 
-    checksum_data: Dict[str, dict[str, str]] = {}
+    checksum_data: dict[str, dict[str, str]] = {}
     if checksums_exists:
         data = json.loads(checksums_path.read_text())
         if isinstance(data, Mapping):
@@ -73,7 +73,7 @@ def audit_dataset(name: str, payload: Mapping[str, object]) -> dict[str, object]
             findings.append("checksums file is not an object")
             status = "FAIL"
 
-    checksum_failures: List[str] = []
+    checksum_failures: list[str] = []
     if checksum_data:
         for sample_name, entry in checksum_data.items():
             sample_path = captures_dir / Path(entry.get("sample", sample_name)).name
@@ -96,7 +96,7 @@ def audit_dataset(name: str, payload: Mapping[str, object]) -> dict[str, object]
             status = "FAIL"
             findings.extend(checksum_failures)
 
-    manifest_entries: List[dict] = []
+    manifest_entries: list[dict] = []
     if manifest_exists:
         manifest_data = json.loads(manifest_path.read_text())
         if isinstance(manifest_data, list):
@@ -105,7 +105,7 @@ def audit_dataset(name: str, payload: Mapping[str, object]) -> dict[str, object]
             findings.append("manifest is not a list")
             status = "FAIL"
 
-    stale_entries: List[str] = []
+    stale_entries: list[str] = []
     for entry in manifest_entries:
         meta_path = captures_dir / Path(entry.get("meta", "")).name
         if not meta_path.exists():

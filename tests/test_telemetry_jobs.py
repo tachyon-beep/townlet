@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.stability.monitor import StabilityMonitor

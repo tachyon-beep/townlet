@@ -183,7 +183,12 @@ def test_tcp_transport_wraps_socket_with_tls(monkeypatch: pytest.MonkeyPatch) ->
             self.loaded_chain: tuple[str | None, str | None] | None = None
             self.wrap_calls: list[str | None] = []
 
-        def load_verify_locations(self, cafile=None, capath=None, cadata=None):  # pragma: no cover - compatibility
+        def load_verify_locations(
+            self,
+            cafile=None,
+            capath=None,
+            cadata=None,
+        ):  # pragma: no cover - compatibility
             self.loaded_cafile = cafile
 
         def load_cert_chain(self, certfile, keyfile=None):  # pragma: no cover - optional chain
@@ -234,7 +239,10 @@ def test_tcp_transport_wraps_socket_with_tls(monkeypatch: pytest.MonkeyPatch) ->
     assert dummy_socket.closed is True
 
 
-def test_create_transport_plaintext_warning(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+def test_create_transport_plaintext_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     calls = {}
 
     class DummySocket:
