@@ -1,0 +1,15 @@
+{
+  "config": "configs/scenarios/demo_story_arc.yaml",
+  "ticks": 150,
+  "agents": [
+    "demo_1#1",
+    "demo_2#1",
+    "demo_3#1"
+  ],
+  "needs_mean": {
+    "hunger": 0.22,
+    "hygiene": 0.332,
+    "energy": 0.276
+  },
+  "reward_mean_per_tick": -0.153974
+}

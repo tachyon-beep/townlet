@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import ClassVar
 
 
-@dataclass(frozen=True)
+@dataclass
 class Personality:
     extroversion: float
     forgiveness: float

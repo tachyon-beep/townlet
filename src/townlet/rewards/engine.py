@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from typing import ClassVar
 
+from townlet.agents.models import PersonalityProfile, PersonalityProfiles
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
 
@@ -11,11 +13,19 @@ from townlet.world.grid import WorldState
 class RewardEngine:
     """Compute per-agent rewards with clipping and guardrails."""
 
+    _REWARD_BIAS_COMPONENTS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "social": ("social_bonus", "social_penalty", "social_avoidance"),
+        "employment": ("wage", "punctuality"),
+        "survival": ("survival",),
+    }
+
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self._termination_block: dict[str, int] = {}
         self._episode_totals: dict[str, float] = {}
         self._latest_breakdown: dict[str, dict[str, float]] = {}
+        self._reward_scaling_enabled = config.reward_personality_scaling_enabled()
+        self._profile_cache: dict[str, PersonalityProfile] = {}
 
     def compute(
         self,
@@ -35,7 +45,6 @@ class RewardEngine:
         self._prune_termination_blocks(current_tick, block_window)
         self._reset_episode_totals(terminated, world)
 
-        social_rewards: dict[str, float] = {}
         chat_events = list(self._consume_chat_events(world))
         avoidance_events = list(self._consume_avoidance_events(world))
         self._latest_social_events = []
@@ -85,6 +94,10 @@ class RewardEngine:
             )
             total += punctuality_value
             components["punctuality"] = punctuality_value
+
+            profile = self._profile_for(snapshot)
+            if profile is not None and profile.reward_bias:
+                total += self._apply_reward_biases(components, profile.reward_bias)
 
             penalty_value = self._compute_terminal_penalty(
                 agent_id, terminated, reason_map
@@ -154,6 +167,61 @@ class RewardEngine:
         stage = getattr(self.config.features.stages, "social_rewards", "OFF")
         order = {"OFF": 0, "C1": 1, "C2": 2, "C3": 3}
         return order.get(stage, 0)
+
+    def _profile_for(self, snapshot) -> PersonalityProfile | None:
+        if not self._reward_scaling_enabled:
+            return None
+        name = getattr(snapshot, "personality_profile", None)
+        if not name:
+            return None
+        key = str(name).strip().lower()
+        if not key:
+            return None
+        profile = self._profile_cache.get(key)
+        if profile is None:
+            try:
+                profile = PersonalityProfiles.get(key)
+            except KeyError:
+                return None
+            self._profile_cache[key] = profile
+        return profile
+
+    def _apply_reward_biases(
+        self,
+        components: dict[str, float],
+        biases: Mapping[str, float],
+    ) -> float:
+        total_delta = 0.0
+
+        def _scale(value: float, factor: float) -> float:
+            if factor <= 0.0:
+                return value
+            if value >= 0.0:
+                return value * factor
+            return value / factor
+
+        for key, raw_factor in biases.items():
+            try:
+                factor = float(raw_factor)
+            except (TypeError, ValueError):
+                continue
+            if factor == 1.0:
+                continue
+            targets = self._REWARD_BIAS_COMPONENTS.get(key, (key,))
+            for name in targets:
+                if name not in components:
+                    continue
+                baseline = components[name]
+                adjusted = _scale(baseline, factor)
+                components[name] = adjusted
+                total_delta += adjusted - baseline
+            if any(name.startswith("social_") for name in targets) or key == "social":
+                components["social"] = (
+                    components.get("social_bonus", 0.0)
+                    + components.get("social_penalty", 0.0)
+                    + components.get("social_avoidance", 0.0)
+                )
+        return total_delta
 
     def _compute_chat_rewards(
         self,

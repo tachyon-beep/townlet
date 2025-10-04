@@ -340,8 +340,20 @@ class PolicyRuntime:
         agent_id: str,
         intent: AgentIntent,
     ) -> AgentIntent:
+        avoidance = getattr(self.behavior, "should_avoid", None)
+
+        def _should_avoid(target_agent: str) -> bool:
+            if not target_agent:
+                return False
+            if callable(avoidance):
+                try:
+                    return bool(avoidance(world, agent_id, target_agent))
+                except Exception:  # pragma: no cover - defensive hook
+                    return world.rivalry_should_avoid(agent_id, target_agent)
+            return world.rivalry_should_avoid(agent_id, target_agent)
+
         if intent.kind == "chat" and intent.target_agent:
-            if world.rivalry_should_avoid(agent_id, intent.target_agent):
+            if _should_avoid(intent.target_agent):
                 world.record_chat_failure(agent_id, intent.target_agent)
                 world.record_relationship_guard_block(
                     agent_id=agent_id,

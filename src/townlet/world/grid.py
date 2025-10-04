@@ -13,7 +13,12 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from townlet.agents.models import Personality, personality_from_profile
+from townlet.agents.models import (
+    Personality,
+    PersonalityProfile,
+    PersonalityProfiles,
+    personality_from_profile,
+)
 from townlet.agents.relationship_modifiers import (
     RelationshipDelta,
     RelationshipEvent,
@@ -162,7 +167,9 @@ class AgentSnapshot:
         if profile_name:
             resolved_name, resolved = _resolve_personality_profile(profile_name)
             self.personality_profile = resolved_name
-            self.personality = resolved
+            current_personality = getattr(self, "personality", None)
+            if current_personality is None or current_personality == resolved:
+                self.personality = resolved
 
 
 @dataclass
@@ -211,6 +218,12 @@ class WorldState:
     tick: int = 0
     queue_manager: QueueManager = field(init=False)
     embedding_allocator: EmbeddingAllocator = field(init=False)
+    _personality_reward_enabled: bool = field(init=False, default=False, repr=False)
+    _personality_profile_cache: dict[str, PersonalityProfile] = field(
+        init=False,
+        default_factory=dict,
+        repr=False,
+    )
     _active_reservations: dict[str, str] = field(init=False, default_factory=dict)
     objects: dict[str, InteractiveObject] = field(init=False, default_factory=dict)
     affordances: dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
@@ -258,6 +271,8 @@ class WorldState:
         return instance
 
     def __post_init__(self) -> None:
+        self._personality_reward_enabled = self.config.reward_personality_scaling_enabled()
+        self._personality_profile_cache.clear()
         self.queue_manager = QueueManager(config=self.config)
         self.embedding_allocator = EmbeddingAllocator(config=self.config)
         self._active_reservations = {}
@@ -1740,6 +1755,26 @@ class WorldState:
             return _default_personality()
         return snapshot.personality
 
+    def _profile_for_snapshot(
+        self, snapshot: AgentSnapshot
+    ) -> PersonalityProfile | None:
+        if not self._personality_reward_enabled:
+            return None
+        name = getattr(snapshot, "personality_profile", None)
+        if not name:
+            return None
+        key = str(name).strip().lower()
+        if not key:
+            return None
+        profile = self._personality_profile_cache.get(key)
+        if profile is None:
+            try:
+                profile = PersonalityProfiles.get(key)
+            except KeyError:
+                return None
+            self._personality_profile_cache[key] = profile
+        return profile
+
     def _apply_relationship_delta(
         self,
         owner_id: str,
@@ -2032,7 +2067,18 @@ class WorldState:
         for snapshot in self.agents.values():
             for need, decay in decay_rates.items():
                 if need in snapshot.needs:
-                    snapshot.needs[need] = max(0.0, snapshot.needs[need] - decay)
+                    multiplier = 1.0
+                    profile = self._profile_for_snapshot(snapshot)
+                    if profile is not None:
+                        raw = profile.need_multipliers.get(need, 1.0)
+                        try:
+                            multiplier = float(raw)
+                        except (TypeError, ValueError):
+                            multiplier = 1.0
+                        if multiplier <= 0.0:
+                            multiplier = 1.0
+                    adjusted_decay = decay * multiplier
+                    snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
         self._decay_rivalry_ledgers()
         self._apply_job_state()
         self._update_basket_metrics()

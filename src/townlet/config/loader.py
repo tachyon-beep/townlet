@@ -14,7 +14,7 @@ import re
 from collections.abc import Mapping
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
@@ -27,6 +27,14 @@ CuriosityToggle = Literal["phase_A", "off"]
 ConsoleMode = Literal["viewer", "admin"]
 TrainingSource = Literal["replay", "rollout", "mixed", "bc", "anneal"]
 TelemetryTransportType = Literal["stdout", "file", "tcp"]
+
+PERSONALITY_NEED_KEYS: Final[set[str]] = {"hunger", "hygiene", "energy"}
+PERSONALITY_REWARD_KEYS: Final[set[str]] = {"social", "employment", "survival"}
+PERSONALITY_BEHAVIOUR_KEYS: Final[set[str]] = {
+    "chat_preference",
+    "work_affinity",
+    "conflict_tolerance",
+}
 
 
 class StageFlags(BaseModel):
@@ -51,12 +59,18 @@ class ConsoleFlags(BaseModel):
     mode: ConsoleMode = "viewer"
 
 
+class BehaviorFlags(BaseModel):
+    personality_profiles: bool = False
+    reward_multipliers: bool = False
+
+
 class FeatureFlags(BaseModel):
     stages: StageFlags
     systems: SystemFlags
     training: TrainingFlags
     console: ConsoleFlags
     relationship_modifiers: bool = False
+    behavior: BehaviorFlags = BehaviorFlags()
 
 
 class PersonalityAssignmentConfig(BaseModel):
@@ -926,6 +940,43 @@ class SimulationConfig(BaseModel):
             return str(profile_name).lower()
         seed_value = getattr(self, "seed", None)
         return self.personalities.resolve(agent_id, seed=seed_value)
+
+    def personality_profiles_enabled(self) -> bool:
+        return bool(getattr(self.features.behavior, "personality_profiles", False))
+
+    def reward_personality_scaling_enabled(self) -> bool:
+        return bool(getattr(self.features.behavior, "reward_multipliers", False))
+
+    @model_validator(mode="after")
+    def _validate_personality_bias_keys(self) -> "SimulationConfig":
+        if not (
+            self.personality_profiles_enabled()
+            or self.reward_personality_scaling_enabled()
+        ):
+            return self
+        from townlet.agents.models import PersonalityProfiles
+
+        for profile_name in PersonalityProfiles.names():
+            profile = PersonalityProfiles.get(profile_name)
+            unknown_needs = set(profile.need_multipliers) - PERSONALITY_NEED_KEYS
+            if unknown_needs:
+                raise ValueError(
+                    "Unknown need multipliers %s in personality profile '%s'"
+                    % (sorted(unknown_needs), profile_name)
+                )
+            unknown_reward = set(profile.reward_bias) - PERSONALITY_REWARD_KEYS
+            if unknown_reward:
+                raise ValueError(
+                    "Unknown reward bias keys %s in personality profile '%s'"
+                    % (sorted(unknown_reward), profile_name)
+                )
+            unknown_behaviour = set(profile.behaviour_bias) - PERSONALITY_BEHAVIOUR_KEYS
+            if unknown_behaviour:
+                raise ValueError(
+                    "Unknown behaviour bias keys %s in personality profile '%s'"
+                    % (sorted(unknown_behaviour), profile_name)
+                )
+        return self
 
     def snapshot_allowed_roots(self) -> tuple[Path, ...]:
         roots: list[Path] = [self.snapshot_root()]
