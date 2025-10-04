@@ -2,8 +2,7 @@
 
 ## Outstanding Defects
 
-1. **Observation helpers breach encapsulation (Medium).** `townlet.world.observation` operates directly on `WorldState` internals such as `_objects_by_position` and `_active_reservations` (`src/townlet/world/observation.py:27-133`), contradicting the facade goal and complicating further refactors.
-2. **Tests depend on private employment hooks (Low).** Multiple fixtures call `_assign_jobs_to_agents` with `type: ignore[attr-defined]` (`tests/test_console_dispatcher.py:43`, `tests/test_console_commands.py:579`, `tests/test_employment_loop.py:32`, plus other telemetry tests), so Phase 3 cleanup cannot drop the shim without breaking coverage.
+_None (addressed via Phase 2/3 work)._
 
 ## Remediation Plan
 

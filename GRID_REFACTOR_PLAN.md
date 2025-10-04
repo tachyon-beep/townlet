@@ -240,14 +240,10 @@
 
 ### Phase 3: Final Cleanup
 
-- **Step 3.1: Dead Code Removal**
-  - Task 3.1.1: Catalogue `WorldState` methods/attributes now unused (legacy queue helpers, direct observation caches) and remove or deprecate behind feature flag.
-  - Task 3.1.2: Update type hints/invariants for remaining `WorldState` APIs to reflect facade/observation modules; ensure mypy clean for `townlet/world`.
-  - Task 3.1.3: Delete temporary compatibility shims once integration tests confirm no downstream usage.
-- **Step 3.2: Documentation & Validation**
-  - Task 3.2.1: Refresh architecture diagrams plus narrative sections in `docs/engineering/WORLDSTATE_REFACTOR.md` to capture final module boundaries and runtime flow.
-  - Task 3.2.2: Regenerate telemetry/observation baselines post-cleanup (facade + legacy modes) and archive diffs.
-  - Task 3.2.3: Run `pytest` (full suite), long-form simulation smoke (`scripts/run_simulation.py ... --ticks 5000`), and observer dashboard spot-check; record results in plan appendix.
+- **Step 3.1: Dead Code Removal** – **Completed**
+  - Legacy observation helpers removed from `WorldState`; employment/test surfaces now rely on public accessors.
+- **Step 3.2: Documentation & Validation** – **Completed**
+  - Engineering docs/fixtures refreshed (Phase 3 telemetry + NPZ baselines regenerated); smoke tests recorded in `tmp/obs_phase3/`.
 - **Step 3.3: Tooling Debt Burn-down**
   - Task 3.3.1: Drive `ruff check src/townlet/world src/townlet/observations` to zero findings; align import ordering/annotation modernisation.
   - Task 3.3.2: Ensure `mypy src/townlet/world src/townlet/observations` passes without ignores; lift legacy `type: ignore`s where feasible.
