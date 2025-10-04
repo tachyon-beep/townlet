@@ -1,0 +1,147 @@
+[
+  {
+    "category": "demo_story",
+    "data": {
+      "agents_seeded": 3,
+      "stage": "warmup"
+    },
+    "message": "Avery and Kai prep the town for Blair's arrival.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.29000000000000004,
+      "delta_trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "other": "demo_2",
+      "owner": "demo_1",
+      "status": "added",
+      "trust": 0.295
+    },
+    "message": "demo_1 bonded with demo_2: trust 0.29, familiarity 0.29.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.29000000000000004,
+      "delta_trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "other": "demo_3",
+      "owner": "demo_1",
+      "status": "added",
+      "trust": 0.295
+    },
+    "message": "demo_1 bonded with demo_3: trust 0.29, familiarity 0.29.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.29000000000000004,
+      "delta_trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "other": "demo_1",
+      "owner": "demo_2",
+      "status": "added",
+      "trust": 0.295
+    },
+    "message": "demo_2 bonded with demo_1: trust 0.29, familiarity 0.29.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.29000000000000004,
+      "delta_trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "other": "demo_3",
+      "owner": "demo_2",
+      "status": "added",
+      "trust": 0.295
+    },
+    "message": "demo_2 bonded with demo_3: trust 0.29, familiarity 0.29.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.29000000000000004,
+      "delta_trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "other": "demo_2",
+      "owner": "demo_3",
+      "status": "added",
+      "trust": 0.295
+    },
+    "message": "demo_3 bonded with demo_2: trust 0.29, familiarity 0.29.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.29000000000000004,
+      "delta_trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "other": "demo_1",
+      "owner": "demo_3",
+      "status": "added",
+      "trust": 0.295
+    },
+    "message": "demo_3 bonded with demo_1: trust 0.29, familiarity 0.29.",
+    "priority": true,
+    "tick": 0
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.09000000000000001,
+      "delta_trust": 0.045000000000000005,
+      "familiarity": 0.09000000000000001,
+      "other": "kai",
+      "owner": "avery",
+      "status": "added",
+      "trust": 0.045000000000000005
+    },
+    "message": "avery bonded with kai: trust 0.05, familiarity 0.09.",
+    "priority": true,
+    "tick": 9
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.09000000000000001,
+      "delta_trust": 0.045000000000000005,
+      "familiarity": 0.09000000000000001,
+      "other": "avery",
+      "owner": "kai",
+      "status": "added",
+      "trust": 0.045000000000000005
+    },
+    "message": "kai bonded with avery: trust 0.05, familiarity 0.09.",
+    "priority": true,
+    "tick": 9
+  },
+  {
+    "category": "relationship_friendship",
+    "data": {
+      "delta_familiarity": 0.0,
+      "delta_trust": -0.1,
+      "familiarity": 0.0,
+      "other": "blair",
+      "owner": "demo_2",
+      "status": "added",
+      "trust": -0.1
+    },
+    "message": "demo_2 bonded with blair: trust -0.10, familiarity 0.00.",
+    "priority": true,
+    "tick": 41
+  }
+]

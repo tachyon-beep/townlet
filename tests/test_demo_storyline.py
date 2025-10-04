@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from townlet.config import load_config
+from townlet.core.sim_loop import SimulationLoop
+from townlet.demo.runner import DemoScheduler
 from townlet.demo.storylines import available_storylines, build_storyline
-from townlet.demo.timeline import load_timeline
+from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
 
 
 def _normalise(value):
@@ -90,3 +94,51 @@ def test_demo_story_arc_config_tick_budget() -> None:
     scenario = getattr(config, "scenario", {})
     ticks = scenario.get("ticks") if isinstance(scenario, dict) else getattr(scenario, "ticks", None)
     assert ticks == 150
+
+
+class _RecordingExecutor:
+    def __init__(self) -> None:
+        self.payloads: list[dict[str, object]] = []
+
+    def submit_payload(self, payload: dict[str, object], *, enqueue: bool = True) -> dict[str, object]:
+        self.payloads.append(payload)
+        return payload
+
+    def pending_count(self) -> int:
+        return len(self.payloads)
+
+
+def test_demo_story_arc_timeline_mutations_and_narration() -> None:
+    config = load_config(Path("configs/scenarios/demo_story_arc.yaml"))
+    loop = SimulationLoop(config)
+
+    base_timeline = load_timeline(Path("configs/scenarios/timelines/demo_story_arc.yaml"))
+    commands = list(base_timeline.upcoming())
+    commands.append(
+        ScheduledCommand(
+            tick=130,
+            name="closing_story",
+            kind="narration",
+            kwargs={"message": "Recovery secured.", "category": "demo_story"},
+        )
+    )
+    timeline = DemoTimeline(commands)
+    scheduler = DemoScheduler(timeline=timeline)
+    executor = _RecordingExecutor()
+
+    for tick in range(0, 135):
+        scheduler.on_tick(loop, executor, tick)
+
+    assert "blair" in loop.world.agents
+    blair = loop.world.agents["blair"]
+    assert blair.needs["energy"] == pytest.approx(0.35)
+
+    assert any(
+        payload.get("name") == "perturbation_trigger" and payload.get("args") == ["price_spike"]
+        for payload in executor.payloads
+    )
+    assert any(
+        payload.get("name") == "announce_story"
+        and payload.get("kwargs", {}).get("message") == "Recovery secured."
+        for payload in executor.payloads
+    )

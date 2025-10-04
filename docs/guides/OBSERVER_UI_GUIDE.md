@@ -8,6 +8,11 @@ The observer dashboard provides a console-based view of Townlet’s employment K
    ```bash
    scripts/observer_ui.py configs/examples/poc_hybrid.yaml --refresh 0.5 [--focus-agent alice]
    ```
+   - For the narrative demo storyline, pair this with the rehearsal helper:
+     ```bash
+     scripts/demo_rehearsal.sh --narration-level summary --no-palette
+     ```
+     The helper uses `scripts/demo_run.py --scenario demo_story_arc`, ensuring the observer view and command palette remain in sync with the playbook (`docs/ops/DEMO_SCENARIO_PLAYBOOK.md`).
 3. You’ll see the following panels:
    - **Telemetry** — schema version and compatibility warning.
    - **Employment** — queue length, exits, caps.
@@ -24,13 +29,13 @@ The observer dashboard provides a console-based view of Townlet’s employment K
 
 Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-agent` selects the map focus agent; `--approve/--defer` can trigger employment actions at startup. New pagination controls include `--agent-page-size` (default 6), `--agent-rotate-interval` (ticks between auto-rotation, 0 disables), and `--disable-agent-autorotate` to keep the current page static while presenting.
 
-For scripted demos, launch `scripts/demo_run.py` with the new `configs/demo/poc_demo.yaml` config, which writes telemetry to `logs/demo_stream.jsonl` so the Rich dashboard stays readable. For example:
+For scripted demos, prefer `scripts/demo_run.py --scenario demo_story_arc` (or another storyline) so config and timeline hashes stay aligned with the narrative assets. Example:
 
 ```bash
-python scripts/demo_run.py configs/demo/poc_demo.yaml --ticks 300 --refresh 0.5
+python scripts/demo_run.py --scenario demo_story_arc --ticks 150 --narration-level summary
 ```
 
-Reuse the same config with `scripts/observer_ui.py` when you want a quiet telemetry sink while exploring manually.
+Telemetry is emitted to stdout by default. If you need a quiet sink while inspecting the observer UI interactively, run `scripts/observer_ui.py` with the same config and include `--history-window 0` to trim sparklines.
 
 When screen-sharing or streaming demos over untrusted networks, switch to
 `configs/demo/poc_demo_tls.yaml`. It targets a secure TCP collector with TLS

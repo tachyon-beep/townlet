@@ -3,9 +3,13 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
+import json
+
 from townlet.core.sim_loop import SimulationLoop
 from townlet.demo.runner import DemoScheduler, default_timeline, seed_demo_state
 from townlet.demo.timeline import load_timeline
+from townlet.console.handlers import create_console_router
+from townlet_ui.commands import ConsoleCommandExecutor
 
 
 def test_load_timeline_from_yaml(tmp_path: Path) -> None:
@@ -96,3 +100,51 @@ def test_seed_demo_state_emits_opening_narration() -> None:
     entry = next((item for item in narrations if item.get("category") == "demo_story"), None)
     assert entry is not None
     assert entry.get("data", {}).get("stage") == "warmup"
+
+
+def test_demo_story_arc_narrations_match_golden() -> None:
+    config = load_config(Path("configs/scenarios/demo_story_arc.yaml"))
+    loop = SimulationLoop(config)
+    seed_demo_state(loop.world, telemetry=loop.telemetry, narration_level="summary")
+
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        promotion=loop.promotion,
+        policy=loop.policy,
+        config=loop.config,
+        lifecycle=loop.lifecycle,
+        mode="viewer",
+    )
+    executor = ConsoleCommandExecutor(router)
+    try:
+        timeline = load_timeline(Path("configs/scenarios/timelines/demo_story_arc.yaml"))
+        scheduler = DemoScheduler(timeline=timeline)
+
+        records: list[dict[str, object]] = []
+
+        def collect() -> None:
+            for entry in loop.telemetry.latest_narrations():
+                record: dict[str, object] = {
+                    "tick": int(loop.tick),
+                    "category": entry.get("category"),
+                    "message": entry.get("message"),
+                    "priority": bool(entry.get("priority", False)),
+                }
+                data = entry.get("data")
+                if isinstance(data, dict):
+                    record["data"] = data
+                records.append(record)
+
+        collect()
+        for _ in range(150):
+            loop.step()
+            collect()
+            scheduler.on_tick(loop, executor, loop.tick)
+    finally:
+        executor.shutdown()
+
+    fixture_path = Path("tests/data/demo_story_arc_narrations.json")
+    golden = json.loads(fixture_path.read_text(encoding="utf-8"))
+    assert records == golden
