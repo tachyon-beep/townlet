@@ -47,11 +47,11 @@ _Last updated: Phase 0 instrumentation refresh (2025-10-03)._
 
 | Segment | Line Range | Primary Methods | Future Owner |
 | --- | --- | --- | --- |
-| Console ingress & admin handlers | 290–1054 | `apply_console`, `_register_default_console_handlers`, `_console_*` | ConsoleBridge |
-| Affordance lifecycle & hooks | 420–2076 | `register_affordance_hook`, `apply_actions`, `resolve_affordances`, `_start_affordance`, `_dispatch_affordance_hooks`, `_apply_affordance_effects`, `affordance_manifest_metadata` | AffordanceRuntime |
+| Console ingress & admin handlers | 290–1054 | `apply_console`, `_register_default_console_handlers`, `_console_*` | ConsoleService |
+| Affordance lifecycle & hooks | 420–2076 | `register_affordance_hook`, `apply_actions`, `resolve_affordances`, `_start_affordance`, `_dispatch_affordance_hooks`, `_apply_affordance_effects`, `affordance_manifest_metadata` | AffordanceCoordinator |
 | Telemetry/export utilities | 1397–1526, 2022–2026 | `snapshot`, `local_view`, `drain_events`, `agent_context`, `active_reservations`, `_emit_event` | Shared (Telemetry bridge) |
 | Relationships & rivalry | 1534–1856 | `_record_queue_conflict`, `rivalry_snapshot`, `relationships_snapshot`, `update_relationship`, `record_chat_success/failure` | RelationshipManager |
-| Employment & job lifecycle | 2167–2686 | `_assign_jobs_to_agents`, `_employment_*`, `employment_queue_snapshot`, `employment_request_manual_exit` | EmploymentEngine |
+| Employment & job lifecycle | 2167–2686 | `_assign_jobs_to_agents`, `_employment_*`, `employment_queue_snapshot`, `employment_request_manual_exit` | EmploymentCoordinator |
 | Economy & nightly upkeep | 2090–2711 | `_apply_need_decay`, `apply_nightly_reset`, `_update_basket_metrics`, `_restock_economy` | Core loop / Economy service |
 
 ### Affordance Responsibility Notes (2025-10-03)
@@ -64,27 +64,23 @@ _Last updated: Phase 0 instrumentation refresh (2025-10-03)._
 
 ### Proposed Module Interfaces (Draft)
 
-- **EmploymentEngine**
-  - `enqueue_exit(agent_id, tick)`/`remove_from_queue(agent_id)`
-  - `queue_snapshot()` returning current pending/metrics
-  - `update_for_tick(world_state, tick)` to advance lateness, shift transitions
-  - `manual_exit_request(agent_id, tick)` and `defer_exit(agent_id)` helpers
+- **EmploymentCoordinator**
+  - Wraps `EmploymentEngine` in `townlet/world/employment_service.py`, providing queue operations (`enqueue_exit`, `remove_from_queue`, `queue_snapshot`) and delegation hooks (`assign_jobs_to_agents`, `apply_job_state`).
+  - Maintains exit counts/metrics while shielding `WorldState` from direct state management.
 
-- **AffordanceRuntime**
-  - `register(spec)` to ingest affordance definitions
-  - `apply_actions(agent_actions, tick)` producing success flags
-  - `resolve(tick)` to tick running affordances + emit events/hooks
-  - `clear_hooks()/register_hook` surfaces feeding into hook registry
+- **AffordanceCoordinator**
+  - Wraps `DefaultAffordanceRuntime` in `townlet/world/affordance_runtime.py`, exposing `start`, `release`, `resolve`, `running_snapshot`, and `remove_agent`.
+  - Allows `WorldState` to delegate affordance orchestration without exposing runtime internals, facilitating future extraction.
 
 - **RelationshipManager**
   - `record_queue_conflict(...)`, `update_relationship(...)`
   - `snapshot()` returning rivalry + relationship structures for telemetry
   - `decay(tick)` to manage periodic decay (currently `_decay_*` helpers)
 
-- **ConsoleBridge**
-  - `register_default_handlers()` and role-aware handler wiring
-  - `dispatch(command)` returning `ConsoleCommandResult`
-  - `record_result(result)` & idempotency cache management
+- **ConsoleService**
+  - `queue_command` / `apply` façade backed by the legacy bridge
+  - Handler registration with role enforcement and idempotency helpers
+  - History caching (`cached_result`) and result buffering for telemetry consumers
 
 Each module should receive a lightweight context rather than holding direct references to the entire `WorldState`.
 
@@ -222,7 +218,7 @@ These invariants should carry forward into the runtime extraction; introduce reg
 - `resolve_affordances` and `_handle_blocked` are thin adapters pointing to the runtime, preparing for full module extraction without altering public signatures.
 - Running-state snapshots are exposed via `DefaultAffordanceRuntime.running_snapshot()` to ease telemetry/test assertions when the runtime becomes standalone.
 - Runtime owns agent cleanup during `WorldState.remove_agent` and `WorldState.running_affordances_snapshot()` forwards the structured view for telemetry consumers.
-- `ConsoleBridge` (`src/townlet/world/console_bridge.py`) now encapsulates handler registration/history, letting `WorldState` delegate console orchestration instead of storing handler state.
+- `ConsoleService` (`src/townlet/console/service.py`) now wraps the bridge implementation, letting `WorldState` delegate console orchestration without exposing handler state, while maintaining the existing audit/history semantics.
 - Queue conflict/rivalry bookkeeping lives inside `QueueConflictTracker` (`src/townlet/world/queue_conflict.py`), keeping rivalry/chat event handling separate from core world state.
 - `SimulationLoop` accepts an optional `affordance_runtime_factory`, enabling tests to inject custom runtimes while the default factory still produces `DefaultAffordanceRuntime` instances.
 

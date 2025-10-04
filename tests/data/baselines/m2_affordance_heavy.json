@@ -1,0 +1,2348 @@
+{
+  "affordance_manifest": {
+    "affordance_count": 4,
+    "checksum": "227b9902504bd06b6d2b2abe6409a1c34f41fcc632c4d160ac8190e7311452cb",
+    "object_count": 3,
+    "path": "configs/affordances/core.yaml"
+  },
+  "affordance_runtime": {
+    "active_reservations": {
+      "bed_0": "agent_0",
+      "bed_1": "agent_1",
+      "bed_10": "agent_10",
+      "bed_11": "agent_11",
+      "bed_12": "agent_12",
+      "bed_13": "agent_13",
+      "bed_14": "agent_14",
+      "bed_15": "agent_15",
+      "bed_16": "agent_16",
+      "bed_17": "agent_17",
+      "bed_18": "agent_18",
+      "bed_19": "agent_19",
+      "bed_2": "agent_2",
+      "bed_20": "agent_20",
+      "bed_21": "agent_21",
+      "bed_22": "agent_22",
+      "bed_23": "agent_23",
+      "bed_24": "agent_24",
+      "bed_25": "agent_25",
+      "bed_26": "agent_26",
+      "bed_27": "agent_27",
+      "bed_28": "agent_28",
+      "bed_29": "agent_29",
+      "bed_3": "agent_3",
+      "bed_4": "agent_4",
+      "bed_5": "agent_5",
+      "bed_6": "agent_6",
+      "bed_7": "agent_7",
+      "bed_8": "agent_8",
+      "bed_9": "agent_9"
+    },
+    "event_counts": {
+      "fail": 0,
+      "finish": 0,
+      "precondition_fail": 0,
+      "start": 30
+    },
+    "running": {
+      "bed_0": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_0",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_0"
+      },
+      "bed_1": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_1",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_1"
+      },
+      "bed_10": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_10",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_10"
+      },
+      "bed_11": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_11",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_11"
+      },
+      "bed_12": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_12",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_12"
+      },
+      "bed_13": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_13",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_13"
+      },
+      "bed_14": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_14",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_14"
+      },
+      "bed_15": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_15",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_15"
+      },
+      "bed_16": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_16",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_16"
+      },
+      "bed_17": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_17",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_17"
+      },
+      "bed_18": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_18",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_18"
+      },
+      "bed_19": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_19",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_19"
+      },
+      "bed_2": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_2",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_2"
+      },
+      "bed_20": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_20",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_20"
+      },
+      "bed_21": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_21",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_21"
+      },
+      "bed_22": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_22",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_22"
+      },
+      "bed_23": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_23",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_23"
+      },
+      "bed_24": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_24",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_24"
+      },
+      "bed_25": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_25",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_25"
+      },
+      "bed_26": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_26",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_26"
+      },
+      "bed_27": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_27",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_27"
+      },
+      "bed_28": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_28",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_28"
+      },
+      "bed_29": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_29",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_29"
+      },
+      "bed_3": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_3",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_3"
+      },
+      "bed_4": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_4",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_4"
+      },
+      "bed_5": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_5",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_5"
+      },
+      "bed_6": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_6",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_6"
+      },
+      "bed_7": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_7",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_7"
+      },
+      "bed_8": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_8",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_8"
+      },
+      "bed_9": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "agent_9",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_9"
+      }
+    },
+    "running_count": 30,
+    "tick": 1
+  },
+  "conflict_snapshot": {
+    "queue_history": [
+      {
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "tick": 1,
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        }
+      }
+    ],
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "rivalry": {},
+    "rivalry_events": []
+  },
+  "console_results": [],
+  "economy_settings": {
+    "cook_energy_cost": 0.05,
+    "cook_hygiene_cost": 0.02,
+    "ingredients_cost": 0.15,
+    "meal_cost": 0.4,
+    "stove_stock_replenish": 2.0,
+    "wage_income": 0.02
+  },
+  "economy_snapshot": {
+    "bed_0": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_1": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_10": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_11": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_12": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_13": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_14": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_15": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_16": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_17": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_18": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_19": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_2": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_20": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_21": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_22": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_23": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_24": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_25": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_26": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_27": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_28": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_29": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_3": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_4": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_5": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_6": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_7": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_8": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "bed_9": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "fridge_1": {
+      "stock": {
+        "meals": 5
+      },
+      "type": "fridge"
+    },
+    "shower_1": {
+      "stock": {
+        "power_on": 1,
+        "water_on": 1
+      },
+      "type": "shower"
+    }
+  },
+  "embedding_metrics": {
+    "allocations_total": 30.0,
+    "forced_reuse_count": 0.0,
+    "forced_reuse_rate": 0.0,
+    "reuse_warning": 0.0
+  },
+  "employment_metrics": {
+    "daily_exit_cap": 2,
+    "exits_today": 0,
+    "pending": [],
+    "pending_count": 0,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "events": [
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_0",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_0",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_1",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_1",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_2",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_2",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_3",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_3",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_4",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_4",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_5",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_5",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_6",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_6",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_7",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_7",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_8",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_8",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_9",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_9",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_10",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_10",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_11",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_11",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_12",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_12",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_13",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_13",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_14",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_14",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_15",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_15",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_16",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_16",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_17",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_17",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_18",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_18",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_19",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_19",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_20",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_20",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_21",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_21",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_22",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_22",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_23",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_23",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_24",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_24",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_25",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_25",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_26",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_26",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_27",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_27",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_28",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_28",
+      "tick": 0
+    },
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "agent_29",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_29",
+      "tick": 0
+    }
+  ],
+  "health": {
+    "employment_exit_queue": 0,
+    "perturbations_active": 0,
+    "perturbations_pending": 0,
+    "telemetry_dropped": 0,
+    "telemetry_queue": 1,
+    "tick": 1,
+    "tick_duration_ms": 9.246303932741284
+  },
+  "job_snapshot": {
+    "agent_0": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_1": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_10": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_11": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_12": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_13": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_14": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_15": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_16": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_17": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_18": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_19": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_2": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_20": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_21": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_22": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_23": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_24": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_25": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_26": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_27": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_28": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_29": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_3": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_4": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_5": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_6": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_7": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_8": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    },
+    "agent_9": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.192,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    }
+  },
+  "kpi_history": {
+    "employment_lateness": [
+      0.0
+    ],
+    "late_help_events": [
+      0.0
+    ],
+    "queue_conflict_intensity": [
+      0.0
+    ],
+    "queue_ghost_step_events": [
+      0
+    ],
+    "queue_rotation_events": [
+      0
+    ]
+  },
+  "narration_state": {
+    "last_category_tick": {},
+    "last_global_tick": -10000,
+    "recent_entries": {},
+    "window_emissions": []
+  },
+  "narrations": [],
+  "perturbations": {
+    "active": {},
+    "cooldowns": {
+      "agents": {},
+      "spec": {}
+    },
+    "pending": []
+  },
+  "policy_identity": {
+    "anneal_ratio": null,
+    "config_id": "v1.3.0",
+    "observation_variant": "hybrid",
+    "policy_hash": null
+  },
+  "policy_snapshot": {
+    "agent_0": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.060412
+    },
+    "agent_1": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.069149
+    },
+    "agent_10": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.07999
+    },
+    "agent_11": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.081005
+    },
+    "agent_12": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.071424
+    },
+    "agent_13": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.071142
+    },
+    "agent_14": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.063717
+    },
+    "agent_15": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.057986
+    },
+    "agent_16": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.056549
+    },
+    "agent_17": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.05071
+    },
+    "agent_18": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.05424
+    },
+    "agent_19": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.058967
+    },
+    "agent_2": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.07821
+    },
+    "agent_20": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.06892
+    },
+    "agent_21": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.06908
+    },
+    "agent_22": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.069044
+    },
+    "agent_23": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.073559
+    },
+    "agent_24": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.081279
+    },
+    "agent_25": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.076635
+    },
+    "agent_26": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.075741
+    },
+    "agent_27": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.071845
+    },
+    "agent_28": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.075083
+    },
+    "agent_29": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.083144
+    },
+    "agent_3": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.085125
+    },
+    "agent_4": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.093332
+    },
+    "agent_5": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.093415
+    },
+    "agent_6": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.086193
+    },
+    "agent_7": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.080785
+    },
+    "agent_8": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.077025
+    },
+    "agent_9": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.074883
+    }
+  },
+  "possessed_agents": [],
+  "price_spikes": {},
+  "promotion_state": {
+    "candidate": null,
+    "candidate_ready": false,
+    "candidate_ready_tick": null,
+    "current_release": {
+      "config_id": "v1.3.0"
+    },
+    "history": [],
+    "initial_release": {
+      "config_id": "v1.3.0"
+    },
+    "last_evaluated_tick": null,
+    "last_result": null,
+    "pass_streak": 0,
+    "required_passes": 2,
+    "state": "monitoring"
+  },
+  "queue_history": [
+    {
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "tick": 1,
+      "totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      }
+    }
+  ],
+  "queue_metrics": {
+    "cooldown_events": 0,
+    "ghost_step_events": 0,
+    "rotation_events": 0
+  },
+  "relationship_metrics": {
+    "history": [],
+    "owners": {},
+    "reasons": {},
+    "total": 0,
+    "window_end": 600,
+    "window_start": 0
+  },
+  "relationship_snapshot": {},
+  "relationship_summary": {
+    "churn": {
+      "history": [],
+      "owners": {},
+      "reasons": {},
+      "total": 0,
+      "window_end": 600,
+      "window_start": 0
+    }
+  },
+  "relationship_updates": [],
+  "reward_breakdown": {
+    "agent_0": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_1": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_10": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_11": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_12": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_13": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_14": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_15": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_16": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_17": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_18": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_19": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_2": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_20": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_21": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_22": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_23": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_24": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_25": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_26": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_27": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_28": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_29": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_3": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_4": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_5": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_6": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_7": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_8": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    },
+    "agent_9": {
+      "clip_adjustment": 0.8454062000000002,
+      "needs_penalty": -1.0474062000000002,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    }
+  },
+  "rivalry_events": [],
+  "social_events": [],
+  "transport_buffer_pending": 1,
+  "transport_status": {
+    "allow_plaintext": false,
+    "connected": false,
+    "dropped_messages": 0,
+    "last_error": null,
+    "last_failure_tick": null,
+    "last_flush_duration_ms": null,
+    "last_success_tick": null,
+    "queue_length": 1,
+    "tls_enabled": false,
+    "verify_hostname": true,
+    "worker_alive": true
+  },
+  "utilities": {
+    "power": true,
+    "water": true
+  }
+}

@@ -36,7 +36,7 @@ from townlet.console.command import (
 )
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
-from townlet.world.console_bridge import ConsoleBridge
+from townlet.console.service import ConsoleService
 from townlet.world.queue_conflict import QueueConflictTracker
 from townlet.world.affordances import (
     AffordanceOutcome,
@@ -47,8 +47,10 @@ from townlet.world.affordances import (
     apply_affordance_outcome,
     build_hook_payload,
 )
+from townlet.world.affordance_runtime import AffordanceCoordinator
 from townlet.world.queue_manager import QueueManager
 from townlet.world.employment import EmploymentEngine
+from townlet.world.employment_service import create_employment_coordinator, EmploymentCoordinator
 from townlet.world.relationships import RelationshipLedger, RelationshipParameters
 from townlet.world.rivalry import RivalryLedger, RivalryParameters
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -231,7 +233,7 @@ class WorldState:
     _pending_events: dict[int, list[dict[str, Any]]] = field(init=False, default_factory=dict)
     store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
     _job_keys: list[str] = field(init=False, default_factory=list)
-    employment: EmploymentEngine = field(init=False, repr=False)
+    employment: EmploymentCoordinator = field(init=False, repr=False)
 
     _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
     _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
@@ -245,7 +247,7 @@ class WorldState:
     affordance_runtime_config: AffordanceRuntimeConfig | None = None
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
-    _console: ConsoleBridge = field(init=False)
+    _console: ConsoleService = field(init=False)
     _queue_conflicts: QueueConflictTracker = field(init=False)
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
@@ -282,12 +284,13 @@ class WorldState:
         self._pending_events = {}
         self.store_stock = {}
         self._job_keys = list(self.config.jobs.keys())
-        self.employment = EmploymentEngine(self.config, self._emit_event)
+        self.employment = create_employment_coordinator(self.config, self._emit_event)
         # Backwards-compatible views for existing helpers (to be removed in later phases).
-        self._employment_state = self.employment._state
-        self._employment_exit_queue = self.employment._exit_queue
-        self._employment_exit_queue_timestamps = self.employment._exit_timestamps
-        self._employment_manual_exits = self.employment._manual_exits
+        engine = self.employment.engine
+        self._employment_state = engine._state
+        self._employment_exit_queue = engine._exit_queue
+        self._employment_exit_queue_timestamps = engine._exit_timestamps
+        self._employment_manual_exits = engine._manual_exits
         self._employment_exits_today = 0
         self.employment.reset_exits_today()
         self._rivalry_ledgers = {}
@@ -310,7 +313,7 @@ class WorldState:
         if self._rng is None:
             self._rng = random.Random()
         self._rng_state = self._rng.getstate()
-        self._console = ConsoleBridge(
+        self._console = ConsoleService(
             world=self,
             history_limit=_CONSOLE_HISTORY_LIMIT,
             buffer_limit=_CONSOLE_RESULT_BUFFER_LIMIT,
@@ -390,15 +393,20 @@ class WorldState:
             build_precondition_context=self._build_precondition_context,
             snapshot_precondition_context=self._snapshot_precondition_context,
         )
+        runtime_obj: DefaultAffordanceRuntime | AffordanceCoordinator
         if self.affordance_runtime_factory is not None:
-            self._affordance_runtime = self.affordance_runtime_factory(self, context)
+            runtime_obj = self.affordance_runtime_factory(self, context)
         else:
-            self._affordance_runtime = DefaultAffordanceRuntime(
+            runtime_obj = DefaultAffordanceRuntime(
                 context,
                 running_cls=RunningAffordance,
                 instrumentation=self._runtime_instrumentation_level,
                 options=self._runtime_options,
             )
+        if isinstance(runtime_obj, AffordanceCoordinator):
+            self._affordance_runtime = runtime_obj
+        else:
+            self._affordance_runtime = AffordanceCoordinator(runtime_obj)
         self._economy_baseline: dict[str, float] = {
             key: float(value) for key, value in self.config.economy.items()
         }
@@ -412,7 +420,7 @@ class WorldState:
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
-        return self._affordance_runtime
+        return self._affordance_runtime.runtime
 
     @property
     def runtime_instrumentation_level(self) -> str:

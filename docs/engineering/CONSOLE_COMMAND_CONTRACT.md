@@ -78,6 +78,12 @@ Valid error codes (extend as needed):
 Audit log entries mirror the response envelope with additional transport metadata
 (client IP, auth context, etc.).
 
+### 2.1 Telemetry Alignment
+
+`TelemetryPublisher.export_state()` exposes `console_results` and historical records using the
+same schema above. Any refactor must keep these payloads stable so dashboards and CLI tools
+(`scripts/observer_ui.py`, `townlet_ui.dashboard`) continue to parse responses without changes.
+
 ## 3. Command Catalog
 
 ### 3.1 Implemented Handlers (as of `src/townlet/console/handlers.py`)

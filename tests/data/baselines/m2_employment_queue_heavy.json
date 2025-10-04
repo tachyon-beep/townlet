@@ -1,0 +1,1012 @@
+{
+  "affordance_manifest": {
+    "affordance_count": 4,
+    "checksum": "227b9902504bd06b6d2b2abe6409a1c34f41fcc632c4d160ac8190e7311452cb",
+    "object_count": 3,
+    "path": "configs/affordances/core.yaml"
+  },
+  "affordance_runtime": {
+    "active_reservations": {},
+    "event_counts": {
+      "fail": 0,
+      "finish": 0,
+      "precondition_fail": 0,
+      "start": 0
+    },
+    "running": {},
+    "running_count": 0,
+    "tick": 0
+  },
+  "conflict_snapshot": {
+    "queue_history": [
+      {
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "tick": 0,
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        }
+      }
+    ],
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "rivalry": {},
+    "rivalry_events": []
+  },
+  "console_results": [],
+  "economy_settings": {
+    "cook_energy_cost": 0.05,
+    "cook_hygiene_cost": 0.02,
+    "ingredients_cost": 0.15,
+    "meal_cost": 0.4,
+    "stove_stock_replenish": 2.0,
+    "wage_income": 0.02
+  },
+  "economy_snapshot": {
+    "bed_1": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 1
+      },
+      "type": "bed"
+    },
+    "fridge_1": {
+      "stock": {
+        "meals": 5
+      },
+      "type": "fridge"
+    },
+    "shower_1": {
+      "stock": {
+        "power_on": 1,
+        "water_on": 1
+      },
+      "type": "shower"
+    }
+  },
+  "embedding_metrics": {
+    "allocations_total": 0.0,
+    "forced_reuse_count": 0.0,
+    "forced_reuse_rate": 0.0,
+    "reuse_warning": 0.0
+  },
+  "employment_metrics": {
+    "daily_exit_cap": 2,
+    "exits_today": 0,
+    "pending": [
+      "worker_0",
+      "worker_1",
+      "worker_2",
+      "worker_3",
+      "worker_4",
+      "worker_5",
+      "worker_6",
+      "worker_7",
+      "worker_8",
+      "worker_9",
+      "worker_10",
+      "worker_11",
+      "worker_12",
+      "worker_13",
+      "worker_14",
+      "worker_15",
+      "worker_16",
+      "worker_17",
+      "worker_18",
+      "worker_19",
+      "worker_20",
+      "worker_21",
+      "worker_22",
+      "worker_23",
+      "worker_24",
+      "worker_25",
+      "worker_26",
+      "worker_27",
+      "worker_28",
+      "worker_29"
+    ],
+    "pending_count": 30,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "events": [
+    {
+      "agent_id": "worker_0",
+      "event": "employment_exit_pending",
+      "pending_count": 1,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_1",
+      "event": "employment_exit_pending",
+      "pending_count": 2,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_2",
+      "event": "employment_exit_pending",
+      "pending_count": 3,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_3",
+      "event": "employment_exit_pending",
+      "pending_count": 4,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_4",
+      "event": "employment_exit_pending",
+      "pending_count": 5,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_5",
+      "event": "employment_exit_pending",
+      "pending_count": 6,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_6",
+      "event": "employment_exit_pending",
+      "pending_count": 7,
+      "tick": 0
+    },
+    {
+      "agent_id": "worker_7",
+      "event": "employment_exit_pending",
+      "pending_count": 8,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 9,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 10,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 11,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 12,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 13,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 14,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 15,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 16,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 17,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 18,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 19,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 20,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 21,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 22,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 23,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 24,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 25,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 26,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 27,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 28,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 29,
+      "tick": 0
+    },
+    {
+      "event": "employment_exit_queue_overflow",
+      "limit": 8,
+      "pending_count": 30,
+      "tick": 0
+    }
+  ],
+  "job_snapshot": {
+    "worker_0": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_1": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_10": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_11": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_12": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_13": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_14": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_15": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_16": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_17": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_18": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_19": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_2": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_20": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_21": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_22": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_23": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_24": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_25": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_26": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_27": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_28": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_29": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_3": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_4": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_5": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_6": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_7": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_8": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    },
+    "worker_9": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.0,
+      "exit_pending": true,
+      "job_id": "barista",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.6,
+        "hunger": 0.6,
+        "hygiene": 0.6
+      },
+      "on_shift": false,
+      "shift_state": "pre_shift",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 2.0
+    }
+  },
+  "narration_state": {
+    "last_category_tick": {},
+    "last_global_tick": -10000,
+    "recent_entries": {},
+    "window_emissions": []
+  },
+  "narrations": [],
+  "perturbations": {
+    "active": {},
+    "cooldowns": {
+      "agents": {},
+      "spec": {}
+    },
+    "pending": []
+  },
+  "possessed_agents": [],
+  "price_spikes": {},
+  "queue_history": [
+    {
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "tick": 0,
+      "totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      }
+    }
+  ],
+  "queue_metrics": {
+    "cooldown_events": 0,
+    "ghost_step_events": 0,
+    "rotation_events": 0
+  },
+  "relationship_metrics": {
+    "history": [],
+    "owners": {},
+    "reasons": {},
+    "total": 0,
+    "window_end": 600,
+    "window_start": 0
+  },
+  "relationship_snapshot": {},
+  "relationship_summary": {
+    "churn": {
+      "history": [],
+      "owners": {},
+      "reasons": {},
+      "total": 0,
+      "window_end": 600,
+      "window_start": 0
+    }
+  },
+  "relationship_updates": [],
+  "reward_breakdown": {},
+  "rivalry_events": [],
+  "social_events": [],
+  "transport_buffer_pending": 1,
+  "transport_status": {
+    "allow_plaintext": false,
+    "connected": false,
+    "dropped_messages": 0,
+    "last_error": null,
+    "last_failure_tick": null,
+    "last_flush_duration_ms": null,
+    "last_success_tick": null,
+    "queue_length": 1,
+    "tls_enabled": false,
+    "verify_hostname": true,
+    "worker_alive": true
+  },
+  "utilities": {
+    "power": true,
+    "water": true
+  }
+}

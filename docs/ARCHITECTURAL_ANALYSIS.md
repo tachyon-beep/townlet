@@ -192,7 +192,7 @@ Adopt a layered architecture aligned with the documented modules:
 **How**:
 1. Introduce lightweight interfaces for key concerns (e.g., `IAffordanceRuntime`, `IEmploymentGateway`).
 2. Extract employment-related attributes/methods into a new `townlet.world.employment_service` module that `WorldState` composes.
-3. Move console bridge and hook loading logic into infrastructure layer (e.g., `ConsoleBridge` service) and inject into world.
+3. Move console bridge and hook loading logic into infrastructure layer (now provided by `ConsoleService` wrapping the legacy bridge) and inject into world.
 4. Provide serialization helpers independent from world to support snapshots/telemetry.
 
 **Effort**: Large (2-3 weeks).
@@ -342,4 +342,3 @@ Key runtime dependencies from `pyproject.toml` (numpy, pydantic, pettingzoo, fas
 - **Anneal**: Training schedule mixing behaviour cloning and PPO stages.
 - **Telemetry**: Streaming observer data for UI/console consumers.
 - **Promotion**: Stability evaluation gating policy release.
-
