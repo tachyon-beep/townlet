@@ -1,7 +1,7 @@
 # Demo Story Arc Scenario Playbook
 
 Reference hashes:
-- `configs/scenarios/demo_story_arc.yaml` — `c3ebb8fbfc9bc6ab793aeb3784a6bf1cf044c8b0`
+- `configs/scenarios/demo_story_arc.yaml` — `a57bea3dea6d755498af260e39cb7876dc068ee2`
 - `configs/scenarios/timelines/demo_story_arc.yaml` — `dafe8f3298f62e1ddeaf0fd40c7907fc3507b2d6`
 
 Use this playbook when rehearsing the narrative demo storyline (`storyline_id = demo_story_arc`).
