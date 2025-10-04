@@ -104,6 +104,9 @@ class TelemetryPublisher:
         self._console_auth = ConsoleAuthenticator(config.console_auth)
         self._social_event_history: deque[dict[str, object]] = deque(maxlen=60)
         self._latest_relationship_summary: dict[str, object] = {}
+        self._current_tick: int = 0
+        self._pending_manual_narrations: list[dict[str, object]] = []
+        self._manual_narration_lock = threading.Lock()
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -869,8 +872,11 @@ class TelemetryPublisher:
     ) -> None:
         # Observations and rewards are consumed for downstream side effects.
         _ = observations, rewards
-        self._narration_limiter.begin_tick(int(tick))
-        self._latest_narrations = []
+        tick = int(tick)
+        self._current_tick = tick
+        self._narration_limiter.begin_tick(tick)
+        manual_narrations = self._consume_manual_narrations()
+        self._latest_narrations = manual_narrations
         previous_queue_metrics = dict(self._latest_queue_metrics or {})
         queue_metrics = world.queue_manager.metrics()
         self._latest_queue_metrics = queue_metrics
@@ -1344,6 +1350,66 @@ class TelemetryPublisher:
         """Return the narration limiter state for snapshot export."""
 
         return self._narration_limiter.export_state()
+
+    def current_tick(self) -> int:
+        """Return the most recent tick processed by telemetry."""
+
+        return int(self._current_tick)
+
+    def emit_manual_narration(
+        self,
+        *,
+        message: str,
+        category: str = "operator_story",
+        tick: int | None = None,
+        priority: bool = False,
+        data: Mapping[str, object] | None = None,
+        dedupe_key: str | None = None,
+    ) -> dict[str, object] | None:
+        """Inject an operator narration entry respecting rate limits."""
+
+        if not isinstance(message, str) or not message.strip():
+            raise ValueError("narration message must be a non-empty string")
+
+        message_text = message.strip()
+        category_name = str(category or "operator_story").strip() or "operator_story"
+        target_tick = int(self._current_tick if tick is None else tick)
+        self._narration_limiter.begin_tick(target_tick)
+        allowed = self._narration_limiter.allow(
+            category_name,
+            message=message_text,
+            priority=bool(priority),
+            dedupe_key=dedupe_key,
+        )
+        if not allowed:
+            return None
+
+        entry: dict[str, object] = {
+            "tick": target_tick,
+            "category": category_name,
+            "message": message_text,
+            "priority": bool(priority),
+        }
+        if data:
+            if not isinstance(data, Mapping):
+                raise ValueError("narration data payload must be a mapping")
+            entry["data"] = {str(key): value for key, value in data.items()}
+        if dedupe_key is not None:
+            entry["dedupe_key"] = str(dedupe_key)
+
+        with self._manual_narration_lock:
+            self._pending_manual_narrations.append(dict(entry))
+
+        self._latest_narrations.append(dict(entry))
+        return entry
+
+    def _consume_manual_narrations(self) -> list[dict[str, object]]:
+        with self._manual_narration_lock:
+            if not self._pending_manual_narrations:
+                return []
+            entries = [dict(entry) for entry in self._pending_manual_narrations]
+            self._pending_manual_narrations.clear()
+            return entries
 
     def register_event_subscriber(
         self, subscriber: Callable[[list[dict[str, object]]], None]

@@ -166,6 +166,44 @@ def test_console_error_fixture_alignment(fixture_name: str) -> None:
     assert result["message"] == expected["message"]
 
 
+def test_announce_story_command_enqueues_narration() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        loop.perturbations,
+        promotion=loop.promotion,
+        policy=loop.policy,
+        config=config,
+        lifecycle=loop.lifecycle,
+        mode="viewer",
+    )
+
+    command = ConsoleCommand(name="announce_story", args=(), kwargs={"message": "Welcome!"})
+    result = router.dispatch(command)
+    assert result["queued"] is True
+    entry = result["entry"]
+    assert entry["message"] == "Welcome!"
+
+    narrations = loop.telemetry.latest_narrations()
+    assert any(entry.get("message") == "Welcome!" for entry in narrations)
+
+    loop.world.tick = 1
+    loop.telemetry.publish_tick(
+        tick=1,
+        world=loop.world,
+        observations={},
+        rewards={},
+    )
+    narrations_next = loop.telemetry.latest_narrations()
+    assert any(entry.get("message") == "Welcome!" for entry in narrations_next)
+
+    throttled = router.dispatch(command)
+    assert throttled["queued"] is False
+    assert throttled.get("throttled") is True
+
+
 def _seed_relationship_state(loop: SimulationLoop) -> None:
     loop.telemetry.import_state(
         {

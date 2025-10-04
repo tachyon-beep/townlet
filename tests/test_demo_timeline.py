@@ -69,3 +69,30 @@ def test_demo_scheduler_actions_update_world(tmp_path: Path) -> None:
     assert tie is not None and tie.trust > 0
     # console command should have been queued
     assert any(cmd["name"] == "perturbation_trigger" for cmd in executor.commands)
+
+
+
+def test_default_timeline_deterministic() -> None:
+    timeline = default_timeline()
+    snapshot = [
+        (item.tick, item.name, item.kind, tuple(item.args), dict(item.kwargs or {}))
+        for item in timeline.upcoming()
+    ]
+    assert snapshot == [
+        (5, "spawn_agent", "action", (), {"agent_id": "guest_1", "position": (2, 1), "wallet": 8.0}),
+        (10, "force_chat", "action", (), {"speaker": "guest_1", "listener": "demo_1", "quality": 0.95}),
+        (20, "perturbation_trigger", "console", ("price_spike",), {"magnitude": 1.4, "starts_in": 0}),
+    ]
+
+
+def test_seed_demo_state_emits_opening_narration() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(config)
+
+    seed_demo_state(loop.world, telemetry=loop.telemetry, narration_level="summary")
+
+    narrations = loop.telemetry.latest_narrations()
+    assert narrations, "Expected opening narration to be queued"
+    entry = next((item for item in narrations if item.get("category") == "demo_story"), None)
+    assert entry is not None
+    assert entry.get("data", {}).get("stage") == "warmup"

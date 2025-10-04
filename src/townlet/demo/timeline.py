@@ -90,7 +90,7 @@ def load_timeline(path: Path) -> DemoTimeline:
         if not isinstance(name, str) or not name:
             raise ValueError("Timeline entry missing command/action name")
         kind = entry.get("kind") or ("action" if "action" in entry else "console")
-        if kind not in {"console", "action"}:
+        if kind not in {"console", "action", "narration"}:
             raise ValueError(f"Unsupported timeline kind: {kind}")
         raw_args = entry.get("args", ())
         if isinstance(raw_args, (list, tuple)):

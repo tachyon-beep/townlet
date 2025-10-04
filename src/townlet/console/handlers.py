@@ -92,6 +92,11 @@ class TelemetryBridge:
                 "usage": "social_events [--limit N]",
                 "description": "List recent chat and rivalry avoidance events (newest first)",
             },
+            "announce_story": {
+                "mode": "viewer",
+                "usage": "announce_story <message> [--category tag] [--priority true|false]",
+                "description": "Push an operator narration entry to observers",
+            },
         }
         return {
             "schema_version": version,
@@ -455,6 +460,96 @@ def create_console_router(
             "schema_version": version,
             "schema_warning": warning,
             "events": events,
+        }
+
+    def _coerce_priority(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            candidate = value.strip().lower()
+            return candidate in {"1", "true", "yes", "on"}
+        return False
+
+    def announce_story_handler(command: ConsoleCommand) -> object:
+        message_arg = command.kwargs.get("message")
+        if message_arg is None and command.args:
+            message_arg = command.args[0]
+        if not isinstance(message_arg, str) or not message_arg.strip():
+            return {
+                "error": "usage",
+                "message": (
+                    "announce_story <message> [--category tag] [--priority true|false]"
+                ),
+            }
+        message = message_arg.strip()
+        category = (
+            str(command.kwargs.get("category", "operator_story")).strip()
+            or "operator_story"
+        )
+        priority = _coerce_priority(command.kwargs.get("priority", False))
+        dedupe_key_arg = command.kwargs.get("dedupe_key")
+        dedupe_key = str(dedupe_key_arg) if dedupe_key_arg is not None else None
+
+        data_payload = command.kwargs.get("data")
+        if data_payload is None:
+            data: dict[str, object] | None = None
+        elif isinstance(data_payload, Mapping):
+            data = dict(data_payload)
+        elif isinstance(data_payload, str):
+            try:
+                parsed = json.loads(data_payload)
+            except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+                return {
+                    "error": "invalid_args",
+                    "message": f"data parse error: {exc.msg}",
+                }
+            if not isinstance(parsed, Mapping):
+                return {
+                    "error": "invalid_args",
+                    "message": "data must decode to an object mapping",
+                }
+            data = dict(parsed)
+        else:
+            return {
+                "error": "invalid_args",
+                "message": "data must be a mapping or JSON object",
+            }
+
+        tick_arg = command.kwargs.get("tick")
+        if tick_arg is None:
+            tick_value = publisher.current_tick()
+        else:
+            try:
+                tick_value = int(tick_arg)
+            except (TypeError, ValueError):
+                return {
+                    "error": "invalid_args",
+                    "message": "tick must be an integer",
+                }
+
+        try:
+            entry = publisher.emit_manual_narration(
+                message=message,
+                category=category,
+                tick=tick_value,
+                priority=priority,
+                data=data,
+                dedupe_key=dedupe_key,
+            )
+        except ValueError as exc:
+            return {"error": "invalid_args", "message": str(exc)}
+
+        if entry is None:
+            return {
+                "queued": False,
+                "throttled": True,
+                "message": "narration suppressed by rate limiter",
+            }
+        return {
+            "queued": True,
+            "entry": entry,
         }
 
     def affordance_status_handler(command: ConsoleCommand) -> object:
@@ -1099,6 +1194,7 @@ def create_console_router(
     router.register("employment_status", employment_status_handler)
     router.register("relationship_summary", relationship_summary_handler)
     router.register("social_events", social_events_handler)
+    router.register("announce_story", announce_story_handler)
     router.register("affordance_status", affordance_status_handler)
     router.register("employment_exit", employment_exit_handler)
     router.register("promotion_status", promotion_status_handler)

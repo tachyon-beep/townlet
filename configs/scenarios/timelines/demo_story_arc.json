@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "storyline_id": "demo_story_arc",
+    "timeline_seed": 73,
+    "tick_budget": 150,
+    "notes": {
+      "warmup_tick": 0,
+      "arrival_tick": 40,
+      "perturbation_tick": 60,
+      "recovery_tick": 110
+    }
+  },
+  "timeline": [
+    {"tick": 8, "kind": "action", "name": "force_chat", "kwargs": {"speaker": "avery", "listener": "kai", "quality": 0.9}},
+    {"tick": 18, "kind": "action", "name": "set_need", "kwargs": {"agent_id": "avery", "need": "energy", "value": 0.68}},
+    {"tick": 40, "kind": "action", "name": "spawn_agent", "kwargs": {"agent_id": "blair", "position": [13, 10], "wallet": 2.5, "needs": {"hunger": 0.55, "hygiene": 0.5, "energy": 0.48}}},
+    {"tick": 46, "kind": "action", "name": "force_chat", "kwargs": {"speaker": "blair", "listener": "avery", "quality": 0.6}},
+    {"tick": 60, "kind": "console", "name": "perturbation_trigger", "args": ["price_spike"], "kwargs": {"magnitude": 1.55, "duration": 35, "targets": ["cafe"]}},
+    {"tick": 72, "kind": "action", "name": "set_need", "kwargs": {"agent_id": "blair", "need": "energy", "value": 0.35}},
+    {"tick": 88, "kind": "action", "name": "force_chat", "kwargs": {"speaker": "kai", "listener": "blair", "quality": 0.82}},
+    {"tick": 110, "kind": "console", "name": "perturbation_trigger", "args": ["arrange_meet"], "kwargs": {"targets": ["avery", "blair"], "location": "cafe", "duration": 20}},
+    {"tick": 126, "kind": "action", "name": "force_chat", "kwargs": {"speaker": "avery", "listener": "blair", "quality": 0.93}}
+  ]
+}

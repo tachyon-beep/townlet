@@ -9,6 +9,11 @@
       "name": "social_events",
       "args": [],
       "kwargs": {"limit": 10}
+    },
+    {
+      "name": "announce_story",
+      "args": [],
+      "kwargs": {"message": "Welcome to Townlet!"}
     }
   ],
   "admin": [

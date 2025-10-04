@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Iterable
+from dataclasses import dataclass, field
 
 from townlet.core.sim_loop import SimulationLoop
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
+from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
+from townlet.telemetry.publisher import TelemetryPublisher
 from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.dashboard import PaletteState, run_dashboard
 from townlet.world.grid import AgentSnapshot, WorldState
@@ -13,6 +14,8 @@ from townlet.world.grid import AgentSnapshot, WorldState
 __all__ = [
     "DemoScheduler",
     "default_timeline",
+    "build_storyline",
+    "available_storylines",
     "load_timeline",
     "run_demo_dashboard",
     "seed_demo_state",
@@ -27,6 +30,8 @@ class DemoScheduler:
 
     timeline: DemoTimeline
     palette_state: PaletteState | None = None
+    narration_category: str = "demo_story"
+    _last_narration_tick: int = field(default=-10_000, init=False, repr=False)
 
     def on_tick(
         self,
@@ -36,8 +41,7 @@ class DemoScheduler:
     ) -> None:
         due = self.timeline.pop_due(tick)
         if not due:
-            if self.palette_state is not None:
-                self.palette_state.pending = executor.pending_count()
+            self._set_palette(executor, None)
             return
 
         for item in due:
@@ -47,24 +51,23 @@ class DemoScheduler:
                     executor.submit_payload(payload)
                     message = f"Dispatched {item.name} at tick {tick}"
                     logger.info(message)
-                    if self.palette_state is not None:
-                        self.palette_state.status_message = message
-                        self.palette_state.status_style = "green"
+                    self._set_palette(executor, message, "green")
                 except CommandQueueFull as exc:
                     warning = (
                         f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
                     )
                     logger.warning(warning)
-                    if self.palette_state is not None:
-                        self.palette_state.status_message = warning
-                        self.palette_state.status_style = "yellow"
-            else:
+                    self._set_palette(executor, warning, "yellow")
+            elif item.kind == "action":
                 message = self._execute_action(loop.world, item)
-                if self.palette_state is not None:
-                    self.palette_state.status_message = message
-                    self.palette_state.status_style = "cyan"
-            if self.palette_state is not None:
-                self.palette_state.pending = executor.pending_count()
+                self._set_palette(executor, message, "cyan")
+            elif item.kind == "narration":
+                message, style = self._enqueue_narration(loop, executor, tick, item)
+                self._set_palette(executor, message, style)
+            else:
+                warning = f"Unsupported timeline kind {item.kind}"
+                logger.warning(warning)
+                self._set_palette(executor, warning, "red")
 
     def _execute_action(self, world: WorldState, command: ScheduledCommand) -> str:
         name = command.name
@@ -116,12 +119,86 @@ class DemoScheduler:
             logger.warning(message)
         return message
 
+    def _enqueue_narration(
+        self,
+        loop: SimulationLoop,
+        executor: ConsoleCommandExecutor,
+        tick: int,
+        command: ScheduledCommand,
+    ) -> tuple[str, str]:
+        kwargs = command.kwargs or {}
+        raw_message = kwargs.get("message")
+        if raw_message is None and command.args:
+            raw_message = command.args[0]
+        if not isinstance(raw_message, str) or not raw_message.strip():
+            return ("Narration missing message", "red")
+        message_text = raw_message.strip()
+
+        spacing = int(getattr(loop.config.telemetry.narration, "global_cooldown_ticks", 30))
+        spacing_override = kwargs.get("spacing")
+        if spacing_override is not None:
+            try:
+                spacing = max(1, int(spacing_override))
+            except (TypeError, ValueError):
+                return ("Narration spacing must be an integer", "red")
+        spacing = max(1, spacing)
+        if tick - self._last_narration_tick < spacing:
+            remaining = spacing - (tick - self._last_narration_tick)
+            return (f"Narration throttled ({remaining} ticks remaining)", "yellow")
+
+        tick_override = kwargs.get("tick")
+        try:
+            tick_value = int(tick_override) if tick_override is not None else tick
+        except (TypeError, ValueError):
+            return ("Narration tick must be an integer", "red")
+
+        payload_kwargs: dict[str, object] = {
+            "message": message_text,
+            "category": str(kwargs.get("category", self.narration_category) or self.narration_category),
+            "tick": tick_value,
+        }
+        if "priority" in kwargs:
+            payload_kwargs["priority"] = bool(kwargs["priority"])
+        if "data" in kwargs:
+            payload_kwargs["data"] = kwargs["data"]
+        if "dedupe_key" in kwargs:
+            payload_kwargs["dedupe_key"] = kwargs["dedupe_key"]
+
+        payload = {"name": "announce_story", "kwargs": payload_kwargs}
+        try:
+            executor.submit_payload(payload)
+        except CommandQueueFull as exc:
+            warning = (
+                f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
+            )
+            logger.warning(warning)
+            return (warning, "yellow")
+
+        self._last_narration_tick = tick
+        summary = message_text if len(message_text) <= 60 else f"{message_text[:57]}..."
+        return (f"Narration queued: {summary}", "magenta")
+
+    def _set_palette(
+        self,
+        executor: ConsoleCommandExecutor,
+        message: str | None,
+        style: str = "dim",
+    ) -> None:
+        if self.palette_state is None:
+            return
+        if message is not None:
+            self.palette_state.status_message = message
+            self.palette_state.status_style = style
+        self.palette_state.pending = executor.pending_count()
+
 
 def seed_demo_state(
     world: WorldState,
     *,
     agents_required: int = 3,
     history_window: int | None = 30,
+    telemetry: TelemetryPublisher | None = None,
+    narration_level: str | None = None,
 ) -> None:
     """Populate world with starter agents, relationships, and history for demos."""
 
@@ -153,38 +230,45 @@ def seed_demo_state(
             world.update_relationship(current, other, trust=0.25, familiarity=0.2)
             world.record_chat_success(current, other, 0.9)
 
-    telemetry = getattr(world, "telemetry", None)
-    if telemetry is not None and history_window and history_window > 0:
-        for agent_id in agent_ids:
-            agent = world.agents[agent_id]
-            telemetry.record_wallet(agent_id, agent.wallet)
-            for need, value in agent.needs.items():
-                telemetry.record_need(agent_id, need, value)
-
-        if seeded:
-            telemetry.publish_tick(
+    telemetry_source = telemetry or getattr(world, "telemetry", None)
+    if telemetry_source is not None:
+        mode = (narration_level or "summary").strip().lower()
+        if mode not in {"off", "none"}:
+            summary = "Avery and Kai prep the town for Blair's arrival."
+            payload_data = {
+                "stage": "warmup",
+                "agents_seeded": len(agent_ids),
+            }
+            priority = mode in {"summary", "highlight", "verbose", "priority"}
+            emitted = telemetry_source.emit_manual_narration(
+                message=summary,
+                category="demo_story",
                 tick=world.tick,
-                world=world,
-                observations={},
-                rewards={},
-                events=[],
-                policy_snapshot={},
-                kpi_history=False,
-                reward_breakdown={},
-                stability_inputs={},
-                perturbations={},
-                policy_identity={},
-                possessed_agents=[],
+                priority=priority,
+                data=payload_data,
+                dedupe_key="demo_seed_warmup",
             )
+            if emitted is None:
+                logger.debug(
+                    "Opening demo narration throttled",
+                    extra={"tick": world.tick, "mode": mode},
+                )
 
-
-def default_timeline() -> DemoTimeline:
-    commands: list[ScheduledCommand] = [
-        ScheduledCommand(tick=5, name="spawn_agent", kind="action", kwargs={"agent_id": "guest_1", "position": (2, 1), "wallet": 8.0}),
-        ScheduledCommand(tick=10, name="force_chat", kind="action", kwargs={"speaker": "guest_1", "listener": "demo_1", "quality": 0.95}),
-        ScheduledCommand(tick=20, name="perturbation_trigger", args=("price_spike",), kwargs={"magnitude": 1.4, "starts_in": 0}),
-    ]
-    return DemoTimeline(commands)
+    if telemetry_source is not None and history_window and history_window > 0 and seeded:
+        telemetry_source.publish_tick(
+            tick=world.tick,
+            world=world,
+            observations={},
+            rewards={},
+            events=[],
+            policy_snapshot={},
+            kpi_history=False,
+            reward_breakdown={},
+            stability_inputs={},
+            perturbations={},
+            policy_identity={},
+            possessed_agents=[],
+        )
 
 
 def run_demo_dashboard(

@@ -1,0 +1,114 @@
+config_id: "scenario_demo_story_arc"
+seed: 4242
+
+meta:
+  storyline_id: "demo_story_arc"
+  version: 1
+  tick_budget: 150
+  narrated_beats:
+    warmup_tick: 0
+    arrival_tick: 40
+    perturbation_tick: 60
+    recovery_tick: 110
+
+features:
+  stages:
+    relationships: "B"
+    social_rewards: "C1"
+  systems:
+    lifecycle: "on"
+    observations: "hybrid"
+  training:
+    curiosity: "off"
+  console:
+    mode: "viewer"
+
+world:
+  grid_size: [24, 24]
+  weather_seed: 707
+
+rewards:
+  needs_weights:
+    hunger: 1.0
+    hygiene: 0.6
+    energy: 0.8
+  decay_rates:
+    hunger: 0.005
+    hygiene: 0.003
+    energy: 0.004
+  survival_tick: 0.0
+  punctuality_bonus: 0.05
+  wage_rate: 0.03
+  faint_penalty: -1.0
+  eviction_penalty: -2.0
+
+employment:
+  enforce_job_loop: true
+  narration:
+    lateness_threshold: 0.4
+
+jobs:
+  cafe_shift:
+    start_tick: 45
+    end_tick: 120
+    wage_rate: 0.035
+    lateness_penalty: 0.25
+    location: [13, 11]
+  market_shift:
+    start_tick: 10
+    end_tick: 80
+    wage_rate: 0.03
+    lateness_penalty: 0.2
+    location: [11, 13]
+
+behavior:
+  hunger_threshold: 0.25
+  hygiene_threshold: 0.25
+  energy_threshold: 0.25
+  job_arrival_buffer: 6
+
+queue_fairness:
+  cooldown_ticks: 5
+  ghost_step_after: 1
+  age_priority_weight: 0.05
+
+conflict:
+  rivalry:
+    increment_per_conflict: 0.08
+    decay_per_tick: 0.015
+    avoid_threshold: 0.55
+    max_edges: 4
+
+
+scenario:
+  description: "Story beats showing newcomer onboarding, a price spike disruption, and the community recovery."
+  ticks: 150
+  objects:
+    - id: cafe_counter
+      type: checkout
+      position: [13, 11]
+    - id: market_stall
+      type: stall
+      position: [11, 13]
+  agents:
+    # Stage 1: Avery and Kai active before newcomer arrival (ticks 0-40).
+    - id: avery
+      position: [11, 12]
+      needs: {hunger: 0.45, hygiene: 0.6, energy: 0.55}
+      wallet: 4.0
+      job: market_shift
+      schedule:
+        - {kind: request, object: market_stall, affordance: work_shift, blocked: false}
+        - {kind: start, object: market_stall, affordance: work_shift, blocked: false}
+        - {kind: wait, object: market_stall, affordance: work_shift, blocked: false}
+    - id: kai
+      position: [13, 12]
+      needs: {hunger: 0.5, hygiene: 0.55, energy: 0.5}
+      wallet: 3.5
+      job: market_shift
+      schedule:
+        - {kind: wait, object: null, affordance: null, blocked: false}
+        - {kind: request, object: market_stall, affordance: work_shift, blocked: false}
+        - {kind: start, object: market_stall, affordance: work_shift, blocked: false}
+        - {kind: release, object: market_stall}
+        - {kind: wait, object: null, affordance: null, blocked: false}
