@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.grid import AgentSnapshot, WorldState
+else:  # pragma: no cover - runtime typing fallbacks
+    AgentSnapshot = Any  # type: ignore[assignment]
+    WorldState = Any  # type: ignore[assignment]
 
 
 def build_local_cache(
@@ -24,15 +27,13 @@ def build_local_cache(
         agent_lookup.setdefault(snapshot.position, []).append(agent_id)
 
     object_lookup: dict[tuple[int, int], list[str]] = {}
-    for position, object_ids in world.objects_by_position_view().items():
-        filtered = [obj_id for obj_id in object_ids if obj_id in world.objects]
+    for position, object_ids_tuple in world.objects_by_position_view().items():
+        filtered = [obj_id for obj_id in object_ids_tuple if obj_id in world.objects]
         if filtered:
             object_lookup[position] = filtered
 
     reservation_tiles: set[tuple[int, int]] = set()
-    for object_id, occupant in world.active_reservations_view().items():
-        if occupant is None:
-            continue
+    for object_id, _ in world.active_reservations_view().items():
         obj = world.objects.get(object_id)
         if obj is not None and obj.position is not None:
             reservation_tiles.add(obj.position)
@@ -51,8 +52,7 @@ def local_view(
     """Return a structured neighborhood snapshot around ``agent_id``."""
 
     snapshots = world.agent_snapshots_view()
-    snapshot = snapshots.get(agent_id)
-    if snapshot is None:
+    if agent_id not in snapshots:
         return {
             "center": None,
             "radius": radius,
@@ -60,17 +60,18 @@ def local_view(
             "agents": [],
             "objects": [],
         }
+    snapshot = snapshots[agent_id]
 
     cx, cy = snapshot.position
     agent_lookup: dict[tuple[int, int], list[str]] = {}
     if include_agents:
-        for other in snapshots.values():
-            agent_lookup.setdefault(other.position, []).append(other.agent_id)
+        for snapshot_value in snapshots.values():
+            agent_lookup.setdefault(snapshot_value.position, []).append(snapshot_value.agent_id)
 
     object_lookup: dict[tuple[int, int], list[str]] = {}
     if include_objects:
-        for position, object_ids in world.objects_by_position_view().items():
-            filtered = [obj_id for obj_id in object_ids if obj_id in world.objects]
+        for position, object_ids_tuple in world.objects_by_position_view().items():
+            filtered = [obj_id for obj_id in object_ids_tuple if obj_id in world.objects]
             if filtered:
                 object_lookup[position] = filtered
 
@@ -85,25 +86,29 @@ def local_view(
             y = cy + dy
             position = (x, y)
             agent_ids = agent_lookup.get(position, []) if include_agents else []
-            object_ids = object_lookup.get(position, []) if include_objects else []
+            object_ids_for_tile: list[str] = (
+                object_lookup[position]
+                if include_objects and position in object_lookup
+                else []
+            )
 
             if include_agents:
                 for agent_id_at_tile in agent_ids:
                     if agent_id_at_tile == agent_id:
                         continue
-                    other = world.agents.get(agent_id_at_tile)
-                    if other is not None:
+                    other_agent = world.agents.get(agent_id_at_tile)
+                    if other_agent is not None:
                         seen_agents.setdefault(
                             agent_id_at_tile,
                             {
                                 "agent_id": agent_id_at_tile,
-                                "position": other.position,
-                                "on_shift": other.on_shift,
+                                "position": other_agent.position,
+                                "on_shift": other_agent.on_shift,
                             },
                         )
 
             if include_objects:
-                for object_id in object_ids:
+                for object_id in object_ids_for_tile:
                     obj = world.objects.get(object_id)
                     if obj is None:
                         continue
@@ -118,11 +123,11 @@ def local_view(
                     )
 
             reservation_active = False
-            if object_ids:
+            if object_ids_for_tile:
                 active_view = world.active_reservations_view()
                 reservation_active = any(
                     active_view.get(object_id) is not None
-                    for object_id in object_ids
+                    for object_id in object_ids_for_tile
                 )
 
             row.append(
@@ -130,7 +135,7 @@ def local_view(
                     "position": position,
                     "self": position == (cx, cy),
                     "agent_ids": list(agent_ids),
-                    "object_ids": list(object_ids),
+                    "object_ids": list(object_ids_for_tile),
                     "reservation_active": reservation_active,
                 }
             )

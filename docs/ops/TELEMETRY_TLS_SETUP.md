@@ -16,17 +16,39 @@ telemetry:
   transport:
     type: tcp
     endpoint: collector.internal:9100
+    # enable_tls defaults to true for tcp transports
     enable_tls: true
     verify_hostname: true
     ca_file: certs/internal_ca.pem
     cert_file: certs/shard_client.pem        # omit when client auth not needed
     key_file: certs/shard_client.key         # omit when client auth not needed
-    allow_plaintext: false                   # required; keeps plaintext disabled
+    allow_plaintext: false
+    dev_allow_plaintext: false                # leave false outside of local development
 ```
 
-If you must run without TLS in a lab environment, set `allow_plaintext: true` to
-acknowledge the risk. The shard will log a `telemetry_tcp_plaintext_enabled`
-warning each time the transport initialises.
+If you must run without TLS in a lab environment, set both `allow_plaintext: true` and
+`dev_allow_plaintext: true` to acknowledge the risk. The shard will log a
+`telemetry_tcp_plaintext_enabled` warning each time the transport initialises.
+
+## 2a. Local Plaintext Override
+
+TCP transports only run without TLS when you explicitly acknowledge the risk.
+Set both `allow_plaintext: true` and `dev_allow_plaintext: true`, and point the
+endpoint at `localhost` to enable a loopback developer shim:
+
+```yaml
+telemetry:
+  transport:
+    type: tcp
+    endpoint: localhost:9100
+    enable_tls: false
+    allow_plaintext: true
+    dev_allow_plaintext: true
+```
+
+Any remote endpoint (`collector.internal`, public IPs, etc.) is rejected when
+`allow_plaintext` is enabled. The shard also logs a WARNING with the
+`telemetry_tcp_plaintext_enabled` tag so you can spot accidental rollouts.
 
 ## 3. Validate Before Deployment
 1. Run `openssl s_client -connect collector.internal:9100 -servername collector.internal`

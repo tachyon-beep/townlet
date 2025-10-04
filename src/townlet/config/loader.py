@@ -619,6 +619,7 @@ class TelemetryTransportConfig(BaseModel):
     cert_file: Path | None = None
     key_file: Path | None = None
     allow_plaintext: bool = False
+    dev_allow_plaintext: bool = False
     retry: TelemetryRetryPolicy = TelemetryRetryPolicy()
     buffer: TelemetryBufferConfig = TelemetryBufferConfig()
     worker_poll_seconds: float = Field(default=0.5, ge=0.01, le=10.0)
@@ -626,73 +627,78 @@ class TelemetryTransportConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_transport(self) -> "TelemetryTransportConfig":
         transport_type = self.type
+        fields_set = getattr(self, "model_fields_set", set())
+
         if transport_type == "stdout":
-            if self.endpoint:
-                raise ValueError(
-                    "telemetry.transport.endpoint is not supported for stdout transport"
-                )
-            if self.file_path is not None:
-                raise ValueError(
-                    "telemetry.transport.file_path must be omitted for stdout transport"
-                )
             if self.enable_tls:
-                raise ValueError(
-                    "telemetry.transport.enable_tls is only supported for tcp transport"
-                )
+                raise ValueError("telemetry.transport.enable_tls is only supported for tcp transport")
             if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
-                raise ValueError(
-                    "telemetry.transport TLS options are only supported for tcp transport"
-                )
+                raise ValueError("telemetry.transport TLS options are only supported for tcp transport")
             if self.allow_plaintext:
-                raise ValueError(
-                    "telemetry.transport.allow_plaintext is only supported for tcp transport"
-                )
-        elif transport_type == "file":
+                raise ValueError("telemetry.transport.allow_plaintext is only supported for tcp transport")
+            if self.dev_allow_plaintext:
+                raise ValueError("telemetry.transport.dev_allow_plaintext is only supported for tcp transport")
+            if self.endpoint:
+                raise ValueError("telemetry.transport.endpoint is not supported for stdout transport")
+            if self.file_path is not None:
+                raise ValueError("telemetry.transport.file_path must be omitted for stdout transport")
+            self.enable_tls = False
+            self.allow_plaintext = False
+            self.dev_allow_plaintext = False
+            return self
+
+        if transport_type == "file":
+            if self.enable_tls:
+                raise ValueError("telemetry.transport.enable_tls is only supported for tcp transport")
+            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
+                raise ValueError("telemetry.transport TLS options are only supported for tcp transport")
+            if self.allow_plaintext:
+                raise ValueError("telemetry.transport.allow_plaintext is only supported for tcp transport")
+            if self.dev_allow_plaintext:
+                raise ValueError("telemetry.transport.dev_allow_plaintext is only supported for tcp transport")
             if self.file_path is None:
                 raise ValueError("telemetry.transport.file_path is required when type is 'file'")
             if str(self.file_path).strip() == "":
                 raise ValueError("telemetry.transport.file_path must not be blank")
-            if self.enable_tls:
-                raise ValueError(
-                    "telemetry.transport.enable_tls is only supported for tcp transport"
-                )
-            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
-                raise ValueError(
-                    "telemetry.transport TLS options are only supported for tcp transport"
-                )
-            if self.allow_plaintext:
-                raise ValueError(
-                    "telemetry.transport.allow_plaintext is only supported for tcp transport"
-                )
-        elif transport_type == "tcp":
+            self.enable_tls = False
+            self.allow_plaintext = False
+            self.dev_allow_plaintext = False
+            return self
+
+        if transport_type == "tcp":
             endpoint = (self.endpoint or "").strip()
             if not endpoint:
                 raise ValueError("telemetry.transport.endpoint is required when type is 'tcp'")
             self.endpoint = endpoint
             if self.file_path is not None:
                 raise ValueError("telemetry.transport.file_path must be omitted for tcp transport")
+            if "enable_tls" not in fields_set and not self.allow_plaintext:
+                self.enable_tls = True
+
             if self.enable_tls:
                 if self.key_file and not self.cert_file:
-                    raise ValueError(
-                        "telemetry.transport.cert_file must be provided when key_file is set"
-                    )
+                    raise ValueError("telemetry.transport.cert_file must be provided when key_file is set")
                 if self.cert_file and not self.key_file:
-                    raise ValueError(
-                        "telemetry.transport.key_file must be provided when cert_file is set"
-                    )
+                    raise ValueError("telemetry.transport.key_file must be provided when cert_file is set")
                 if self.cert_file is not None and str(self.cert_file).strip() == "":
                     raise ValueError("telemetry.transport.cert_file must not be blank")
                 if self.key_file is not None and str(self.key_file).strip() == "":
                     raise ValueError("telemetry.transport.key_file must not be blank")
                 if self.ca_file is not None and str(self.ca_file).strip() == "":
                     raise ValueError("telemetry.transport.ca_file must not be blank")
-            elif not self.allow_plaintext:
-                raise ValueError(
-                    "telemetry.transport.tcp requires enable_tls=true or allow_plaintext=true"
-                )
-        else:  # pragma: no cover - defensive branch for Literal changes
-            raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
-        return self
+            else:
+                if not self.allow_plaintext:
+                    raise ValueError("telemetry.transport.tcp requires enable_tls=true or allow_plaintext=true")
+                if not self.dev_allow_plaintext:
+                    raise ValueError("telemetry.transport.allow_plaintext requires dev_allow_plaintext=true for tcp transport")
+                host, *_ = endpoint.split(":", 1)
+                host = host.strip()
+                if host not in {"localhost", "127.0.0.1", "::1"}:
+                    raise ValueError("telemetry.transport.allow_plaintext is only permitted for localhost endpoints")
+            return self
+
+        raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
+
 
 
 class TelemetryConfig(BaseModel):

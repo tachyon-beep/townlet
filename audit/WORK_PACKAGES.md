@@ -86,9 +86,9 @@ Telemetry and console command delivery can halt silently, eroding observability 
 - None, though complements WP-304 for broader health coverage.
 
 ### Acceptance Criteria
-- [ ] Flush thread failures set a health flag and produce structured logs.
-- [ ] Optional auto-restart or explicit shutdown path implemented.
-- [ ] Tests assert health flag toggling on simulated failure.
+- [x] Flush thread failures set a health flag and produce structured logs.
+- [x] Optional auto-restart or explicit shutdown path implemented.
+- [x] Tests assert health flag toggling on simulated failure.
 
 ### Related Issues
 - Feeds into risk R-003 in the risk register.
@@ -105,7 +105,7 @@ Telemetry and console command delivery can halt silently, eroding observability 
 Telephony transport defaults encourage plaintext TCP because TLS is disabled and operators must set `allow_plaintext=true` to connect.
 
 ### Current State
-`TelemetryTransportConfig` defaults to `enable_tls=False`, and TCP mode raises unless `allow_plaintext=True` (`src/townlet/config/loader.py:507-560`). TCP clients log a warning but continue without encryption (`src/townlet/telemetry/transport.py:201-243`).
+`TelemetryTransportConfig` now auto-enables TLS for TCP transports when no override is provided. Plaintext requires `enable_tls: false`, `allow_plaintext: true`, `dev_allow_plaintext: true`, and a localhost endpoint; remote plaintext overrides are rejected at load time.
 
 ### Desired State
 TLS should be the default for TCP transport with clear certificate configuration, and plaintext should be a temporary dev-only override with feature flagging.
@@ -127,9 +127,9 @@ Telemetry data and console responses traverse networks unencrypted, exposing sen
 - None
 
 ### Acceptance Criteria
-- [ ] TLS-enabled TCP transport works out of the box with sample certs.
-- [ ] CI covers TLS and plaintext (dev) scenarios.
-- [ ] Documentation warns about plaintext and explains cert management.
+- [x] TLS-enabled TCP transport works out of the box with sample certs.
+- [x] CI covers TLS and plaintext (dev) scenarios.
+- [x] Documentation warns about plaintext and explains cert management.
 
 ### Related Issues
 - Works with WP-301 to lock down remote command access.

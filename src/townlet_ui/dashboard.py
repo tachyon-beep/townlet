@@ -2094,9 +2094,7 @@ def run_dashboard(
             personality=resolved_personality,
             personality_profile=profile_name,
         )
-        assign_jobs = getattr(loop.world, "assign_jobs_to_agents", None)
-        if callable(assign_jobs):
-            assign_jobs()
+        loop.world.assign_jobs_to_agents()
 
     router = create_console_router(
         loop.telemetry,

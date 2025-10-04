@@ -99,9 +99,7 @@ class DemoScheduler:
                 personality_profile=profile_name,
             )
             world.agents[agent_id] = snapshot
-            assign_jobs = getattr(world, "assign_jobs_to_agents", None)
-            if callable(assign_jobs):
-                assign_jobs()
+            world.assign_jobs_to_agents()
             message = f"Spawned agent {agent_id}"
         elif name == "force_chat":
             speaker = kwargs.get("speaker") or (command.args[0] if command.args else None)
@@ -233,9 +231,7 @@ def seed_demo_state(
             )
         seeded = True
 
-    assign_jobs = getattr(world, "assign_jobs_to_agents", None)
-    if callable(assign_jobs):
-        assign_jobs()
+    world.assign_jobs_to_agents()
 
     agent_ids = list(world.agents.keys())
     if len(agent_ids) >= 2:

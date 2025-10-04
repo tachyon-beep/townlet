@@ -5,7 +5,7 @@ Use this checklist whenever enabling or modifying the telemetry transport in sta
 ## Preconditions
 - [ ] Confirm `config.telemetry.transport` matches the target environment (stdout for dev, file/tcp for shared observers).
 - [ ] Ensure transport credentials/endpoints (for tcp) are provisioned in the deployment environment.
-- [ ] Provision TLS material when using tcp (`enable_tls: true` with CA/cert/key paths). Plaintext requires `allow_plaintext: true` and VP approval.
+- [ ] Provision TLS material when using tcp (TLS is enabled by default; provide CA/cert/key paths as needed). Plaintext requires `allow_plaintext: true`, `dev_allow_plaintext: true`, a localhost endpoint, and VP approval.
 - [ ] Verify buffer limits (`transport.buffer.max_batch_size`, `transport.buffer.max_buffer_bytes`) align with expected tick cadence.
 
 ## Deployment Steps
@@ -20,6 +20,7 @@ Use this checklist whenever enabling or modifying the telemetry transport in sta
 
 ## Post-Deployment Verification
 - [ ] Execute `telemetry_snapshot` via the console; confirm `transport.connected` is true, `dropped_messages` is zero, and `last_error` is empty.
+- [ ] Verify the telemetry worker block reports `worker_alive: true` and `worker_error: null`; if the worker is down, escalate before continuing rollout.
 - [ ] Review the observer dashboard header transport panel for the same status.
 - [ ] Tail shard logs for transport retry warnings for 5–10 minutes.
 - [ ] For TLS, confirm no `SSL:` errors are emitted and the console snapshot reports `transport.tls_enabled: true` (see telemetry health panel).

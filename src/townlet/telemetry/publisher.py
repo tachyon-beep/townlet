@@ -132,11 +132,14 @@ class TelemetryPublisher:
             "verify_hostname": bool(getattr(transport_cfg, "verify_hostname", True)),
             "allow_plaintext": bool(getattr(transport_cfg, "allow_plaintext", False)),
             "worker_alive": True,
+            "worker_error": None,
+            "worker_restart_count": 0,
         }
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
         self._flush_poll_interval = max(0.01, poll_interval)
         self._buffer_lock = threading.Lock()
+        self._worker_state_lock = threading.Lock()
         self._flush_event = threading.Event()
         self._stop_event = threading.Event()
         self._latest_enqueue_tick = 0
@@ -667,22 +670,52 @@ class TelemetryPublisher:
                 )
 
     def _flush_loop(self) -> None:
-        while not self._stop_event.is_set():
-            self._flush_event.wait(timeout=self._flush_poll_interval)
-            self._flush_event.clear()
-            if self._stop_event.is_set():
-                break
+        had_failure = False
+        with self._worker_state_lock:
+            self._transport_status["worker_error"] = None
+        try:
+            while not self._stop_event.is_set():
+                self._flush_event.wait(timeout=self._flush_poll_interval)
+                self._flush_event.clear()
+                if self._stop_event.is_set():
+                    break
+                with self._buffer_lock:
+                    tick = self._latest_enqueue_tick
+                    pending = len(self._transport_buffer)
+                    self._transport_status["queue_length"] = pending
+                if pending:
+                    self._flush_transport_buffer(tick)
+        except Exception as exc:  # pragma: no cover - unexpected failure path
+            had_failure = True
+            self._handle_flush_worker_failure(exc)
+        finally:
             with self._buffer_lock:
                 tick = self._latest_enqueue_tick
                 pending = len(self._transport_buffer)
-            if pending:
-                self._flush_transport_buffer(tick)
-        with self._buffer_lock:
-            tick = self._latest_enqueue_tick
-            pending = len(self._transport_buffer)
-        if pending:
-            self._flush_transport_buffer(tick)
-        self._transport_status["worker_alive"] = False
+                self._transport_status["queue_length"] = pending
+            if pending and not had_failure:
+                try:
+                    self._flush_transport_buffer(tick)
+                except Exception as exc:  # pragma: no cover - shutdown failure
+                    had_failure = True
+                    self._handle_flush_worker_failure(exc)
+            with self._worker_state_lock:
+                self._transport_status["worker_alive"] = False
+                if not had_failure:
+                    self._transport_status["worker_error"] = None
+
+    def _handle_flush_worker_failure(self, exc: Exception) -> None:
+        message = f"{exc.__class__.__name__}: {exc}"
+        with self._worker_state_lock:
+            self._transport_status["worker_error"] = message
+            self._transport_status["worker_alive"] = False
+            self._transport_status["last_failure_tick"] = int(self._latest_enqueue_tick)
+            self._transport_status["connected"] = False
+        self._transport_status["last_error"] = message
+        logger.critical("Telemetry flush worker failed: %s", message, exc_info=True)
+        self._stop_event.set()
+        self._flush_event.set()
+
 
     def _enqueue_stream_payload(self, payload: Mapping[str, Any], *, tick: int) -> None:
         encoded = json.dumps(

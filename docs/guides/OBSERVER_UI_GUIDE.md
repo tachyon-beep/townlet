@@ -41,7 +41,7 @@ Telemetry is emitted to stdout by default. If you need a quiet sink while inspec
 
 When screen-sharing or streaming demos over untrusted networks, switch to
 `configs/demo/poc_demo_tls.yaml`. It targets a secure TCP collector with TLS
-enabled (`allow_plaintext: false`) so telemetry stays encrypted in transit.
+enabled (plaintext overrides are disabled) so telemetry stays encrypted in transit.
 
 
 ## Schema Compatibility

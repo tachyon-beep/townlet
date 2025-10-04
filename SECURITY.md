@@ -54,9 +54,9 @@ over plaintext TCP. The transport config adds TLS controls:
   via `ca_file`, `cert_file`, and `key_file` when mutual auth is required.
 - Hostname verification is on by default; set `verify_hostname: false` only for
   trusted lab environments with pinned certificates.
-- Plaintext TCP is disabled unless you set `telemetry.transport.allow_plaintext:
-  true`. This flag is intended for legacy tooling and should not be used in
-  multi-tenant or internet-facing deployments.
+- Plaintext TCP is disabled unless you set both `telemetry.transport.allow_plaintext:
+  true` and `telemetry.transport.dev_allow_plaintext: true`. The override only
+  works for localhost endpoints and is intended for local tooling.
 - All plaintext runs log a warning (`telemetry_tcp_plaintext_enabled`); treat it
   as an alert that hardening is incomplete.
 
@@ -69,8 +69,7 @@ Operational checklist:
    verification intact.
 3. Run the telemetry release checklist before rollout to confirm the secure
    transport negotiates successfully.
-4. Avoid sharing demo configs that set `allow_plaintext: true` unless the target
-   environment is fully trusted.
+4. Avoid sharing demo configs that set `allow_plaintext: true` / `dev_allow_plaintext: true` unless the target environment is fully trusted.
 
 ## Observation Privacy & Social Data
 
