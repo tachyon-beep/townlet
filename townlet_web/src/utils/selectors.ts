@@ -1,4 +1,7 @@
-import type { TelemetrySnapshotPayload } from "./telemetryTypes";
+import type {
+  PersonalitySnapshotEntry,
+  TelemetrySnapshotPayload
+} from "./telemetryTypes";
 
 export function selectTransport(snapshot: TelemetrySnapshotPayload | null) {
   const transport = snapshot?.transport as Record<string, unknown> | undefined;
@@ -99,4 +102,16 @@ export function selectSocialEvents(snapshot: TelemetrySnapshotPayload | null) {
 export function selectNarrations(snapshot: TelemetrySnapshotPayload | null) {
   const narrations = snapshot?.narrations as Array<Record<string, unknown>> | undefined;
   return narrations ?? [];
+}
+
+export function selectPersonalities(
+  snapshot: TelemetrySnapshotPayload | null
+): Record<string, PersonalitySnapshotEntry> {
+  const personalities = snapshot?.personalities as
+    | Record<string, PersonalitySnapshotEntry>
+    | undefined;
+  if (!personalities) {
+    return {};
+  }
+  return personalities;
 }

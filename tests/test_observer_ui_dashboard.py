@@ -96,6 +96,7 @@ def test_render_snapshot_includes_palette_overlay_when_visible() -> None:
     rendered = console.export_text().lower()
     assert "search:" in rendered
     assert "pending:" in rendered
+    assert "personality:" in rendered
     assert "ctrl+p" in rendered
 
 

@@ -1,0 +1,34 @@
+{
+  "schema_version": "0.9.7",
+  "payload_type": "snapshot",
+  "tick": 12,
+  "transport": {
+    "connected": true,
+    "dropped_messages": 0,
+    "queue_length": 0
+  },
+  "agents": [
+    {
+      "agent_id": "avery",
+      "wallet": 6.0,
+      "attendance_ratio": 0.82,
+      "shift_state": "on_shift"
+    },
+    {
+      "agent_id": "blair",
+      "wallet": 2.5,
+      "attendance_ratio": 0.61,
+      "shift_state": "off_shift"
+    }
+  ],
+  "personalities": {
+    "avery": {
+      "profile": "socialite",
+      "traits": { "extroversion": 0.7, "forgiveness": 0.2, "ambition": 0.3 }
+    },
+    "blair": {
+      "profile": "stoic",
+      "traits": { "extroversion": -0.3, "forgiveness": 0.6, "ambition": 0.1 }
+    }
+  }
+}

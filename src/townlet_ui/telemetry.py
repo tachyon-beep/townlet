@@ -156,6 +156,13 @@ class AgentSummary:
 
 
 @dataclass(frozen=True)
+class PersonalitySnapshotEntry:
+    profile: str
+    traits: Mapping[str, float]
+    multipliers: Mapping[str, Mapping[str, float]] | None
+
+
+@dataclass(frozen=True)
 class RelationshipOverlayEntry:
     other: str
     trust: float
@@ -325,6 +332,7 @@ class TelemetrySnapshot:
     console_commands: Mapping[str, Mapping[str, Any]]
     console_results: tuple[Mapping[str, Any], ...]
     history: TelemetryHistory | None
+    personalities: Mapping[str, PersonalitySnapshotEntry]
     raw: Mapping[str, Any]
 
 
@@ -378,12 +386,48 @@ class TelemetryClient:
         relationship_summary_payload = payload.get("relationship_summary")
         relationship_updates_payload = payload.get("relationship_updates", [])
         social_events_payload = payload.get("social_events")
+        personalities_payload = payload.get("personalities")
         narrations_payload = payload.get("narrations", [])
         narration_state_payload = payload.get("narration_state", {})
         perturbations_payload = payload.get("perturbations", {})
         console_commands_payload = payload.get("console_commands", {})
         console_results_payload = payload.get("console_results", [])
         history_payload = payload.get("history")
+
+        personalities: dict[str, PersonalitySnapshotEntry] = {}
+        if isinstance(personalities_payload, Mapping):
+            for raw_agent_id, entry in personalities_payload.items():
+                if not isinstance(entry, Mapping):
+                    continue
+                agent_id = str(raw_agent_id)
+                profile = str(entry.get("profile", "")) or "balanced"
+                traits_payload = entry.get("traits", {})
+                if isinstance(traits_payload, Mapping):
+                    traits = {
+                        "extroversion": _coerce_float(traits_payload.get("extroversion"), 0.0),
+                        "forgiveness": _coerce_float(traits_payload.get("forgiveness"), 0.0),
+                        "ambition": _coerce_float(traits_payload.get("ambition"), 0.0),
+                    }
+                else:
+                    traits = {"extroversion": 0.0, "forgiveness": 0.0, "ambition": 0.0}
+                multipliers_payload = entry.get("multipliers")
+                multipliers: dict[str, Mapping[str, float]] | None = None
+                if isinstance(multipliers_payload, Mapping):
+                    multipliers = {}
+                    for section_name, section_payload in multipliers_payload.items():
+                        if not isinstance(section_payload, Mapping):
+                            continue
+                        multipliers[str(section_name)] = {
+                            str(key): _coerce_float(value, 0.0)
+                            for key, value in section_payload.items()
+                        }
+                    if not multipliers:
+                        multipliers = None
+                personalities[agent_id] = PersonalitySnapshotEntry(
+                    profile=profile,
+                    traits=traits,
+                    multipliers=multipliers,
+                )
 
         economy_settings_payload = payload.get("economy_settings", {})
         if isinstance(economy_settings_payload, Mapping):
@@ -980,6 +1024,7 @@ class TelemetryClient:
             console_commands=console_commands,
             console_results=tuple(console_results),
             history=history_snapshot,
+            personalities=personalities,
             raw=dict(payload),
         )
 

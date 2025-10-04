@@ -288,6 +288,7 @@ def run_demo_dashboard(
     max_ticks: int,
     timeline: DemoTimeline,
     palette_state: PaletteState | None,
+    personality_filter: str | None = None,
 ) -> None:
     scheduler = DemoScheduler(timeline=timeline, palette_state=palette_state)
     run_dashboard(
@@ -296,4 +297,5 @@ def run_demo_dashboard(
         max_ticks=max_ticks,
         palette_state=palette_state,
         on_tick=scheduler.on_tick,
+        personality_filter=personality_filter,
     )

@@ -66,6 +66,7 @@ class BehaviorFlags(BaseModel):
 
 class ObservationFeatureFlags(BaseModel):
     personality_channels: bool = False
+    personality_ui: bool = False
 
 
 class FeatureFlags(BaseModel):
@@ -955,6 +956,10 @@ class SimulationConfig(BaseModel):
     def personality_channels_enabled(self) -> bool:
         observations = getattr(self.features, "observations", None)
         return bool(getattr(observations, "personality_channels", False))
+
+    def personality_ui_enabled(self) -> bool:
+        observations = getattr(self.features, "observations", None)
+        return bool(getattr(observations, "personality_ui", False))
 
     @model_validator(mode="after")
     def _validate_personality_bias_keys(self) -> "SimulationConfig":

@@ -19,6 +19,7 @@ from townlet_ui.dashboard import (
 from townlet_ui.telemetry import (
     AgentSummary,
     FriendSummary,
+    PersonalitySnapshotEntry,
     PerturbationSnapshot,
     RelationshipSummaryEntry,
     RelationshipSummarySnapshot,
@@ -397,6 +398,7 @@ def test_palette_overlay_renders_history_and_search() -> None:
     assert "inspect queue entries" in rendered
     assert "social_events" in rendered
     assert "queue_inspect <object_id>" in rendered
+    assert "personality:" in rendered
 
 
 def test_palette_overlay_respects_mode_filter() -> None:
@@ -423,6 +425,7 @@ def test_palette_overlay_respects_mode_filter() -> None:
     rendered = console.export_text().lower()
     assert "set_spawn_delay" in rendered
     assert "queue_inspect" not in rendered
+    assert "personality:" in rendered
 
 
 def test_dispatch_palette_selection_dispatches_and_updates_status() -> None:
@@ -452,6 +455,7 @@ def test_dispatch_palette_selection_dispatches_and_updates_status() -> None:
 
     palette = PaletteState(visible=True, query="queue")
     command = dispatch_palette_selection(snapshot, palette, executor)
+    assert command is not None
     assert command.name == "queue_inspect"
 
     assert router.event.wait(timeout=0.5)
@@ -493,3 +497,220 @@ def test_dispatch_palette_selection_handles_queue_full() -> None:
         assert palette.pending >= 1
 
     executor.shutdown()
+
+
+def test_dispatch_palette_selection_applies_personality_filter() -> None:
+    snapshot = SimpleNamespace(
+        console_commands={},
+        console_results=(),
+        personalities={
+            "alice": PersonalitySnapshotEntry(
+                profile="socialite",
+                traits={"extroversion": 0.8, "forgiveness": 0.1, "ambition": 0.2},
+                multipliers=None,
+            )
+        },
+    )
+    router = SimpleNamespace(dispatch=lambda command: None)
+    executor = ConsoleCommandExecutor(router, autostart=False)
+    palette = PaletteState(visible=True, query="profile:socialite")
+
+    result = dispatch_palette_selection(
+        snapshot,
+        palette,
+        executor,
+        personality_enabled=True,
+    )
+
+    assert result is None
+    assert palette.personality_filter == "profile:socialite"
+    assert palette.status_message is not None
+    assert "profile:socialite" in palette.status_message
+
+    executor.shutdown()
+
+
+def test_agent_cards_panel_filters_by_profile() -> None:
+    summary = SimpleNamespace(per_agent={}, churn_metrics={})
+    history = SimpleNamespace(needs={}, wallet={}, rivalry={})
+    agents = [
+        AgentSummary(
+            agent_id="alice",
+            wallet=5.0,
+            shift_state="on_shift",
+            attendance_ratio=0.9,
+            wages_withheld=0.0,
+            lateness_counter=0,
+            on_shift=True,
+            job_id="clerk",
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            exit_pending=False,
+            late_ticks_today=0,
+            meals_cooked=0,
+            meals_consumed=0,
+            basket_cost=0.0,
+        ),
+        AgentSummary(
+            agent_id="bob",
+            wallet=3.0,
+            shift_state="off_shift",
+            attendance_ratio=0.8,
+            wages_withheld=0.0,
+            lateness_counter=0,
+            on_shift=False,
+            job_id="cook",
+            needs={"hunger": 0.6, "hygiene": 0.4, "energy": 0.6},
+            exit_pending=False,
+            late_ticks_today=0,
+            meals_cooked=0,
+            meals_consumed=0,
+            basket_cost=0.0,
+        ),
+    ]
+    snapshot = SimpleNamespace(
+        agents=agents,
+        relationship_summary=summary,
+        history=history,
+        personalities={
+            "alice": PersonalitySnapshotEntry(
+                profile="socialite",
+                traits={"extroversion": 0.8, "forgiveness": 0.2, "ambition": 0.3},
+                multipliers=None,
+            ),
+            "bob": PersonalitySnapshotEntry(
+                profile="stoic",
+                traits={"extroversion": -0.2, "forgiveness": 0.5, "ambition": 0.1},
+                multipliers=None,
+            ),
+        },
+        social_events=(),
+        perturbations=SimpleNamespace(cooldowns_agents={}),
+    )
+
+    panel = _build_agent_cards_panel(
+        snapshot,
+        tick=10,
+        personality_filter="profile:socialite",
+        personality_enabled=True,
+    )
+    assert panel is not None
+    console = Console(record=True, width=120)
+    console.print(panel)
+    rendered = console.export_text()
+    assert "alice" in rendered
+    assert "bob" not in rendered
+    assert "traits ext +0.80" in rendered.lower()
+
+
+def test_agent_cards_panel_filter_notice_when_disabled() -> None:
+    summary = SimpleNamespace(per_agent={}, churn_metrics={})
+    history = SimpleNamespace(needs={}, wallet={}, rivalry={})
+    agents = [
+        AgentSummary(
+            agent_id="alice",
+            wallet=5.0,
+            shift_state="on_shift",
+            attendance_ratio=0.9,
+            wages_withheld=0.0,
+            lateness_counter=0,
+            on_shift=True,
+            job_id="clerk",
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            exit_pending=False,
+            late_ticks_today=0,
+            meals_cooked=0,
+            meals_consumed=0,
+            basket_cost=0.0,
+        ),
+    ]
+    snapshot = SimpleNamespace(
+        agents=agents,
+        relationship_summary=summary,
+        history=history,
+        personalities={},
+        social_events=(),
+        perturbations=SimpleNamespace(cooldowns_agents={}),
+    )
+
+    panel = _build_agent_cards_panel(
+        snapshot,
+        tick=5,
+        personality_filter="profile:socialite",
+        personality_enabled=False,
+    )
+    assert panel is not None
+    console = Console(record=True, width=120)
+    console.print(panel)
+    rendered = console.export_text().lower()
+    assert "personality filters require" in rendered
+
+
+def test_agent_cards_panel_filters_by_trait_threshold() -> None:
+    summary = SimpleNamespace(per_agent={}, churn_metrics={})
+    history = SimpleNamespace(needs={}, wallet={}, rivalry={})
+    agents = [
+        AgentSummary(
+            agent_id="alice",
+            wallet=5.0,
+            shift_state="on_shift",
+            attendance_ratio=0.9,
+            wages_withheld=0.0,
+            lateness_counter=0,
+            on_shift=True,
+            job_id="clerk",
+            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+            exit_pending=False,
+            late_ticks_today=0,
+            meals_cooked=0,
+            meals_consumed=0,
+            basket_cost=0.0,
+        ),
+        AgentSummary(
+            agent_id="bob",
+            wallet=3.0,
+            shift_state="off_shift",
+            attendance_ratio=0.8,
+            wages_withheld=0.0,
+            lateness_counter=0,
+            on_shift=False,
+            job_id="cook",
+            needs={"hunger": 0.6, "hygiene": 0.4, "energy": 0.6},
+            exit_pending=False,
+            late_ticks_today=0,
+            meals_cooked=0,
+            meals_consumed=0,
+            basket_cost=0.0,
+        ),
+    ]
+    snapshot = SimpleNamespace(
+        agents=agents,
+        relationship_summary=summary,
+        history=history,
+        personalities={
+            "alice": PersonalitySnapshotEntry(
+                profile="balanced",
+                traits={"extroversion": 0.6, "forgiveness": 0.1, "ambition": 0.3},
+                multipliers=None,
+            ),
+            "bob": PersonalitySnapshotEntry(
+                profile="balanced",
+                traits={"extroversion": 0.1, "forgiveness": 0.4, "ambition": 0.2},
+                multipliers=None,
+            ),
+        },
+        social_events=(),
+        perturbations=SimpleNamespace(cooldowns_agents={}),
+    )
+
+    panel = _build_agent_cards_panel(
+        snapshot,
+        tick=7,
+        personality_filter="trait:extroversion>=0.5",
+        personality_enabled=True,
+    )
+    assert panel is not None
+    console = Console(record=True, width=120)
+    console.print(panel)
+    rendered = console.export_text().lower()
+    assert "alice" in rendered
+    assert "bob" not in rendered

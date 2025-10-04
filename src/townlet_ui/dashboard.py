@@ -5,10 +5,11 @@ from __future__ import annotations
 import difflib
 import itertools
 import math
+import re
 import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from rich.columns import Columns
@@ -18,12 +19,26 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+try:  # pragma: no cover - fallback for older Rich versions
+    from rich.tooltip import Tooltip
+except ImportError:  # pragma: no cover - fallback shim
+    class Tooltip:  # type: ignore[too-many-ancestors]
+        """Minimal shim when rich.tooltip.Tooltip is unavailable."""
+
+        def __init__(self, renderable: RenderableType, text: str) -> None:
+            self.renderable = renderable
+            self.text = text
+
+        def __rich_console__(self, console: Console, options) -> Iterable[RenderableType]:
+            yield from console.render(self.renderable, options)
+
 from townlet.console.handlers import ConsoleCommand
 from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.telemetry import (
     AgentSummary,
     AnnealStatus,
     FriendSummary,
+    PersonalitySnapshotEntry,
     PromotionSnapshot,
     RelationshipChurn,
     RelationshipSummarySnapshot,
@@ -54,6 +69,128 @@ NEED_SPARK_STYLES: Mapping[str, str] = {
     "energy": "yellow",
 }
 
+PROFILE_STYLE_MAP: Mapping[str, str] = {
+    "socialite": "magenta",
+    "industrious": "yellow",
+    "stoic": "cyan",
+    "balanced": "white",
+}
+
+PERSONALITY_TRAIT_ALIASES: Mapping[str, str] = {
+    "ext": "extroversion",
+    "extroversion": "extroversion",
+    "forg": "forgiveness",
+    "forgiveness": "forgiveness",
+    "amb": "ambition",
+    "ambition": "ambition",
+}
+
+PERSONALITY_TRAIT_LABELS: Mapping[str, str] = {
+    "extroversion": "Extroversion",
+    "forgiveness": "Forgiveness",
+    "ambition": "Ambition",
+}
+
+FILTER_COMMAND_PREFIX = "filter"
+
+
+@dataclass(frozen=True)
+class PersonalityFilterSpec:
+    """Structured representation of a personality filter request."""
+
+    profile_prefix: str | None = None
+    trait_key: str | None = None
+    trait_operator: str | None = None
+    trait_threshold: float | None = None
+
+    def describe(self) -> str:
+        parts: list[str] = []
+        if self.profile_prefix:
+            parts.append(f"profile={self.profile_prefix}")
+        if (
+            self.trait_key
+            and self.trait_operator
+            and self.trait_threshold is not None
+        ):
+            trait_label = PERSONALITY_TRAIT_LABELS.get(self.trait_key, self.trait_key)
+            parts.append(
+                f"{trait_label} {self.trait_operator} {self.trait_threshold:+.2f}"
+            )
+        return " & ".join(parts)
+
+
+_FILTER_DIRECTIVE_RE = re.compile(r"^(?P<kind>profile|trait)\s*:\s*(?P<body>.+)$")
+_FILTER_TRAIT_RE = re.compile(
+    r"^(?P<key>[a-z_]+)\s*(?P<op>>=|<=|==|=|>|<)\s*(?P<value>[-+]?\d*\.?\d+)",
+)
+
+
+def _parse_personality_filter(raw: str | None) -> PersonalityFilterSpec | None:
+    if raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+
+    directive_match = _FILTER_DIRECTIVE_RE.match(text.lower())
+    if directive_match:
+        kind = directive_match.group("kind")
+        body = directive_match.group("body").strip()
+        if kind == "profile":
+            return PersonalityFilterSpec(profile_prefix=body.lower())
+        if kind == "trait":
+            trait_match = _FILTER_TRAIT_RE.match(body.lower())
+            if not trait_match:
+                return None
+            raw_key = trait_match.group("key")
+            trait_key = PERSONALITY_TRAIT_ALIASES.get(raw_key)
+            if trait_key is None:
+                return None
+            operator = trait_match.group("op")
+            threshold = float(trait_match.group("value"))
+            if operator == "=":
+                operator = "=="
+            return PersonalityFilterSpec(
+                trait_key=trait_key,
+                trait_operator=operator,
+                trait_threshold=threshold,
+            )
+        return None
+
+    # Default to treating the text as a profile prefix
+    return PersonalityFilterSpec(profile_prefix=text.lower())
+
+
+def _compare_trait_value(value: float, operator: str, threshold: float) -> bool:
+    if operator == ">=":
+        return value >= threshold
+    if operator == ">":
+        return value > threshold
+    if operator == "<=":
+        return value <= threshold
+    if operator == "<":
+        return value < threshold
+    if operator == "==":
+        return math.isclose(value, threshold, abs_tol=1e-6)
+    return False
+
+
+def _matches_personality_filter(
+    entry: PersonalitySnapshotEntry,
+    spec: PersonalityFilterSpec,
+) -> bool:
+    if spec.profile_prefix and not entry.profile.lower().startswith(spec.profile_prefix):
+        return False
+    if (
+        spec.trait_key
+        and spec.trait_operator
+        and spec.trait_threshold is not None
+    ):
+        trait_value = entry.traits.get(spec.trait_key, 0.0)
+        if not _compare_trait_value(trait_value, spec.trait_operator, spec.trait_threshold):
+            return False
+    return True
+
 
 @dataclass(frozen=True)
 class PaletteCommandMeta:
@@ -78,11 +215,69 @@ class PaletteState:
     pending: int = 0
     status_message: str | None = None
     status_style: str = "dim"
+    personality_filter: str | None = None
 
     def clamp_history(self, window: int | None) -> None:
         if window is None:
             return
         self.history_limit = max(1, window // 2 or 1)
+
+
+def _build_personality_filter_commands(
+    personalities: Mapping[str, PersonalitySnapshotEntry] | None,
+) -> list[PaletteCommandMeta]:
+    if not personalities:
+        return []
+
+    commands: list[PaletteCommandMeta] = []
+    commands.append(
+        PaletteCommandMeta(
+            name=f"{FILTER_COMMAND_PREFIX}:clear",
+            mode="ui",
+            usage="clear personality filter",
+            description="Show all agents (remove personality filters)",
+        )
+    )
+
+    profiles = sorted({entry.profile.lower() for entry in personalities.values()})
+    for profile in profiles:
+        commands.append(
+            PaletteCommandMeta(
+                name=f"{FILTER_COMMAND_PREFIX}:profile:{profile}",
+                mode="ui",
+                usage=f"profile:{profile}",
+                description=f"Filter agent cards to the {profile.title()} archetype",
+            )
+        )
+
+    trait_thresholds: tuple[tuple[str, str, float, str], ...] = (
+        (">=", ">=", 0.5, "High"),
+        ("<=", "<=", -0.5, "Low"),
+    )
+    for trait_key, trait_label in PERSONALITY_TRAIT_LABELS.items():
+        for command_suffix, operator, threshold, adjective in trait_thresholds:
+            commands.append(
+                PaletteCommandMeta(
+                    name=(
+                        f"{FILTER_COMMAND_PREFIX}:trait:{trait_key}{command_suffix}{threshold}"
+                    ),
+                    mode="ui",
+                    usage=f"trait:{trait_key}{operator}{threshold}",
+                    description=(
+                        f"Filter agents with {adjective.lower()} {trait_label}"
+                    ),
+                )
+            )
+
+    # Deduplicate command names while preserving order
+    seen: set[str] = set()
+    unique_commands: list[PaletteCommandMeta] = []
+    for command in commands:
+        if command.name in seen:
+            continue
+        seen.add(command.name)
+        unique_commands.append(command)
+    return unique_commands
 
 
 @dataclass
@@ -134,7 +329,11 @@ class DashboardState:
     agent_cards: AgentCardState = field(default_factory=AgentCardState)
 
 
-def _extract_palette_commands(snapshot: TelemetrySnapshot) -> list[PaletteCommandMeta]:
+def _extract_palette_commands(
+    snapshot: TelemetrySnapshot,
+    *,
+    include_filters: bool = False,
+) -> list[PaletteCommandMeta]:
     commands: list[PaletteCommandMeta] = []
     metadata = getattr(snapshot, "console_commands", {})
     if isinstance(metadata, Mapping):
@@ -152,6 +351,9 @@ def _extract_palette_commands(snapshot: TelemetrySnapshot) -> list[PaletteComman
                     description=description,
                 )
             )
+    if include_filters:
+        personality_map = getattr(snapshot, "personalities", {})
+        commands.extend(_build_personality_filter_commands(personality_map))
     commands.sort(key=lambda item: item.name)
     return commands
 
@@ -202,11 +404,13 @@ def _format_palette_filter_label(mode_filter: str) -> str:
 def _build_palette_overlay(
     snapshot: TelemetrySnapshot,
     palette: PaletteState,
+    *,
+    personality_enabled: bool = False,
 ) -> Panel | None:
     if not palette.visible:
         return None
 
-    commands = _extract_palette_commands(snapshot)
+    commands = _extract_palette_commands(snapshot, include_filters=personality_enabled)
     results = _search_palette_commands(commands, palette)
     highlight_index = (
         palette.highlight_index if results else -1
@@ -220,11 +424,17 @@ def _build_palette_overlay(
     header.add_column(justify="left")
     header.add_column(justify="center")
     header.add_column(justify="right")
+    header.add_column(justify="right")
     query_text = palette.query.strip() or "[dim](all commands)[/]"
     header.add_row(
         f"[bold]Search:[/bold] {query_text}",
         f"[bold]Pending:[/bold] {palette.pending}",
         f"[bold]Filter:[/bold] {_format_palette_filter_label(palette.mode_filter)}",
+        (
+            f"[bold]Personality:[/bold] {palette.personality_filter or '—'}"
+            if personality_enabled
+            else "[bold]Personality:[/bold] disabled"
+        ),
     )
 
     suggestion_table = Table.grid(padding=(0, 1), expand=True)
@@ -234,7 +444,7 @@ def _build_palette_overlay(
 
     if results:
         for idx, command in enumerate(results):
-            marker = "›" if idx == highlight_index else " "
+            marker = ">" if idx == highlight_index else " "
             marker_style = "bold cyan" if idx == highlight_index else "dim"
             label = f"{command.name} [{command.mode}]"
             description = command.description or command.usage
@@ -249,10 +459,15 @@ def _build_palette_overlay(
     else:
         suggestion_table.add_row("", "[dim]No commands match current search.[/]", "")
 
-    instructions = Text(
-        "Ctrl+P toggle • Tab cycles fields • Enter dispatch • Esc close",
-        style="dim",
-    )
+    instruction_parts = [
+        "Ctrl+P toggle",
+        "Tab cycles fields",
+        "Enter dispatch",
+        "Esc close",
+    ]
+    if personality_enabled:
+        instruction_parts.append("Type or select filter: profile:<name> / trait:ext>=0.5")
+    instructions = Text(" • ".join(instruction_parts), style="dim")
 
     status_text: Text | None = None
     if palette.status_message:
@@ -308,9 +523,10 @@ def dispatch_palette_selection(
     palette: PaletteState,
     executor: ConsoleCommandExecutor,
     *,
+    personality_enabled: bool = False,
     payload_override: Mapping[str, Any] | None = None,
     enqueue: bool = True,
-) -> ConsoleCommand:
+) -> ConsoleCommand | None:
     """Dispatch the highlighted palette command via the executor.
 
     Returns the normalised `ConsoleCommand` produced by the executor so callers
@@ -319,7 +535,10 @@ def dispatch_palette_selection(
     `CommandQueueFull` error so the caller can react (e.g. show dialog).
     """
 
-    commands = _search_palette_commands(_extract_palette_commands(snapshot), palette)
+    commands = _search_palette_commands(
+        _extract_palette_commands(snapshot, include_filters=personality_enabled),
+        palette,
+    )
     if not commands:
         raise ValueError("No palette commands available for current selection")
 
@@ -330,6 +549,31 @@ def dispatch_palette_selection(
         payload = payload_override
     else:
         payload = {"name": selected.name, "args": (), "kwargs": {}}
+
+    if personality_enabled and selected.name.startswith(f"{FILTER_COMMAND_PREFIX}:"):
+        action = selected.name.split(":", 2)
+        if len(action) >= 2:
+            directive = action[1]
+            if directive == "clear":
+                palette.personality_filter = None
+                palette.status_message = "Cleared personality filter"
+                palette.status_style = "green"
+                return None
+            if directive == "profile" and len(action) == 3:
+                palette.personality_filter = f"profile:{action[2]}"
+                palette.status_message = (
+                    f"Personality filter set to profile:{action[2]}"
+                )
+                palette.status_style = "cyan"
+                return None
+            if directive == "trait" and len(action) == 3:
+                # usage already normalised (e.g., trait:extroversion>=0.5)
+                palette.personality_filter = selected.usage
+                palette.status_message = (
+                    f"Personality filter set to {selected.usage}"
+                )
+                palette.status_style = "cyan"
+                return None
 
     try:
         command = executor.submit_payload(payload, enqueue=enqueue)
@@ -358,6 +602,8 @@ def render_snapshot(
     palette: PaletteState | None = None,
     state: DashboardState | None = None,
     focus_agent: str | None = None,
+    personality_filter: str | None = None,
+    personality_enabled: bool = False,
 ) -> Iterable[Panel]:
     """Yield rich Panels representing the current telemetry snapshot."""
     panels: list[Panel] = []
@@ -421,7 +667,13 @@ def render_snapshot(
     panels.append(Panel(header_table, title="Telemetry"))
 
     if palette is not None:
-        overlay = _build_palette_overlay(snapshot, palette)
+        if palette.personality_filter is None and personality_filter:
+            palette.personality_filter = personality_filter
+        overlay = _build_palette_overlay(
+            snapshot,
+            palette,
+            personality_enabled=personality_enabled,
+        )
         if overlay is not None:
             panels.append(overlay)
 
@@ -433,11 +685,17 @@ def render_snapshot(
     if perturbation_panel is not None:
         panels.append(perturbation_panel)
 
+    active_personality_filter = personality_filter
+    if palette is not None and palette.personality_filter:
+        active_personality_filter = palette.personality_filter
+
     agent_cards_panel = _build_agent_cards_panel(
         snapshot,
         tick,
         focus_agent=focus_agent,
         state=state.agent_cards if state else None,
+        personality_filter=active_personality_filter,
+        personality_enabled=personality_enabled,
     )
     if agent_cards_panel is not None:
         panels.append(agent_cards_panel)
@@ -741,6 +999,8 @@ def _build_agent_cards_panel(
     *,
     focus_agent: str | None = None,
     state: AgentCardState | None = None,
+    personality_filter: str | None = None,
+    personality_enabled: bool = False,
 ) -> Panel | None:
     agents = snapshot.agents
     if not agents:
@@ -752,6 +1012,38 @@ def _build_agent_cards_panel(
         agents,
         key=lambda a: (not a.on_shift, a.attendance_ratio * -1, a.agent_id),
     )
+
+    personality_map: Mapping[str, PersonalitySnapshotEntry] = getattr(snapshot, "personalities", {})
+    filter_spec = _parse_personality_filter(personality_filter) if personality_filter else None
+    filter_label: str | None = None
+    filter_active = False
+    filter_notice: Text | None = None
+    if filter_spec:
+        filter_label = filter_spec.describe() or personality_filter
+        filter_active = True
+        if personality_enabled and isinstance(personality_map, Mapping) and personality_map:
+            filtered_agents: list[AgentSummary] = []
+            for agent in sorted_agents:
+                entry = personality_map.get(agent.agent_id)
+                if not isinstance(entry, PersonalitySnapshotEntry):
+                    continue
+                if _matches_personality_filter(entry, filter_spec):
+                    filtered_agents.append(agent)
+            if filtered_agents:
+                sorted_agents = filtered_agents
+            else:
+                description = filter_label or "filter"
+                body = Text(
+                    f"No agents match {description}",
+                    style="yellow",
+                )
+                return Panel(body, title=f"Agents — filter: {description}", border_style="cyan")
+        else:
+            filter_notice = Text(
+                "Personality filters require personality telemetry",
+                style="yellow",
+            )
+
     agent_ids = [agent.agent_id for agent in sorted_agents]
 
     card_state = state
@@ -774,6 +1066,38 @@ def _build_agent_cards_panel(
             subtitle_parts.append(agent.job_id)
         subtitle_parts.append(agent.shift_state)
         subtitle = " • ".join(part for part in subtitle_parts if part)
+
+        personality_entry = None
+        if personality_enabled and isinstance(personality_map, Mapping):
+            personality_entry = personality_map.get(agent.agent_id)
+        if personality_enabled and isinstance(personality_entry, PersonalitySnapshotEntry):
+            profile_key = personality_entry.profile.lower()
+            badge_color = PROFILE_STYLE_MAP.get(profile_key, "white")
+            badge_label = personality_entry.profile.title()
+            badge_text = Text(f" {badge_label} ", style=f"bold {badge_color}")
+            badge_text.stylize(f"reverse {badge_color}")
+            traits = personality_entry.traits
+            tooltip_summary = (
+                f"Profile: {badge_label} • Ext {traits.get('extroversion', 0.0):+.2f}"
+                f" • Forg {traits.get('forgiveness', 0.0):+.2f}"
+                f" • Amb {traits.get('ambition', 0.0):+.2f}"
+            )
+            card_table.add_row(Tooltip(badge_text, tooltip_summary))
+            traits_text = Text(
+                "Traits "
+                f"ext {traits.get('extroversion', 0.0):+.2f}  "
+                f"forg {traits.get('forgiveness', 0.0):+.2f}  "
+                f"amb {traits.get('ambition', 0.0):+.2f}",
+                style="dim",
+            )
+            card_table.add_row(traits_text)
+            multipliers = personality_entry.multipliers or {}
+            behaviour_bias = multipliers.get("behaviour", {})
+            if behaviour_bias:
+                bias_parts = ", ".join(
+                    f"{key.replace('_', ' ')}={value:+.2f}" for key, value in behaviour_bias.items()
+                )
+                card_table.add_row(Text(f"Bias {bias_parts}", style="dim"))
 
         needs_history = (
             history.needs.get(agent.agent_id, {})
@@ -871,6 +1195,10 @@ def _build_agent_cards_panel(
         card_table.add_row(alerts_text)
 
         border_style = "blue"
+        if personality_enabled and isinstance(personality_entry, PersonalitySnapshotEntry):
+            profile_color = PROFILE_STYLE_MAP.get(personality_entry.profile.lower())
+            if profile_color:
+                border_style = profile_color
         if agent.exit_pending:
             border_style = "red"
         elif agent.on_shift:
@@ -891,10 +1219,18 @@ def _build_agent_cards_panel(
         )
 
     columns = Columns(cards, equal=True, expand=True)
+    body: RenderableType = columns
+    if filter_notice is not None:
+        notice_panel = Panel(filter_notice, border_style="yellow", padding=(0, 1))
+        body = Group(columns, notice_panel)
+
     title = "Agents"
+    filter_title = filter_label or (personality_filter or "")
+    if filter_active and filter_title:
+        title += f" — filter: {filter_title}"
     if card_state is not None and total_pages > 1:
         title += f" (Page {card_state.page + 1}/{total_pages})"
-    return Panel(columns, title=title, border_style="cyan")
+    return Panel(body, title=title, border_style="cyan")
 
 
 def _format_need_bar(name: str, value: float) -> Text:
@@ -955,10 +1291,10 @@ def _build_perturbation_banner(snapshot: TelemetrySnapshot) -> Panel | None:
     if not perturbations.active and not perturbations.pending:
         health = snapshot.health
         if health and (health.perturbations_pending or health.perturbations_active):
-            text = Text(
-                f"Health reports pending={health.perturbations_pending} active={health.perturbations_active}",
-                style="yellow",
-            )
+            pending = health.perturbations_pending
+            active = health.perturbations_active
+            status_line = f"Health reports pending={pending} active={active}"
+            text = Text(status_line, style="yellow")
             return Panel(text, title="Perturbation Status", border_style="yellow", padding=(0, 1))
         return None
 
@@ -1732,6 +2068,7 @@ def run_dashboard(
     agent_page_size: int = 6,
     agent_rotate_interval: int = 12,
     agent_autorotate: bool = True,
+    personality_filter: str | None = None,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
     from townlet.console.handlers import create_console_router
@@ -1775,6 +2112,12 @@ def run_dashboard(
         )
     )
 
+    personality_ui_enabled = False
+    try:
+        personality_ui_enabled = bool(loop.config.personality_ui_enabled())
+    except AttributeError:
+        personality_ui_enabled = False
+
     if approve:
         executor.submit(
             ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={})
@@ -1802,10 +2145,17 @@ def run_dashboard(
                         palette=palette_state,
                         state=dashboard_state,
                         focus_agent=focus_agent,
+                        personality_filter=personality_filter,
+                        personality_enabled=personality_ui_enabled,
                     )
                 )
                 obs_batch = loop.observations.build_batch(loop.world, terminated={})
-                map_panel = _build_map_panel(snapshot, obs_batch, focus_agent, show_coords=show_coords)
+                map_panel = _build_map_panel(
+                    snapshot,
+                    obs_batch,
+                    focus_agent,
+                    show_coords=show_coords,
+                )
                 if map_panel is not None:
                     panels.append(map_panel)
                 footer = Text(f"Tick: {loop.tick}", style="dim")

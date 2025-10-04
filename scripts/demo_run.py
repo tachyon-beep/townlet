@@ -89,6 +89,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Hide the command palette overlay during the demo",
     )
+    parser.add_argument(
+        "--personality-filter",
+        help="Optional personality profile filter for agent cards (e.g., socialite)",
+    )
     args = parser.parse_args()
     config_path = args.config_override or args.config
     if config_path is None:
@@ -142,6 +146,7 @@ def main() -> None:
         max_ticks=args.ticks,
         timeline=timeline,
         palette_state=palette_state,
+        personality_filter=args.personality_filter,
     )
 
 
