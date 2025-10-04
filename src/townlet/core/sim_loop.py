@@ -10,10 +10,11 @@ from __future__ import annotations
 import hashlib
 from importlib import import_module
 import logging
+import os
 import random
 import time
 from collections.abc import Iterable
-from typing import Callable
+from typing import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.grid import WorldState
+from townlet.world.runtime import WorldRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,7 @@ class SimulationLoop:
         config: SimulationConfig,
         *,
         affordance_runtime_factory: Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime] | None = None,
+        use_legacy_runtime: bool | None = None,
     ) -> None:
         self.config = config
         self.config.register_snapshot_migrations()
@@ -65,7 +68,17 @@ class SimulationLoop:
             self._affordance_runtime_factory = self._load_affordance_runtime_factory(
                 self._runtime_config
             )
+        self._force_legacy_runtime = use_legacy_runtime
+        self.runtime: WorldRuntime | None = None
+        self._runtime_variant: str = "legacy"
         self._build_components()
+
+    def __setattr__(self, name: str, value: object) -> None:  # pragma: no cover - delegation glue
+        super().__setattr__(name, value)
+        if name == "world":
+            runtime = getattr(self, "runtime", None)
+            if isinstance(runtime, WorldRuntime) and isinstance(value, WorldState):
+                runtime.bind_world(value)
 
     def _build_components(self) -> None:
         self._rng_world = random.Random(self._derive_seed("world"))
@@ -94,6 +107,26 @@ class SimulationLoop:
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
         self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
+        if self._legacy_runtime_enabled():
+            self.runtime = None
+            self._runtime_variant = "legacy"
+        else:
+            self.runtime = WorldRuntime(
+                world=self.world,
+                lifecycle=self.lifecycle,
+                perturbations=self.perturbations,
+                ticks_per_day=self._ticks_per_day,
+            )
+            self._runtime_variant = "facade"
+        self.telemetry.set_runtime_variant(self._runtime_variant)
+
+    def _legacy_runtime_enabled(self) -> bool:
+        if self._force_legacy_runtime is not None:
+            return bool(self._force_legacy_runtime)
+        value = os.getenv("TOWNLET_LEGACY_RUNTIME")
+        if value is None:
+            return False
+        return value.strip().lower() in {"1", "true", "yes", "on"}
 
     def reset(self) -> None:
         """Reset the simulation loop to its initial state."""
@@ -203,23 +236,40 @@ class SimulationLoop:
     def step(self) -> TickArtifacts:
         tick_start = time.perf_counter()
         self.tick += 1
-        self.world.tick = self.tick
-        self.lifecycle.process_respawns(self.world, tick=self.tick)
         console_ops = self.telemetry.drain_console_buffer()
-        self.world.apply_console(console_ops)
-        console_results = self.world.consume_console_results()
+        if self.runtime is not None:
+            self.runtime.queue_console(console_ops)
+
+            def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
+                return self.policy.decide(world, current_tick)
+
+            runtime_result = self.runtime.tick(
+                tick=self.tick,
+                action_provider=_action_provider,
+            )
+            console_results = runtime_result.console_results
+            events = runtime_result.events
+            terminated = runtime_result.terminated
+            termination_reasons = runtime_result.termination_reasons
+        else:
+            self.world.tick = self.tick
+            self.lifecycle.process_respawns(self.world, tick=self.tick)
+            self.world.apply_console(console_ops)
+            console_results = self.world.consume_console_results()
+            self.perturbations.tick(self.world, current_tick=self.tick)
+            actions = self.policy.decide(self.world, self.tick)
+            self.world.apply_actions(actions)
+            self.world.resolve_affordances(current_tick=self.tick)
+            if self._ticks_per_day and self.tick % self._ticks_per_day == 0:
+                self.world.apply_nightly_reset()
+            events = self.world.drain_events()
+            terminated = self.lifecycle.evaluate(self.world, tick=self.tick)
+            termination_reasons = self.lifecycle.termination_reasons()
+
         self.telemetry.record_console_results(console_results)
-        self.perturbations.tick(self.world, current_tick=self.tick)
-        actions = self.policy.decide(self.world, self.tick)
-        self.world.apply_actions(actions)
-        self.world.resolve_affordances(current_tick=self.tick)
-        if self._ticks_per_day and self.tick % self._ticks_per_day == 0:
-            self.world.apply_nightly_reset()
         episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
         for snapshot in self.world.agents.values():
             snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
-        terminated = self.lifecycle.evaluate(self.world, tick=self.tick)
-        termination_reasons = self.lifecycle.termination_reasons()
         rewards = self.rewards.compute(self.world, terminated, termination_reasons)
         reward_breakdown = self.rewards.latest_reward_breakdown()
         self.policy.post_step(rewards, terminated)
@@ -227,7 +277,6 @@ class SimulationLoop:
         self.policy.flush_transitions(observations)
         policy_snapshot = self.policy.latest_policy_snapshot()
         possessed_agents = self.policy.possessed_agents()
-        events = self.world.drain_events()
         option_switch_counts = self.policy.consume_option_switch_counts()
         hunger_levels = {
             agent_id: float(snapshot.needs.get("hunger", 1.0))
@@ -258,6 +307,7 @@ class SimulationLoop:
             policy_identity=policy_identity,
             possessed_agents=possessed_agents,
             social_events=self.rewards.latest_social_events(),
+            runtime_variant=self._runtime_variant,
         )
         self.stability.track(
             tick=self.tick,

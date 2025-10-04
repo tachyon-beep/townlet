@@ -33,12 +33,39 @@ def _build_payload(variant: str) -> dict[str, object]:
     return batch["alice"]
 
 
+REQUIRED_FEATURES = {
+    "need_hunger",
+    "need_hygiene",
+    "need_energy",
+    "wallet",
+    "time_sin",
+    "time_cos",
+    "ctx_reset_flag",
+}
+
+
 def test_observation_baselines_match_recorded_snapshots() -> None:
     for variant in ("hybrid", "full", "compact"):
         payload = _build_payload(variant)
         path = DATA_DIR / f"baseline_{variant}.npz"
         stored = np.load(path, allow_pickle=True)
+
         np.testing.assert_allclose(payload["map"], stored["map"])
         np.testing.assert_allclose(payload["features"], stored["features"])
+
         stored_metadata = stored["metadata"][0]
         assert payload["metadata"] == stored_metadata
+
+        assert payload["map"].dtype == np.float32
+        assert payload["features"].dtype == np.float32
+        assert payload["metadata"]["variant"] == variant
+
+        feature_names = payload["metadata"].get("feature_names", [])
+        assert REQUIRED_FEATURES.issubset(set(feature_names))
+
+        if variant == "compact":
+            assert payload["map"].size == 0
+        else:
+            channels, height, width = payload["map"].shape
+            assert channels == len(payload["metadata"]["map_channels"])
+            assert height == width == 11

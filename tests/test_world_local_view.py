@@ -5,6 +5,7 @@ from pathlib import Path
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot
+from townlet.world.observation import agent_context, local_view
 
 
 def make_loop() -> SimulationLoop:
@@ -41,7 +42,7 @@ def test_local_view_includes_objects_and_agents() -> None:
 
     world._active_reservations["fridge_1"] = "bob"
 
-    view = world.local_view("alice", radius=1)
+    view = local_view(world, "alice", radius=1)
     assert view["center"] == (0, 0)
     tile = tile_for_position(view["tiles"], (1, 0))
     assert "bob" in tile["agent_ids"]
@@ -64,7 +65,7 @@ def test_agent_context_defaults() -> None:
         last_action_duration=3,
     )
 
-    context = world.agent_context("alice")
+    context = agent_context(world, "alice")
     assert context["needs"]["hunger"] == 0.2
     assert context["last_action_id"] == "move"
     assert context["last_action_success"] is True

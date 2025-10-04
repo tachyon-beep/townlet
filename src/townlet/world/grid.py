@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import random
+import copy
 import logging
 import os
-import copy
+import random
 import time
-from collections import OrderedDict, deque
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field, asdict
+from collections import deque
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from townlet.agents.models import (
     Personality,
@@ -34,10 +34,10 @@ from townlet.console.command import (
     ConsoleCommandError,
     ConsoleCommandResult,
 )
+from townlet.console.service import ConsoleService
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
-from townlet.console.service import ConsoleService
-from townlet.world.queue_conflict import QueueConflictTracker
+from townlet.world.affordance_runtime import AffordanceCoordinator
 from townlet.world.affordances import (
     AffordanceOutcome,
     AffordanceRuntimeContext,
@@ -47,19 +47,27 @@ from townlet.world.affordances import (
     apply_affordance_outcome,
     build_hook_payload,
 )
-from townlet.world.affordance_runtime import AffordanceCoordinator
-from townlet.world.queue_manager import QueueManager
-from townlet.world.employment import EmploymentEngine
-from townlet.world.employment_service import create_employment_coordinator, EmploymentCoordinator
-from townlet.world.relationships import RelationshipLedger, RelationshipParameters
-from townlet.world.rivalry import RivalryLedger, RivalryParameters
+from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
+from townlet.world.observation import (
+    find_nearest_object_of_type as observation_find_nearest_object_of_type,
+)
+from townlet.world.observation import (
+    snapshot_precondition_context,
+)
 from townlet.world.preconditions import (
     CompiledPrecondition,
     PreconditionSyntaxError,
     compile_preconditions,
 )
-
+from townlet.world.queue_conflict import QueueConflictTracker
+from townlet.world.queue_manager import QueueManager
+from townlet.world.relationships import (
+    RelationshipLedger,
+    RelationshipParameters,
+    RelationshipTie,
+)
+from townlet.world.rivalry import RivalryLedger, RivalryParameters
 
 logger = logging.getLogger(__name__)
 
@@ -240,10 +248,13 @@ class WorldState:
     _relationship_churn: RelationshipChurnAccumulator = field(init=False)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
-    _rng_seed: Optional[int] = field(init=False, default=None)
-    _rng_state: Optional[tuple[Any, ...]] = field(init=False, default=None)
-    _rng: Optional[random.Random] = field(init=False, default=None, repr=False)
-    affordance_runtime_factory: Callable[["WorldState", AffordanceRuntimeContext], "DefaultAffordanceRuntime"] | None = None
+    _rng_seed: int | None = field(init=False, default=None)
+    _rng_state: tuple[Any, ...] | None = field(init=False, default=None)
+    _rng: random.Random | None = field(init=False, default=None, repr=False)
+    affordance_runtime_factory: (
+        Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime]
+        | None
+    ) = None
     affordance_runtime_config: AffordanceRuntimeConfig | None = None
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
@@ -258,10 +269,13 @@ class WorldState:
         cls,
         config: SimulationConfig,
         *,
-        rng: Optional[random.Random] = None,
-        affordance_runtime_factory: Callable[["WorldState", AffordanceRuntimeContext], "DefaultAffordanceRuntime"] | None = None,
+        rng: random.Random | None = None,
+        affordance_runtime_factory: (
+            Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime]
+            | None
+        ) = None,
         affordance_runtime_config: AffordanceRuntimeConfig | None = None,
-    ) -> "WorldState":
+    ) -> WorldState:
         """Bootstrap the initial world from config."""
 
         instance = cls(
@@ -391,7 +405,7 @@ class WorldState:
             record_queue_conflict=self._record_queue_conflict,
             apply_need_decay=self._apply_need_decay,
             build_precondition_context=self._build_precondition_context,
-            snapshot_precondition_context=self._snapshot_precondition_context,
+            snapshot_precondition_context=snapshot_precondition_context,
         )
         runtime_obj: DefaultAffordanceRuntime | AffordanceCoordinator
         if self.affordance_runtime_factory is not None:
@@ -550,7 +564,10 @@ class WorldState:
                         getattr(handler, "__name__", handler.__class__.__name__),
                     )
                     logger.debug(
-                        "world.resolve_affordances.hook_handler stage=%s hook=%s handler=%s duration_ms=%.2f",
+                        (
+                            "world.resolve_affordances.hook_handler stage=%s hook=%s "
+                            "handler=%s duration_ms=%.2f"
+                        ),
                         stage,
                         hook_name,
                         handler_name,
@@ -612,7 +629,7 @@ class WorldState:
         stock: dict[str, Any] = {}
         object_context: dict[str, Any] = {}
         if obj is not None:
-            stock = {key: value for key, value in obj.stock.items()}
+            stock = dict(obj.stock)
             position = list(obj.position) if obj.position is not None else None
             occupied_by = obj.occupied_by
             object_context = {
@@ -648,18 +665,6 @@ class WorldState:
             "stock": stock,
         }
         return context
-
-    def _snapshot_precondition_context(self, context: Mapping[str, Any]) -> dict[str, Any]:
-        def _clone(value: Any) -> Any:
-            if isinstance(value, dict):
-                return {str(key): _clone(val) for key, val in value.items()}
-            if isinstance(value, list):
-                return [_clone(item) for item in value]
-            if isinstance(value, tuple):
-                return [_clone(item) for item in value]
-            return value
-
-        return {str(key): _clone(val) for key, val in context.items()}
 
     def _register_default_console_handlers(self) -> None:
         self.register_console_handler(
@@ -901,7 +906,7 @@ class WorldState:
     def _console_spawn_agent(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
-            payload = {key: value for key, value in zip(["agent_id", "position"], envelope.args)}
+            payload = dict(zip(["agent_id", "position"], envelope.args))
         if not isinstance(payload, Mapping):
             raise ConsoleCommandError("invalid_args", "spawn payload must be a mapping")
         agent_id = payload.get("agent_id")
@@ -916,8 +921,8 @@ class WorldState:
             raise ConsoleCommandError("invalid_args", "position must be [x, y]")
         try:
             x, y = int(position[0]), int(position[1])
-        except (TypeError, ValueError):
-            raise ConsoleCommandError("invalid_args", "position must be integers")
+        except (TypeError, ValueError) as error:
+            raise ConsoleCommandError("invalid_args", "position must be integers") from error
         if not self._is_position_walkable((x, y)):
             raise ConsoleCommandError(
                 "invalid_args",
@@ -934,10 +939,10 @@ class WorldState:
                 )
             try:
                 hx, hy = int(home_payload[0]), int(home_payload[1])
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as error:
                 raise ConsoleCommandError(
                     "invalid_args", "home_position must be integers"
-                )
+                ) from error
             home_tuple = (hx, hy)
             if home_tuple != (x, y) and not self._is_position_walkable(home_tuple):
                 raise ConsoleCommandError(
@@ -984,7 +989,7 @@ class WorldState:
     def _console_teleport_agent(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
-            payload = {key: value for key, value in zip(["agent_id", "position"], envelope.args)}
+            payload = dict(zip(["agent_id", "position"], envelope.args))
         if not isinstance(payload, Mapping):
             raise ConsoleCommandError("invalid_args", "teleport payload must be a mapping")
         agent_id = payload.get("agent_id")
@@ -1000,8 +1005,8 @@ class WorldState:
             raise ConsoleCommandError("invalid_args", "position must be [x, y]")
         try:
             x, y = int(position[0]), int(position[1])
-        except (TypeError, ValueError):
-            raise ConsoleCommandError("invalid_args", "position must be integers")
+        except (TypeError, ValueError) as error:
+            raise ConsoleCommandError("invalid_args", "position must be integers") from error
         if not self._is_position_walkable((x, y)):
             raise ConsoleCommandError(
                 "invalid_args",
@@ -1060,7 +1065,7 @@ class WorldState:
     def _console_set_need(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
-            payload = {key: value for key, value in zip(["agent_id", "needs"], envelope.args)}
+            payload = dict(zip(["agent_id", "needs"], envelope.args))
         if not isinstance(payload, Mapping):
             raise ConsoleCommandError("invalid_args", "setneed payload must be a mapping")
         agent_id = payload.get("agent_id")
@@ -1086,10 +1091,10 @@ class WorldState:
                 )
             try:
                 float_value = float(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as error:
                 raise ConsoleCommandError(
                     "invalid_args", "need values must be numeric", details={"need": key}
-                )
+                ) from error
             clamped = max(0.0, min(1.0, float_value))
             snapshot.needs[key] = clamped
             updated[key] = clamped
@@ -1102,7 +1107,7 @@ class WorldState:
     def _console_set_price(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
-            payload = {key: value for key, value in zip(["key", "value"], envelope.args)}
+            payload = dict(zip(["key", "value"], envelope.args))
         if not isinstance(payload, Mapping):
             raise ConsoleCommandError("invalid_args", "price payload must be a mapping")
         key = payload.get("key")
@@ -1113,8 +1118,10 @@ class WorldState:
         value = payload.get("value")
         try:
             numeric_value = float(value)
-        except (TypeError, ValueError):
-            raise ConsoleCommandError("invalid_args", "value must be numeric", details={"key": key})
+        except (TypeError, ValueError) as error:
+            raise ConsoleCommandError(
+                "invalid_args", "value must be numeric", details={"key": key}
+            ) from error
         self.config.economy[key] = numeric_value
         self._economy_baseline[key] = numeric_value
         if self._price_spike_events:
@@ -1127,9 +1134,7 @@ class WorldState:
     def _console_force_chat(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
-            payload = {
-                key: value for key, value in zip(["speaker", "listener", "quality"], envelope.args)
-            }
+            payload = dict(zip(["speaker", "listener", "quality"], envelope.args))
         if not isinstance(payload, Mapping):
             raise ConsoleCommandError("invalid_args", "force_chat payload must be a mapping")
         speaker = payload.get("speaker")
@@ -1149,10 +1154,10 @@ class WorldState:
         quality = payload.get("quality", 1.0)
         try:
             quality_value = float(quality)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as error:
             raise ConsoleCommandError(
                 "invalid_args", "quality must be numeric", details={"quality": quality}
-            )
+            ) from error
         clipped = max(0.0, min(1.0, quality_value))
         self.record_chat_success(speaker, listener, clipped)
         tie_forward = self.relationship_tie(speaker, listener)
@@ -1169,13 +1174,12 @@ class WorldState:
     def _console_set_relationship(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
         payload = envelope.kwargs.get("payload")
         if payload is None:
-            payload = {
-                key: value
-                for key, value in zip(
+            payload = dict(
+                zip(
                     ["agent_a", "agent_b", "trust", "familiarity", "rivalry"],
                     envelope.args,
                 )
-            }
+            )
         if not isinstance(payload, Mapping):
             raise ConsoleCommandError("invalid_args", "set_rel payload must be a mapping")
         agent_a = payload.get("agent_a")
@@ -1200,14 +1204,9 @@ class WorldState:
                 "invalid_args", "set_rel requires at least one of trust/familiarity/rivalry"
             )
         forward = self._get_relationship_ledger(agent_a).tie_for(agent_b)
-        reverse = self._get_relationship_ledger(agent_b).tie_for(agent_a)
         current_forward = (
             forward.as_dict() if forward else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
         )
-        current_reverse = (
-            reverse.as_dict() if reverse else {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.0}
-        )
-
         def _compute_delta(
             target: object, current: float, *, clamp_low: float, clamp_high: float
         ) -> float:
@@ -1215,11 +1214,11 @@ class WorldState:
                 return 0.0
             try:
                 coerced = float(target)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as error:
                 raise ConsoleCommandError(
                     "invalid_args",
                     "relationship values must be numeric",
-                )
+                ) from error
             coerced = max(clamp_low, min(clamp_high, coerced))
             return coerced - current
 
@@ -1449,126 +1448,6 @@ class WorldState:
     def snapshot(self) -> dict[str, AgentSnapshot]:
         """Return a shallow copy of the agent dictionary for observers."""
         return {agent_id: copy.deepcopy(snapshot) for agent_id, snapshot in self.agents.items()}
-
-    def local_view(
-        self,
-        agent_id: str,
-        radius: int,
-        *,
-        include_agents: bool = True,
-        include_objects: bool = True,
-    ) -> dict[str, Any]:
-        """Return local neighborhood information for observation builders."""
-
-        snapshot = self.agents.get(agent_id)
-        if snapshot is None:
-            return {
-                "center": None,
-                "radius": radius,
-                "tiles": [],
-                "agents": [],
-                "objects": [],
-            }
-
-        cx, cy = snapshot.position
-        agent_lookup: dict[tuple[int, int], list[str]] = {}
-        if include_agents:
-            for other in self.agents.values():
-                position = other.position
-                agent_lookup.setdefault(position, []).append(other.agent_id)
-
-        object_lookup: dict[tuple[int, int], list[str]] = {}
-        if include_objects:
-            for position, object_ids in self._objects_by_position.items():
-                filtered = [obj_id for obj_id in object_ids if obj_id in self.objects]
-                if filtered:
-                    object_lookup[position] = filtered
-
-        tiles: list[list[dict[str, Any]]] = []
-        seen_agents: dict[str, dict[str, Any]] = {}
-        seen_objects: dict[str, dict[str, Any]] = {}
-
-        for dy in range(-radius, radius + 1):
-            row: list[dict[str, Any]] = []
-            for dx in range(-radius, radius + 1):
-                x = cx + dx
-                y = cy + dy
-                position = (x, y)
-                agent_ids = agent_lookup.get(position, [])
-                object_ids = object_lookup.get(position, [])
-                if include_agents:
-                    for agent_id_at_tile in agent_ids:
-                        if agent_id_at_tile == agent_id:
-                            continue
-                        other = self.agents.get(agent_id_at_tile)
-                        if other is not None:
-                            seen_agents.setdefault(
-                                agent_id_at_tile,
-                                {
-                                    "agent_id": agent_id_at_tile,
-                                    "position": other.position,
-                                    "on_shift": other.on_shift,
-                                },
-                            )
-                if include_objects:
-                    for object_id in object_ids:
-                        obj = self.objects.get(object_id)
-                        if obj is None:
-                            continue
-                        seen_objects.setdefault(
-                            object_id,
-                            {
-                                "object_id": object_id,
-                                "object_type": obj.object_type,
-                                "position": obj.position,
-                                "occupied_by": obj.occupied_by,
-                            },
-                        )
-                reservation_active = False
-                if object_ids:
-                    reservation_active = any(
-                        self._active_reservations.get(object_id) is not None
-                        for object_id in object_ids
-                    )
-                row.append(
-                    {
-                        "position": position,
-                        "self": position == (cx, cy),
-                        "agent_ids": list(agent_ids),
-                        "object_ids": list(object_ids),
-                        "reservation_active": reservation_active,
-                    }
-                )
-            tiles.append(row)
-
-        return {
-            "center": (cx, cy),
-            "radius": radius,
-            "tiles": tiles,
-            "agents": list(seen_agents.values()),
-            "objects": list(seen_objects.values()),
-        }
-
-    def agent_context(self, agent_id: str) -> dict[str, object]:
-        """Return scalar context fields for the requested agent."""
-
-        snapshot = self.agents.get(agent_id)
-        if snapshot is None:
-            return {}
-        return {
-            "needs": dict(snapshot.needs),
-            "wallet": snapshot.wallet,
-            "lateness_counter": snapshot.lateness_counter,
-            "on_shift": snapshot.on_shift,
-            "attendance_ratio": snapshot.attendance_ratio,
-            "wages_withheld": snapshot.wages_withheld,
-            "shift_state": snapshot.shift_state,
-            "last_action_id": snapshot.last_action_id,
-            "last_action_success": snapshot.last_action_success,
-            "last_action_duration": snapshot.last_action_duration,
-            "wages_paid": self._employment_context_wages(snapshot.agent_id),
-            "punctuality_bonus": self._employment_context_punctuality(snapshot.agent_id),
-        }
 
     @property
     def active_reservations(self) -> dict[str, str]:
@@ -2059,16 +1938,7 @@ class WorldState:
     def find_nearest_object_of_type(
         self, object_type: str, origin: tuple[int, int]
     ) -> tuple[int, int] | None:
-        targets = [
-            obj.position
-            for obj in self.objects.values()
-            if obj.object_type == object_type and obj.position is not None
-        ]
-        if not targets:
-            return None
-        ox, oy = origin
-        closest = min(targets, key=lambda pos: (pos[0] - ox) ** 2 + (pos[1] - oy) ** 2)
-        return closest
+        return observation_find_nearest_object_of_type(self, object_type, origin)
 
     def _apply_need_decay(self) -> None:
         decay_rates = self.config.rewards.decay_rates

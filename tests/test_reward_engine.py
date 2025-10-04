@@ -22,6 +22,9 @@ class StubWorld:
     ) -> None:
         self.config = config
         self.tick = 0
+        snapshot.agent_id = "alice"
+        snapshot.wages_paid = context.get("wages_paid", 0.0)
+        snapshot.punctuality_bonus = context.get("punctuality_bonus", 0.0)
         self.agents = {"alice": snapshot}
         self._context = context
 
@@ -30,6 +33,12 @@ class StubWorld:
 
     def agent_context(self, agent_id: str) -> dict[str, float]:
         return self._context
+
+    def _employment_context_wages(self, agent_id: str) -> float:
+        return float(self._context.get("wages_paid", 0.0))
+
+    def _employment_context_punctuality(self, agent_id: str) -> float:
+        return float(self._context.get("punctuality_bonus", 0.0))
 
     def relationship_tie(self, subject: str, target: str):
         return None

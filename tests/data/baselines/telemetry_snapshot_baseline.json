@@ -73,5 +73,6 @@
     "forced_reuse_rate": 0.0,
     "reuse_warning": 0.0
   },
-  "narrations_count": 0
+  "narrations_count": 0,
+  "runtime_variant": "facade"
 }

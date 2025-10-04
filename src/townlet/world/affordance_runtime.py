@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Iterable, Mapping
 
 from townlet.world.affordances import DefaultAffordanceRuntime, RunningAffordanceState
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from townlet.config import EmploymentConfig, SimulationConfig
 
@@ -513,7 +514,10 @@ class EmploymentEngine:
             )
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                "employment.enqueue_exit agent=%s tick=%s pending_before=%s pending_after=%s manual=%s",
+                (
+                    "employment.enqueue_exit agent=%s tick=%s pending_before=%s "
+                    "pending_after=%s manual=%s"
+                ),
                 agent_id,
                 tick,
                 pending_before,

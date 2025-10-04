@@ -141,29 +141,92 @@
 - **Status**: Employment coordinator added (`src/townlet/world/employment_service.py`), `WorldState` delegation updated, tests passing; queue conflict wiring unchanged pending Phase 3.
 
 ### Phase 3: Integration & Regression
-- **Step 3.1: Consumer Updates**
-  - Update observation builder, telemetry publisher, and console handlers to rely on `AffordanceCoordinator`/`EmploymentCoordinator` instead of direct `WorldState` internals.
-  - Review tests for direct `_employment_*` or `_affordance_runtime` access and refactor to new service interfaces.
-- **Step 3.2: Benchmark & Snapshot Validation**
-  - Rerun `benchmarks/m2_affordance_employment_baseline.json` and compare telemetry snapshots (`m2_affordance_heavy.json`, `m2_employment_queue_heavy.json`) to confirm no behavioural drift.
-- **Step 3.3: Documentation & Rollback**
-  - Update architecture docs with final module boundaries, and document rollback instructions after verifying benchmarks/snapshots.
+- **Step 3.0: Readiness & Risk Check**
+  - Review Phase 1/2 pull requests, TODO markers, and ensure pending shims are logged with owners.
+  - Confirm rollback points exist (git tags or feature branches) for both coordinators and record in release notes.
+  - Sync telemetry baseline fixtures and snapshot scripts to latest schema to avoid false alarms.
+- **Step 3.1: World Runtime Integration Sweep**
+  - Run focused integration suites (`pytest tests/test_world_queue_integration.py tests/test_world_local_view.py tests/test_telemetry_baselines.py`).
+  - Execute an end-to-end simulation (`python scripts/run_simulation.py configs/examples/poc_hybrid.yaml`) capturing telemetry diffs for console, affordance, and employment flows.
+  - Inspect logs for ordering issues (reservation sync, employment exits) and file follow-up tasks.
+- **Step 3.2: Telemetry & UI Verification**
+  - Compare telemetry exports against baselines (`m2_affordance_heavy.json`, `m2_employment_queue_heavy.json`) and update fixtures if behaviour is unchanged.
+  - Smoke test observer UI (`python scripts/observer_ui.py configs/examples/poc_hybrid.yaml`) to confirm command history, queue metrics, and affordance panels render correctly.
+  - Update documentation only if schemas or user-visible output changed; otherwise note stability.
+- **Step 3.3: Performance & Load Checks**
+  - Run heavy scenarios (`python scripts/run_simulation.py configs/scenarios/queue_conflict.yaml`) and capture tick duration metrics.
+  - Compare against pre-refactor benchmarks (±5 % tolerance); investigate regressions with profiling if needed.
+- **Step 3.4: Regression Hardening**
+  - Close identified coverage gaps with additional integration/property tests targeting new service boundaries.
+  - Ensure `ruff check src tests`, `ruff format`, and `mypy src` pass; resolve warnings introduced during migration.
+  - Verify employment/affordance coordinators expose deterministic snapshot APIs for future testability.
+- **Step 3.5: Sign-off & Transition**
+  - Produce milestone closure note summarising outcomes, risks, and follow-up backlog.
+  - Update `GRID_REFACTOR_PLAN.md` status trackers, appendices, and rollout notes to reflect completion.
+  - Prepare handoff to Milestone M3 (observation/runtime simplification) with any outstanding dependencies.
 
 ## Milestone M3 – Observation & World Runtime Simplification
+
+### Status Snapshot
+- Phase 0 (Risk Reduction) – **Completed** (fixtures regenerated, RNG docs/tests, integration matrix & baselines captured).
+- Phase 1 (Runtime Core Extraction) – **Completed** (WorldRuntime facade shipped with flag, telemetry/runtime wiring, CLI + test coverage).
+- Phase 2 (Observation Helper Relocation) – **Completed** (helpers extracted to `world/observation.py`, builder refactored, telemetry/policy parity confirmed).
+- Phase 3 (Final Cleanup) – Planned.
 
 ### Phase 0: Risk Reduction
 
 - **Step 0.1: Observation Contract Audit**
-  - Freeze observation schemas (hybrid/full/compact) and capture golden fixtures.
+  - Task: Enumerate all observation exporters (`observations/builder.py`, policy adapters) and document expected tensors/keys per variant.
+  - Task: Regenerate golden fixtures (`tests/data/observations/baseline_*.npz`, `tests/data/baselines/telemetry_snapshot_baseline.json`) via `python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 200 --telemetry-path tmp/telemetry_baseline.json`.
+  - Task: Add contract assertions to `tests/test_observation_baselines.py` ensuring new fixtures align with documented schemas (shape, dtype, key ordering).
 - **Step 0.2: RNG & State Handling**
-  - Document RNG usage and world snapshot semantics to avoid behavioural drift.
+  - Task: Trace RNG entry points (`townlet/utils/rng.py`, `WorldState.get_rng_state/set_rng_state`) and summarise sequencing expectations in `docs/engineering/WORLDSTATE_REFACTOR.md`.
+  - Task: Add regression coverage in `tests/test_utils_rng.py` for state export/import parity and nightly reset flows.
+  - Task: Validate snapshot import/export by running `pytest tests/test_snapshot_manager.py tests/test_snapshot_migrations.py` and logging any dependencies on runtime order.
+- **Step 0.3: Integration Test Matrix & Tooling**
+  - Task: Build a dependency matrix of integration suites (world, telemetry, UI) and create a test checklist in `docs/engineering/WORLDSTATE_REFACTOR.md` appendix.
+  - Task: Establish lint/type clean-up goals—track Ruff/Mypy failures relevant to `townlet/world`/`observations` in `PROJECT_CLEAN_ORDER.md` with owners and target phases.
+  - Task: Design runtime feature flag (`TOWNLET_LEGACY_RUNTIME=1`) with acceptance criteria, including CLI/environment wiring and documentation for toggling during validation.
+- **Step 0.4: Baseline Telemetry & Performance Capture**
+  - Task: Execute reference simulations (`python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 500`, `python scripts/run_simulation.py configs/scenarios/queue_conflict.yaml --ticks 500`) and archive telemetry/perf metrics in `benchmarks/m3_runtime_baseline.json`.
+  - Task: Capture observer dashboard snapshot (`python scripts/observer_ui.py configs/examples/poc_hybrid.yaml --ticks 5 --refresh 0.1`) and record expected panels/state for comparison post-refactor.
+  - Task: Document success criteria (tick throughput ±5 %, telemetry schema unchanged) in the plan to inform Phase 1/2 validation gates.
+  - Status: Baseline metrics recorded at ~2.94k (poc_hybrid) and ~3.06k (queue_conflict) ticks/sec; reference telemetry snapshot stored in `tmp/observer_snapshot.txt`. Acceptance threshold logged as ±5 % throughput variance with unchanged `schema_version`.
 
 ### Phase 1: Runtime Core Extraction
 
 - **Step 1.1: Create `WorldRuntime` Facade**
-  - Introduce a runtime orchestrator responsible for tick sequencing (`process_respawns`, `apply_actions`, `resolve_affordances`, etc.).
+  - Task 1.1.1: Draft runtime interface (`class WorldRuntime`) covering lifecycle hooks (`bind_world`, `queue_console`, `apply_actions`, `tick`, `snapshot`).
+  - Task 1.1.2: Implement façade in `src/townlet/world/runtime.py`, delegating to existing WorldState internals behind a feature flag.
+  - Task 1.1.3: Add unit tests (`tests/test_world_runtime_facade.py`) ensuring the facade invokes WorldState methods in correct order and propagates exceptions.
+  - **Status**: Completed (facade landed, unit suite added, integrated into `townlet/world/__init__.py`).
 - **Step 1.2: Slim `WorldState`**
-  - Reduce `WorldState` responsibilities to pure data/manipulation (agents, objects, reservations).
+  - Task 1.2.1: Introduce thin delegations inside `WorldState` that forward to `WorldRuntime` when active, retaining legacy paths behind `TOWNLET_LEGACY_RUNTIME`.
+  - Task 1.2.2: Move tick sequencing helpers (`process_respawns`, `apply_affordances`, `resolve_affordances`, `apply_nightly_reset`) into the runtime module while preserving public signatures.
+  - Task 1.2.3: Update policy (`SimulationLoop`), telemetry, and console orchestrators to call the runtime entry points instead of direct WorldState methods.
+  - **Status**: Completed (SimulationLoop delegates through facade with env flag + telemetry variant wiring; legacy path guarded).
+- **Step 1.3: Compatibility & Rollback Shims**
+  - Task 1.3.1: Wire `TOWNLET_LEGACY_RUNTIME` env handling into `SimulationLoop` initialiser and CLI entry points.
+  - Task 1.3.2: Emit telemetry field (`runtime_variant`) describing active runtime for diffability.
+  - Task 1.3.3: Document rollback instructions in `docs/engineering/WORLDSTATE_REFACTOR.md` and ensure tests cover both flag modes (parametrise key integration suites).
+  - **Status**: Completed (runtime CLI switch shipped, telemetry carries variant, docs + tests updated).
+
+### Phase 2: Observation Helper Relocation
+
+- **Step 2.1: Move Observation Helpers**
+  - Task 2.1.1: Extract local view builders, reservation cache helpers, and snapshot utilities from `WorldState` into a new `townlet/world/observations.py` (or existing observation module) while maintaining import compatibility via shims.
+  - Task 2.1.2: Update `WorldState` to call relocated helpers; provide feature flag or temporary proxy to allow fallback if regressions surface.
+  - Task 2.1.3: Add targeted unit tests for the new helper module (`tests/test_world_observation_helpers.py`) covering map generation, reservation overlays, and agent context outputs.
+- **Step 2.2: Update Observation Builder & Tests**
+  - Task 2.2.1: Refactor `ObservationBuilder` to consume the new helper APIs instead of reaching into `WorldState` internals.
+  - Task 2.2.2: Refresh observation fixtures (`tests/data/observations/baseline_*.npz`) and expand contract assertions for relocated helper outputs.
+  - Task 2.2.3: Ensure policy runners and replay loaders continue to work with the new metadata (update `tests/test_simulation_loop_runtime.py` parametrisation if required).
+- **Step 2.3: Telemetry & Policy Integration**
+  - Task 2.3.1: Adjust telemetry publishers and stability monitors to reference relocated observation utilities; validate snapshot parity against frozen fixtures.
+  - Task 2.3.2: Update documentation for observation variants (`docs/engineering/WORLDSTATE_REFACTOR.md`, observation README) with new module boundaries and call flows.
+  - Task 2.3.3: Run cross-runtime regression suites (legacy vs facade) ensuring observation outputs remain deterministic; backfill additional tests if discrepancies arise.
+
+### Phase 3: Final Cleanup
 
 ### Phase 2: Observation Helper Relocation
 
@@ -171,40 +234,69 @@
   - Transfer local view builders and context helpers to observation modules, leaving `WorldState` as a data provider.
 - **Step 2.2: Update Observation Builder & Tests**
   - Ensure observation builder interacts with the new provider interface.
+- **Step 2.3: Telemetry & Policy Integration**
+  - Adjust telemetry publishers and policy adapters to consume relocated helpers and validate snapshot parity against frozen fixtures.
+  - Refresh documentation for observation variants to reflect new module boundaries.
 
 ### Phase 3: Final Cleanup
 
 - **Step 3.1: Dead Code Removal**
-  - Remove unused fields/methods from `WorldState`, verifying type hints and invariants.
+  - Task 3.1.1: Catalogue `WorldState` methods/attributes now unused (legacy queue helpers, direct observation caches) and remove or deprecate behind feature flag.
+  - Task 3.1.2: Update type hints/invariants for remaining `WorldState` APIs to reflect facade/observation modules; ensure mypy clean for `townlet/world`.
+  - Task 3.1.3: Delete temporary compatibility shims once integration tests confirm no downstream usage.
 - **Step 3.2: Documentation & Validation**
-  - Update `docs/engineering/WORLDSTATE_REFACTOR.md` and diagrams.
-  - Execute full test suite, reproduce telemetry snapshots, run long-duration sim smoke.
+  - Task 3.2.1: Refresh architecture diagrams plus narrative sections in `docs/engineering/WORLDSTATE_REFACTOR.md` to capture final module boundaries and runtime flow.
+  - Task 3.2.2: Regenerate telemetry/observation baselines post-cleanup (facade + legacy modes) and archive diffs.
+  - Task 3.2.3: Run `pytest` (full suite), long-form simulation smoke (`scripts/run_simulation.py ... --ticks 5000`), and observer dashboard spot-check; record results in plan appendix.
+- **Step 3.3: Tooling Debt Burn-down**
+  - Task 3.3.1: Drive `ruff check src/townlet/world src/townlet/observations` to zero findings; align import ordering/annotation modernisation.
+  - Task 3.3.2: Ensure `mypy src/townlet/world src/townlet/observations` passes without ignores; lift legacy `type: ignore`s where feasible.
+  - Task 3.3.3: Decide fate of `TOWNLET_LEGACY_RUNTIME` flag (keep for rollout vs remove); if retiring, document rollback strategy for Milestone M4.
 
 ## Milestone M4 – Hardening & Adoption
+
+### Status Snapshot
+- Phase 0 (Risk Reduction) – Pending.
+- Phase 1 (Rollout & Monitoring) – Pending.
+- Phase 2 (Backlog & Follow-ups) – Pending.
+- Phase 3 (Post-mortem) – Pending.
 
 ### Phase 0: Risk Reduction
 
 - **Step 0.1: Ops & Tooling Review**
-  - Check CI/build scripts for assumptions about old module layout; update as needed.
+  - Task 0.1.1: Inventory CI workflows, Docker images, and packaging scripts for old import paths; update to use `townlet.world.observation` and runtime facade.
+  - Task 0.1.2: Verify training/automation notebooks for deprecated APIs; file follow-up issues or supply migration snippets.
+  - Task 0.1.3: Validate telemetry ingestion pipeline (dashboards, alerting) against new `runtime_variant` field and document any consumer updates.
+- **Step 0.2: Release Readiness Audit**
+  - Task 0.2.1: Confirm lint/type suites run clean on main branch or capture remaining debt with owners/dates.
+  - Task 0.2.2: Establish regression runbook (facade vs legacy mode) to execute before merges during rollout.
 
 ### Phase 1: Rollout & Monitoring
 
 - **Step 1.1: Merge Strategy**
-  - Coordinate incremental merges, ensuring each step is release-ready.
+  - Task 1.1.1: Define staging branches/feature flags for incremental adoption (e.g., enable facade in canary envs first).
+  - Task 1.1.2: Schedule stakeholder sign-off (UI, telemetry, training) before toggling default runtime.
 - **Step 1.2: Monitoring Hooks**
-  - Add temporary logging/metrics where behaviour might change to monitor post-merge.
+  - Task 1.2.1: Add structured logs/metrics for runtime-switch decisions (`runtime_variant`, queue metrics) to detect regressions.
+  - Task 1.2.2: Establish dashboards/alerts for tick duration, console error rates, telemetry drop counts during rollout window.
 
 ### Phase 2: Backlog & Follow-ups
 
 - **Step 2.1: Issue Sweep**
-  - Audit open tickets/PRs for conflicts with new structure; provide guidance or rebases.
+  - Task 2.1.1: Review open PRs/issues referencing legacy helpers; update or close with guidance.
+  - Task 2.1.2: Coordinate with documentation/help teams to publish migration notes for external contributors.
+- **Step 2.2: Debt Burn-down**
+  - Task 2.2.1: Drive remaining `townlet.world` Ruff/mypy findings to zero.
+  - Task 2.2.2: Decide timeline for removing `TOWNLET_LEGACY_RUNTIME`; capture rollback plan if retained longer term.
 
 ### Phase 3: Post-mortem
 
 - **Step 3.1: Lessons Learned**
-  - Document successes, challenges, and future opportunities.
+  - Task 3.1.1: Run a retrospective covering risk mitigations, tooling gaps, and stakeholder feedback.
+  - Task 3.1.2: Capture metrics (perf deltas, incident counts) to inform future refactors.
 - **Step 3.2: Cleanup Tasks**
-  - Remove temporary monitoring, mark work packages closed, archive design notes.
+  - Task 3.2.1: Remove rollout-specific logging/feature flags once stable.
+  - Task 3.2.2: Archive design notes, update Confluence/README references, and close the GRID_REFACTOR plan with final status.
 
 ## Cross-Cutting Risk Reduction Highlights
 
@@ -276,4 +368,11 @@
 - Phase 0 (Risk Reduction) – **Completed** (benchmarks, telemetry baselines, migration playbook)
 - Phase 1 (Affordance Runtime Extraction) – **Completed** (coordinator module, delegation, tests)
 - Phase 2 (Employment & Queue Management) – **Completed** (employment coordinator, delegation, tests)
-- Phase 3 (Integration & Regression) – Pending
+- Phase 3 (Integration & Regression) – **Completed** (integration tests/runtime sweeps, telemetry/UI verification, performance runs, lint/type audit)
+
+### Milestone M2 Closure Notes
+- Executed focused pytest suites (`tests/test_world_queue_integration.py`, `tests/test_world_local_view.py`, `tests/test_telemetry_baselines.py`) and 50-tick sim smoke (`scripts/run_simulation.py configs/examples/poc_hybrid.yaml`) with no regressions beyond expected console auth notices.
+- Observer dashboard smoke (`scripts/observer_ui.py configs/examples/poc_hybrid.yaml --ticks 5`) rendered affordance/employment panels correctly; telemetry baselines remained unchanged.
+- Queue-conflict load scenario (`scripts/run_simulation.py configs/scenarios/queue_conflict.yaml --ticks 200`) sustained ~3.8k ticks/sec; telemetry buffer warnings persist when running without a consumer—recorded as known behaviour, no new risk.
+- `ruff check`, `ruff format --check`, and `mypy src` report long-standing repository violations; captured results for backlog triage (no regressions introduced by M2 work).
+- Ready to proceed to Milestone M3; no additional shims or rollback blockers identified.

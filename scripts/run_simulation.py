@@ -29,12 +29,28 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Write telemetry payloads to this file when stdout streaming is disabled.",
     )
+    parser.add_argument(
+        "--runtime",
+        choices=("auto", "facade", "legacy"),
+        default="auto",
+        help="Select runtime implementation (default: auto, honouring TOWNLET_LEGACY_RUNTIME)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
+    runtime_choice = args.runtime
+    legacy_flag: bool | None
+    if runtime_choice == "legacy":
+        legacy_flag = True
+        os.environ["TOWNLET_LEGACY_RUNTIME"] = "1"
+    elif runtime_choice == "facade":
+        legacy_flag = False
+        os.environ["TOWNLET_LEGACY_RUNTIME"] = "0"
+    else:
+        legacy_flag = None
     if args.stream_telemetry and args.telemetry_path is not None:
         raise SystemExit("--stream-telemetry cannot be combined with --telemetry-path")
 
@@ -49,7 +65,7 @@ def main() -> None:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             print(f"Telemetry stream written to {target_path}")
 
-    loop = SimulationLoop(config=config)
+    loop = SimulationLoop(config=config, use_legacy_runtime=legacy_flag)
     start = time.perf_counter()
     try:
         loop.run_for(args.ticks)

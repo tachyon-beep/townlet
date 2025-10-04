@@ -96,7 +96,7 @@ class EmbeddingAllocator:
 
         available = payload.get("available", [])
         if isinstance(available, list):
-            self._available = set(int(slot) for slot in available)
+            self._available = {int(slot) for slot in available}
         else:
             self._available = set(self._slot_state)
         # Assigned slots should not remain in the available set.

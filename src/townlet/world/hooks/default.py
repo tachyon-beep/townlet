@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - type hint guard
     from townlet.world.grid import WorldState
@@ -13,7 +13,7 @@ _SHOWER_POWER_EVENT = "shower_power_outage"
 _SLEEP_COMPLETE_EVENT = "sleep_complete"
 
 
-def register_hooks(world: "WorldState") -> None:
+def register_hooks(world: WorldState) -> None:
     """Register built-in affordance hooks with the provided world."""
 
     world.register_affordance_hook("on_attempt_shower", _on_attempt_shower)
@@ -275,7 +275,7 @@ def _on_finish_sleep(context: dict[str, Any]) -> None:
 
 
 def _abort_affordance(
-    world: "WorldState",
+    world: WorldState,
     spec: Any,
     agent_id: str,
     object_id: str,

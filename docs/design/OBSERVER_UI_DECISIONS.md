@@ -26,7 +26,7 @@
 ## Implementation Implications
 1. Enhance existing CLI dashboard (alerts, concurrency) but keep it non-blocking—makes porting to other UI stacks easier.
 2. Expose telemetry client as package entry point (`townlet_ui`) for reuse; document API guarantees (versioning, field names).
-3. When world geometry is ready, extend `WorldState.local_view` to include object positions and queue nodes; UI can then gradually upgrade from ASCII map to more detailed rendering.
+3. When world geometry is ready, extend `townlet.world.observation.local_view` to include object positions and queue nodes; UI can then gradually upgrade from ASCII map to more detailed rendering.
 4. Prepare data adapters (e.g., convert map tensor → JSON/canvas) for future web or 3D layers.
 
 ## Residual Questions

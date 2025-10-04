@@ -10,8 +10,17 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from townlet.config import ObservationVariant, SimulationConfig
 from townlet.agents.models import PersonalityProfiles
+from townlet.config import ObservationVariant, SimulationConfig
+from townlet.world.observation import (
+    agent_context as observation_agent_context,
+)
+from townlet.world.observation import (
+    build_local_cache as observation_build_local_cache,
+)
+from townlet.world.observation import (
+    find_nearest_object_of_type as observation_find_nearest_object_of_type,
+)
 
 if TYPE_CHECKING:
     from townlet.world.grid import AgentSnapshot, WorldState
@@ -121,7 +130,7 @@ class ObservationBuilder:
         self._social_slot_dim = (
             self.social_cfg.embed_dim + 3
         )  # id embedding + trust/fam/rivalry
-        self.full_channels = self.MAP_CHANNELS + ("path_dx", "path_dy")
+        self.full_channels = (*self.MAP_CHANNELS, "path_dx", "path_dy")
         social_feature_names: list[str] = []
         for slot_index in range(self._social_slots):
             for component_index in range(self._social_slot_dim):
@@ -177,7 +186,7 @@ class ObservationBuilder:
             self._personality_feature_indices = {}
 
     def build_batch(
-        self, world: "WorldState", terminated: dict[str, bool]
+        self, world: WorldState, terminated: dict[str, bool]
     ) -> dict[str, dict[str, np.ndarray]]:
         """Return a mapping from agent_id to observation payloads."""
         observations: dict[str, dict[str, np.ndarray]] = {}
@@ -199,27 +208,12 @@ class ObservationBuilder:
 
     def _build_local_cache(
         self,
-        world: "WorldState",
-        snapshots: dict[str, "AgentSnapshot"],
+        world: WorldState,
+        snapshots: dict[str, AgentSnapshot],
     ) -> _LocalCache:
-        agent_lookup: dict[tuple[int, int], list[str]] = {}
-        for agent_id, snapshot in snapshots.items():
-            agent_lookup.setdefault(snapshot.position, []).append(agent_id)
-
-        object_lookup: dict[tuple[int, int], list[str]] = {}
-        for position, object_ids in world._objects_by_position.items():
-            filtered = [obj_id for obj_id in object_ids if obj_id in world.objects]
-            if filtered:
-                object_lookup[position] = filtered
-
-        reservation_tiles: set[tuple[int, int]] = set()
-        for object_id, occupant in world._active_reservations.items():
-            if occupant is None:
-                continue
-            obj = world.objects.get(object_id)
-            if obj is not None and obj.position is not None:
-                reservation_tiles.add(obj.position)
-
+        agent_lookup, object_lookup, reservation_tiles = observation_build_local_cache(
+            world, snapshots
+        )
         return _LocalCache(agent_lookup, object_lookup, reservation_tiles)
 
     def _encode_common_features(
@@ -228,7 +222,7 @@ class ObservationBuilder:
         *,
         context: dict[str, object],
         slot: int,
-        snapshot: "AgentSnapshot",
+        snapshot: AgentSnapshot,
         world_tick: int,
     ) -> None:
         needs = context.get("needs", {})
@@ -290,8 +284,8 @@ class ObservationBuilder:
     def _encode_rivalry(
         self,
         features: np.ndarray,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
     ) -> None:
         top_rivals = world.rivalry_top(
             snapshot.agent_id, limit=self.config.conflict.rivalry.max_edges
@@ -305,8 +299,8 @@ class ObservationBuilder:
     def _encode_environmental_flags(
         self,
         features: np.ndarray,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
     ) -> None:
         reservation_idx = self._feature_index.get("reservation_active")
         if reservation_idx is not None:
@@ -327,12 +321,14 @@ class ObservationBuilder:
     def _encode_path_hint(
         self,
         features: np.ndarray,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
     ) -> None:
         if not self._path_hint_indices:
             return
-        target = world.find_nearest_object_of_type("stove", snapshot.position)
+        target = observation_find_nearest_object_of_type(
+            world, "stove", snapshot.position
+        )
         if target is None:
             north = south = east = west = 0.0
         else:
@@ -354,7 +350,7 @@ class ObservationBuilder:
     def _map_with_summary(
         self,
         channels: tuple[str, ...],
-        snapshot: "AgentSnapshot",
+        snapshot: AgentSnapshot,
         radius: int,
         cache: _LocalCache,
     ) -> tuple[np.ndarray, dict[str, float]]:
@@ -451,8 +447,8 @@ class ObservationBuilder:
     def _encode_local_summary(
         self,
         features: np.ndarray,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
         cache: _LocalCache,
         summary_override: dict[str, float] | None = None,
     ) -> dict[str, float]:
@@ -481,7 +477,7 @@ class ObservationBuilder:
     def _encode_personality_features(
         self,
         features: np.ndarray,
-        snapshot: "AgentSnapshot",
+        snapshot: AgentSnapshot,
     ) -> dict[str, object] | None:
         if not self._personality_feature_indices:
             return None
@@ -525,14 +521,14 @@ class ObservationBuilder:
 
     def _initialise_feature_vector(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
         local_summary: dict[str, float] | None = None,
     ) -> tuple[np.ndarray, dict[str, object], dict[str, float], dict[str, object] | None]:
         features = np.zeros(len(self._feature_names), dtype=np.float32)
-        context = world.agent_context(snapshot.agent_id)
+        context = observation_agent_context(world, snapshot.agent_id)
         self._encode_common_features(
             features,
             context=context,
@@ -598,8 +594,8 @@ class ObservationBuilder:
 
     def _build_single(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
     ) -> dict[str, np.ndarray | dict[str, object]]:
@@ -613,8 +609,8 @@ class ObservationBuilder:
 
     def _build_hybrid(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
     ) -> dict[str, np.ndarray | dict[str, object]]:
@@ -650,8 +646,8 @@ class ObservationBuilder:
 
     def _build_full(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
     ) -> dict[str, np.ndarray | dict[str, object]]:
@@ -687,8 +683,8 @@ class ObservationBuilder:
 
     def _build_compact(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
     ) -> dict[str, np.ndarray | dict[str, object]]:
@@ -725,8 +721,8 @@ class ObservationBuilder:
     # ------------------------------------------------------------------
     def _build_social_vector(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
     ) -> tuple[np.ndarray, dict[str, object]]:
         if not self._social_vector_length:
             return self._empty_social_vector, {
@@ -774,8 +770,8 @@ class ObservationBuilder:
 
     def _collect_social_slots(
         self,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
     ) -> tuple[list[dict[str, float]], dict[str, object]]:
         total_slots = self._social_slots
         context: dict[str, object] = {
@@ -817,7 +813,7 @@ class ObservationBuilder:
 
     def _resolve_relationships(
         self,
-        world: "WorldState",
+        world: WorldState,
         agent_id: str,
     ) -> tuple[list[dict[str, float]], str]:
         snapshot_getter = getattr(world, "relationships_snapshot", None)
@@ -862,15 +858,17 @@ class ObservationBuilder:
     def _encode_landmarks(
         self,
         features: np.ndarray,
-        world: "WorldState",
-        snapshot: "AgentSnapshot",
+        world: WorldState,
+        snapshot: AgentSnapshot,
     ) -> None:
         cx, cy = snapshot.position
         for landmark in self._landmarks:
             slice_ = self._landmark_slices.get(landmark)
             if slice_ is None:
                 continue
-            position = world.find_nearest_object_of_type(landmark, snapshot.position)
+            position = observation_find_nearest_object_of_type(
+                world, landmark, snapshot.position
+            )
             if position is None:
                 features[slice_] = 0.0
                 continue

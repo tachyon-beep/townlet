@@ -21,6 +21,47 @@
   - `_dispatch_affordance_hooks` records per-hook and per-handler duration to surface drift once AffordanceRuntime lands.
   - `employment.enqueue_exit` logs queue depth deltas for pending exits.
 
+## Observation Contract Snapshot (2025-10-03)
+- Builder outputs use `map`, `features`, `metadata` keys across all variants; policy pipelines (`policy.runner.flush_transitions`) rely on those exact keys.
+- `metadata.feature_names` currently exposes 81 entries shared across variants, including critical channels `need_hunger`, `need_hygiene`, `need_energy`, `wallet`, `time_sin`, `time_cos`, and `ctx_reset_flag`.
+- Map tensor expectations:
+  - **Hybrid**: `(4, 11, 11)` with channels `self`, `agents`, `objects`, `reservations`.
+  - **Full**: `(6, 11, 11)` adding `path_dx`, `path_dy` channels.
+  - **Compact**: empty spatial tensor (`(0, 0, 0)`), relies solely on the feature vector.
+- Social snippet aggregates, landmark slices, and personality overlays are carried via `metadata.social_context`, `metadata.landmark_slices`, and `metadata.feature_names`; tests assert these keys survive refactors.
+- Fixture regeneration (`tests/data/observations/baseline_*.npz`) uses `scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 200 --telemetry-path tmp/telemetry_baseline.json` to seed deterministic inputs prior to encoding.
+- Observation helper logic now lives in `townlet.world.observation`; `WorldState.local_view()/agent_context()` are thin shims delegating to that module so downstream systems can consume the same APIs without coupling to private fields.
+- Legacy `WorldState.local_view`/`agent_context` shim methods were removed in favour of direct imports from `townlet.world.observation`; downstream callers should migrate to the helper module before Milestone M4.
+
+## RNG & Snapshot Semantics (2025-10-03)
+- `WorldState.attach_rng` installs a shared `random.Random` used for nightly resets, hook scheduling, and queue conflict perturbations; `get_rng_state`/`set_rng_state` wrap the underlying `random` state.
+- Simulation snapshots serialise RNG via `townlet.utils.encode_rng_state`; reload paths (`snapshots/state.py`) call `decode_rng_state` before reinjecting with `WorldState.set_rng_state`.
+- Policy anneal blending, queue perturbations, and scripted actors share the same RNG; restoring the world state must therefore restore RNG before processing queued actions for deterministic replay.
+- Regression coverage (`tests/test_utils_rng.py`) now asserts state round-trips on the `WorldState` object, guarding against regressions when the runtime facade assumes ownership of RNG plumbing.
+
+## Integration Test Matrix (M3 Phase 0)
+| Focus | Test suite(s) | Purpose | Notes |
+| --- | --- | --- | --- |
+| World runtime sequencing | `tests/test_world_queue_integration.py`, `tests/test_world_nightly_reset.py` | Validate tick ordering, queue sync, nightly resets | Must run on every runtime facade PR. |
+| Observation parity | `tests/test_observation_baselines.py`, `tests/test_world_local_view.py` | Guard map/features tensors and local view contexts | Requires refreshed NPZ fixtures from Phase 0. |
+| Telemetry compatibility | `tests/test_telemetry_baselines.py`, `tests/test_telemetry_stream_smoke.py`, `tests/test_observer_ui_dashboard.py` | Ensure telemetry snapshot schema and UI dashboards remain intact | UI smoke relies on `SCREEN=off` pseudo terminal; keep invocation headless. |
+| Snapshot import/export | `tests/test_snapshot_manager.py`, `tests/test_snapshot_migrations.py` | Confirm RNG + world payloads survive save/restore | Already executed in Phase 0; rerun before releasing runtime facade. |
+| Performance smoke | `scripts/run_simulation.py configs/scenarios/queue_conflict.yaml --ticks 500` | Capture tick throughput reference prior to refactor | Metrics stored in `benchmarks/m3_runtime_baseline.json`. |
+
+## Runtime Facade Rollback Controls (M3 Phase 1)
+- Environment switch: set `TOWNLET_LEGACY_RUNTIME=1` to force the legacy sequencing inside `SimulationLoop`; unset/`0` restores the facade.
+- CLI overrides: both `scripts/run_simulation.py` and `scripts/observer_ui.py` accept `--runtime {auto,facade,legacy}` to toggle the env flag for the current process.
+- Telemetry now emits `runtime_variant` in every snapshot/diff payload so downstream dashboards can confirm which implementation produced the data.
+- Regression protocol: `pytest tests/test_simulation_loop_runtime.py` exercises both runtime modes; integration suites listed above should be parametrised (or run twice) when preparing release candidates to ensure parity across the feature flag.
+
+### Runtime Feature Flag (Design)
+- Env var `TOWNLET_LEGACY_RUNTIME=1` forces `SimulationLoop` to instantiate the pre-refactor `WorldState` tick implementation.
+- Default behaviour (unset/`0`) selects the new `WorldRuntime` facade post-M3; CLI tools (`scripts/run_simulation.py`, `scripts/observer_ui.py`) read the env var and pass through to loop construction.
+- Acceptance criteria:
+  1. Flag honoured across CLI entry points and tests via `monkeypatch`.
+  2. Telemetry payloads emit a `runtime_variant` field when legacy mode is active for easier diffing.
+  3. Flag removal plan captured before Milestone M4 rollout freeze.
+
 ## Module Ownership Map (Target)
 - `world/employment.py` → queue state, lateness tracking, exit flows.
 - `world/affordances.py` → running affordances, hook dispatch, agent state mutations.

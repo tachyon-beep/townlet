@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 __all__ = [
-    "PreconditionSyntaxError",
-    "PreconditionEvaluationError",
     "CompiledPrecondition",
+    "PreconditionEvaluationError",
+    "PreconditionSyntaxError",
     "compile_preconditions",
     "evaluate_preconditions",
 ]
@@ -84,7 +85,7 @@ class _IdentifierCollector(ast.NodeVisitor):
         self.names: set[str] = set()
 
     # pylint: disable=invalid-name
-    def visit_Name(self, node: ast.Name) -> None:  # noqa: D401
+    def visit_Name(self, node: ast.Name) -> None:
         """Collect bare identifiers used in the expression."""
 
         self.names.add(node.id)

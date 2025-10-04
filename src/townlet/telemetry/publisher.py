@@ -110,6 +110,7 @@ class TelemetryPublisher:
         self._current_tick: int = 0
         self._pending_manual_narrations: list[dict[str, object]] = []
         self._manual_narration_lock = threading.Lock()
+        self._runtime_variant: str | None = None
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -532,6 +533,11 @@ class TelemetryPublisher:
             self._append_console_audit(payload)
         self._console_results_batch = batch if batch else []
 
+    def set_runtime_variant(self, variant: str | None) -> None:
+        """Record which runtime variant produced the latest telemetry."""
+
+        self._runtime_variant = variant
+
     def latest_console_results(self) -> list[dict[str, Any]]:
         return list(self._console_results_batch)
 
@@ -714,6 +720,7 @@ class TelemetryPublisher:
         payload: dict[str, Any] = {
             "schema_version": self.schema_version,
             "tick": int(tick),
+            "runtime_variant": self._runtime_variant,
             "queue_metrics": dict(self._latest_queue_metrics or {}),
             "embedding_metrics": dict(self._latest_embedding_metrics or {}),
             "employment": dict(self._latest_employment_metrics or {}),
@@ -874,10 +881,13 @@ class TelemetryPublisher:
         policy_identity: Mapping[str, object] | None = None,
         possessed_agents: Iterable[str] | None = None,
         social_events: Iterable[dict[str, object]] | None = None,
+        runtime_variant: str | None = None,
     ) -> None:
         # Observations and rewards are consumed for downstream side effects.
         _ = observations, rewards
         tick = int(tick)
+        if runtime_variant is not None:
+            self._runtime_variant = runtime_variant
         self._current_tick = tick
         self._narration_limiter.begin_tick(tick)
         manual_narrations = self._consume_manual_narrations()

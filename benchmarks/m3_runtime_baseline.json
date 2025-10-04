@@ -1,0 +1,19 @@
+{
+  "runs": [
+    {
+      "config_path": "configs/examples/poc_hybrid.yaml",
+      "ticks": 500,
+      "duration_sec": 0.169967,
+      "ticks_per_sec": 2941.74,
+      "timestamp": 1759574566.96
+    },
+    {
+      "config_path": "configs/scenarios/queue_conflict.yaml",
+      "ticks": 500,
+      "duration_sec": 0.16319,
+      "ticks_per_sec": 3063.9,
+      "timestamp": 1759574567.13
+    }
+  ],
+  "notes": "Captured during M3 Phase 0 using SimulationLoop.run_for"
+}

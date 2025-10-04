@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Callable, Deque, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 
 class QueueConflictTracker:
@@ -17,9 +18,9 @@ class QueueConflictTracker:
     ) -> None:
         self._world = world
         self._record_rivalry_conflict_cb = record_rivalry_conflict
-        self._rivalry_events: Deque[dict[str, object]] = deque(maxlen=256)
-        self._chat_events: List[dict[str, object]] = []
-        self._avoidance_events: List[dict[str, object]] = []
+        self._rivalry_events: deque[dict[str, object]] = deque(maxlen=256)
+        self._chat_events: list[dict[str, object]] = []
+        self._avoidance_events: list[dict[str, object]] = []
 
     def record_queue_conflict(
         self,

@@ -44,7 +44,7 @@ world processes actions (request/move/start/release/blocked).
 
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
-| Local map | Egocentric 11×11 window with 4 channels: `self`, `agents`, `objects`, `reservations` | `WorldState.local_view()` | (4, 11, 11) |
+| Local map | Egocentric 11×11 window with 4 channels: `self`, `agents`, `objects`, `reservations` | `townlet.world.observation.local_view()` | (4, 11, 11) |
 | Scalars | Shared bundle (§1) | Observation builder | ~70 (`+3` when personality channels enabled) |
 | Social snippet | Optional top friends/rivals embeddings | Relationships ledger | configurable |
 
@@ -54,7 +54,7 @@ Reference sample: `docs/samples/observation_hybrid_sample.npz` (metadata JSON al
 
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
-| Local map | Egocentric 11×11 window with 6 channels: `self`, `agents`, `objects`, `reservations`, `path_dx`, `path_dy` | `WorldState.local_view()` | (6, 11, 11) |
+| Local map | Egocentric 11×11 window with 6 channels: `self`, `agents`, `objects`, `reservations`, `path_dx`, `path_dy` | `townlet.world.observation.local_view()` | (6, 11, 11) |
 | Scalars | Shared bundle (§1) | Observation builder | ~74 (`+3` when personality channels enabled) |
 | Social snippet | Optional | Relationships ledger | configurable |
 

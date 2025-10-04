@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable, TYPE_CHECKING
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - avoid circular import
     from townlet.world.grid import WorldState
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_modules(
-    world: "WorldState", module_paths: Iterable[str]
+    world: WorldState, module_paths: Iterable[str]
 ) -> tuple[list[str], list[tuple[str, str]]]:
     """Import hook modules and let them register against the given world.
 

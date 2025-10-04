@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 def _clamp(value: float, *, low: float, high: float) -> float:
@@ -39,7 +38,7 @@ class RivalryLedger:
 
     owner_id: str
     params: RivalryParameters = field(default_factory=RivalryParameters)
-    eviction_hook: Optional[Callable[[str, str, str], None]] = None
+    eviction_hook: Callable[[str, str, str], None] | None = None
     _scores: dict[str, float] = field(default_factory=dict)
 
     def apply_conflict(self, other_id: str, *, intensity: float = 1.0) -> float:

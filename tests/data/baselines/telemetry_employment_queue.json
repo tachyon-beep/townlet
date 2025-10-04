@@ -196,5 +196,6 @@
   "utilities": {
     "power": true,
     "water": true
-  }
+  },
+  "runtime_variant": "facade"
 }

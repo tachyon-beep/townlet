@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, MutableMapping, Protocol, TypedDict
-from typing import Literal
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Protocol,
+    TypedDict,
+)
 
-from townlet.world.queue_manager import QueueManager
 from townlet.world.preconditions import evaluate_preconditions
-
+from townlet.world.queue_manager import QueueManager
 
 logger = logging.getLogger("townlet.world.grid")
 
@@ -23,7 +28,7 @@ if TYPE_CHECKING:  # pragma: no cover - type hint guard
 class AffordanceRuntimeContext:
     """Dependencies supplied to the affordance runtime."""
 
-    world: "WorldState"
+    world: WorldState
     queue_manager: QueueManager
     objects: MutableMapping[str, Any]
     affordances: MutableMapping[str, Any]
@@ -59,7 +64,7 @@ class HookPayload(TypedDict, total=False):
     agent_id: str
     object_id: str
     affordance_id: str
-    world: "WorldState"
+    world: WorldState
     spec: Any
     effects: dict[str, float]
     reason: str
@@ -94,7 +99,7 @@ def build_hook_payload(
     agent_id: str,
     object_id: str,
     affordance_id: str,
-    world: "WorldState",
+    world: WorldState,
     spec: Any,
     extra: Mapping[str, object] | None = None,
 ) -> HookPayload:
@@ -130,7 +135,7 @@ class AffordanceOutcome:
 
 
 def apply_affordance_outcome(
-    snapshot: "AgentSnapshot",
+    snapshot: AgentSnapshot,
     outcome: AffordanceOutcome,
 ) -> None:
     """Update agent snapshot bookkeeping based on the supplied outcome."""
@@ -192,7 +197,7 @@ class DefaultAffordanceRuntime:
         return self._ctx
 
     @property
-    def world(self) -> "WorldState":
+    def world(self) -> WorldState:
         return self._ctx.world
 
     @property
@@ -229,7 +234,6 @@ class DefaultAffordanceRuntime:
         tick: int,
     ) -> tuple[bool, dict[str, object]]:
         ctx = self._ctx
-        world = ctx.world
         queue_manager = ctx.queue_manager
         objects = ctx.objects
         affordances = ctx.affordances
@@ -424,7 +428,6 @@ class DefaultAffordanceRuntime:
     def handle_blocked(self, object_id: str, tick: int) -> None:
         ctx = self._ctx
         queue_manager = ctx.queue_manager
-        world = ctx.world
         if queue_manager.record_blocked_attempt(object_id):
             occupant = queue_manager.active_agent(object_id)
             running = self.running_affordances.pop(object_id, None)
@@ -448,7 +451,7 @@ class DefaultAffordanceRuntime:
 
     def _select_handover_candidate(
         self,
-        world: "WorldState",
+        world: WorldState,
         source_agent: str,
         waiting: list[str],
     ) -> str | None:
@@ -535,7 +538,10 @@ class DefaultAffordanceRuntime:
                 if debug_enabled:
                     hook_duration_ms = (time.perf_counter() - hook_start) * 1000.0
                     logger.debug(
-                        "world.resolve_affordances.hook tick=%s stage=%s object=%s agent=%s duration_ms=%.2f hooks=%s",
+                        (
+                            "world.resolve_affordances.hook tick=%s stage=%s "
+                            "object=%s agent=%s duration_ms=%.2f hooks=%s"
+                        ),
                         tick,
                         "after",
                         object_id,
@@ -575,7 +581,10 @@ class DefaultAffordanceRuntime:
                 for object_id in objects.keys()
             )
             logger.debug(
-                "world.resolve_affordances.end tick=%s duration_ms=%.2f running=%s queued_agents=%s running_delta=%s queued_delta=%s",
+                (
+                    "world.resolve_affordances.end tick=%s duration_ms=%.2f "
+                    "running=%s queued_agents=%s running_delta=%s queued_delta=%s"
+                ),
                 tick,
                 duration_ms,
                 running_count,

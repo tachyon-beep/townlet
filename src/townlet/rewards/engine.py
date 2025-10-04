@@ -8,6 +8,7 @@ from typing import ClassVar
 from townlet.agents.models import PersonalityProfile, PersonalityProfiles
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
+from townlet.world.observation import agent_context as observation_agent_context
 
 
 class RewardEngine:
@@ -355,7 +356,7 @@ class RewardEngine:
     ) -> float:
         if wage_rate <= 0.0:
             return 0.0
-        ctx = world.agent_context(agent_id)
+        ctx = observation_agent_context(world, agent_id)
         wages_paid = float(ctx.get("wages_paid", 0.0))
         wages_withheld = float(ctx.get("wages_withheld", 0.0))
         return wages_paid - wages_withheld
@@ -368,7 +369,7 @@ class RewardEngine:
     ) -> float:
         if bonus_rate <= 0.0:
             return 0.0
-        ctx = world.agent_context(agent_id)
+        ctx = observation_agent_context(world, agent_id)
         punctuality = float(ctx.get("punctuality_bonus", 0.0))
         return bonus_rate * punctuality
 

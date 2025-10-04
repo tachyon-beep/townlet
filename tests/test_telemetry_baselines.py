@@ -18,6 +18,7 @@ def test_telemetry_steady_state_contains_defaults() -> None:
     assert employment["pending_count"] == 0
     assert payload["queue_metrics"]["ghost_step_events"] == 0
     assert "affordance_manifest" in payload
+    assert payload.get("runtime_variant") in {"legacy", "facade"}
 
 
 def test_telemetry_affordance_active_contains_running_entry() -> None:

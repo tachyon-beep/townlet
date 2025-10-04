@@ -19,3 +19,14 @@ help target modernisation and quality wins.
 
 The remaining files carry progressively fewer diagnostics and can follow once the highest-impact
 modules are professionalised.
+
+## Milestone M3 Lint & Type Targets
+
+| Scope | Ruff status (2025-10-03) | Mypy blockers | Owner | Target phase |
+| --- | --- | --- | --- | --- |
+| `src/townlet/world` | 72 findings (UP037×14, UP035×11, B904×7, C416×7, E501×7) | `preconditions.py` no-any-return, `queue_manager.py` iterable typing, `affordances.py` TypedDict/Mapping mismatches | Codex | M3 Phase 1 (runtime facade landing) |
+| `src/townlet/observations` | **Addressed** – observation builder/embedding cleaned during Phase 2 | Remaining debt limited to world package (above) | Codex | ✅ |
+
+Notes:
+- Track reductions in this table as each phase closes; re-run `ruff check --statistics` and `mypy` scoped to the directories above when opening PRs.
+- Any new modules created during runtime extraction must inherit the same lint/type baselines before promotion to Milestone M4.
