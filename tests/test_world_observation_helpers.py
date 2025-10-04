@@ -34,6 +34,7 @@ def _make_world() -> WorldState:
         {"hunger": 0.6, "hygiene": 0.5, "energy": 0.7},
         wallet=1.5,
     )
+    world.rebuild_spatial_index()
     return world
 
 

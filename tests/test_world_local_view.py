@@ -40,6 +40,7 @@ def test_local_view_includes_objects_and_agents() -> None:
         needs={"hunger": 0.3},
     )
 
+    world.rebuild_spatial_index()
     world.queue_manager.request_access("fridge_1", "bob", world.tick)
     world.refresh_reservations()
 
@@ -65,6 +66,7 @@ def test_agent_context_defaults() -> None:
         last_action_success=True,
         last_action_duration=3,
     )
+    world.rebuild_spatial_index()
 
     context = agent_context(world, "alice")
     assert context["needs"]["hunger"] == 0.2
@@ -82,6 +84,7 @@ def test_world_snapshot_returns_defensive_copies() -> None:
         needs={"hunger": 0.5},
         wallet=1.5,
     )
+    world.rebuild_spatial_index()
 
     snapshot = world.snapshot()
     snapshot["alice"].needs["hunger"] = 0.0

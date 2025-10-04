@@ -1,4 +1,6 @@
+from types import MappingProxyType
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -26,7 +28,11 @@ class StubWorld:
         snapshot.wages_paid = context.get("wages_paid", 0.0)
         snapshot.punctuality_bonus = context.get("punctuality_bonus", 0.0)
         self.agents = {"alice": snapshot}
+        self._snapshots = {"alice": snapshot}
         self._context = context
+
+    def agent_snapshots_view(self):
+        return MappingProxyType(self._snapshots)
 
     def consume_chat_events(self):
         return []

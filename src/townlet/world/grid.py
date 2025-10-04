@@ -219,6 +219,91 @@ class AffordanceSpec:
     )
 
 
+class WorldSpatialIndex:
+    """Tracks agent placement and reservation tiles for fast lookups."""
+
+    def __init__(self) -> None:
+        self._agents_by_position: dict[tuple[int, int], list[str]] = {}
+        self._positions_by_agent: dict[str, tuple[int, int]] = {}
+        self._reservation_tiles: set[tuple[int, int]] = set()
+
+    # Agent bookkeeping -------------------------------------------------
+    def rebuild(
+        self,
+        agents: Mapping[str, AgentSnapshot],
+        objects: Mapping[str, InteractiveObject],
+        active_reservations: Mapping[str, str],
+    ) -> None:
+        self._agents_by_position.clear()
+        self._positions_by_agent.clear()
+        for agent_id, snapshot in agents.items():
+            position = tuple(snapshot.position)
+            self._positions_by_agent[agent_id] = position
+            bucket = self._agents_by_position.setdefault(position, [])
+            bucket.append(agent_id)
+        for bucket in self._agents_by_position.values():
+            bucket.sort()
+        self._reservation_tiles.clear()
+        for object_id, occupant in active_reservations.items():
+            if not occupant:
+                continue
+            obj = objects.get(object_id)
+            if obj is None or obj.position is None:
+                continue
+            self._reservation_tiles.add(obj.position)
+
+    def insert_agent(self, agent_id: str, position: tuple[int, int]) -> None:
+        self._positions_by_agent[agent_id] = position
+        bucket = self._agents_by_position.setdefault(position, [])
+        if agent_id not in bucket:
+            bucket.append(agent_id)
+
+    def move_agent(self, agent_id: str, position: tuple[int, int]) -> None:
+        previous = self._positions_by_agent.get(agent_id)
+        if previous is not None:
+            bucket = self._agents_by_position.get(previous)
+            if bucket is not None:
+                try:
+                    bucket.remove(agent_id)
+                except ValueError:
+                    pass
+                if not bucket:
+                    self._agents_by_position.pop(previous, None)
+        self.insert_agent(agent_id, position)
+
+    def remove_agent(self, agent_id: str) -> None:
+        previous = self._positions_by_agent.pop(agent_id, None)
+        if previous is None:
+            return
+        bucket = self._agents_by_position.get(previous)
+        if bucket is None:
+            return
+        try:
+            bucket.remove(agent_id)
+        except ValueError:
+            return
+        if not bucket:
+            self._agents_by_position.pop(previous, None)
+
+    def position_of(self, agent_id: str) -> tuple[int, int] | None:
+        return self._positions_by_agent.get(agent_id)
+
+    def agents_at(self, position: tuple[int, int]) -> tuple[str, ...]:
+        return tuple(self._agents_by_position.get(position, ()))
+
+    # Reservation bookkeeping -------------------------------------------
+    def set_reservation(self, position: tuple[int, int] | None, active: bool) -> None:
+        if position is None:
+            return
+        if active:
+            self._reservation_tiles.add(position)
+        else:
+            self._reservation_tiles.discard(position)
+
+    def reservation_tiles(self) -> frozenset[tuple[int, int]]:
+        return frozenset(self._reservation_tiles)
+
+
 @dataclass
 class WorldState:
     """Holds mutable world state for the simulation tick."""
@@ -259,6 +344,7 @@ class WorldState:
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
     _console: ConsoleService = field(init=False)
+    _spatial_index: "WorldSpatialIndex" = field(init=False, repr=False)
     _queue_conflicts: QueueConflictTracker = field(init=False)
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
@@ -290,6 +376,7 @@ class WorldState:
         self._personality_reward_enabled = self.config.reward_personality_scaling_enabled()
         self._personality_profile_cache.clear()
         self.queue_manager = QueueManager(config=self.config)
+        self._spatial_index = WorldSpatialIndex()
         self.embedding_allocator = EmbeddingAllocator(config=self.config)
         self._active_reservations = {}
         self.objects = {}
@@ -424,6 +511,7 @@ class WorldState:
             "water": set(),
         }
         self._object_utility_baselines: dict[str, dict[str, float]] = {}
+        self.rebuild_spatial_index()
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
@@ -458,6 +546,18 @@ class WorldState:
         if self._rng is None:
             self._rng = random.Random()
         return self._rng
+
+    def rebuild_spatial_index(self) -> None:
+        self._spatial_index.rebuild(self.agents, self.objects, self._active_reservations)
+
+    def agents_at_tile(self, position: tuple[int, int]) -> tuple[str, ...]:
+        return self._spatial_index.agents_at(position)
+
+    def agent_position(self, agent_id: str) -> tuple[int, int] | None:
+        return self._spatial_index.position_of(agent_id)
+
+    def reservation_tiles(self) -> frozenset[tuple[int, int]]:
+        return self._spatial_index.reservation_tiles()
 
     def get_rng_state(self) -> tuple[Any, ...]:
         return self.rng.getstate()
@@ -778,6 +878,7 @@ class WorldState:
         snapshot = self.agents.pop(agent_id, None)
         if snapshot is None:
             return None
+        self._spatial_index.remove_agent(agent_id)
         self.queue_manager.remove_agent(agent_id, tick)
         self._affordance_runtime.remove_agent(agent_id)
         for object_id, occupant in list(self._active_reservations.items()):
@@ -787,6 +888,7 @@ class WorldState:
                 obj = self.objects.get(object_id)
                 if obj is not None:
                     obj.occupied_by = None
+                    self._spatial_index.set_reservation(obj.position, False)
         self.embedding_allocator.release(agent_id, tick)
         self.employment.remove_agent(self, agent_id)
         self._relationship_ledgers.pop(agent_id, None)
@@ -872,6 +974,7 @@ class WorldState:
         if isinstance(job_id, str):
             snapshot.job_id = job_id
         self.agents[agent_id] = snapshot
+        self._spatial_index.insert_agent(agent_id, snapshot.position)
         self._assign_job_if_missing(snapshot)
         self._sync_agent_spawn(snapshot)
         self._emit_event(
@@ -958,6 +1061,7 @@ class WorldState:
             personality_profile=profile_name,
         )
         self.agents[agent_id] = snapshot
+        self._spatial_index.insert_agent(agent_id, snapshot.position)
         job_override = payload.get("job_id")
         if isinstance(job_override, str):
             snapshot.job_id = job_override
@@ -1000,6 +1104,7 @@ class WorldState:
                 details={"position": [x, y]},
             )
         self._release_queue_membership(snapshot.agent_id)
+        self._spatial_index.move_agent(snapshot.agent_id, (x, y))
         snapshot.position = (x, y)
         self._sync_reservation_for_agent(snapshot.agent_id)
         self.request_ctx_reset(agent_id)
@@ -1029,6 +1134,7 @@ class WorldState:
         snapshot = self.agents.pop(agent_id, None)
         if snapshot is None:
             return False
+        self._spatial_index.remove_agent(agent_id)
         self._release_queue_membership(agent_id)
         self.embedding_allocator.release(agent_id, self.tick)
         self.employment.remove_agent(self, agent_id)
@@ -1248,6 +1354,8 @@ class WorldState:
         existing = self.objects.get(object_id)
         if existing is not None and existing.position is not None:
             self._unindex_object_position(object_id, existing.position)
+            if self._active_reservations.get(object_id):
+                self._spatial_index.set_reservation(existing.position, False)
 
         obj = InteractiveObject(
             object_id=object_id,
@@ -1269,6 +1377,8 @@ class WorldState:
         self.store_stock[object_id] = obj.stock
         if obj.position is not None:
             self._index_object_position(object_id, obj.position)
+            if self._active_reservations.get(object_id):
+                self._spatial_index.set_reservation(obj.position, True)
 
     def _index_object_position(self, object_id: str, position: tuple[int, int]) -> None:
         bucket = self._objects_by_position.setdefault(position, [])
@@ -1341,6 +1451,7 @@ class WorldState:
                 action_success = bool(granted)
             elif kind == "move" and action.get("position"):
                 target_pos = tuple(action["position"])
+                self._spatial_index.move_agent(snapshot.agent_id, target_pos)
                 snapshot.position = target_pos
                 action_success = True
             elif kind == "chat":
@@ -1863,10 +1974,12 @@ class WorldState:
             self._active_reservations.pop(object_id, None)
             if obj is not None:
                 obj.occupied_by = None
+                self._spatial_index.set_reservation(obj.position, False)
         else:
             self._active_reservations[object_id] = active
             if obj is not None:
                 obj.occupied_by = active
+                self._spatial_index.set_reservation(obj.position, True)
 
     def _handle_blocked(self, object_id: str, tick: int) -> None:
         self._affordance_runtime.handle_blocked(object_id, tick)

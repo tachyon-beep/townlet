@@ -7,8 +7,8 @@ checks such as observation variant validation and reward guardrails.
 
 from __future__ import annotations
 
-import importlib
 import hashlib
+import importlib
 import random
 import re
 from collections.abc import Mapping
@@ -90,7 +90,7 @@ class PersonalityAssignmentConfig(BaseModel):
     _cumulative_weights: list[tuple[str, float]] = PrivateAttr(default_factory=list)
 
     @model_validator(mode="after")
-    def _normalise(self) -> "PersonalityAssignmentConfig":
+    def _normalise(self) -> PersonalityAssignmentConfig:
         from townlet.agents.models import PersonalityProfiles
 
         normalized: dict[str, float] = {}
@@ -189,7 +189,7 @@ class RewardsConfig(BaseModel):
     clip: RewardClips = RewardClips()
 
     @model_validator(mode="after")
-    def _sanity_check_punctuality(self) -> "RewardsConfig":
+    def _sanity_check_punctuality(self) -> RewardsConfig:
         if self.punctuality_bonus > self.needs_weights.hunger:
             raise ValueError(
                 "Punctuality bonus must remain below hunger weight (see REQUIREMENTS#6)."
@@ -202,7 +202,7 @@ class ShapingConfig(BaseModel):
 
 
 class CuriosityConfig(BaseModel):
-    phase_A_weight: float = Field(0.02, ge=0.0, le=0.1)
+    phase_A_weight: float = Field(0.02, ge=0.0, le=0.1)  # noqa: N815
     decay_by_milestone: Literal["M2", "never"] = "M2"
 
 
@@ -229,7 +229,7 @@ class RivalryConfig(BaseModel):
     queue_length_boost: float = Field(0.25, ge=0.0, le=2.0)
 
     @model_validator(mode="after")
-    def _validate_ranges(self) -> "RivalryConfig":
+    def _validate_ranges(self) -> RivalryConfig:
         if self.min_value > self.max_value:
             raise ValueError("rivalry.min_value must be <= max_value")
         if self.avoid_threshold < self.min_value or self.avoid_threshold > self.max_value:
@@ -275,7 +275,7 @@ class HybridObservationConfig(BaseModel):
     time_ticks_per_day: int = Field(1440, ge=1)
 
     @model_validator(mode="after")
-    def _validate_window(self) -> "HybridObservationConfig":
+    def _validate_window(self) -> HybridObservationConfig:
         if self.local_window % 2 == 0:
             raise ValueError("observations.hybrid.local_window must be odd to center on agent")
         return self
@@ -288,7 +288,7 @@ class SocialSnippetConfig(BaseModel):
     include_aggregates: bool = True
 
     @model_validator(mode="after")
-    def _validate_totals(self) -> "SocialSnippetConfig":
+    def _validate_totals(self) -> SocialSnippetConfig:
         if self.top_friends == 0 and self.top_rivals == 0:
             object.__setattr__(self, "include_aggregates", False)
         if self.top_friends + self.top_rivals > 8:
@@ -328,7 +328,7 @@ class PromotionGateConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _coerce_allowed(cls, value: object) -> object:
+    def _coerce_allowed(cls, value: object) -> object:  # noqa: N805
         if isinstance(value, Mapping):
             allowed = value.get("allowed_alerts")
             if allowed is not None and not isinstance(allowed, (list, tuple)):
@@ -338,7 +338,7 @@ class PromotionGateConfig(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _normalise(self) -> "PromotionGateConfig":
+    def _normalise(self) -> PromotionGateConfig:
         object.__setattr__(self, "allowed_alerts", tuple(self.allowed_alerts))
         return self
 
@@ -373,7 +373,7 @@ class IntRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _coerce(cls, value: object) -> dict[str, int]:
+    def _coerce(cls, value: object) -> dict[str, int]:  # noqa: N805
         if isinstance(value, Mapping):
             return {
                 "min": int(value.get("min", 0)),
@@ -389,7 +389,7 @@ class IntRange(BaseModel):
         raise TypeError(f"Unsupported range value: {value!r}")
 
     @model_validator(mode="after")
-    def _validate_bounds(self) -> "IntRange":
+    def _validate_bounds(self) -> IntRange:
         if self.max < self.min:
             raise ValueError("Range max must be >= min")
         return self
@@ -402,7 +402,7 @@ class FloatRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _coerce(cls, value: object) -> dict[str, float]:
+    def _coerce(cls, value: object) -> dict[str, float]:  # noqa: N805
         if isinstance(value, Mapping):
             lo = float(value.get("min", 0.0))
             hi = float(value.get("max", value.get("min", 0.0)))
@@ -418,7 +418,7 @@ class FloatRange(BaseModel):
         raise TypeError(f"Unsupported float range value: {value!r}")
 
     @model_validator(mode="after")
-    def _validate_bounds(self) -> "FloatRange":
+    def _validate_bounds(self) -> FloatRange:
         if self.max < self.min:
             raise ValueError("Float range max must be >= min")
         return self
@@ -440,7 +440,7 @@ class BasePerturbationEventConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     @model_validator(mode="before")
-    def _normalise_duration(cls, values: dict[str, object]) -> dict[str, object]:
+    def _normalise_duration(cls, values: dict[str, object]) -> dict[str, object]:  # noqa: N805
         if "duration" not in values and "duration_min" in values:
             values["duration"] = values["duration_min"]
         return values
@@ -452,7 +452,7 @@ class PriceSpikeEventConfig(BasePerturbationEventConfig):
     targets: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
-    def _normalise_magnitude(cls, values: dict[str, object]) -> dict[str, object]:
+    def _normalise_magnitude(cls, values: dict[str, object]) -> dict[str, object]:  # noqa: N805
         if "magnitude" not in values and "magnitude_range" in values:
             values["magnitude"] = values["magnitude_range"]
         return values
@@ -582,7 +582,7 @@ class RelationshipNarrationConfig(BaseModel):
     rivalry_escalation_threshold: float = Field(0.9, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
-    def _validate_thresholds(self) -> "RelationshipNarrationConfig":
+    def _validate_thresholds(self) -> RelationshipNarrationConfig:
         if self.friendship_priority_threshold < self.friendship_trust_threshold:
             raise ValueError(
                 "telemetry.relationship_narration.friendship_priority_threshold must be "
@@ -625,9 +625,9 @@ class TelemetryTransportConfig(BaseModel):
     worker_poll_seconds: float = Field(default=0.5, ge=0.01, le=10.0)
 
     @model_validator(mode="after")
-    def _validate_transport(self) -> "TelemetryTransportConfig":
+    def _validate_transport(self) -> TelemetryTransportConfig:
         transport_type = self.type
-        fields_set = getattr(self, "model_fields_set", set())
+        fields_set: set[str] = set(getattr(self, "model_fields_set", set()))
 
         if transport_type == "stdout":
             if self.enable_tls:
@@ -718,7 +718,7 @@ class ConsoleAuthTokenConfig(BaseModel):
     token_env: str | None = None
 
     @model_validator(mode="after")
-    def _validate_token_source(self) -> "ConsoleAuthTokenConfig":
+    def _validate_token_source(self) -> ConsoleAuthTokenConfig:
         provided = [value for value in (self.token, self.token_env) if value]
         if len(provided) != 1:
             raise ValueError(
@@ -739,7 +739,7 @@ class ConsoleAuthConfig(BaseModel):
     tokens: list[ConsoleAuthTokenConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _validate_tokens(self) -> "ConsoleAuthConfig":
+    def _validate_tokens(self) -> ConsoleAuthConfig:
         if self.enabled and not self.tokens:
             raise ValueError("console.auth.tokens must be provided when auth is enabled")
         return self
@@ -749,7 +749,7 @@ class SnapshotStorageConfig(BaseModel):
     root: Path = Field(default=Path("snapshots"))
 
     @model_validator(mode="after")
-    def _validate_root(self) -> "SnapshotStorageConfig":
+    def _validate_root(self) -> SnapshotStorageConfig:
         if str(self.root).strip() == "":
             raise ValueError("snapshot.storage.root must not be empty")
         return self
@@ -760,7 +760,7 @@ class SnapshotAutosaveConfig(BaseModel):
     retain: int = Field(default=3, ge=1, le=1000)
 
     @model_validator(mode="after")
-    def _validate_cadence(self) -> "SnapshotAutosaveConfig":
+    def _validate_cadence(self) -> SnapshotAutosaveConfig:
         if self.cadence_ticks is not None and self.cadence_ticks < 100:
             raise ValueError(
                 "snapshot.autosave.cadence_ticks must be at least 100 ticks when enabled"
@@ -779,7 +779,7 @@ class SnapshotIdentityConfig(BaseModel):
     _BASE64 = re.compile(r"^[A-Za-z0-9+/=]{32,88}$")
 
     @model_validator(mode="after")
-    def _validate_policy_hash(self) -> "SnapshotIdentityConfig":
+    def _validate_policy_hash(self) -> SnapshotIdentityConfig:
         if self.policy_hash is None:
             return self
         candidate = self.policy_hash.strip()
@@ -797,14 +797,13 @@ class SnapshotIdentityConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_variant(self) -> "SnapshotIdentityConfig":
+    def _validate_variant(self) -> SnapshotIdentityConfig:
         if self.observation_variant == "infer":
             return self
         supported: set[str] = {"hybrid", "full", "compact"}
         if self.observation_variant not in supported:
             raise ValueError(
-                "snapshot.identity.observation_variant must be one of %s or 'infer'"
-                % sorted(supported)
+                f"snapshot.identity.observation_variant must be one of {sorted(supported)} or 'infer'"
             )
         return self
 
@@ -815,7 +814,7 @@ class SnapshotMigrationsConfig(BaseModel):
     allow_minor: bool = False
 
     @model_validator(mode="after")
-    def _validate_handlers(self) -> "SnapshotMigrationsConfig":
+    def _validate_handlers(self) -> SnapshotMigrationsConfig:
         for legacy_id, target in self.handlers.items():
             if not str(legacy_id).strip():
                 raise ValueError("snapshot.migrations.handlers keys must not be empty")
@@ -838,7 +837,7 @@ class SnapshotConfig(BaseModel):
     guardrails: SnapshotGuardrailsConfig = SnapshotGuardrailsConfig()
 
     @model_validator(mode="after")
-    def _validate_observation_override(self) -> "SnapshotConfig":
+    def _validate_observation_override(self) -> SnapshotConfig:
         if (
             self.identity.observation_variant != "infer"
             and self.identity.observation_variant not in {"hybrid", "full", "compact"}
@@ -856,7 +855,7 @@ class TrainingConfig(BaseModel):
     rollout_auto_seed_agents: bool = False
     replay_manifest: Path | None = None
     social_reward_stage_override: SocialRewardStage | None = None
-    social_reward_schedule: list["SocialRewardScheduleEntry"] = Field(default_factory=list)
+    social_reward_schedule: list[SocialRewardScheduleEntry] = Field(default_factory=list)
     bc: BCTrainingSettings = BCTrainingSettings()
     anneal_schedule: list[AnnealStage] = Field(default_factory=list)
     anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
@@ -926,13 +925,12 @@ class SimulationConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
-    def _validate_observation_variant(self) -> "SimulationConfig":
+    def _validate_observation_variant(self) -> SimulationConfig:
         variant = self.features.systems.observations
         supported = {"hybrid", "full", "compact"}
         if variant not in supported:
             raise ValueError(
-                "Observation variant '%s' is not supported yet; supported variants: %s"
-                % (variant, sorted(supported))
+                f"Observation variant '{variant}' is not supported yet; supported variants: {sorted(supported)}"
             )
         return self
 
@@ -943,11 +941,7 @@ class SimulationConfig(BaseModel):
     def require_observation_variant(self, expected: ObservationVariant) -> None:
         if self.observation_variant != expected:
             raise ValueError(
-                "Observation variant mismatch: expected %s, got %s"
-                % (
-                    expected,
-                    self.observation_variant,
-                )
+                f"Observation variant mismatch: expected {expected}, got {self.observation_variant}"
             )
 
     def snapshot_root(self) -> Path:
@@ -977,7 +971,7 @@ class SimulationConfig(BaseModel):
         return bool(getattr(observations, "personality_ui", False))
 
     @model_validator(mode="after")
-    def _validate_personality_bias_keys(self) -> "SimulationConfig":
+    def _validate_personality_bias_keys(self) -> SimulationConfig:
         if not (
             self.personality_profiles_enabled()
             or self.reward_personality_scaling_enabled()
@@ -990,20 +984,17 @@ class SimulationConfig(BaseModel):
             unknown_needs = set(profile.need_multipliers) - PERSONALITY_NEED_KEYS
             if unknown_needs:
                 raise ValueError(
-                    "Unknown need multipliers %s in personality profile '%s'"
-                    % (sorted(unknown_needs), profile_name)
+                    f"Unknown need multipliers {sorted(unknown_needs)} in personality profile '{profile_name}'"
                 )
             unknown_reward = set(profile.reward_bias) - PERSONALITY_REWARD_KEYS
             if unknown_reward:
                 raise ValueError(
-                    "Unknown reward bias keys %s in personality profile '%s'"
-                    % (sorted(unknown_reward), profile_name)
+                    f"Unknown reward bias keys {sorted(unknown_reward)} in personality profile '{profile_name}'"
                 )
             unknown_behaviour = set(profile.behaviour_bias) - PERSONALITY_BEHAVIOUR_KEYS
             if unknown_behaviour:
                 raise ValueError(
-                    "Unknown behaviour bias keys %s in personality profile '%s'"
-                    % (sorted(unknown_behaviour), profile_name)
+                    f"Unknown behaviour bias keys {sorted(unknown_behaviour)} in personality profile '{profile_name}'"
                 )
         return self
 

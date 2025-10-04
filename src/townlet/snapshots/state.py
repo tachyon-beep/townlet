@@ -484,6 +484,8 @@ def apply_snapshot_to_world(
             }
         )
 
+    world.rebuild_spatial_index()
+
     world.embedding_allocator.import_state(snapshot.embeddings)
 
     affordance_state = snapshot.affordances

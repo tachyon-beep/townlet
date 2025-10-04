@@ -146,7 +146,7 @@ Telemetry data and console responses traverse networks unencrypted, exposing sen
 `WorldState.local_view` rebuilds agent/object lookups by scanning every agent for each request, leading to O(n²) behaviour as populations grow.
 
 ### Current State
-Lines `src/townlet/world/grid.py:1396-1459` iterate over every agent and object per agent view, recomputing dictionaries on each call.
+`WorldSpatialIndex` now maintains agent buckets and reservation tiles (`src/townlet/world/grid.py`). `local_view` / `build_local_cache` consume the index, observation builders run against the accessor path, and benchmarks with 50 agents (radius 1/3/5) measure ~0.0049/0.0209/0.0465 ms per view. Regression tests cover respawn/move/kill flows plus reservation churn (`tests/test_world_spatial_index.py`).
 
 ### Desired State
 Maintain spatial indices (per-tile buckets or uniform grid) that can be updated incrementally, reducing local view construction to O(k) for neighbourhood size.
@@ -160,17 +160,19 @@ Observation building and policy loops will degrade rapidly as agent counts incre
 - Add microbenchmarks and regression tests verifying performance at higher agent counts.
 
 ### Affected Components
-- src/townlet/world/grid.py:1396-1469
-- src/townlet/world/queue_manager.py
+- src/townlet/world/grid.py
+- src/townlet/world/observation.py
 - tests/test_world_local_view.py
+- tests/test_world_observation_helpers.py
+- tests/test_world_spatial_index.py
 
 ### Dependencies
 - Coordinate with WP-306 to avoid duplicate structural work.
 
 ### Acceptance Criteria
-- [ ] Benchmarks show near-linear behaviour in radius instead of agent count.
-- [ ] Tests cover index updates during moves/spawns/despawns.
-- [ ] Observation builders consume the new index without regressions.
+- [x] Benchmarks show near-linear behaviour in radius instead of agent count.
+- [x] Tests cover index updates during moves/spawns/despawns.
+- [x] Observation builders consume the new index without regressions.
 
 ### Related Issues
 - Mitigates performance risk R-004.

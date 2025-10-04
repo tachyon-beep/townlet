@@ -8,6 +8,7 @@ import yaml
 from townlet.config import SimulationConfig, load_config
 from townlet.snapshots.migrations import clear_registry, migration_registry
 
+
 @pytest.fixture()
 def poc_config(tmp_path: Path) -> Path:
     source = Path("configs/examples/poc_hybrid.yaml")
