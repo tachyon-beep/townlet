@@ -28,7 +28,7 @@ def _make_employment_loop(enable_console: bool = False) -> SimulationLoop:
         needs={"hunger": 0.4, "hygiene": 0.5, "energy": 0.6},
         wallet=2.0,
     )
-    loop.world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    loop.world.assign_jobs_to_agents()  
     return loop
 
 

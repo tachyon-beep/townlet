@@ -19,7 +19,7 @@ def _run_scenario(config_path: str, ticks: int) -> SimulationLoop:
     assert scenario is not None, "scenario config required for test"
     apply_scenario(loop, scenario)
     # Disable transport IO for deterministic tests
-    loop.telemetry._transport_client = SimpleNamespace(  # type: ignore[attr-defined]
+    loop.telemetry._transport_client = SimpleNamespace(  
         send=lambda payload: None,
         close=lambda: None,
     )

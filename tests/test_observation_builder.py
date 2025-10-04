@@ -2,12 +2,12 @@ from pathlib import Path
 
 import numpy as np
 
+from townlet.agents.models import PersonalityProfiles
 from townlet.config import load_config
+from townlet.console.command import ConsoleCommandEnvelope
 from townlet.core.sim_loop import SimulationLoop
 from townlet.observations.builder import ObservationBuilder
-from townlet.console.command import ConsoleCommandEnvelope
 from townlet.world.grid import AgentSnapshot
-from townlet.agents.models import PersonalityProfiles
 
 
 def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
@@ -34,7 +34,7 @@ def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
         needs={"hunger": 0.7, "hygiene": 0.8, "energy": 0.9},
         wallet=3.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
     return loop
 
 
@@ -129,9 +129,8 @@ def test_observation_queue_and_reservation_flags() -> None:
     builder: ObservationBuilder = loop.observations
     world = loop.world
 
-    world._active_reservations["stove_test"] = "alice"
-    if "stove_test" in world.objects:
-        world.objects["stove_test"].occupied_by = "alice"
+    world.queue_manager.request_access("stove_test", "alice", world.tick)
+    world.refresh_reservations()
     world.queue_manager.requeue_to_tail("stove_test", "bob", tick=world.tick)
 
     observations = builder.build_batch(world, terminated={})

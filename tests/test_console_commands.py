@@ -1,8 +1,7 @@
-from dataclasses import replace
-from pathlib import Path
-
 import json
 import threading
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -69,7 +68,10 @@ def test_palette_command_request_from_payload_normalises() -> None:
         ({"name": "test", "kwargs": "invalid"}, "kwargs"),
     ],
 )
-def test_palette_command_request_from_payload_validation(payload: dict[str, object], message: str) -> None:
+def test_palette_command_request_from_payload_validation(
+    payload: dict[str, object],
+    message: str,
+) -> None:
     with pytest.raises(ValueError) as exc:
         PaletteCommandRequest.from_payload(payload)
     assert message in str(exc.value)
@@ -293,7 +295,7 @@ def test_console_telemetry_snapshot_returns_payload() -> None:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
 
     router = create_console_router(
         loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
@@ -576,7 +578,7 @@ def test_employment_console_commands_manage_queue() -> None:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
     router = create_console_router(
         loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
     )

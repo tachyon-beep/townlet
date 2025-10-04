@@ -8,14 +8,12 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 from __future__ import annotations
 
 import hashlib
-from importlib import import_module
 import logging
-import os
 import random
 import time
-from collections.abc import Iterable
-from typing import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
@@ -56,8 +54,11 @@ class SimulationLoop:
         self,
         config: SimulationConfig,
         *,
-        affordance_runtime_factory: Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime] | None = None,
-        use_legacy_runtime: bool | None = None,
+        affordance_runtime_factory: Callable[
+            [WorldState, AffordanceRuntimeContext],
+            DefaultAffordanceRuntime,
+        ]
+        | None = None,
     ) -> None:
         self.config = config
         self.config.register_snapshot_migrations()
@@ -68,9 +69,8 @@ class SimulationLoop:
             self._affordance_runtime_factory = self._load_affordance_runtime_factory(
                 self._runtime_config
             )
-        self._force_legacy_runtime = use_legacy_runtime
         self.runtime: WorldRuntime | None = None
-        self._runtime_variant: str = "legacy"
+        self._runtime_variant: str = "facade"
         self._build_components()
 
     def __setattr__(self, name: str, value: object) -> None:  # pragma: no cover - delegation glue
@@ -107,26 +107,14 @@ class SimulationLoop:
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
         self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
-        if self._legacy_runtime_enabled():
-            self.runtime = None
-            self._runtime_variant = "legacy"
-        else:
-            self.runtime = WorldRuntime(
-                world=self.world,
-                lifecycle=self.lifecycle,
-                perturbations=self.perturbations,
-                ticks_per_day=self._ticks_per_day,
-            )
-            self._runtime_variant = "facade"
+        self.runtime = WorldRuntime(
+            world=self.world,
+            lifecycle=self.lifecycle,
+            perturbations=self.perturbations,
+            ticks_per_day=self._ticks_per_day,
+        )
+        self._runtime_variant = "facade"
         self.telemetry.set_runtime_variant(self._runtime_variant)
-
-    def _legacy_runtime_enabled(self) -> bool:
-        if self._force_legacy_runtime is not None:
-            return bool(self._force_legacy_runtime)
-        value = os.getenv("TOWNLET_LEGACY_RUNTIME")
-        if value is None:
-            return False
-        return value.strip().lower() in {"1", "true", "yes", "on"}
 
     def reset(self) -> None:
         """Reset the simulation loop to its initial state."""
@@ -237,34 +225,23 @@ class SimulationLoop:
         tick_start = time.perf_counter()
         self.tick += 1
         console_ops = self.telemetry.drain_console_buffer()
-        if self.runtime is not None:
-            self.runtime.queue_console(console_ops)
+        runtime = self.runtime
+        if runtime is None:  # pragma: no cover - defensive guard
+            raise RuntimeError("WorldRuntime is not initialised")
 
-            def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
-                return self.policy.decide(world, current_tick)
+        runtime.queue_console(console_ops)
 
-            runtime_result = self.runtime.tick(
-                tick=self.tick,
-                action_provider=_action_provider,
-            )
-            console_results = runtime_result.console_results
-            events = runtime_result.events
-            terminated = runtime_result.terminated
-            termination_reasons = runtime_result.termination_reasons
-        else:
-            self.world.tick = self.tick
-            self.lifecycle.process_respawns(self.world, tick=self.tick)
-            self.world.apply_console(console_ops)
-            console_results = self.world.consume_console_results()
-            self.perturbations.tick(self.world, current_tick=self.tick)
-            actions = self.policy.decide(self.world, self.tick)
-            self.world.apply_actions(actions)
-            self.world.resolve_affordances(current_tick=self.tick)
-            if self._ticks_per_day and self.tick % self._ticks_per_day == 0:
-                self.world.apply_nightly_reset()
-            events = self.world.drain_events()
-            terminated = self.lifecycle.evaluate(self.world, tick=self.tick)
-            termination_reasons = self.lifecycle.termination_reasons()
+        def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
+            return self.policy.decide(world, current_tick)
+
+        runtime_result = runtime.tick(
+            tick=self.tick,
+            action_provider=_action_provider,
+        )
+        console_results = runtime_result.console_results
+        events = runtime_result.events
+        terminated = runtime_result.terminated
+        termination_reasons = runtime_result.termination_reasons
 
         self.telemetry.record_console_results(console_results)
         episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
@@ -341,7 +318,10 @@ class SimulationLoop:
         self.telemetry.record_health_metrics(health_payload)
         if logger.isEnabledFor(logging.INFO):
             logger.info(
-                "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s perturbations_pending=%s perturbations_active=%s exit_queue=%s",
+                (
+                    "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
+                    "perturbations_pending=%s perturbations_active=%s exit_queue=%s"
+                ),
                 self.tick,
                 duration_ms,
                 health_payload["telemetry_queue"],

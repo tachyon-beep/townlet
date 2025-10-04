@@ -20,7 +20,7 @@ def _ensure_agents(loop: SimulationLoop) -> None:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
 
 
 def test_file_transport_stream_smoke(tmp_path: Path) -> None:

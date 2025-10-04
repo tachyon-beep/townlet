@@ -40,7 +40,8 @@ def test_local_view_includes_objects_and_agents() -> None:
         needs={"hunger": 0.3},
     )
 
-    world._active_reservations["fridge_1"] = "bob"
+    world.queue_manager.request_access("fridge_1", "bob", world.tick)
+    world.refresh_reservations()
 
     view = local_view(world, "alice", radius=1)
     assert view["center"] == (0, 0)

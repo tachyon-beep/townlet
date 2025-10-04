@@ -7,10 +7,10 @@ import logging
 import os
 import random
 import time
-from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from townlet.agents.models import (
@@ -1439,6 +1439,31 @@ class WorldState:
         """Expose a copy of active reservations for diagnostics/tests."""
         return dict(self._active_reservations)
 
+    def active_reservations_view(self) -> Mapping[str, str]:
+        """Return a read-only snapshot of active reservations."""
+
+        return MappingProxyType(self._active_reservations)
+
+    def refresh_reservations(self) -> None:
+        """Synchronise reservation state from the queue manager."""
+
+        for object_id in self.objects:
+            self._sync_reservation(object_id)
+
+    def agent_snapshots_view(self) -> Mapping[str, AgentSnapshot]:
+        """Expose current agent snapshots without allowing dict mutation."""
+
+        return MappingProxyType(self.agents)
+
+    def objects_by_position_view(self) -> Mapping[tuple[int, int], tuple[str, ...]]:
+        """Return immutable positions mapped to tuples of object IDs."""
+
+        snapshot: dict[tuple[int, int], tuple[str, ...]] = {
+            position: tuple(object_ids)
+            for position, object_ids in self._objects_by_position.items()
+        }
+        return MappingProxyType(snapshot)
+
     def drain_events(self) -> list[dict[str, Any]]:
         """Return all pending events accumulated up to the current tick."""
         events: list[dict[str, Any]] = []
@@ -1913,7 +1938,7 @@ class WorldState:
             "object_count": manifest.object_count,
             "affordance_count": manifest.affordance_count,
         }
-        self._assign_jobs_to_agents()
+        self.assign_jobs_to_agents()
 
     def affordance_manifest_metadata(self) -> dict[str, object]:
         """Expose manifest metadata (path, checksum, counts) for telemetry."""
@@ -2013,7 +2038,9 @@ class WorldState:
 
         return reset_agents
 
-    def _assign_jobs_to_agents(self) -> None:
+    def assign_jobs_to_agents(self) -> None:
+        """Assign jobs to agents lacking a valid role."""
+
         self.employment.assign_jobs_to_agents(self)
 
     def _apply_job_state(self) -> None:

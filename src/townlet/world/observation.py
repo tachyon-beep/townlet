@@ -24,13 +24,13 @@ def build_local_cache(
         agent_lookup.setdefault(snapshot.position, []).append(agent_id)
 
     object_lookup: dict[tuple[int, int], list[str]] = {}
-    for position, object_ids in world._objects_by_position.items():
+    for position, object_ids in world.objects_by_position_view().items():
         filtered = [obj_id for obj_id in object_ids if obj_id in world.objects]
         if filtered:
             object_lookup[position] = filtered
 
     reservation_tiles: set[tuple[int, int]] = set()
-    for object_id, occupant in world._active_reservations.items():
+    for object_id, occupant in world.active_reservations_view().items():
         if occupant is None:
             continue
         obj = world.objects.get(object_id)
@@ -50,7 +50,8 @@ def local_view(
 ) -> dict[str, Any]:
     """Return a structured neighborhood snapshot around ``agent_id``."""
 
-    snapshot = world.agents.get(agent_id)
+    snapshots = world.agent_snapshots_view()
+    snapshot = snapshots.get(agent_id)
     if snapshot is None:
         return {
             "center": None,
@@ -63,12 +64,12 @@ def local_view(
     cx, cy = snapshot.position
     agent_lookup: dict[tuple[int, int], list[str]] = {}
     if include_agents:
-        for other in world.agents.values():
+        for other in snapshots.values():
             agent_lookup.setdefault(other.position, []).append(other.agent_id)
 
     object_lookup: dict[tuple[int, int], list[str]] = {}
     if include_objects:
-        for position, object_ids in world._objects_by_position.items():
+        for position, object_ids in world.objects_by_position_view().items():
             filtered = [obj_id for obj_id in object_ids if obj_id in world.objects]
             if filtered:
                 object_lookup[position] = filtered
@@ -118,8 +119,9 @@ def local_view(
 
             reservation_active = False
             if object_ids:
+                active_view = world.active_reservations_view()
                 reservation_active = any(
-                    world._active_reservations.get(object_id) is not None
+                    active_view.get(object_id) is not None
                     for object_id in object_ids
                 )
 
@@ -146,7 +148,7 @@ def local_view(
 def agent_context(world: WorldState, agent_id: str) -> dict[str, Any]:
     """Return scalar context fields consumed by observation builders."""
 
-    snapshot = world.agents.get(agent_id)
+    snapshot = world.agent_snapshots_view().get(agent_id)
     if snapshot is None:
         return {}
     return {

@@ -13,7 +13,7 @@ def test_run_simulation_cli_iterates_ticks(monkeypatch):
     instances: list[object] = []
 
     class StubLoop:
-        def __init__(self, config, *, use_legacy_runtime=None):
+        def __init__(self, config):
             self.config = config
             self.iterations = 0
             self.tick = 0

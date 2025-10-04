@@ -34,7 +34,7 @@ def make_loop_with_employment() -> SimulationLoop:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
     return loop
 
 
@@ -100,7 +100,7 @@ def test_employment_exit_queue_respects_cap_and_manual_override() -> None:
         needs={"hunger": 1.0},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
     world.agents["alice"].absent_shifts_7d = 1
     world.agents["bob"].absent_shifts_7d = 1
 

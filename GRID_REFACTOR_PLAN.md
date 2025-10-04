@@ -251,7 +251,7 @@
 - **Step 3.3: Tooling Debt Burn-down**
   - Task 3.3.1: Drive `ruff check src/townlet/world src/townlet/observations` to zero findings; align import ordering/annotation modernisation.
   - Task 3.3.2: Ensure `mypy src/townlet/world src/townlet/observations` passes without ignores; lift legacy `type: ignore`s where feasible.
-  - Task 3.3.3: Decide fate of `TOWNLET_LEGACY_RUNTIME` flag (keep for rollout vs remove); if retiring, document rollback strategy for Milestone M4.
+  - Task 3.3.3: Decide fate of `TOWNLET_LEGACY_RUNTIME` flag (✅ completed – legacy runtime removed; facade is sole path).
 
 ## Milestone M4 – Hardening & Adoption
 
@@ -287,7 +287,7 @@
   - Task 2.1.2: Coordinate with documentation/help teams to publish migration notes for external contributors.
 - **Step 2.2: Debt Burn-down**
   - Task 2.2.1: Drive remaining `townlet.world` Ruff/mypy findings to zero.
-  - Task 2.2.2: Decide timeline for removing `TOWNLET_LEGACY_RUNTIME`; capture rollback plan if retained longer term.
+  - Task 2.2.2: Decide timeline for removing `TOWNLET_LEGACY_RUNTIME`; capture rollback plan if retained longer term. (✅ completed – toggle removed)
 
 ### Phase 3: Post-mortem
 

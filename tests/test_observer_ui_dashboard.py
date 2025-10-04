@@ -1,22 +1,21 @@
-from pathlib import Path
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from rich.console import Console
 
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
-from townlet.policy.models import torch_available
 from townlet_ui.dashboard import (
+    PaletteState,
     _build_map_panel,
+    _derive_promotion_reason,
+    _promotion_border_style,
     render_snapshot,
     run_dashboard,
-    _promotion_border_style,
-    _derive_promotion_reason,
-    PaletteState,
 )
-from townlet_ui.telemetry import TelemetryClient, AnnealStatus, PromotionSnapshot
-from rich.console import Console
+from townlet_ui.telemetry import AnnealStatus, PromotionSnapshot, TelemetryClient
 
 
 def make_loop() -> SimulationLoop:
@@ -38,14 +37,19 @@ def make_loop() -> SimulationLoop:
             needs={"hunger": 0.6, "hygiene": 0.4, "energy": 0.5},
             wallet=1.2,
         )
-        world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+        world.assign_jobs_to_agents()  
         world.update_relationship("alice", "bob", trust=0.2, familiarity=0.1)
     return loop
 
 
 def test_render_snapshot_produces_panels() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
     for _ in range(3):
         loop.step()
     loop.world.update_relationship(
@@ -86,7 +90,12 @@ def test_render_snapshot_produces_panels() -> None:
 
 def test_render_snapshot_includes_palette_overlay_when_visible() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
     for _ in range(2):
         loop.step()
     snapshot = TelemetryClient().from_console(router)
@@ -129,7 +138,12 @@ def test_run_dashboard_advances_loop(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_build_map_panel_produces_table() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
     for _ in range(2):
         loop.step()
     snapshot = TelemetryClient().from_console(router)
@@ -141,7 +155,12 @@ def test_build_map_panel_produces_table() -> None:
 
 def test_narration_panel_shows_styled_categories() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
     world = loop.world
     telemetry = loop.telemetry
 
@@ -226,7 +245,11 @@ def test_narration_panel_shows_styled_categories() -> None:
             show_personality_narration=True,
         )
     )
-    narration_panel = next(panel for panel in panels if (panel.title or "").startswith("Narrations"))
+    narration_panel = next(
+        panel
+        for panel in panels
+        if (panel.title or "").startswith("Narrations")
+    )
     console = Console(record=True, width=120)
     console.print(narration_panel)
     rendered = console.export_text()
@@ -235,7 +258,12 @@ def test_narration_panel_shows_styled_categories() -> None:
 
 def test_policy_inspector_snapshot_contains_entries() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
     for _ in range(2):
         loop.step()
     snapshot = TelemetryClient().from_console(router)
@@ -250,7 +278,12 @@ def test_social_panel_renders_with_summary_and_events() -> None:
     loop = make_loop()
     world = loop.world
     telemetry = loop.telemetry
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
 
     world.update_relationship("alice", "bob", trust=0.6, familiarity=0.4)
     world.update_relationship("bob", "alice", trust=0.45, familiarity=0.3, rivalry=0.05)
@@ -301,7 +334,12 @@ def test_social_panel_renders_with_summary_and_events() -> None:
 
 def test_social_panel_handles_missing_summary() -> None:
     loop = make_loop()
-    router = create_console_router(loop.telemetry, loop.world, policy=loop.policy, config=loop.config)
+    router = create_console_router(
+        loop.telemetry,
+        loop.world,
+        policy=loop.policy,
+        config=loop.config,
+    )
     for _ in range(2):
         loop.step()
     snapshot = TelemetryClient().from_console(router)
@@ -310,7 +348,7 @@ def test_social_panel_handles_missing_summary() -> None:
         snapshot,
         relationship_summary=None,
         relationships=None,
-        social_events=tuple(),
+        social_events=(),
     )
 
     panels = list(

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 from townlet.config import load_config
@@ -58,28 +57,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable automatic pagination of agent cards",
     )
-    parser.add_argument(
-        "--runtime",
-        choices=("auto", "facade", "legacy"),
-        default="auto",
-        help="Select runtime implementation (default: auto, honouring TOWNLET_LEGACY_RUNTIME)",
-    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    legacy_flag: bool | None
-    if args.runtime == "legacy":
-        legacy_flag = True
-        os.environ["TOWNLET_LEGACY_RUNTIME"] = "1"
-    elif args.runtime == "facade":
-        legacy_flag = False
-        os.environ["TOWNLET_LEGACY_RUNTIME"] = "0"
-    else:
-        legacy_flag = None
-    loop = SimulationLoop(config, use_legacy_runtime=legacy_flag)
+    loop = SimulationLoop(config)
     run_dashboard(
         loop,
         refresh_interval=args.refresh,

@@ -4,18 +4,18 @@ import logging
 from dataclasses import dataclass, field
 
 from townlet.core.sim_loop import SimulationLoop
-from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
+from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
 from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.world.grid import AgentSnapshot, WorldState
 from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.dashboard import PaletteState, run_dashboard
-from townlet.world.grid import AgentSnapshot, WorldState
 
 __all__ = [
     "DemoScheduler",
-    "default_timeline",
-    "build_storyline",
     "available_storylines",
+    "build_storyline",
+    "default_timeline",
     "load_timeline",
     "run_demo_dashboard",
     "seed_demo_state",
@@ -99,13 +99,15 @@ class DemoScheduler:
                 personality_profile=profile_name,
             )
             world.agents[agent_id] = snapshot
-            assign_jobs = getattr(world, "_assign_jobs_to_agents", None)
+            assign_jobs = getattr(world, "assign_jobs_to_agents", None)
             if callable(assign_jobs):
                 assign_jobs()
             message = f"Spawned agent {agent_id}"
         elif name == "force_chat":
             speaker = kwargs.get("speaker") or (command.args[0] if command.args else None)
-            listener = kwargs.get("listener") or (command.args[1] if len(command.args) > 1 else None)
+            listener = kwargs.get("listener") or (
+                command.args[1] if len(command.args) > 1 else None
+            )
             quality = float(kwargs.get("quality", 0.85))
             if speaker and listener:
                 world.record_chat_success(speaker, listener, quality)
@@ -161,7 +163,10 @@ class DemoScheduler:
 
         payload_kwargs: dict[str, object] = {
             "message": message_text,
-            "category": str(kwargs.get("category", self.narration_category) or self.narration_category),
+            "category": str(
+                kwargs.get("category", self.narration_category)
+                or self.narration_category
+            ),
             "tick": tick_value,
         }
         if "priority" in kwargs:
@@ -228,7 +233,7 @@ def seed_demo_state(
             )
         seeded = True
 
-    assign_jobs = getattr(world, "_assign_jobs_to_agents", None)
+    assign_jobs = getattr(world, "assign_jobs_to_agents", None)
     if callable(assign_jobs):
         assign_jobs()
 

@@ -50,7 +50,7 @@ def _make_loop() -> SimulationLoop:
         needs={"hunger": 0.4, "hygiene": 0.8, "energy": 0.9},
         wallet=1.0,
     )
-    world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    world.assign_jobs_to_agents()  
     world.update_relationship("alice", "bob", trust=0.3, familiarity=0.2)
     loop.telemetry.publish_tick(
         tick=world.tick,

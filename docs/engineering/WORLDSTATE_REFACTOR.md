@@ -49,18 +49,18 @@
 | Performance smoke | `scripts/run_simulation.py configs/scenarios/queue_conflict.yaml --ticks 500` | Capture tick throughput reference prior to refactor | Metrics stored in `benchmarks/m3_runtime_baseline.json`. |
 
 ## Runtime Facade Rollback Controls (M3 Phase 1)
-- Environment switch: set `TOWNLET_LEGACY_RUNTIME=1` to force the legacy sequencing inside `SimulationLoop`; unset/`0` restores the facade.
-- CLI overrides: both `scripts/run_simulation.py` and `scripts/observer_ui.py` accept `--runtime {auto,facade,legacy}` to toggle the env flag for the current process.
-- Telemetry now emits `runtime_variant` in every snapshot/diff payload so downstream dashboards can confirm which implementation produced the data.
-- Regression protocol: `pytest tests/test_simulation_loop_runtime.py` exercises both runtime modes; integration suites listed above should be parametrised (or run twice) when preparing release candidates to ensure parity across the feature flag.
+- **Update (2025-??-??):** The legacy runtime toggle has been removed; `WorldRuntime` is now the sole tick implementation. CLI tools (`scripts/run_simulation.py`, `scripts/observer_ui.py`) no longer expose `--runtime`, and `TOWNLET_LEGACY_RUNTIME` is ignored.
+- Telemetry continues to emit a `runtime_variant` field (currently always `"facade"`) for backwards compatibility with dashboards that track historical deployments.
+- Regression protocol: run `pytest tests/test_simulation_loop_runtime.py` to ensure the facade initialises correctly and continue executing the integration suites listed above for release candidates.
 
-### Runtime Feature Flag (Design)
-- Env var `TOWNLET_LEGACY_RUNTIME=1` forces `SimulationLoop` to instantiate the pre-refactor `WorldState` tick implementation.
-- Default behaviour (unset/`0`) selects the new `WorldRuntime` facade post-M3; CLI tools (`scripts/run_simulation.py`, `scripts/observer_ui.py`) read the env var and pass through to loop construction.
-- Acceptance criteria:
-  1. Flag honoured across CLI entry points and tests via `monkeypatch`.
-  2. Telemetry payloads emit a `runtime_variant` field when legacy mode is active for easier diffing.
-  3. Flag removal plan captured before Milestone M4 rollout freeze.
+### Runtime Feature Flag (Retired)
+- The previous `TOWNLET_LEGACY_RUNTIME` environment switch and associated CLI overrides were decommissioned as part of Milestone M3 Phase 3 cleanup.
+- Docs and automation should no longer reference the legacy path; rollback, if ever required, would be handled via git tags/branches rather than a runtime flag.
+
+### Observation Accessor Refresh (Completed 2025-??-??)
+- Observation helpers now consume the read-only `WorldState` accessors (`src/townlet/world/observation.py`), eliminating direct access to private fields.
+- `tests/test_world_state_accessors.py` covers the view contracts; observation suites were updated accordingly.
+- Baseline NPZ fixtures (`tests/data/observations/baseline_*.npz`) regenerated via `scripts/run_simulation.py` + `ObservationBuilder` after the migration to confirm parity.
 
 ## Module Ownership Map (Target)
 - `world/employment.py` → queue state, lateness tracking, exit flows.

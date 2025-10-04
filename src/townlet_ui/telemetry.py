@@ -350,7 +350,9 @@ class TelemetryClient:
         history_window: int | None = 30,
     ) -> None:
         self.expected_schema_prefix = expected_schema_prefix
-        self.history_window = history_window if history_window is None or history_window > 0 else None
+        self.history_window = (
+            history_window if history_window is None or history_window > 0 else None
+        )
         self._state: dict[str, Any] | None = None
 
     def _parse_snapshot(self, payload: Mapping[str, Any]) -> TelemetrySnapshot:

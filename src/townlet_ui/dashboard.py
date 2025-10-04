@@ -38,6 +38,7 @@ from townlet_ui.telemetry import (
     AgentSummary,
     AnnealStatus,
     FriendSummary,
+    NarrationEntry,
     PersonalitySnapshotEntry,
     PromotionSnapshot,
     RelationshipChurn,
@@ -2093,7 +2094,7 @@ def run_dashboard(
             personality=resolved_personality,
             personality_profile=profile_name,
         )
-        assign_jobs = getattr(loop.world, "_assign_jobs_to_agents", None)
+        assign_jobs = getattr(loop.world, "assign_jobs_to_agents", None)
         if callable(assign_jobs):
             assign_jobs()
 

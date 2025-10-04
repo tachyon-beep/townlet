@@ -78,8 +78,8 @@ def test_find_nearest_object_of_type_returns_closest_position() -> None:
 
 def test_build_local_cache_matches_world_state() -> None:
     world = _make_world()
-    # Transitional access until reservation refactor completes.
-    world._active_reservations["bed_1"] = "alice"
+    world.queue_manager.request_access("bed_1", "alice", world.tick)
+    world.refresh_reservations()
     snapshots = world.snapshot()
     agent_lookup, object_lookup, reservation_tiles = build_local_cache(world, snapshots)
 

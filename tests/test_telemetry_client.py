@@ -24,7 +24,7 @@ def make_simulation(enforce_job_loop: bool = True) -> SimulationLoop:
             needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
             wallet=1.0,
         )
-        world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+        world.assign_jobs_to_agents()  
     return loop
 
 

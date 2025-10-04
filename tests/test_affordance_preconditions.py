@@ -25,7 +25,7 @@ def _make_loop() -> tuple[SimulationLoop, object]:
 def _request_object(world, object_id: str, agent_id: str) -> None:
     granted = world.queue_manager.request_access(object_id, agent_id, world.tick)
     assert granted is True
-    world._sync_reservation(object_id)  # type: ignore[attr-defined]
+    world._sync_reservation(object_id)  
 
 
 def test_compile_preconditions_normalises_booleans() -> None:

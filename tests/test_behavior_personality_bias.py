@@ -132,7 +132,7 @@ def test_conflict_tolerance_relaxes_queue_guard() -> None:
         world.register_object(object_id="fridge_1", object_type="fridge", position=(0, 0))
         world.agents["rival"] = _make_agent("rival", profile="balanced", position=(0, 0))
         world.agents["stoic"] = _make_agent("stoic", profile="stoic", position=(0, 0))
-        ledger = world._get_rivalry_ledger("stoic")  # type: ignore[attr-defined]
+        ledger = world._get_rivalry_ledger("stoic")  
         for _ in range(6):
             ledger.apply_conflict("rival")
         world.queue_manager.request_access("fridge_1", "rival", tick=0)
