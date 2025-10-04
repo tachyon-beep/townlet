@@ -51,8 +51,7 @@ def test_local_view_includes_neighbouring_agents_and_objects() -> None:
 
 def test_agent_context_exposes_core_metrics() -> None:
     world = _make_world()
-    # Transitional access until employment queue extraction lands.
-    world._employment_exit_queue.append("alice")
+    world.employment.enqueue_exit(world, "alice", tick=world.tick)
     context = agent_context(world, "alice")
 
     expected_keys = {

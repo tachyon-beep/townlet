@@ -53,7 +53,7 @@ def test_respawn_after_delay() -> None:
 def test_employment_exit_emits_event_and_resets_state() -> None:
     manager, world = _make_world(respawn_delay=0)
     snapshot = _spawn_agent(world)
-    world._employment_enqueue_exit(snapshot.agent_id, tick=0)
+    world.employment.enqueue_exit(world, snapshot.agent_id, tick=0)
     terminated = manager.evaluate(world, tick=0)
     assert terminated[snapshot.agent_id] is True
     manager.finalize(world, tick=0, terminated=terminated)
@@ -63,8 +63,8 @@ def test_employment_exit_emits_event_and_resets_state() -> None:
         and event.get("agent_id") == snapshot.agent_id
         for event in events
     )
-    assert snapshot.agent_id not in world._employment_state
-    assert snapshot.agent_id not in world._employment_exit_queue
+    assert world.employment.has_context(snapshot.agent_id) is False
+    assert not world.employment.exit_queue_contains(snapshot.agent_id)
 
 
 def test_employment_daily_reset() -> None:
@@ -83,7 +83,7 @@ def test_termination_reasons_captured() -> None:
     terminated = manager.evaluate(world, tick=0)
     reasons = manager.termination_reasons()
     assert reasons.get("alice") == "faint"
-    world._employment_enqueue_exit(alice.agent_id, tick=1)
+    world.employment.enqueue_exit(world, alice.agent_id, tick=1)
     terminated = manager.evaluate(world, tick=1)
     reasons = manager.termination_reasons()
     assert reasons.get(alice.agent_id) == "eviction"

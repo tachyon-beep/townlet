@@ -4,7 +4,7 @@
 - **Config bootstrap**: `WorldState.__post_init__` (`src/townlet/world/grid.py:228`) loads objects/affordances and initial agents if provided in config.
 - **Console spawn**: `spawn` command routes to `_console_spawn_agent` which creates `AgentSnapshot`, initialises needs, wallet, assigns job via `_sync_agent_spawn` (`grid.py:672`).
 - **Home routing**: Each agent snapshot records `home_position`; spawn and respawn paths populate it so nightly resets can return agents home (`grid.py:709`).
-- **Employment context**: `_sync_agent_spawn` hydrates `_employment_state` with defaults (lateness counters, wages, attendance) and allocates embedding slots.
+- **Employment context**: `_sync_agent_spawn` resets the employment coordinator context (lateness counters, wages, attendance) and allocates embedding slots via the employment service.
 - **Current behaviour**: `LifecycleManager` now schedules respawns using the configurable
   `lifecycle.respawn_delay_ticks`. Agents removed by lifecycle evaluation are reintroduced after
   the delay with default needs, a fresh agent identifier (tracked via `origin_agent_id`), and reset employment state.
@@ -13,7 +13,7 @@
 - **Queue manager**: `QueueManager` tracks object reservations and request access (stay in queue until granted) (`grid.py` interactions around apply_actions/resolve_affordances).
 - **Fairness tuning**: rotation/ghost-step metrics driven by `queue_fairness.*`; see `docs/ops/QUEUE_FAIRNESS_TUNING.md` for parameter rationale.
 - **Employment loop**: `_employment_*` helpers drive shift states (idle, prepare, active) and update context each tick (`grid.py:2057-2400`).
-- **Manual exits**: lifecycle queues exits via `_employment_enqueue_exit`; console `employment_exit` adds to `_employment_manual_exits` (admin approval).
+- **Manual exits**: lifecycle queues exits via `employment.enqueue_exit`; console `employment_exit` adds to `employment.manual_exit_agents()` (admin approval).
 - **LifecycleManager ties**: `_evaluate_employment` enforces exit caps/review windows and emits `employment_exit_processed` events (`lifecycle/manager.py:40-114`).
 - **Current behaviour**: Terminated agents are removed from the world map, queues, and ledgers;
   respawn tickets are queued for later re-entry.

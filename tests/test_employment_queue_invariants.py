@@ -35,7 +35,7 @@ def _make_employment_loop(enable_console: bool = False) -> SimulationLoop:
 def test_employment_queue_snapshot_tracks_pending_agent() -> None:
     loop = _make_employment_loop()
     world = loop.world
-    world._employment_enqueue_exit("alice", loop.tick)
+    world.employment.enqueue_exit(world, "alice", loop.tick)
 
     snapshot = world.employment_queue_snapshot()
     assert snapshot["pending"] == ["alice"]
@@ -66,7 +66,7 @@ def test_employment_queue_snapshot_tracks_pending_agent() -> None:
 def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
     loop = _make_employment_loop()
     world = loop.world
-    world._employment_enqueue_exit("alice", loop.tick)
+    world.employment.enqueue_exit(world, "alice", loop.tick)
 
     assert world.employment_defer_exit("alice") is True
 

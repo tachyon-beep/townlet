@@ -110,28 +110,32 @@ class LifecycleManager:
             self._employment_day = day_index
             world.reset_employment_exits_today()
 
-        for agent_id in list(world._employment_manual_exits):
+        for agent_id in world.employment.manual_exit_agents():
             if self._employment_execute_exit(world, agent_id, tick, reason="manual_approve"):
                 results[agent_id] = True
-            world._employment_manual_exits.discard(agent_id)
 
         for agent_id, snapshot in world.agents.items():
             if snapshot.absent_shifts_7d >= cfg.max_absent_shifts:
-                world._employment_enqueue_exit(agent_id, tick)
+                world.employment.enqueue_exit(world, agent_id, tick)
 
         # Forced exits when pending beyond review window.
-        for agent_id in list(world._employment_exit_queue):
-            enqueue_tick = world._employment_exit_queue_timestamps.get(agent_id, tick)
+        for agent_id in world.employment.exit_queue_members():
+            enqueue_tick = world.employment.exit_queue_enqueue_tick(agent_id) or tick
             if tick - enqueue_tick >= cfg.exit_review_window:
                 if self._employment_execute_exit(world, agent_id, tick, reason="auto_review"):
                     results[agent_id] = True
 
         # Process daily cap for remaining queue entries.
-        while world._employment_exit_queue and (
+        while (
+            world.employment.exit_queue_length() > 0
+            and (
             cfg.daily_exit_cap == 0
             or world.employment_exits_today() < cfg.daily_exit_cap
+            )
         ):
-            agent_id = world._employment_exit_queue[0]
+            agent_id = world.employment.exit_queue_head()
+            if agent_id is None:
+                break
             if self._employment_execute_exit(world, agent_id, tick, reason="daily_cap"):
                 results[agent_id] = True
             else:
@@ -148,8 +152,8 @@ class LifecycleManager:
         reason: str,
     ) -> bool:
         snapshot = world.agents.get(agent_id)
-        world._employment_remove_from_queue(agent_id)
-        world._employment_manual_exits.discard(agent_id)
+        world.employment.remove_from_queue(world, agent_id)
+        world.employment.discard_manual_exit(agent_id)
         if snapshot is None:
             return False
         world.increment_employment_exits_today()

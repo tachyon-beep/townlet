@@ -248,7 +248,7 @@ These invariants should carry forward into the runtime extraction; introduce reg
 ## Phase 2 – Employment Extraction (In Progress)
 
 - Introduced `townlet/world/employment.py` with `EmploymentEngine` owning employment state (context map, exit queue, manual exit set).
-- `WorldState` instantiates the engine and delegates queue-oriented helpers (`_employment_enqueue_exit`, `employment_queue_snapshot`, `employment_request_manual_exit`, `employment_defer_exit`). Method signatures remain unchanged.
+- `WorldState` instantiates the engine and delegates queue-oriented helpers (`employment.enqueue_exit`, `employment_queue_snapshot`, `employment_request_manual_exit`, `employment_defer_exit`). Method signatures remain unchanged.
 - The legacy `_employment_*` dictionaries now proxy to the engine to keep behaviour stable pending full extraction of shift logic.
 - Baseline telemetry/console artefacts re-captured (`audit/baselines/worldstate_phase0_current/`) differ only by timing variability; guardrail and employment-focused test suites pass.
 

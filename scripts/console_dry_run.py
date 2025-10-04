@@ -97,7 +97,7 @@ def main() -> None:
     print("=== employment_exit review (before) ===")
     print(router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={})))
 
-    world._employment_enqueue_exit("agent_0", world.tick)
+    world.employment.enqueue_exit(world, "agent_0", world.tick)
 
     print("=== employment_exit review (after enqueue) ===")
     print(router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={})))

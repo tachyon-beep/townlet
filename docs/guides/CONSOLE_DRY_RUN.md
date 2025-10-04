@@ -46,7 +46,7 @@ for _ in range(20):
 print(router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})))
 
 # Step 2: Enqueue employment exits.
-world._employment_enqueue_exit("agent_0", world.tick)
+world.employment.enqueue_exit(world, "agent_0", world.tick)
 print(router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={})))
 print(router.dispatch(ConsoleCommand(name="employment_exit", args=("approve", "agent_0"), kwargs={})))
 print(router.dispatch(ConsoleCommand(name="employment_exit", args=("defer", "agent_0"), kwargs={})))

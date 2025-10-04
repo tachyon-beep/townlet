@@ -218,6 +218,9 @@ class EmploymentEngine:
             ctx["attendance_samples"] = deque(samples, maxlen=window)
         return ctx
 
+    def has_context(self, agent_id: str) -> bool:
+        return agent_id in self._state
+
     def employment_context_wages(self, agent_id: str) -> float:
         ctx = self._state.get(agent_id)
         if not ctx:
@@ -570,6 +573,57 @@ class EmploymentEngine:
             },
         )
         return True
+
+    # -- queue & manual exit helpers -----------------------------------
+
+    def manual_exit_agents(self) -> set[str]:
+        """Return a snapshot of agents awaiting manual exit approval."""
+
+        return set(self._manual_exits)
+
+    def discard_manual_exit(self, agent_id: str) -> None:
+        """Forget a pending manual exit request if present."""
+
+        self._manual_exits.discard(agent_id)
+
+    def exit_queue_members(self) -> list[str]:
+        """Return a copy of the pending employment exit queue."""
+
+        return list(self._exit_queue)
+
+    def exit_queue_head(self) -> str | None:
+        """Return the next agent scheduled for exit, if any."""
+
+        if not self._exit_queue:
+            return None
+        return self._exit_queue[0]
+
+    def exit_queue_contains(self, agent_id: str) -> bool:
+        """Return whether ``agent_id`` is enqueued for exit review."""
+
+        return agent_id in self._exit_queue
+
+    def exit_queue_length(self) -> int:
+        """Return the number of agents awaiting exit review."""
+
+        return len(self._exit_queue)
+
+    def exit_queue_enqueue_tick(self, agent_id: str) -> int | None:
+        """Return the tick when ``agent_id`` entered the exit queue."""
+
+        return self._exit_timestamps.get(agent_id)
+
+    def clear_context(self, agent_id: str) -> None:
+        """Discard cached employment context for ``agent_id`` if present."""
+
+        self._state.pop(agent_id, None)
+
+    def reset_context(self, agent_id: str) -> dict[str, Any]:
+        """Reset the employment context for ``agent_id`` back to defaults."""
+
+        ctx = self.context_defaults()
+        self._state[agent_id] = ctx
+        return ctx
 
     # -- persistence helpers -------------------------------------------
 

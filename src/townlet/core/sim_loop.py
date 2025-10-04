@@ -336,7 +336,7 @@ class SimulationLoop:
             "telemetry_dropped": transport_status.get("dropped_messages", 0),
             "perturbations_pending": self.perturbations.pending_count(),
             "perturbations_active": self.perturbations.active_count(),
-            "employment_exit_queue": len(getattr(self.world, "_employment_exit_queue", [])),
+            "employment_exit_queue": self.world.employment.exit_queue_length(),
         }
         self.telemetry.record_health_metrics(health_payload)
         if logger.isEnabledFor(logging.INFO):

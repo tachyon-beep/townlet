@@ -581,7 +581,7 @@ def test_employment_console_commands_manage_queue() -> None:
         loop.telemetry, world, loop.perturbations, policy=loop.policy, config=config
     )
 
-    world._employment_enqueue_exit("alice", world.tick)
+    world.employment.enqueue_exit(world, "alice", world.tick)
     review = router.dispatch(ConsoleCommand(name="employment_exit", args=("review",), kwargs={}))
     assert review["pending_count"] == 1
 
@@ -591,12 +591,12 @@ def test_employment_console_commands_manage_queue() -> None:
     assert defer["deferred"] is True
     assert world.employment_queue_snapshot()["pending_count"] == 0
 
-    world._employment_enqueue_exit("alice", world.tick)
+    world.employment.enqueue_exit(world, "alice", world.tick)
     approve = router.dispatch(
         ConsoleCommand(name="employment_exit", args=("approve", "alice"), kwargs={})
     )
     assert approve["approved"] is True
-    assert "alice" in world._employment_manual_exits
+    assert "alice" in world.employment.manual_exit_agents()
 
     status = router.dispatch(ConsoleCommand(name="employment_status", args=(), kwargs={}))
     assert status["schema_version"] == loop.telemetry.schema()

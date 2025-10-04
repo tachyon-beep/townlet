@@ -55,7 +55,7 @@ def _queue_command(loop: SimulationLoop, payload: dict[str, object]) -> None:
 
 def test_dispatcher_processes_employment_review(employment_loop: SimulationLoop) -> None:
     loop = employment_loop
-    loop.world._employment_enqueue_exit("alice", loop.world.tick)
+    loop.world.employment.enqueue_exit(loop.world, "alice", loop.world.tick)
     _queue_command(
         loop,
         {
@@ -81,7 +81,7 @@ def test_dispatcher_idempotency_reuses_history(employment_loop: SimulationLoop) 
         "mode": "admin",
         "cmd_id": "repeat-1",
     }
-    loop.world._employment_enqueue_exit("alice", loop.world.tick)
+    loop.world.employment.enqueue_exit(loop.world, "alice", loop.world.tick)
     _queue_command(loop, payload)
     _queue_command(loop, payload)
     loop.step()
@@ -103,7 +103,7 @@ def test_dispatcher_cached_result_across_steps(employment_loop: SimulationLoop) 
         "mode": "admin",
         "cmd_id": "repeat-multi",
     }
-    loop.world._employment_enqueue_exit("alice", loop.world.tick)
+    loop.world.employment.enqueue_exit(loop.world, "alice", loop.world.tick)
     _queue_command(loop, payload)
     loop.step()
     first_results = loop.telemetry.latest_console_results()
@@ -122,7 +122,7 @@ def test_dispatcher_cached_result_across_steps(employment_loop: SimulationLoop) 
 
 def test_dispatcher_requires_admin_mode(employment_loop: SimulationLoop) -> None:
     loop = employment_loop
-    loop.world._employment_enqueue_exit("alice", loop.world.tick)
+    loop.world.employment.enqueue_exit(loop.world, "alice", loop.world.tick)
     _queue_command(
         loop,
         {

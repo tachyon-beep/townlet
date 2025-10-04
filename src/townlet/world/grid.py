@@ -299,13 +299,6 @@ class WorldState:
         self.store_stock = {}
         self._job_keys = list(self.config.jobs.keys())
         self.employment = create_employment_coordinator(self.config, self._emit_event)
-        # Backwards-compatible views for existing helpers (to be removed in later phases).
-        engine = self.employment.engine
-        self._employment_state = engine._state
-        self._employment_exit_queue = engine._exit_queue
-        self._employment_exit_queue_timestamps = engine._exit_timestamps
-        self._employment_manual_exits = engine._manual_exits
-        self._employment_exits_today = 0
         self.employment.reset_exits_today()
         self._rivalry_ledgers = {}
         self._relationship_ledgers = {}
@@ -795,12 +788,7 @@ class WorldState:
                 if obj is not None:
                     obj.occupied_by = None
         self.embedding_allocator.release(agent_id, tick)
-        self._employment_state.pop(agent_id, None)
-        self._employment_manual_exits.discard(agent_id)
-        self._employment_exit_queue_timestamps.pop(agent_id, None)
-        if agent_id in self._employment_exit_queue:
-            self._employment_exit_queue.remove(agent_id)
-        self._employment_remove_from_queue(agent_id)
+        self.employment.remove_agent(self, agent_id)
         self._relationship_ledgers.pop(agent_id, None)
         for ledger in self._relationship_ledgers.values():
             ledger.remove_tie(agent_id, reason="removed")
@@ -898,9 +886,7 @@ class WorldState:
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
         if snapshot.home_position is None:
             snapshot.home_position = snapshot.position
-        ctx = self._get_employment_context(snapshot.agent_id)
-        ctx.update(self._employment_context_defaults())
-        self._employment_state[snapshot.agent_id] = ctx
+        self.employment.reset_context(snapshot.agent_id)
         self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
 
     def _console_spawn_agent(self, envelope: ConsoleCommandEnvelope) -> ConsoleCommandResult:
@@ -1045,8 +1031,7 @@ class WorldState:
             return False
         self._release_queue_membership(agent_id)
         self.embedding_allocator.release(agent_id, self.tick)
-        self._employment_state.pop(agent_id, None)
-        self._employment_remove_from_queue(agent_id)
+        self.employment.remove_agent(self, agent_id)
         self._recent_meal_participants = {
             key: value
             for key, value in self._recent_meal_participants.items()
@@ -2044,58 +2029,16 @@ class WorldState:
     # Employment helpers
     # ------------------------------------------------------------------
     def _employment_context_defaults(self) -> dict[str, Any]:
-        window = max(1, self.config.employment.attendance_window)
-        return {
-            "state": "pre_shift",
-            "late_penalty_applied": False,
-            "absence_penalty_applied": False,
-            "late_event_emitted": False,
-            "absence_event_emitted": False,
-            "departure_event_emitted": False,
-            "late_help_event_emitted": False,
-            "took_shift_event_emitted": False,
-            "shift_started_tick": None,
-            "shift_end_tick": None,
-            "last_present_tick": None,
-            "ever_on_time": False,
-            "scheduled_ticks": 0,
-            "on_time_ticks": 0,
-            "late_ticks": 0,
-            "wages_paid": 0.0,
-            "attendance_samples": deque(maxlen=window),
-            "absence_events": deque(),
-            "shift_outcome_recorded": False,
-            "current_day": -1,
-            "late_counter_recorded": False,
-        }
+        return self.employment.context_defaults()
 
     def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        ctx = self._employment_state.get(agent_id)
-        if ctx is None or ctx.get("attendance_samples") is None:
-            ctx = self._employment_context_defaults()
-            self._employment_state[agent_id] = ctx
-        # Resize deque if window changed via config reload.
-        window = max(1, self.config.employment.attendance_window)
-        samples: deque[float] = ctx["attendance_samples"]
-        if samples.maxlen != window:
-            new_samples: deque[float] = deque(samples, maxlen=window)
-            ctx["attendance_samples"] = new_samples
-        return ctx
+        return self.employment.get_context(self, agent_id)
 
     def _employment_context_wages(self, agent_id: str) -> float:
-        ctx = self._employment_state.get(agent_id)
-        if not ctx:
-            return 0.0
-        return float(ctx.get("wages_paid", 0.0))
+        return self.employment.employment_context_wages(agent_id)
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
-        ctx = self._employment_state.get(agent_id)
-        if not ctx:
-            return 0.0
-        scheduled = max(1, int(ctx.get("scheduled_ticks", 0)))
-        on_time = float(ctx.get("on_time_ticks", 0))
-        value = on_time / scheduled
-        return max(0.0, min(1.0, value))
+        return self.employment.employment_context_punctuality(agent_id)
 
     def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
         if ctx["state"] != "pre_shift":
@@ -2351,12 +2294,6 @@ class WorldState:
                 coworkers.append(other.agent_id)
         return coworkers
 
-    def _employment_enqueue_exit(self, agent_id: str, tick: int) -> None:
-        self.employment.enqueue_exit(self, agent_id, tick)
-
-    def _employment_remove_from_queue(self, agent_id: str) -> None:
-        self.employment.remove_from_queue(self, agent_id)
-
     def employment_queue_snapshot(self) -> dict[str, Any]:
         return self.employment.queue_snapshot()
 
@@ -2367,17 +2304,16 @@ class WorldState:
         return self.employment.defer_exit(self, agent_id)
 
     def employment_exits_today(self) -> int:
-        return self._employment_exits_today
+        return self.employment.exits_today
 
     def set_employment_exits_today(self, value: int) -> None:
-        self._employment_exits_today = max(0, int(value))
-        self.employment.set_exits_today(self._employment_exits_today)
+        self.employment.set_exits_today(value)
 
     def reset_employment_exits_today(self) -> None:
-        self.set_employment_exits_today(0)
+        self.employment.reset_exits_today()
 
     def increment_employment_exits_today(self) -> None:
-        self.set_employment_exits_today(self._employment_exits_today + 1)
+        self.employment.increment_exits_today()
 
     def _update_basket_metrics(self) -> None:
         basket_cost = (
