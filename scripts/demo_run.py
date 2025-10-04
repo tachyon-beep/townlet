@@ -93,6 +93,11 @@ def parse_args() -> argparse.Namespace:
         "--personality-filter",
         help="Optional personality profile filter for agent cards (e.g., socialite)",
     )
+    parser.add_argument(
+        "--mute-personality-narration",
+        action="store_true",
+        help="Hide personality-driven narration entries in the CLI dashboard",
+    )
     args = parser.parse_args()
     config_path = args.config_override or args.config
     if config_path is None:
@@ -147,6 +152,7 @@ def main() -> None:
         timeline=timeline,
         palette_state=palette_state,
         personality_filter=args.personality_filter,
+        show_personality_narration=not args.mute_personality_narration,
     )
 
 

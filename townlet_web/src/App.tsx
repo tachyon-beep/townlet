@@ -55,6 +55,7 @@ export function App({ initialSnapshot = null }: AppProps) {
   const socialEvents = selectSocialEvents(snapshot);
   const personalities = useMemo(() => selectPersonalities(snapshot), [snapshot]);
   const personalityEnabled = Object.keys(personalities).length > 0;
+  const [showPersonalityNarration, setShowPersonalityNarration] = useState(true);
 
   const { play } = useAudioCue({ enabled: audioEnabled });
   const lastAlertTickRef = useRef<number | null>(null);
@@ -83,22 +84,34 @@ export function App({ initialSnapshot = null }: AppProps) {
         })),
     [narrations]
   );
+  const hasPersonalityNarration = useMemo(
+    () => narrationEntries.some((entry) => entry.category === "personality_event"),
+    [narrationEntries]
+  );
+
+  const visibleNarrations = useMemo(() => {
+    if (showPersonalityNarration) {
+      return narrationEntries;
+    }
+    return narrationEntries.filter((entry) => entry.category !== "personality_event");
+  }, [narrationEntries, showPersonalityNarration]);
 
   useEffect(() => {
     if (!audioEnabled) {
       return;
     }
-    const latestAlert = narrationEntries.find((entry) => entry.priority);
+    const latestAlert = visibleNarrations.find((entry) => entry.priority);
     if (latestAlert && (lastAlertTickRef.current ?? -1) < latestAlert.tick) {
       lastAlertTickRef.current = latestAlert.tick;
       play("alert");
     }
-  }, [audioEnabled, narrationEntries, play]);
+  }, [audioEnabled, visibleNarrations, play]);
 
   useEffect(() => {
     if (!personalityEnabled) {
       setProfileFilter("all");
       setTraitFilter((prev) => ({ ...prev, enabled: false }));
+      setShowPersonalityNarration(true);
     }
   }, [personalityEnabled]);
 
@@ -327,7 +340,12 @@ export function App({ initialSnapshot = null }: AppProps) {
             filterActive={personalityEnabled && filterApplied}
           />
         </section>
-        <NarrationFeed entries={narrationEntries} />
+        <NarrationFeed
+          entries={visibleNarrations}
+          personalityToggleAvailable={personalityEnabled && hasPersonalityNarration}
+          personalityNarrationEnabled={showPersonalityNarration}
+          onPersonalityNarrationChange={(checked) => setShowPersonalityNarration(checked)}
+        />
         <RelationshipOverlay overlays={relationships} />
         <SocialPanel events={socialEvents} />
         <LegendPanel />

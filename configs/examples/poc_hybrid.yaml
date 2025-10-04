@@ -105,6 +105,9 @@ telemetry:
     global_cooldown_ticks: 30
     category_cooldown_ticks:
       queue_conflict: 30
+      personality_event: 45
     dedupe_window_ticks: 20
     global_window_ticks: 600
     global_window_limit: 10
+  personality_narration:
+    enabled: true

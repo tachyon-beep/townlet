@@ -54,7 +54,14 @@ def test_render_snapshot_produces_panels() -> None:
     loop.step()
     snapshot = TelemetryClient().from_console(router)
 
-    panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00"))
+    panels = list(
+        render_snapshot(
+            snapshot,
+            tick=loop.tick,
+            refreshed="00:00:00",
+            show_personality_narration=True,
+        )
+    )
     assert panels
     telemetry_panel = next(panel for panel in panels if (panel.title or "") == "Telemetry")
     console = Console(record=True, width=120)
@@ -85,7 +92,15 @@ def test_render_snapshot_includes_palette_overlay_when_visible() -> None:
     snapshot = TelemetryClient().from_console(router)
 
     palette = PaletteState(visible=True, query="queue", mode_filter="viewer")
-    panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00", palette=palette))
+    panels = list(
+        render_snapshot(
+            snapshot,
+            tick=loop.tick,
+            refreshed="00:00:00",
+            palette=palette,
+            show_personality_narration=True,
+        )
+    )
 
     titles = [panel.title or "" for panel in panels]
     assert any(title == "Command Palette" for title in titles)
@@ -203,7 +218,14 @@ def test_narration_panel_shows_styled_categories() -> None:
 
     snapshot = TelemetryClient().from_console(router)
     assert snapshot.narrations, "Expected narrations to be populated"
-    panels = list(render_snapshot(snapshot, tick=loop.tick + 1, refreshed="00:00:00"))
+    panels = list(
+        render_snapshot(
+            snapshot,
+            tick=loop.tick + 1,
+            refreshed="00:00:00",
+            show_personality_narration=True,
+        )
+    )
     narration_panel = next(panel for panel in panels if (panel.title or "").startswith("Narrations"))
     console = Console(record=True, width=120)
     console.print(narration_panel)
@@ -258,7 +280,14 @@ def test_social_panel_renders_with_summary_and_events() -> None:
     )
 
     snapshot = TelemetryClient().from_console(router)
-    panels = list(render_snapshot(snapshot, tick=loop.tick, refreshed="00:00:00"))
+    panels = list(
+        render_snapshot(
+            snapshot,
+            tick=loop.tick,
+            refreshed="00:00:00",
+            show_personality_narration=True,
+        )
+    )
     social_panel = next(panel for panel in panels if (panel.title or "") == "Social")
 
     console = Console(record=True, width=120)
@@ -284,7 +313,14 @@ def test_social_panel_handles_missing_summary() -> None:
         social_events=tuple(),
     )
 
-    panels = list(render_snapshot(blank_snapshot, tick=loop.tick, refreshed="00:00:00"))
+    panels = list(
+        render_snapshot(
+            blank_snapshot,
+            tick=loop.tick,
+            refreshed="00:00:00",
+            show_personality_narration=True,
+        )
+    )
     social_panel = next(panel for panel in panels if (panel.title or "") == "Social")
 
     console = Console(record=True, width=120)

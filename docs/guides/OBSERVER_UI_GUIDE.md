@@ -22,17 +22,19 @@ The observer dashboard provides a console-based view of Townlet’s employment K
    - **Policy Inspector** — per-agent selected action, probability, value estimate, and top action distribution.
    - **Relationship Overlay** — top trust ties with recent deltas (trust/fam/rivalry).
    - **KPI Panel** — rolling KPIs (queue intensity, lateness, late help) with colour-coded thresholds.
-   - **Narrations** — recent narrated events with priority markers.
-   - **Agents** — paginated per-agent cards with needs sparklines, social heartbeat, rivalry trend, alerts (exit pending, cooldowns).
-   - **Legend** — usage hints and colour semantics.
-   - (Optional) **Local Map** — ASCII map derived from the hybrid observation tensor for the first agent.
+- **Narrations** — recent narrated events with priority markers.
+- **Agents** — paginated per-agent cards with needs sparklines, social heartbeat, rivalry trend, alerts (exit pending, cooldowns).
+- **Personality badges** — when `features.observations.personality_ui` is enabled, agent cards include colour-coded profile chips, trait summaries, and behaviour bias hints. Use `--personality-filter <profile>` to pre-filter the panel or palette commands (`filter:profile:<name>`, `filter:trait:ext>=0.5`) to focus on archetypes mid-demo.
+- **Legend** — usage hints and colour semantics.
+- (Optional) **Local Map** — ASCII map derived from the hybrid observation tensor for the first agent.
 
 Press `Ctrl+C` to exit. Use `--ticks N` to auto-stop after N ticks; `--focus-agent` selects the map focus agent; `--approve/--defer` can trigger employment actions at startup. New pagination controls include `--agent-page-size` (default 6), `--agent-rotate-interval` (ticks between auto-rotation, 0 disables), and `--disable-agent-autorotate` to keep the current page static while presenting.
 
 For scripted demos, prefer `scripts/demo_run.py --scenario demo_story_arc` (or another storyline) so config and timeline hashes stay aligned with the narrative assets. Example:
 
 ```bash
-python scripts/demo_run.py --scenario demo_story_arc --ticks 150 --narration-level summary
+python scripts/demo_run.py --scenario demo_story_arc --ticks 150 --narration-level summary \\
+  --personality-filter socialite --mute-personality-narration
 ```
 
 Telemetry is emitted to stdout by default. If you need a quiet sink while inspecting the observer UI interactively, run `scripts/observer_ui.py` with the same config and include `--history-window 0` to trim sparklines.
@@ -50,6 +52,10 @@ enabled (`allow_plaintext: false`) so telemetry stays encrypted in transit.
 - Approve or defer employment exits from the dashboard by issuing commands in a separate terminal (see `scripts/console_dry_run.py` for examples).
 - Future versions may add interactive controls; current MVP is read-only.
 - Audio cues remain out of scope for the Rich console; sound design will land with the web observer UI where accessibility affordances are richer.
+
+### Web Spectator Notes
+- The web spectator mirrors CLI features: personality badges/filters on agent cards, narration log with a **Show personality stories** toggle, and audio cues (if enabled).
+- Launch locally with `npm run dev --prefix townlet_web`; Storybook smoke tests (`npm run storybook:smoke --prefix townlet_web`) ensure components render with new data contracts.
 
 ## Anneal Panel Reference
 - **BC Accuracy / Threshold** — derived from the latest anneal run (telemetry version ≥1.2). The panel turns red if BC gate failed and yellow if drift flags trip.

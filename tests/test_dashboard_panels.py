@@ -25,6 +25,7 @@ from townlet_ui.telemetry import (
     RelationshipSummarySnapshot,
     RivalSummary,
     SocialEventEntry,
+    NarrationEntry,
     TelemetryHistory,
     TelemetryClient,
 )
@@ -714,3 +715,89 @@ def test_agent_cards_panel_filters_by_trait_threshold() -> None:
     rendered = console.export_text().lower()
     assert "alice" in rendered
     assert "bob" not in rendered
+
+
+def test_render_snapshot_filters_personality_narrations_when_muted() -> None:
+    narrations = [
+        NarrationEntry(
+            tick=5,
+            category="personality_event",
+            message="avery remained calm",
+            priority=False,
+            data={"agent": "avery"},
+        ),
+        NarrationEntry(
+            tick=6,
+            category="queue_conflict",
+            message="queue conflict occurred",
+            priority=False,
+            data={},
+        ),
+    ]
+    snapshot = SimpleNamespace(
+        schema_version="0.9.7",
+        schema_warning=None,
+        narrations=narrations,
+        transport=SimpleNamespace(
+            connected=True,
+            dropped_messages=0,
+            last_success_tick=0,
+            last_failure_tick=None,
+            queue_length=0,
+            last_flush_duration_ms=None,
+            last_error=None,
+        ),
+        health=None,
+        utilities={},
+        employment=SimpleNamespace(
+            pending=[],
+            pending_count=0,
+            exits_today=0,
+            daily_exit_cap=0,
+            queue_limit=0,
+            review_window=0,
+        ),
+        conflict=SimpleNamespace(
+            queue_cooldown_events=0,
+            queue_ghost_step_events=0,
+            queue_rotation_events=0,
+            rivalry_events=[],
+            queue_history=[],
+            rivalry_agents=0,
+        ),
+        economy_settings={},
+        perturbations=PerturbationSnapshot(
+            active={},
+            pending=(),
+            cooldowns_agents={},
+            cooldowns_spec={},
+        ),
+        agents=[],
+        relationship_summary=None,
+        history=None,
+        social_events=(),
+        anneal=None,
+        promotion=None,
+        kpis={},
+        policy_inspector=[],
+        relationship_overlay={},
+        relationships=None,
+        price_spikes=(),
+        stability=SimpleNamespace(alerts=[]),
+        relationship_updates=[],
+    )
+
+    panels = list(
+        render_snapshot(
+            snapshot,
+            tick=10,
+            refreshed="00:00:00",
+            show_personality_narration=False,
+        )
+    )
+    text_console = Console(record=True, width=120)
+    narration_panel = next(panel for panel in panels if (panel.title or "") == "Narrations")
+    text_console.print(narration_panel)
+    rendered = text_console.export_text()
+    assert "queue conflict occurred" in rendered
+    assert "avery remained calm" not in rendered

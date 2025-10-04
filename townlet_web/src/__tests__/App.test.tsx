@@ -55,18 +55,35 @@ describe("App personality filters", () => {
       schema_version: "1.0.0",
       tick: 42,
       agents: baseAgents,
-      personalities
+      personalities,
+      narrations: [
+        {
+          tick: 5,
+          category: "personality_event",
+          message: "avery lit up the plaza",
+          priority: false
+        },
+        {
+          tick: 6,
+          category: "queue_conflict",
+          message: "queue conflict at market",
+          priority: false
+        }
+      ]
     } as any;
 
     render(<App initialSnapshot={mockTelemetryState.snapshot as any} />);
 
-    expect(screen.getByText(/avery/i)).toBeInTheDocument();
-    expect(screen.getByText(/blair/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^avery$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^blair$/i })).toBeInTheDocument();
+    const personalityToggle = screen.getByLabelText(/show personality stories/i) as HTMLInputElement;
+    expect(personalityToggle.checked).toBe(true);
+    expect(screen.getByText(/avery lit up the plaza/i)).toBeInTheDocument();
 
     const profileSelect = screen.getByLabelText(/personality profile/i);
     fireEvent.change(profileSelect, { target: { value: "stoic" } });
-    expect(screen.queryByText(/avery/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/blair/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^avery$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^blair$/i })).toBeInTheDocument();
 
     fireEvent.change(profileSelect, { target: { value: "all" } });
     const traitCheckbox = screen.getByLabelText(/enable trait threshold/i);
@@ -75,8 +92,12 @@ describe("App personality filters", () => {
     const thresholdInput = screen.getByRole("spinbutton", { name: /threshold/i });
     fireEvent.change(thresholdInput, { target: { value: "0.7" } });
 
-    expect(screen.getByText(/avery/i)).toBeInTheDocument();
-    expect(screen.queryByText(/blair/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^avery$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^blair$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(personalityToggle);
+    expect(personalityToggle.checked).toBe(false);
+    expect(screen.queryByText(/avery lit up the plaza/i)).not.toBeInTheDocument();
   });
 
   it("shows fallback copy when personality data is missing", () => {
@@ -91,8 +112,9 @@ describe("App personality filters", () => {
     expect(
       screen.getByText(/personality ui disabled or telemetry missing/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/avery/i)).toBeInTheDocument();
-    expect(screen.getByText(/blair/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^avery$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^blair$/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/personality profile/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/show personality stories/i)).not.toBeInTheDocument();
   });
 });

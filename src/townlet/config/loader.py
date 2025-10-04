@@ -566,6 +566,14 @@ class NarrationThrottleConfig(BaseModel):
         return int(self.category_cooldown_ticks.get(category, self.global_cooldown_ticks))
 
 
+class PersonalityNarrationConfig(BaseModel):
+    enabled: bool = True
+    chat_extroversion_threshold: float = Field(0.5, ge=-1.0, le=1.0)
+    chat_priority_threshold: float = Field(0.75, ge=-1.0, le=1.0)
+    chat_quality_threshold: float = Field(0.3, ge=0.0, le=1.0)
+    conflict_tolerance_threshold: float = Field(0.95, ge=0.0, le=5.0)
+
+
 class RelationshipNarrationConfig(BaseModel):
     friendship_trust_threshold: float = Field(0.6, ge=-1.0, le=1.0)
     friendship_delta_threshold: float = Field(0.25, ge=0.0, le=2.0)
@@ -691,6 +699,7 @@ class TelemetryConfig(BaseModel):
     narration: NarrationThrottleConfig = NarrationThrottleConfig()
     transport: TelemetryTransportConfig = TelemetryTransportConfig()
     relationship_narration: RelationshipNarrationConfig = RelationshipNarrationConfig()
+    personality_narration: PersonalityNarrationConfig = PersonalityNarrationConfig()
     diff_enabled: bool = True
 
 

@@ -28,9 +28,19 @@
 - Note lacking automation around narration volume (manual check). Consider adding a log-length assertion once personality cues land.
 
 ## Next Steps
-1. Implement UI toggles and badge rendering (Phase 4.1), updating CLI and web pipelines.
-2. Extend narration processing and limiter configuration for trait-driven events (Phase 4.2).
-3. Update automated tests and documentation covering both surfaces.
+1. Phase 4.1 complete — badges/filters live in CLI + web.
+2. Phase 4.2 underway — narration cues, limiter tuning, and mute toggles implemented.
+3. Continue expanding automated coverage and capture post-change fixtures for regression tracking.
+
+## Phase 4.2 Snapshot
+- Added `telemetry.personality_narration` config (thresholds + enable toggle) plus a dedicated
+  cooldown for `personality_event` narrations.
+- Telemetry publisher now emits trait-aware cues (high extroversion chats, low conflict tolerance)
+  gated by config and dedupe/limiter rules.
+- CLI dashboard exposes personality narrations with themed styling and a runtime flag via
+  `--mute-personality-narration`.
+- Web spectator surfaces the same entries with badges and a “Show personality stories” toggle.
+- Test suites cover narration emission, limiter behaviour, CLI filtering, and the React toggle flow.
 
 ## Flagging Strategy
 - Observation tensor personality data is gated by `features.observations.personality_channels`.

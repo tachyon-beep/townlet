@@ -289,6 +289,7 @@ def run_demo_dashboard(
     timeline: DemoTimeline,
     palette_state: PaletteState | None,
     personality_filter: str | None = None,
+    show_personality_narration: bool = True,
 ) -> None:
     scheduler = DemoScheduler(timeline=timeline, palette_state=palette_state)
     run_dashboard(
@@ -298,4 +299,5 @@ def run_demo_dashboard(
         palette_state=palette_state,
         on_tick=scheduler.on_tick,
         personality_filter=personality_filter,
+        show_personality_narration=show_personality_narration,
     )

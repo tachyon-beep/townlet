@@ -2,6 +2,7 @@ from pathlib import Path
 
 from townlet.config import (
     NarrationThrottleConfig,
+    PersonalityNarrationConfig,
     RelationshipNarrationConfig,
     load_config,
 )
@@ -241,3 +242,79 @@ def test_social_alert_narrations_for_chat_and_avoidance() -> None:
         if n["category"] == "relationship_social_alert"
     ]
     assert any(priority_flags)
+
+
+def test_personality_narration_emits_for_extroversion_chat() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    personality_cfg = config.telemetry.personality_narration.model_copy(
+        update={
+            "enabled": True,
+            "chat_extroversion_threshold": 0.6,
+            "chat_priority_threshold": 0.75,
+            "chat_quality_threshold": 0.2,
+        }
+    )
+    config.telemetry = config.telemetry.model_copy(
+        update={"personality_narration": personality_cfg}
+    )
+    publisher = TelemetryPublisher(config)
+    publisher._latest_personality_snapshot = {
+        "avery": {
+            "profile": "socialite",
+            "traits": {"extroversion": 0.82, "forgiveness": 0.1, "ambition": 0.2},
+            "multipliers": {"behaviour": {"conflict_tolerance": 0.7}},
+        }
+    }
+    publisher._narration_limiter.begin_tick(40)
+    publisher._latest_narrations = []
+    social_events = [
+        {
+            "type": "chat_success",
+            "speaker": "avery",
+            "listener": "blair",
+            "quality": 0.65,
+        }
+    ]
+    publisher._emit_personality_event_narrations(social_events, tick=40)
+    narrations = publisher.latest_narrations()
+    assert any(entry["category"] == "personality_event" for entry in narrations)
+
+
+def test_personality_narration_respects_toggle_and_thresholds() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    personality_cfg = PersonalityNarrationConfig(
+        enabled=False,
+        chat_extroversion_threshold=0.9,
+        chat_priority_threshold=0.95,
+        chat_quality_threshold=0.9,
+        conflict_tolerance_threshold=0.5,
+    )
+    config.telemetry = config.telemetry.model_copy(
+        update={"personality_narration": personality_cfg}
+    )
+    publisher = TelemetryPublisher(config)
+    publisher._latest_personality_snapshot = {
+        "avery": {
+            "profile": "socialite",
+            "traits": {"extroversion": 0.99, "forgiveness": 0.1, "ambition": 0.2},
+            "multipliers": {"behaviour": {"conflict_tolerance": 0.4}},
+        }
+    }
+    publisher._narration_limiter.begin_tick(50)
+    publisher._latest_narrations = []
+    events = [
+        {
+            "type": "chat_success",
+            "speaker": "avery",
+            "listener": "blair",
+            "quality": 0.95,
+        },
+        {
+            "type": "rivalry_avoidance",
+            "agent": "avery",
+            "object": "market",
+            "reason": "crowd",
+        },
+    ]
+    publisher._emit_personality_event_narrations(events, tick=50)
+    assert not publisher.latest_narrations()

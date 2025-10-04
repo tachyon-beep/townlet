@@ -42,6 +42,7 @@ class TelemetryPublisher:
         self.config = config
         self.schema_version = "0.9.7"
         self._relationship_narration_cfg = self.config.telemetry.relationship_narration
+        self._personality_narration_cfg = self.config.telemetry.personality_narration
         self._console_buffer: list[object] = []
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
@@ -1677,8 +1678,17 @@ class TelemetryPublisher:
         events: Iterable[Mapping[str, object]],
         tick: int,
     ) -> None:
-        if not self._latest_personality_snapshot:
+        if (
+            not self._personality_narration_cfg.enabled
+            or not self._latest_personality_snapshot
+        ):
             return
+        chat_threshold = float(self._personality_narration_cfg.chat_extroversion_threshold)
+        chat_priority = float(self._personality_narration_cfg.chat_priority_threshold)
+        quality_threshold = float(self._personality_narration_cfg.chat_quality_threshold)
+        tolerance_threshold = float(
+            self._personality_narration_cfg.conflict_tolerance_threshold
+        )
         for event in events:
             etype = str(event.get("type", ""))
             if etype == "chat_success":
@@ -1694,9 +1704,11 @@ class TelemetryPublisher:
                     extroversion = float(traits.get("extroversion", 0.0))
                 except (TypeError, ValueError):
                     extroversion = 0.0
-                if extroversion < 0.5:
+                if extroversion < chat_threshold:
                     continue
                 quality = float(event.get("quality", 0.0) or 0.0)
+                if quality < quality_threshold:
+                    continue
                 message = (
                     f"{speaker}'s extroversion ({extroversion:+.2f}) sparked a high-energy chat"
                 )
@@ -1706,7 +1718,7 @@ class TelemetryPublisher:
                     message += f" (quality {quality:.2f})"
                 message += "."
                 dedupe_key = f"personality_chat:{speaker}:{listener}"
-                priority = extroversion >= 0.75
+                priority = extroversion >= chat_priority
                 if self._narration_limiter.allow(
                     "personality_event",
                     message=message,
@@ -1744,7 +1756,7 @@ class TelemetryPublisher:
                     tolerance = float(behaviour.get("conflict_tolerance", 1.0))
                 except (TypeError, ValueError):
                     tolerance = 1.0
-                if tolerance >= 1.0:
+                if tolerance >= tolerance_threshold:
                     continue
                 location = str(event.get("object") or "the area")
                 reason = str(event.get("reason") or "conflict avoidance")
@@ -1805,7 +1817,6 @@ class TelemetryPublisher:
         )
         self._emit_relationship_rivalry_narrations(tick)
         self._emit_social_alert_narrations(social_events_snapshot, tick)
-        self._emit_personality_event_narrations(social_events_snapshot, tick)
         self._emit_personality_event_narrations(social_events_snapshot, tick)
 
     def _emit_relationship_friendship_narrations(

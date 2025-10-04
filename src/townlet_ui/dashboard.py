@@ -61,6 +61,7 @@ NARRATION_CATEGORY_STYLES: dict[str, tuple[str, str]] = {
     "shower_complete": ("Shower Complete", "cyan"),
     "sleep_complete": ("Sleep Complete", "green"),
     "queue_conflict": ("Queue Conflict", "magenta"),
+    "personality_event": ("Personality", "magenta"),
 }
 
 NEED_SPARK_STYLES: Mapping[str, str] = {
@@ -604,6 +605,7 @@ def render_snapshot(
     focus_agent: str | None = None,
     personality_filter: str | None = None,
     personality_enabled: bool = False,
+    show_personality_narration: bool = True,
 ) -> Iterable[Panel]:
     """Yield rich Panels representing the current telemetry snapshot."""
     panels: list[Panel] = []
@@ -846,7 +848,12 @@ def render_snapshot(
     panels.append(_build_relationship_overlay_panel(snapshot))
     panels.append(_build_kpi_panel(snapshot))
 
-    narration_panel = _build_narration_panel(snapshot)
+    visible_narrations = list(snapshot.narrations)
+    if not show_personality_narration:
+        visible_narrations = [
+            entry for entry in visible_narrations if entry.category != "personality_event"
+        ]
+    narration_panel = _build_narration_panel(visible_narrations)
     panels.append(narration_panel)
 
     summary = snapshot.relationship_summary
@@ -1653,8 +1660,7 @@ def _format_top_entries(entries: Mapping[str, int]) -> str:
     return ", ".join(f"{owner}:{count}" for owner, count in sorted_entries[:3])
 
 
-def _build_narration_panel(snapshot: TelemetrySnapshot) -> Panel:
-    narrations = snapshot.narrations
+def _build_narration_panel(narrations: Sequence[NarrationEntry]) -> Panel:
     if narrations:
         table = Table(expand=True)
         table.add_column("Tick", justify="right")
@@ -2069,6 +2075,7 @@ def run_dashboard(
     agent_rotate_interval: int = 12,
     agent_autorotate: bool = True,
     personality_filter: str | None = None,
+    show_personality_narration: bool = True,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
     from townlet.console.handlers import create_console_router
@@ -2147,6 +2154,7 @@ def run_dashboard(
                         focus_agent=focus_agent,
                         personality_filter=personality_filter,
                         personality_enabled=personality_ui_enabled,
+                        show_personality_narration=show_personality_narration,
                     )
                 )
                 obs_batch = loop.observations.build_batch(loop.world, terminated={})

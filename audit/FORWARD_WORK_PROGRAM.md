@@ -130,11 +130,28 @@ Derived from `docs/external/Forward Work Program for Townlet Tech Demo.pdf`, thi
 - **Affected Components**: `src/townlet/demo/timeline.py`, `src/townlet/demo/runner.py`, `scripts/demo_run.py`, `scripts/demo_rehearsal.sh`, `configs/scenarios/`, `tests/test_demo_storyline.py`, `tests/test_demo_timeline.py`, `tests/data/demo_story_arc_narrations.json`, docs (`docs/ops/DEMO_SCENARIO_PLAYBOOK.md`, `docs/guides/OBSERVER_UI_GUIDE.md`).
 - **Validation**: `pytest tests/test_demo_storyline.py tests/test_demo_timeline.py tests/test_console_commands.py`; rehearsal dry run (`TICKS=10 scripts/demo_rehearsal.sh --no-palette`); manual dashboard verification per playbook cues.
 
-## FWP-09 Agent Personalities & Diversity
-- **Fix / Change**: Introduce personality profiles affecting needs, rewards, and action bias; expose traits in observations and UI.
-- **Risks**: Behaviour variance could destabilize training; balancing traits requires tuning; UI clutter if not well presented.
-- **Affected Components**: `src/townlet/agents/models.py`, `src/townlet/policy/behavior.py`, `src/townlet_ui/dashboard.py`, relevant tests (`tests/test_behavior_rivalry.py`, `tests/test_dashboard_panels.py`).
-- **Validation**: Behavioural regression tests, telemetry summaries highlighting trait-driven outcomes, updated documentation.
+## FWP-09 Agent Personalities & Diversity *(Completed – 2025-11-07)*
+- **Fix / Change**: Personality profiles now drive needs decay, reward scaling, action bias,
+  observation channels, UI badges/filters, and trait-aware narration (`personality_event`).
+- **Risks & Mitigations**:
+  - Training drift → behaviour/reward paths remain flag-gated; regression suite captures KPIs.
+  - Narration/telemetry noise → dedicated limiter cooldown + CLI/web toggles to mute personalities.
+  - UI clutter → palette filters + profile dropdown in web spectator keep presentations focused.
+- **Affected Components**: `src/townlet/agents/models.py`, `src/townlet/policy/behavior.py`,
+  `src/townlet/rewards/engine.py`, `src/townlet/telemetry/publisher.py`,
+  `src/townlet_ui/dashboard.py`, `townlet_web/src/App.tsx`, new design note
+  `docs/design/AGENT_PERSONALITIES.md`.
+- **Key Config Hashes**:
+  - `configs/examples/poc_hybrid.yaml` – `8f7c94db0183e2d88a8f689968dca51a5decf251`
+  - `configs/demo/poc_demo.yaml` – `58431c8e61d4efd34420859b2c22ca9d13557ef9`
+  - `configs/demo/poc_demo_tls.yaml` – `0214debcffcd0064708454f970dd0627aad928ce`
+- **Validation**: Full `pytest` suite (452 passed), vitest (`npm run test`), Storybook smoke
+  (`npm run storybook:smoke`), CLI rehearsal
+  `python scripts/demo_run.py --scenario demo_story_arc --ticks 60 --personality-filter stoic`
+  and mute variant. Documentation updated (playbook, observer guide, design note).
+- **Rollback**: Disable via `features.behavior.personality_profiles` / `reward_multipliers`,
+  drop observation/telemetry channels with `features.observations.personality_channels`,
+  hide UI presentation with `features.observations.personality_ui` or runtime toggles.
 
 ## FWP-10 Personal Agent Inventories & Items
 - **Fix / Change**: Add inventory system for agents (e.g., meals/tools), integrate with affordances and telemetry, and display inventory state.
