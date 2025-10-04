@@ -43,7 +43,17 @@ class ObservationBuilder:
         self.config = config
         self.variant: ObservationVariant = config.observation_variant
         self.hybrid_cfg = config.observations_config.hybrid
+        self.compact_cfg = config.observations_config.compact
         self._include_personality_channels = False
+        compact_channels: list[str] = ["self", "agents", "objects", "reservations"]
+        self._compact_object_channels: list[str] = []
+        for name in self.compact_cfg.object_channels:
+            sanitized = str(name).strip().lower()
+            if sanitized and sanitized not in self._compact_object_channels:
+                self._compact_object_channels.append(sanitized)
+                compact_channels.append(f"object:{sanitized}")
+        compact_channels.append("walkable")
+        self.compact_map_channels = tuple(compact_channels)
         if hasattr(config, "personality_channels_enabled"):
             try:
                 self._include_personality_channels = bool(
@@ -105,8 +115,9 @@ class ObservationBuilder:
         ]
         base_feature_names.extend(self._local_summary_names)
 
+        include_targets = self.hybrid_cfg.include_targets or self.compact_cfg.include_targets
         self._landmark_slices: dict[str, slice] = {}
-        if self.hybrid_cfg.include_targets:
+        if include_targets:
             for landmark in self._landmarks:
                 start = len(base_feature_names)
                 base_feature_names.extend(
@@ -444,6 +455,73 @@ class ObservationBuilder:
 
         return tensor, summary
 
+    def _build_compact_map(
+        self,
+        world: WorldState,
+        snapshot: AgentSnapshot,
+        radius: int,
+        cache: _LocalCache,
+    ) -> np.ndarray:
+        window = radius * 2 + 1
+        channels = self.compact_map_channels
+        tensor = np.zeros((len(channels), window, window), dtype=np.float32)
+        channel_index = {name: idx for idx, name in enumerate(channels)}
+        if 'self' in channel_index:
+            tensor[channel_index['self'], radius, radius] = 1.0
+
+        cx, cy = snapshot.position
+        for dy in range(-radius, radius + 1):
+            tile_y = dy + radius
+            for dx in range(-radius, radius + 1):
+                tile_x = dx + radius
+                position = (cx + dx, cy + dy)
+                agents_here = cache.agent_lookup.get(position, [])
+                objects_here = cache.object_lookup.get(position, [])
+                reserved = position in cache.reservation_tiles
+
+                other_agents = [agent for agent in agents_here if agent != snapshot.agent_id]
+                if 'agents' in channel_index and other_agents:
+                    value = float(len(other_agents))
+                    if self.compact_cfg.normalize_counts:
+                        value = min(1.0, value)
+                    tensor[channel_index['agents'], tile_y, tile_x] = value
+
+                if 'objects' in channel_index and objects_here:
+                    value = float(len(objects_here))
+                    if self.compact_cfg.normalize_counts:
+                        value = min(1.0, value)
+                    tensor[channel_index['objects'], tile_y, tile_x] = value
+
+                if reserved and 'reservations' in channel_index:
+                    tensor[channel_index['reservations'], tile_y, tile_x] = 1.0
+
+                if self._compact_object_channels:
+                    counts: dict[str, int] = {}
+                    for object_id in objects_here:
+                        obj = world.objects.get(object_id)
+                        obj_type = getattr(obj, 'object_type', None) if obj is not None else None
+                        obj_key = str(obj_type).strip().lower() if obj_type else ''
+                        if obj_key in self._compact_object_channels:
+                            counts[obj_key] = counts.get(obj_key, 0) + 1
+                    for obj_key, count in counts.items():
+                        channel_name = f"object:{obj_key}"
+                        idx = channel_index.get(channel_name)
+                        if idx is None:
+                            continue
+                        value = float(count)
+                        if self.compact_cfg.normalize_counts:
+                            value = min(1.0, value)
+                        tensor[idx, tile_y, tile_x] = value
+
+                walkable_idx = channel_index.get('walkable')
+                if walkable_idx is not None:
+                    walkable = 1.0
+                    if other_agents or objects_here or reserved or position == snapshot.position:
+                        walkable = 0.0
+                    tensor[walkable_idx, tile_y, tile_x] = walkable
+
+        return tensor
+
     def _encode_local_summary(
         self,
         features: np.ndarray,
@@ -688,25 +766,31 @@ class ObservationBuilder:
         slot: int,
         cache: _LocalCache,
     ) -> dict[str, np.ndarray | dict[str, object]]:
-        window = self.hybrid_cfg.local_window
+        window = self.compact_cfg.map_window
         radius = window // 2
         _, local_summary = self._map_with_summary((), snapshot, radius, cache)
+        map_tensor = self._build_compact_map(world, snapshot, radius, cache)
         (
             features,
             social_context,
-            _,
+            local_summary,
             personality_context,
         ) = self._initialise_feature_vector(
             world, snapshot, slot, cache, local_summary
         )
-        map_tensor = np.zeros((0, 0, 0), dtype=np.float32)
         metadata = self._build_metadata(
             slot=slot,
             map_shape=map_tensor.shape,
-            map_channels=(),
+            map_channels=self.compact_map_channels,
             social_context=social_context,
             local_summary=local_summary,
         )
+        metadata["compact"] = {
+            "map_window": window,
+            "object_channels": list(self._compact_object_channels),
+            "normalize_counts": bool(self.compact_cfg.normalize_counts),
+            "include_targets": bool(self.compact_cfg.include_targets),
+        }
         if personality_context is not None:
             metadata["personality"] = personality_context
 

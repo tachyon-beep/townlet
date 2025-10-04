@@ -281,6 +281,19 @@ class HybridObservationConfig(BaseModel):
         return self
 
 
+class CompactObservationConfig(BaseModel):
+    map_window: int = Field(7, ge=3)
+    include_targets: bool = False
+    object_channels: list[str] = Field(default_factory=list)
+    normalize_counts: bool = True
+
+    @model_validator(mode="after")
+    def _validate_window(self) -> CompactObservationConfig:
+        if self.map_window % 2 == 0:
+            raise ValueError("observations.compact.map_window must be odd to center on agent")
+        return self
+
+
 class SocialSnippetConfig(BaseModel):
     top_friends: int = Field(2, ge=0, le=8)
     top_rivals: int = Field(2, ge=0, le=8)
@@ -298,6 +311,7 @@ class SocialSnippetConfig(BaseModel):
 
 class ObservationsConfig(BaseModel):
     hybrid: HybridObservationConfig = HybridObservationConfig()
+    compact: CompactObservationConfig = CompactObservationConfig()
     social_snippet: SocialSnippetConfig = SocialSnippetConfig()
 
 

@@ -11,10 +11,12 @@ from townlet.observations.builder import ObservationBuilder
 from townlet.world.grid import AgentSnapshot
 
 
-def make_compact_world() -> SimulationLoop:
+def make_compact_world(*, object_channels: list[str] | None = None) -> SimulationLoop:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.features.systems.observations = "compact"
     config.observations_config.hybrid.include_targets = True
+    if object_channels is not None:
+        config.observations_config.compact.object_channels = list(object_channels)
     loop = SimulationLoop(config)
     world = loop.world
     world.agents.clear()
@@ -25,6 +27,7 @@ def make_compact_world() -> SimulationLoop:
         needs={"hunger": 0.2, "hygiene": 0.7, "energy": 0.9},
         wallet=4.0,
     )
+    world.rebuild_spatial_index()
     return loop
 
 
@@ -38,10 +41,27 @@ def test_compact_observation_features_only() -> None:
     features = obs["features"]
     metadata = obs["metadata"]
 
-    assert map_tensor.shape == (0, 0, 0)
-    assert metadata["map_shape"] == (0, 0, 0)
+    window = builder.compact_cfg.map_window
+    channels = builder.compact_map_channels
+    radius = window // 2
+    assert map_tensor.shape == (len(channels), window, window)
+    assert metadata["map_shape"] == (len(channels), window, window)
     assert metadata["variant"] == "compact"
-    assert metadata["map_channels"] == []
+    assert metadata["map_channels"] == list(channels)
+
+    channel_index = {name: idx for idx, name in enumerate(channels)}
+    assert map_tensor[channel_index["self"], radius, radius] == pytest.approx(1.0)
+    assert map_tensor[channel_index["agents"], radius, radius] == pytest.approx(0.0)
+    stove_x = radius + 2
+    stove_y = radius + 0
+    assert map_tensor[channel_index["objects"], stove_y, stove_x] == pytest.approx(1.0)
+    assert map_tensor[channel_index["walkable"], stove_y, stove_x] == pytest.approx(0.0)
+    assert metadata.get("compact") == {
+        "map_window": window,
+        "object_channels": [],
+        "normalize_counts": True,
+        "include_targets": False,
+    }
 
     feature_names = metadata["feature_names"]
     assert len(feature_names) == features.shape[0]
@@ -86,3 +106,24 @@ def test_compact_observation_features_only() -> None:
     assert np.isclose(
         features[nearest_agent_idx], summary["nearest_agent_distance_norm"]
     )
+
+
+def test_compact_object_channels() -> None:
+    loop = make_compact_world(object_channels=["stove"])
+    builder: ObservationBuilder = loop.observations
+    world = loop.world
+    obs = builder.build_batch(world, terminated={})["alice"]
+
+    map_tensor = obs["map"]
+    metadata = obs["metadata"]
+    channels = metadata["map_channels"]
+    assert "object:stove" in channels
+    assert metadata.get("compact", {}).get("object_channels") == ["stove"]
+
+    channel_index = {name: idx for idx, name in enumerate(channels)}
+    stove_idx = channel_index["object:stove"]
+    radius = builder.compact_cfg.map_window // 2
+    stove_x = radius + 2
+    stove_y = radius
+    assert map_tensor[stove_idx, stove_y, stove_x] == pytest.approx(1.0)
+

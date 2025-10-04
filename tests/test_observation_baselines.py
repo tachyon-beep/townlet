@@ -27,6 +27,7 @@ def _build_payload(variant: str) -> dict[str, object]:
         needs={"hunger": 0.4, "hygiene": 0.6, "energy": 0.8},
         wallet=5.0,
     )
+    world.rebuild_spatial_index()
 
     builder = loop.observations
     batch = builder.build_batch(world, terminated={})
@@ -63,9 +64,12 @@ def test_observation_baselines_match_recorded_snapshots() -> None:
         feature_names = payload["metadata"].get("feature_names", [])
         assert REQUIRED_FEATURES.issubset(set(feature_names))
 
+        channels, height, width = payload["map"].shape
+        assert (channels, height, width) == payload["metadata"]["map_shape"]
+        assert channels == len(payload["metadata"]["map_channels"])
         if variant == "compact":
-            assert payload["map"].size == 0
+            compact_meta = payload["metadata"].get("compact")
+            assert compact_meta is not None
+            assert compact_meta.get("map_window") == height == width == payload["metadata"]["compact"]["map_window"]
         else:
-            channels, height, width = payload["map"].shape
-            assert channels == len(payload["metadata"]["map_channels"])
             assert height == width == 11

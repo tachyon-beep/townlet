@@ -67,15 +67,27 @@ Reference sample: `docs/samples/observation_hybrid_sample.npz` (metadata JSON al
 | Component | Description | Source | Shape |
 | --- | --- | --- | --- |
 | Feature vector | Shared bundle (§1) plus local summary scalars (`neighbor_agent_ratio`, `neighbor_object_ratio`, `reserved_tile_ratio`, `nearest_agent_distance`) | Observation builder | ~84 (`+3` when personality channels enabled) |
-| Map tensor | Not used (placeholder zeros) | — | (0, 0, 0) |
+| Compact map | Egocentric window (`observations.compact.map_window`, default 7) with channels `self`, `agents`, `objects`, `reservations`, `walkable` and optional per-type channels (`object:<type>`) | Spatial index (`world.agents_at_tile`, `world.objects_by_position_view`) | (C, W, W) |
 
-Compact omits the spatial map entirely. Instead, the builder encodes a coarse
-summary of the local egocentric window: counts and ratios for neighboring
-agents/objects/reservations and the normalized distance to the nearest other
-agent. These values populate the new scalar features and appear in
-`metadata['local_summary']` for downstream inspection. Consumers should branch
-when `metadata['map_shape'] == (0, 0, 0)` and rely on the summary bundle rather
-than expecting spatial grids.
+Compact now emits a lightweight spatial grid backed by the spatial index. Each tile
+tracks agent presence (exclusive of `self`), object counts, reservation flags, and a
+binary walkable mask. Additional per-object-type channels can be enabled via
+`observations.compact.object_channels`, and counts are clamped to `[0, 1]` when
+`observations.compact.normalize_counts` is true. Metadata carries a `compact`
+block detailing the configured window, object channels, and normalisation behaviour:
+
+```json
+"compact": {
+  "map_window": 7,
+  "object_channels": ["stove"],
+  "normalize_counts": true,
+  "include_targets": false
+}
+```
+
+Compact variants still expose the local summary bundle in `metadata['local_summary']`,
+allowing consumers that only need coarse ratios to ignore the map while richer
+pipelines (policy, telemetry) can take advantage of the populated tensor.
 
 ## 5. Social Snippet Behaviour
 
@@ -109,7 +121,10 @@ metadata rather than hard-coded indices when interpreting social values.
 - `features.observations.personality_channels`: gate the personality trait channel
   and metadata bundle (defaults to `false` for backward compatibility)
 - `observations.hybrid.local_window`: odd integer ≥3 (hybrid/full map size)
-- `observations.hybrid.include_targets`: whether to append landmark bearings/distances
+- `observations.hybrid.include_targets` / `observations.compact.include_targets`: whether to append landmark bearings/distances
+- `observations.compact.map_window`: odd integer ≥3 (compact map size)
+- `observations.compact.object_channels`: optional list of object types for dedicated channels (lower-case)
+- `observations.compact.normalize_counts`: clamp agent/object counts to `[0,1]`
 - Social snippet controls: `observations.social_snippet.*`
 
 ## 7. Regenerating Golden Fixtures
@@ -143,11 +158,15 @@ from townlet.core.sim_loop import SimulationLoop
 
 config = load_config(Path("configs/examples/poc_hybrid.yaml"))
 config.features.systems.observations = "compact"
+config.observations_config.compact.object_channels = ["stove"]
 loop = SimulationLoop(config)
-obs = loop.observations.build_batch(loop.world, terminated={})
+world = loop.world
+world.rebuild_spatial_index()
+obs = loop.observations.build_batch(world, terminated={})
 sample = next(iter(obs.values()))
-print("compact features shape:", sample["features"].shape)
-print("first feature names:", sample["metadata"]["feature_names"][:10])
+print("compact map shape:", sample["metadata"]["map_shape"])
+print("compact channels:", sample["metadata"]["map_channels"])
+print("compact metadata:", sample["metadata"].get("compact"))
 PY
 ```
 

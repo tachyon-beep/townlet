@@ -179,6 +179,14 @@ Observation building and policy loops will degrade rapidly as agent counts incre
 
 
 ## WP-309: Complete Compact Observation Variant
+### Progress
+- Phase 0 (risk prep) complete: baseline compact test passes (pytest tests/test_observation_builder_compact.py) and dependency touchpoints reviewed.
+- Phase 1 (config scaffolding) complete: added CompactObservationConfig (map_window/object_channels/normalization) and wired builder accessors; regression test unchanged.
+- Phase 2 (builder implementation) complete: compact map generation implemented with configurable channels/normalisation; metadata now includes compact settings. Pending test updates reflect new tensor shape.
+- Phase 3 (runtime alignment) complete: verified compact map flows through ObservationBuilder metadata and added sanitised channel list for downstream policy consumers.
+- Phase 4 (validation) complete: compact tests updated, baselines regenerated, perf spot-check (~3.65ms per 50-agent build), and full pytest run green (493 passed, 1 skipped).
+- Phase 5 (docs/wrap-up) complete: observation tensor spec updated, compact baseline regenerated, acceptance criteria ticked.
+
 
 **Category**: Enhancement
 **Priority**: HIGH
@@ -211,9 +219,9 @@ Compact-mode experiments and documentation remain blocked, reducing flexibility 
 - None, though coordinate with WP-305 for data sources.
 
 ### Acceptance Criteria
-- [ ] Compact builder returns populated tensors matching design spec.
-- [ ] Policy runners accept compact observations without requiring hybrid/full.
-- [ ] Documentation updated for compact feature availability.
+- [x] Compact builder returns populated tensors matching design spec.
+- [x] Policy runners accept compact observations without requiring hybrid/full.
+- [x] Documentation updated for compact feature availability.
 
 ### Related Issues
 - Eliminates enhancement risk R-005.
