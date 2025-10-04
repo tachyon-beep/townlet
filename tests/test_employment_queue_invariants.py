@@ -1,0 +1,104 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
+from townlet.core.sim_loop import SimulationLoop
+from townlet.world.grid import AgentSnapshot
+
+
+def _make_employment_loop(enable_console: bool = False) -> SimulationLoop:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.employment.enforce_job_loop = True
+    if enable_console:
+        console_auth = ConsoleAuthConfig(
+            enabled=True,
+            require_auth_for_viewer=False,
+            tokens=[
+                ConsoleAuthTokenConfig(token="viewer-token", role="viewer", label="viewer"),
+                ConsoleAuthTokenConfig(token="admin-token", role="admin", label="admin"),
+            ],
+        )
+        config = config.model_copy(update={"console_auth": console_auth})
+    loop = SimulationLoop(config)
+    loop.world.agents.clear()
+    loop.world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs={"hunger": 0.4, "hygiene": 0.5, "energy": 0.6},
+        wallet=2.0,
+    )
+    loop.world._assign_jobs_to_agents()  # type: ignore[attr-defined]
+    return loop
+
+
+def test_employment_queue_snapshot_tracks_pending_agent() -> None:
+    loop = _make_employment_loop()
+    world = loop.world
+    world._employment_enqueue_exit("alice", loop.tick)
+
+    snapshot = world.employment_queue_snapshot()
+    assert snapshot["pending"] == ["alice"]
+    assert snapshot["pending_count"] == 1
+
+    loop.telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=world.drain_events(),
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown=None,
+        stability_inputs=None,
+        perturbations=None,
+        policy_identity=None,
+        possessed_agents=None,
+        social_events=None,
+    )
+    metrics = loop.telemetry.latest_employment_metrics()
+    assert metrics["pending"] == ["alice"]
+    assert metrics["pending_count"] == 1
+
+    loop.telemetry.close()
+
+
+def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
+    loop = _make_employment_loop()
+    world = loop.world
+    world._employment_enqueue_exit("alice", loop.tick)
+
+    assert world.employment_defer_exit("alice") is True
+
+    events = world.drain_events()
+    loop.telemetry.publish_tick(
+        tick=loop.tick,
+        world=world,
+        observations={},
+        rewards={},
+        events=events,
+        policy_snapshot={},
+        kpi_history=False,
+        reward_breakdown=None,
+        stability_inputs=None,
+        perturbations=None,
+        policy_identity=None,
+        possessed_agents=None,
+        social_events=None,
+    )
+
+    metrics = loop.telemetry.latest_employment_metrics()
+    assert metrics["pending_count"] == 0
+    assert any(event.get("event") == "employment_exit_deferred" for event in events)
+
+    loop.telemetry.close()
+
+
+def test_manual_exit_request_tracked_in_state() -> None:
+    loop = _make_employment_loop()
+    world = loop.world
+    assert world.employment_request_manual_exit("alice", tick=loop.tick) is True
+    state = world.employment.export_state()
+    assert "alice" in state["manual_exits"]
+
+    loop.telemetry.close()

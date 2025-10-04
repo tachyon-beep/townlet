@@ -1,0 +1,20 @@
+[
+  {
+    "cmd_id": "baseline-review",
+    "issuer": "admin",
+    "latency_ms": null,
+    "name": "employment_exit",
+    "result": {
+      "daily_exit_cap": 2,
+      "exits_today": 0,
+      "pending": [
+        "alice"
+      ],
+      "pending_count": 1,
+      "queue_limit": 8,
+      "review_window": 1440
+    },
+    "status": "ok",
+    "tick": 1
+  }
+]

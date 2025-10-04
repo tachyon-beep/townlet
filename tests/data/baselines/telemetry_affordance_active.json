@@ -1,0 +1,289 @@
+{
+  "affordance_manifest": {
+    "affordance_count": 4,
+    "checksum": "227b9902504bd06b6d2b2abe6409a1c34f41fcc632c4d160ac8190e7311452cb",
+    "object_count": 3,
+    "path": "configs/affordances/core.yaml"
+  },
+  "affordance_runtime": {
+    "active_reservations": {
+      "bed_1": "alice"
+    },
+    "event_counts": {
+      "fail": 0,
+      "finish": 0,
+      "precondition_fail": 0,
+      "start": 1
+    },
+    "running": {
+      "bed_1": {
+        "affordance_id": "rest_sleep",
+        "agent_id": "alice",
+        "duration_remaining": 59,
+        "effects": {
+          "energy": 0.8
+        },
+        "object_id": "bed_1"
+      }
+    },
+    "running_count": 1,
+    "tick": 1
+  },
+  "conflict_snapshot": {
+    "queue_history": [
+      {
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "tick": 1,
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        }
+      }
+    ],
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "rivalry": {},
+    "rivalry_events": []
+  },
+  "console_results": [],
+  "economy_settings": {
+    "cook_energy_cost": 0.05,
+    "cook_hygiene_cost": 0.02,
+    "ingredients_cost": 0.15,
+    "meal_cost": 0.4,
+    "stove_stock_replenish": 2.0,
+    "wage_income": 0.02
+  },
+  "economy_snapshot": {
+    "bed_1": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 0
+      },
+      "type": "bed"
+    },
+    "fridge_1": {
+      "stock": {
+        "meals": 5
+      },
+      "type": "fridge"
+    },
+    "shower_1": {
+      "stock": {
+        "power_on": 1,
+        "water_on": 1
+      },
+      "type": "shower"
+    }
+  },
+  "embedding_metrics": {
+    "allocations_total": 1.0,
+    "forced_reuse_count": 0.0,
+    "forced_reuse_rate": 0.0,
+    "reuse_warning": 0.0
+  },
+  "employment_metrics": {
+    "daily_exit_cap": 2,
+    "exits_today": 0,
+    "pending": [],
+    "pending_count": 0,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "events": [
+    {
+      "affordance_id": "rest_sleep",
+      "agent_id": "alice",
+      "duration": 60,
+      "event": "affordance_start",
+      "object_id": "bed_1",
+      "tick": 0
+    }
+  ],
+  "health": {
+    "employment_exit_queue": 0,
+    "perturbations_active": 0,
+    "perturbations_pending": 0,
+    "telemetry_dropped": 0,
+    "telemetry_queue": 1,
+    "tick": 1,
+    "tick_duration_ms": 3.2457419438287616
+  },
+  "job_snapshot": {
+    "alice": {
+      "absent_shifts_7d": 0,
+      "attendance_ratio": 0.0,
+      "basket_cost": 0.62,
+      "exit_pending": false,
+      "job_id": "grocer",
+      "late_ticks_today": 0,
+      "lateness_counter": 0,
+      "meals_consumed": 0,
+      "meals_cooked": 0,
+      "needs": {
+        "energy": 0.092,
+        "hunger": 0.39,
+        "hygiene": 0.495
+      },
+      "on_shift": false,
+      "shift_state": "idle",
+      "wages_earned": 0,
+      "wages_withheld": 0.0,
+      "wallet": 5.0
+    }
+  },
+  "kpi_history": {
+    "employment_lateness": [
+      0.0
+    ],
+    "late_help_events": [
+      0.0
+    ],
+    "queue_conflict_intensity": [
+      0.0
+    ],
+    "queue_ghost_step_events": [
+      0
+    ],
+    "queue_rotation_events": [
+      0
+    ]
+  },
+  "narration_state": {
+    "last_category_tick": {},
+    "last_global_tick": -10000,
+    "recent_entries": {},
+    "window_emissions": []
+  },
+  "narrations": [],
+  "perturbations": {
+    "active": {},
+    "cooldowns": {
+      "agents": {},
+      "spec": {}
+    },
+    "pending": []
+  },
+  "policy_identity": {
+    "anneal_ratio": null,
+    "config_id": "v1.3.0",
+    "observation_variant": "hybrid",
+    "policy_hash": null
+  },
+  "policy_snapshot": {
+    "alice": {
+      "log_prob": 0.0,
+      "selected_action": "0",
+      "tick": 1,
+      "top_actions": [
+        {
+          "action": "0",
+          "probability": 1.0
+        }
+      ],
+      "value_pred": 0.04186
+    }
+  },
+  "possessed_agents": [],
+  "price_spikes": {},
+  "promotion_state": {
+    "candidate": null,
+    "candidate_ready": false,
+    "candidate_ready_tick": null,
+    "current_release": {
+      "config_id": "v1.3.0"
+    },
+    "history": [],
+    "initial_release": {
+      "config_id": "v1.3.0"
+    },
+    "last_evaluated_tick": null,
+    "last_result": null,
+    "pass_streak": 0,
+    "required_passes": 2,
+    "state": "monitoring"
+  },
+  "queue_history": [
+    {
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "tick": 1,
+      "totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      }
+    }
+  ],
+  "queue_metrics": {
+    "cooldown_events": 0,
+    "ghost_step_events": 0,
+    "rotation_events": 0
+  },
+  "relationship_metrics": {
+    "history": [],
+    "owners": {},
+    "reasons": {},
+    "total": 0,
+    "window_end": 600,
+    "window_start": 0
+  },
+  "relationship_snapshot": {},
+  "relationship_summary": {
+    "churn": {
+      "history": [],
+      "owners": {},
+      "reasons": {},
+      "total": 0,
+      "window_end": 600,
+      "window_start": 0
+    }
+  },
+  "relationship_updates": [],
+  "reward_breakdown": {
+    "alice": {
+      "clip_adjustment": 0.9826862000000001,
+      "needs_penalty": -1.1846862,
+      "punctuality": 0.0,
+      "social": 0.0,
+      "social_avoidance": 0.0,
+      "social_bonus": 0.0,
+      "social_penalty": 0.0,
+      "survival": 0.002,
+      "terminal_penalty": 0.0,
+      "total": -0.2,
+      "wage": 0.0
+    }
+  },
+  "rivalry_events": [],
+  "social_events": [],
+  "transport_buffer_pending": 1,
+  "transport_status": {
+    "allow_plaintext": false,
+    "connected": false,
+    "dropped_messages": 0,
+    "last_error": null,
+    "last_failure_tick": null,
+    "last_flush_duration_ms": null,
+    "last_success_tick": null,
+    "queue_length": 1,
+    "tls_enabled": false,
+    "verify_hostname": true,
+    "worker_alive": true
+  },
+  "utilities": {
+    "power": true,
+    "water": true
+  }
+}

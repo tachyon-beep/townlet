@@ -95,6 +95,31 @@ def test_dispatcher_idempotency_reuses_history(employment_loop: SimulationLoop) 
     assert loop.world.employment_queue_snapshot()["pending_count"] == 0
 
 
+def test_dispatcher_cached_result_across_steps(employment_loop: SimulationLoop) -> None:
+    loop = employment_loop
+    payload = {
+        "name": "employment_exit",
+        "args": ["defer", "alice"],
+        "mode": "admin",
+        "cmd_id": "repeat-multi",
+    }
+    loop.world._employment_enqueue_exit("alice", loop.world.tick)
+    _queue_command(loop, payload)
+    loop.step()
+    first_results = loop.telemetry.latest_console_results()
+    assert first_results, "expected results after first processing"
+    assert first_results[-1]["status"] == "ok"
+    assert loop.world.employment_queue_snapshot()["pending_count"] == 0
+
+    _queue_command(loop, payload)
+    loop.step()
+    second_results = loop.telemetry.latest_console_results()
+    assert second_results, "expected cached result on subsequent step"
+    assert second_results[-1]["status"] == "ok"
+    assert second_results[-1].get("result", {}).get("deferred") is True
+    assert loop.world.employment_queue_snapshot()["pending_count"] == 0
+
+
 def test_dispatcher_requires_admin_mode(employment_loop: SimulationLoop) -> None:
     loop = employment_loop
     loop.world._employment_enqueue_exit("alice", loop.world.tick)
@@ -206,6 +231,28 @@ def test_teleport_rejects_blocked_tile(employment_loop: SimulationLoop) -> None:
     result = loop.telemetry.latest_console_results()[-1]
     assert result["status"] == "error"
     assert result["error"]["code"] == "invalid_args"
+
+
+def test_dispatcher_surfaces_handler_errors(employment_loop: SimulationLoop) -> None:
+    loop = employment_loop
+
+    def failing_handler(command: ConsoleCommand) -> dict[str, object]:
+        raise RuntimeError("boom")
+
+    loop.world.register_console_handler("fail_case", failing_handler, mode="admin")
+    _queue_command(
+        loop,
+        {
+            "name": "fail_case",
+            "mode": "admin",
+            "cmd_id": "fail-case",
+        },
+    )
+    loop.step()
+    result = loop.telemetry.latest_console_results()[-1]
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "internal"
+    assert "boom" in result["error"].get("details", {}).get("exception", "")
 
 
 def test_setneed_updates_needs(employment_loop: SimulationLoop) -> None:

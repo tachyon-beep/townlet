@@ -54,6 +54,15 @@ warn_return_any = true
 warn_unused_configs = true
 packages = ["townlet"]
 
+[[tool.mypy.overrides]]
+module = [
+  "townlet.world.console_service",
+  "townlet.world.affordance_runtime",
+  "townlet.world.employment_service",
+  "townlet.world.runtime",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 pythonpath = ["src"]

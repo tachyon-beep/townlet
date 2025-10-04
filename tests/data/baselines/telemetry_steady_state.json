@@ -1,0 +1,218 @@
+{
+  "affordance_manifest": {
+    "affordance_count": 4,
+    "checksum": "227b9902504bd06b6d2b2abe6409a1c34f41fcc632c4d160ac8190e7311452cb",
+    "object_count": 3,
+    "path": "configs/affordances/core.yaml"
+  },
+  "affordance_runtime": {
+    "active_reservations": {},
+    "event_counts": {
+      "fail": 0,
+      "finish": 0,
+      "precondition_fail": 0,
+      "start": 0
+    },
+    "running": {},
+    "running_count": 0,
+    "tick": 1
+  },
+  "conflict_snapshot": {
+    "queue_history": [
+      {
+        "delta": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        },
+        "tick": 1,
+        "totals": {
+          "cooldown_events": 0,
+          "ghost_step_events": 0,
+          "rotation_events": 0
+        }
+      }
+    ],
+    "queues": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "rivalry": {},
+    "rivalry_events": []
+  },
+  "console_results": [],
+  "economy_settings": {
+    "cook_energy_cost": 0.05,
+    "cook_hygiene_cost": 0.02,
+    "ingredients_cost": 0.15,
+    "meal_cost": 0.4,
+    "stove_stock_replenish": 2.0,
+    "wage_income": 0.02
+  },
+  "economy_snapshot": {
+    "bed_1": {
+      "stock": {
+        "sleep_capacity": 1,
+        "sleep_slots": 1
+      },
+      "type": "bed"
+    },
+    "fridge_1": {
+      "stock": {
+        "meals": 5
+      },
+      "type": "fridge"
+    },
+    "shower_1": {
+      "stock": {
+        "power_on": 1,
+        "water_on": 1
+      },
+      "type": "shower"
+    }
+  },
+  "embedding_metrics": {
+    "allocations_total": 0.0,
+    "forced_reuse_count": 0.0,
+    "forced_reuse_rate": 0.0,
+    "reuse_warning": 0.0
+  },
+  "employment_metrics": {
+    "daily_exit_cap": 2,
+    "exits_today": 0,
+    "pending": [],
+    "pending_count": 0,
+    "queue_limit": 8,
+    "review_window": 1440
+  },
+  "events": [],
+  "health": {
+    "employment_exit_queue": 0,
+    "perturbations_active": 0,
+    "perturbations_pending": 0,
+    "telemetry_dropped": 0,
+    "telemetry_queue": 1,
+    "tick": 1,
+    "tick_duration_ms": 0.2462109550833702
+  },
+  "job_snapshot": {},
+  "kpi_history": {
+    "employment_lateness": [
+      0.0
+    ],
+    "late_help_events": [
+      0.0
+    ],
+    "queue_conflict_intensity": [
+      0.0
+    ],
+    "queue_ghost_step_events": [
+      0
+    ],
+    "queue_rotation_events": [
+      0
+    ]
+  },
+  "narration_state": {
+    "last_category_tick": {},
+    "last_global_tick": -10000,
+    "recent_entries": {},
+    "window_emissions": []
+  },
+  "narrations": [],
+  "perturbations": {
+    "active": {},
+    "cooldowns": {
+      "agents": {},
+      "spec": {}
+    },
+    "pending": []
+  },
+  "policy_identity": {
+    "anneal_ratio": null,
+    "config_id": "v1.3.0",
+    "observation_variant": "hybrid",
+    "policy_hash": null
+  },
+  "possessed_agents": [],
+  "price_spikes": {},
+  "promotion_state": {
+    "candidate": null,
+    "candidate_ready": false,
+    "candidate_ready_tick": null,
+    "current_release": {
+      "config_id": "v1.3.0"
+    },
+    "history": [],
+    "initial_release": {
+      "config_id": "v1.3.0"
+    },
+    "last_evaluated_tick": null,
+    "last_result": null,
+    "pass_streak": 0,
+    "required_passes": 2,
+    "state": "monitoring"
+  },
+  "queue_history": [
+    {
+      "delta": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "tick": 1,
+      "totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      }
+    }
+  ],
+  "queue_metrics": {
+    "cooldown_events": 0,
+    "ghost_step_events": 0,
+    "rotation_events": 0
+  },
+  "relationship_metrics": {
+    "history": [],
+    "owners": {},
+    "reasons": {},
+    "total": 0,
+    "window_end": 600,
+    "window_start": 0
+  },
+  "relationship_snapshot": {},
+  "relationship_summary": {
+    "churn": {
+      "history": [],
+      "owners": {},
+      "reasons": {},
+      "total": 0,
+      "window_end": 600,
+      "window_start": 0
+    }
+  },
+  "relationship_updates": [],
+  "reward_breakdown": {},
+  "rivalry_events": [],
+  "social_events": [],
+  "transport_buffer_pending": 1,
+  "transport_status": {
+    "allow_plaintext": false,
+    "connected": false,
+    "dropped_messages": 0,
+    "last_error": null,
+    "last_failure_tick": null,
+    "last_flush_duration_ms": null,
+    "last_success_tick": null,
+    "queue_length": 1,
+    "tls_enabled": false,
+    "verify_hostname": true,
+    "worker_alive": true
+  },
+  "utilities": {
+    "power": true,
+    "water": true
+  }
+}
