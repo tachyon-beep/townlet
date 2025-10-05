@@ -65,7 +65,7 @@ Unauthenticated clients can execute admin console commands, undermining safety c
 The telemetry flush thread runs without exception guards or liveness checks; any runtime error silently kills telemetry streaming.
 
 ### Current State
-`TelemetryPublisher._flush_loop` lacks try/except or watchdog notification (`src/townlet/telemetry/publisher.py:651-666`). Failures leave the system unaware while telemetry stops.
+`TelemetryPublisher` now captures flush-loop exceptions, records `last_worker_error`, and attempts bounded auto-restarts (default 3) before halting. Transport status exposes `worker_alive`, restart counts, and the last failure message, and the stop path clears pending restarts.
 
 ### Desired State
 Flush worker failures should be caught, surfaced via state, and optionally retried/restarted so operators can react.
@@ -79,8 +79,9 @@ Telemetry and console command delivery can halt silently, eroding observability 
 - Add unit tests simulating flush exceptions.
 
 ### Affected Components
-- src/townlet/telemetry/publisher.py:620-699
+- src/townlet/telemetry/publisher.py
 - tests/test_telemetry_stream_smoke.py
+- tests/test_telemetry_worker_health.py
 
 ### Dependencies
 - None, though complements WP-304 for broader health coverage.
@@ -90,49 +91,15 @@ Telemetry and console command delivery can halt silently, eroding observability 
 - [x] Optional auto-restart or explicit shutdown path implemented.
 - [x] Tests assert health flag toggling on simulated failure.
 
+### Progress
+- Phase 0 (risk prep) complete: baseline smoke tests (`pytest tests/test_telemetry_stream_smoke.py`) confirmed existing worker died silently on errors.
+- Phase 1 (design) complete: defined restart strategy (status flags, restart limit, pending restart gate).
+- Phase 2 (implementation) complete: added failure handling with restart attempts, `last_worker_error`, and shutdown-aware stop logic.
+- Phase 3 (validation) complete: restart/limit tests added (`test_telemetry_stream_smoke.py`, `test_telemetry_worker_health.py`); full pytest run green (495 passed / 1 skipped).
+- Phase 4 (docs & wrap-up) complete: work package updated; transport status now documents restart metadata.
+
 ### Related Issues
 - Feeds into risk R-003 in the risk register.
-
-
-## WP-302: Require Secure Telemetry Transport Defaults
-
-**Category**: Security
-**Priority**: HIGH
-**Effort**: M (1-3 days)
-**Risk Level**: High
-
-### Description
-Telephony transport defaults encourage plaintext TCP because TLS is disabled and operators must set `allow_plaintext=true` to connect.
-
-### Current State
-`TelemetryTransportConfig` now auto-enables TLS for TCP transports when no override is provided. Plaintext requires `enable_tls: false`, `allow_plaintext: true`, `dev_allow_plaintext: true`, and a localhost endpoint; remote plaintext overrides are rejected at load time.
-
-### Desired State
-TLS should be the default for TCP transport with clear certificate configuration, and plaintext should be a temporary dev-only override with feature flagging.
-
-### Impact if Not Addressed
-Telemetry data and console responses traverse networks unencrypted, exposing sensitive behavioural metrics and enabling manipulation.
-
-### Proposed Solution
-- Default TCP transport to `enable_tls=True` with hostname verification.
-- Provide configuration validation errors when plaintext is requested outside explicitly tagged dev configs.
-- Extend docs with certificate provisioning steps and add regression tests for TLS handshake paths.
-
-### Affected Components
-- src/townlet/config/loader.py:507-560
-- src/townlet/telemetry/transport.py:201-263
-- docs/ops/CONSOLE_ACCESS.md
-
-### Dependencies
-- None
-
-### Acceptance Criteria
-- [x] TLS-enabled TCP transport works out of the box with sample certs.
-- [x] CI covers TLS and plaintext (dev) scenarios.
-- [x] Documentation warns about plaintext and explains cert management.
-
-### Related Issues
-- Works with WP-301 to lock down remote command access.
 
 
 ## WP-305: Introduce Spatial Indexing for Local Views
@@ -179,14 +146,6 @@ Observation building and policy loops will degrade rapidly as agent counts incre
 
 
 ## WP-309: Complete Compact Observation Variant
-### Progress
-- Phase 0 (risk prep) complete: baseline compact test passes (pytest tests/test_observation_builder_compact.py) and dependency touchpoints reviewed.
-- Phase 1 (config scaffolding) complete: added CompactObservationConfig (map_window/object_channels/normalization) and wired builder accessors; regression test unchanged.
-- Phase 2 (builder implementation) complete: compact map generation implemented with configurable channels/normalisation; metadata now includes compact settings. Pending test updates reflect new tensor shape.
-- Phase 3 (runtime alignment) complete: verified compact map flows through ObservationBuilder metadata and added sanitised channel list for downstream policy consumers.
-- Phase 4 (validation) complete: compact tests updated, baselines regenerated, perf spot-check (~3.65ms per 50-agent build), and full pytest run green (493 passed, 1 skipped).
-- Phase 5 (docs/wrap-up) complete: observation tensor spec updated, compact baseline regenerated, acceptance criteria ticked.
-
 
 **Category**: Enhancement
 **Priority**: HIGH
@@ -194,10 +153,10 @@ Observation building and policy loops will degrade rapidly as agent counts incre
 **Risk Level**: Medium
 
 ### Description
-The compact observation variant returns zero tensors, preventing configs marked `observations: compact` from functioning.
+The compact observation variant returned zero tensors, preventing configs marked `observations: compact` from functioning.
 
 ### Current State
-`ObservationBuilder._build_compact` returns zero arrays with placeholder metadata (`src/townlet/observations/builder.py:450-468`).
+Compact observations now emit a populated map tensor (configurable window/channels) backed by the spatial index, with metadata documenting channel layout and compact settings. Policy/runtime consumers accept the schema, tests cover occupancy semantics, and documentation describes the contract.
 
 ### Desired State
 Compact observations should include a reduced feature vector and minimal spatial map consistent with network expectations.
@@ -211,17 +170,26 @@ Compact-mode experiments and documentation remain blocked, reducing flexibility 
 - Extend tests in `tests/test_observation_builder_compact.py` to assert contents.
 
 ### Affected Components
-- src/townlet/observations/builder.py:420-520
+- src/townlet/observations/builder.py
 - tests/test_observation_builder_compact.py
-- docs/design/OBSERVATIONS.md (if added)
+- tests/test_observation_baselines.py
+- docs/design/OBSERVATION_TENSOR_SPEC.md
 
 ### Dependencies
-- None, though coordinate with WP-305 for data sources.
+- None, though coordination with WP-305 ensured shared spatial index usage.
 
 ### Acceptance Criteria
 - [x] Compact builder returns populated tensors matching design spec.
 - [x] Policy runners accept compact observations without requiring hybrid/full.
 - [x] Documentation updated for compact feature availability.
+
+### Progress
+- Phase 0 (risk prep) complete: baseline compact tests (`pytest tests/test_observation_builder_compact.py`) and dependency review.
+- Phase 1 (config scaffolding) complete: introduced `CompactObservationConfig` and builder wiring.
+- Phase 2 (builder implementation) complete: generated compact map tensor with configurable normalization and metadata.
+- Phase 3 (runtime alignment) complete: verified metadata/channel consumption by downstream pipelines.
+- Phase 4 (validation) complete: updated tests/baselines, perf spot-check (~3.65 ms per 50-agent build), full pytest green.
+- Phase 5 (docs & wrap-up) complete: tensor spec updated, work package closed with acceptance criteria ticked.
 
 ### Related Issues
 - Eliminates enhancement risk R-005.

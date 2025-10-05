@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from townlet.config import load_config
@@ -80,3 +81,83 @@ def test_file_transport_diff_stream(tmp_path: Path) -> None:
 
     assert snapshot.schema_version.startswith("0.9")
     assert snapshot.transport.dropped_messages >= 0
+
+
+def test_flush_worker_restarts_on_failure(monkeypatch, tmp_path: Path) -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.telemetry.transport.type = "file"
+    config.telemetry.transport.file_path = tmp_path / "telemetry_restart.jsonl"
+    config.telemetry.transport.buffer.max_batch_size = 1
+    config.telemetry.transport.buffer.flush_interval_ticks = 1
+    loop = SimulationLoop(config)
+    _ensure_agents(loop)
+    publisher = loop.telemetry
+
+    original = publisher._flush_transport_buffer
+    state = {"calls": 0}
+
+    def failing(self, tick: int) -> None:  # type: ignore[override]
+        state["calls"] += 1
+        if state["calls"] == 1:
+            raise RuntimeError("flush boom")
+        return original(self, tick)
+
+    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", failing)
+
+    loop.step()
+
+    for _ in range(60):
+        status = dict(publisher._transport_status)
+        if status.get("worker_restart_count", 0) >= 1 and status.get("worker_alive"):
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("flush worker did not restart")
+
+    status = publisher._transport_status
+    assert status["worker_restart_count"] >= 1
+    assert status["worker_alive"] is True
+    assert status["worker_error"] is None
+    assert status["last_worker_error"].startswith("RuntimeError")
+
+    # restore original behaviour and ensure clean shutdown
+    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", original)
+    loop.step()
+    publisher.close()
+
+
+def test_flush_worker_halts_after_restart_limit(monkeypatch, tmp_path: Path) -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.telemetry.transport.type = "file"
+    config.telemetry.transport.file_path = tmp_path / "telemetry_limit.jsonl"
+    config.telemetry.transport.buffer.max_batch_size = 1
+    config.telemetry.transport.buffer.flush_interval_ticks = 1
+    loop = SimulationLoop(config)
+    _ensure_agents(loop)
+    publisher = loop.telemetry
+    publisher._worker_restart_limit = 1
+
+    def always_fail(self, tick: int) -> None:  # type: ignore[override]
+        raise RuntimeError("persistent failure")
+
+    original = publisher._flush_transport_buffer
+    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", always_fail)
+
+    loop.step()
+
+    for _ in range(60):
+        status = dict(publisher._transport_status)
+        if status.get("worker_restart_count", 0) >= publisher._worker_restart_limit:
+            if not status.get("worker_alive"):
+                break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("flush worker did not stop after reaching restart limit")
+
+    status = publisher._transport_status
+    assert status["worker_restart_count"] == publisher._worker_restart_limit
+    assert status["worker_alive"] is False
+    assert status["worker_error"] is not None
+
+    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", original)
+    publisher.close()

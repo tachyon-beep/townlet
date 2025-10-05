@@ -134,23 +134,41 @@ class TelemetryPublisher:
             "worker_alive": True,
             "worker_error": None,
             "worker_restart_count": 0,
+            "last_worker_error": None,
         }
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
         self._flush_poll_interval = max(0.01, poll_interval)
         self._buffer_lock = threading.Lock()
         self._worker_state_lock = threading.Lock()
+        self._worker_restart_lock = threading.Lock()
         self._flush_event = threading.Event()
         self._stop_event = threading.Event()
+        self._pending_restart = False
+        self._shutdown = False
+        self._worker_restart_limit = 3
         self._latest_enqueue_tick = 0
         self._diff_enabled = bool(getattr(config.telemetry, "diff_enabled", False))
         self._last_stream_payload: dict[str, Any] | None = None
-        self._flush_thread = threading.Thread(
+        self._start_flush_thread()
+
+    def _start_flush_thread(self) -> None:
+        with self._worker_state_lock:
+            if self._shutdown:
+                return
+            self._transport_status["worker_alive"] = True
+            self._transport_status["worker_error"] = None
+        self._stop_event.clear()
+        self._flush_event.clear()
+        thread = threading.Thread(
             target=self._flush_loop,
             name="telemetry-flush",
             daemon=True,
         )
-        self._flush_thread.start()
+        self._flush_thread = thread
+        thread.start()
+        with self._worker_restart_lock:
+            self._pending_restart = False
 
     def queue_console_command(self, command: object) -> None:
         try:
@@ -703,6 +721,11 @@ class TelemetryPublisher:
                 self._transport_status["worker_alive"] = False
                 if not had_failure:
                     self._transport_status["worker_error"] = None
+            restart_requested = False
+            with self._worker_restart_lock:
+                restart_requested = self._pending_restart and not self._shutdown
+            if restart_requested:
+                self._start_flush_thread()
 
     def _handle_flush_worker_failure(self, exc: Exception) -> None:
         message = f"{exc.__class__.__name__}: {exc}"
@@ -711,10 +734,36 @@ class TelemetryPublisher:
             self._transport_status["worker_alive"] = False
             self._transport_status["last_failure_tick"] = int(self._latest_enqueue_tick)
             self._transport_status["connected"] = False
+            self._transport_status["last_worker_error"] = message
         self._transport_status["last_error"] = message
         logger.critical("Telemetry flush worker failed: %s", message, exc_info=True)
-        self._stop_event.set()
-        self._flush_event.set()
+
+        restart_scheduled = False
+        restart_attempt: int | None = None
+        if not self._shutdown:
+            with self._worker_restart_lock:
+                if not self._shutdown and not self._pending_restart:
+                    current = int(self._transport_status.get("worker_restart_count", 0))
+                    if current < self._worker_restart_limit:
+                        self._transport_status["worker_restart_count"] = current + 1
+                        self._pending_restart = True
+                        restart_scheduled = True
+                        restart_attempt = current + 1
+                    else:
+                        logger.critical(
+                            "Telemetry flush worker restart limit reached (%s attempts)",
+                            self._worker_restart_limit,
+                        )
+        if restart_scheduled:
+            logger.warning(
+                "Telemetry flush worker restarting (attempt %s/%s)",
+                restart_attempt,
+                self._worker_restart_limit,
+            )
+            self._flush_event.set()
+        else:
+            self._stop_event.set()
+            self._flush_event.set()
 
 
     def _enqueue_stream_payload(self, payload: Mapping[str, Any], *, tick: int) -> None:
@@ -854,11 +903,15 @@ class TelemetryPublisher:
     def stop_worker(self, *, wait: bool = True, timeout: float = 2.0) -> None:
         """Stop the background flush worker without closing transports."""
 
+        self._shutdown = True
+        with self._worker_restart_lock:
+            self._pending_restart = False
         if not self._stop_event.is_set():
             self._stop_event.set()
             self._flush_event.set()
-        if wait and self._flush_thread.is_alive():
-            self._flush_thread.join(timeout=timeout)
+        thread = getattr(self, "_flush_thread", None)
+        if wait and thread is not None and thread.is_alive():
+            thread.join(timeout=timeout)
 
     def _capture_affordance_runtime(
         self,

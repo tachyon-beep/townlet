@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from townlet.config import load_config
@@ -43,21 +44,27 @@ def test_flush_worker_failure_sets_status(monkeypatch, caplog) -> None:
             publisher._transport_buffer.append(b"payload")
             publisher._latest_enqueue_tick = 1
         publisher._flush_event.set()
-        publisher._flush_thread.join(timeout=1.0)
+
+        for _ in range(60):
+            status = publisher.latest_transport_status()
+            if status.get("worker_restart_count", 0) >= 1:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("flush worker did not report restart")
 
         status = publisher.latest_transport_status()
-        assert status["worker_alive"] is False
-        assert status["worker_error"] and "RuntimeError" in status["worker_error"]
-        assert status["connected"] is False
-        assert status["last_error"].startswith("RuntimeError: flush worker crash")
-        assert status["worker_restart_count"] == 0
+        assert status["worker_alive"] is True
+        assert status["worker_error"] is None
+        assert status["last_worker_error"].startswith("RuntimeError")
+        assert status["worker_restart_count"] == 1
         assert any(
             "Telemetry flush worker failed" in record.getMessage()
             for record in caplog.records
         )
     finally:
+        monkeypatch.setattr(publisher, "_flush_transport_buffer", original_flush)
         publisher.stop_worker(wait=True)
-        publisher._flush_transport_buffer = original_flush
         publisher.close()
 
 
