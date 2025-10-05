@@ -38,6 +38,8 @@ from townlet.policy.replay import (
 )
 from townlet.policy.replay_buffer import InMemoryReplayDataset
 from townlet.policy.rollout import RolloutBuffer
+
+DEFAULT_REPLAY_MANIFEST = Path('docs/samples/replay_manifest.json')
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.stability.promotion import PromotionManager
 
@@ -120,8 +122,14 @@ class PolicyTrainingOrchestrator:
         config = ReplayDatasetConfig(entries=entries, batch_size=len(entries))
         return self.run_replay_dataset(config)
 
-    def run_replay_dataset(self, dataset_config: ReplayDatasetConfig) -> dict[str, float]:
-        dataset = ReplayDataset(dataset_config)
+
+    def run_replay_dataset(
+        self, dataset_config: ReplayDatasetConfig | ReplayDataset
+    ) -> dict[str, float]:
+        if isinstance(dataset_config, ReplayDatasetConfig):
+            dataset: ReplayDataset | Iterable[ReplayBatch] = ReplayDataset(dataset_config)
+        else:
+            dataset = dataset_config
         summary: dict[str, float] = {}
         for idx, batch in enumerate(dataset, start=1):
             summary = self._summarise_batch(batch, batch_index=idx)
@@ -940,8 +948,40 @@ class PolicyTrainingOrchestrator:
             summary[f"conflict.{key}"] = value
         return summary
 
-    def build_replay_dataset(self, config: ReplayDatasetConfig) -> ReplayDataset:
-        return ReplayDataset(config)
+
+    def _resolve_replay_manifest(self, manifest: Path | str | None) -> Path:
+        candidates: list[Path] = []
+        for value in (manifest, getattr(self.config.training, "replay_manifest", None)):
+            if value:
+                path = Path(value)
+                candidates.append(path)
+                candidates.append(Path.cwd() / path)
+        repo_root = Path(__file__).resolve().parents[3]
+        candidates.append(repo_root / DEFAULT_REPLAY_MANIFEST)
+        candidates.append(Path.cwd() / DEFAULT_REPLAY_MANIFEST)
+        checked: set[str] = set()
+        for candidate in candidates:
+            expanded = candidate.expanduser()
+            resolved = expanded.resolve(strict=False)
+            key = str(resolved)
+            if key in checked:
+                continue
+            checked.add(key)
+            if resolved.exists():
+                return resolved
+        raise FileNotFoundError(
+            "Replay manifest not provided and default manifest could not be located",
+        )
+
+    def build_replay_dataset(
+        self, config: ReplayDatasetConfig | Path | str | None = None
+    ) -> ReplayDataset:
+        if isinstance(config, ReplayDatasetConfig):
+            dataset_config = config
+        else:
+            manifest_path = self._resolve_replay_manifest(config)
+            dataset_config = ReplayDatasetConfig.from_manifest(manifest_path)
+        return ReplayDataset(dataset_config)
 
     def build_policy_network(
         self,

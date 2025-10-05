@@ -26,6 +26,7 @@ optional-dependencies.dev = [
   "ruff>=0.3",
   "types-pyyaml>=6.0.12",
   "httpx>=0.28",
+  "pytest-cov>=4.1",
 ]
 
 [project.urls]
@@ -67,5 +68,5 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "7.0"
 pythonpath = ["src"]
-addopts = "-ra"
+addopts = "-ra --cov=src/townlet --cov-report=term-missing"
 testpaths = ["tests"]

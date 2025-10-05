@@ -799,6 +799,22 @@ class WorldState:
         )
         return blueprint
 
+    def kill_agent(self, agent_id: str, *, reason: str | None = None) -> bool:
+        """Remove an agent from the world and emit a kill notification."""
+
+        blueprint = self.remove_agent(agent_id, self.tick)
+        if blueprint is None:
+            return False
+        self._emit_event(
+            "agent_killed",
+            {
+                "agent_id": agent_id,
+                "reason": reason,
+                "tick": self.tick,
+            },
+        )
+        return True
+
     def respawn_agent(self, blueprint: Mapping[str, Any]) -> None:
         agent_id = str(blueprint.get("agent_id", ""))
         if not agent_id or agent_id in self.agents:

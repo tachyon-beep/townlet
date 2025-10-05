@@ -12,6 +12,7 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
+      provider: "v8",
       enabled: false
     }
   }
