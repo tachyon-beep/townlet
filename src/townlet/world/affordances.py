@@ -143,16 +143,26 @@ def apply_affordance_outcome(
     snapshot.last_action_id = outcome.kind
     snapshot.last_action_success = outcome.success
     snapshot.last_action_duration = outcome.duration
-    # TODO(@townlet-backlog): Persist richer outcome metadata (affordance/object ids)
-    # once the snapshot schema evolves; keep attachments scoped to metadata until the
-    # schema extension is scheduled.
+    history_entry: dict[str, object] = {
+        "kind": outcome.kind,
+        "success": outcome.success,
+        "duration": outcome.duration,
+    }
+    if outcome.object_id is not None:
+        history_entry["object_id"] = outcome.object_id
+    if outcome.affordance_id is not None:
+        history_entry["affordance_id"] = outcome.affordance_id
+    if outcome.tick is not None:
+        history_entry["tick"] = outcome.tick
     if outcome.metadata:
-        outcome_log = snapshot.inventory.setdefault("_affordance_outcomes", [])
-        outcome_log.append(outcome.metadata)
-        if len(outcome_log) > 10:
-            del outcome_log[0]
-        if len(outcome_log) > 10:
-            del outcome_log[0]
+        history_entry["metadata"] = dict(outcome.metadata)
+
+    outcome_log = snapshot.inventory.setdefault("_affordance_outcomes", [])
+    outcome_log.append(history_entry)
+    if len(outcome_log) > 10:
+        del outcome_log[0]
+    if len(outcome_log) > 10:
+        del outcome_log[0]
 
 
 class AffordanceRuntime(Protocol):

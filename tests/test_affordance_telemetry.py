@@ -51,7 +51,16 @@ def test_apply_affordance_outcome_retains_metadata() -> None:
     )
     apply_affordance_outcome(snapshot, outcome)
     history = snapshot.inventory.get("_affordance_outcomes")
-    assert history is not None and history[-1] == {"reason": "manual_cancel"}
+    assert history is not None
+    assert history[-1] == {
+        "kind": "release",
+        "success": False,
+        "duration": 0,
+        "object_id": "bed_1",
+        "affordance_id": "rest_sleep",
+        "tick": 5,
+        "metadata": {"reason": "manual_cancel"},
+    }
 
     # Ensure history is capped at 10 entries
     for index in range(12):
@@ -71,3 +80,6 @@ def test_apply_affordance_outcome_retains_metadata() -> None:
     history = snapshot.inventory.get("_affordance_outcomes")
     assert history is not None
     assert len(history) <= 10
+    latest = history[-1]
+    assert latest["affordance_id"] == "rest_sleep"
+    assert latest["object_id"] == "bed_1"
