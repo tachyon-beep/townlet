@@ -1,5 +1,12 @@
 # Repository Guidelines
 
+## External Research Capability
+Leverage the Firecrawl MCP services proactively. The `firecrawl_search` tool surfaces the latest
+information on products, technologies, APIs, and best practices whenever you are unsure. When you
+need structured results, use `firecrawl_extract` to pull specific fields from source pages, and
+fall back to `firecrawl_crawl` for broader, multi-page discovery. Combine these options so design
+decisions are backed by fresh, trustworthy context.
+
 ## Project Structure & Module Organization
 Townlet keeps runtime code in `src/townlet/`, split into focused modules: `core/` for the tick loop, `policy/` for PettingZoo agents, and `world/` for grid primitives. Configuration entry points sit under `configs/` with curated examples in `configs/examples/` and experimentation branches in dedicated subfolders. Automation lives in `scripts/`, while design references stay in `docs/`. Mirror this layout in `tests/` when adding coverage so each module has a matching test suite.
 

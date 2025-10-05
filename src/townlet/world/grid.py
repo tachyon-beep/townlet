@@ -6,7 +6,6 @@ import copy
 import logging
 import os
 import random
-import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,19 +36,19 @@ from townlet.console.service import ConsoleService
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.affordance_runtime import AffordanceCoordinator
+from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import (
     AffordanceOutcome,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
-    HookPayload,
     RunningAffordanceState,
     apply_affordance_outcome,
-    build_hook_payload,
 )
 from townlet.world.console_handlers import (
     WorldConsoleController,
     install_world_console_handlers,
 )
+from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
 from townlet.world.observation import (
@@ -330,6 +329,7 @@ class WorldState:
     store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
     _job_keys: list[str] = field(init=False, default_factory=list)
     employment: EmploymentCoordinator = field(init=False, repr=False)
+    _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
 
     _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
     _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
@@ -391,6 +391,7 @@ class WorldState:
         self._job_keys = list(self.config.jobs.keys())
         self.employment = create_employment_coordinator(self.config, self._emit_event)
         self.employment.reset_exits_today()
+        self._employment_runtime = EmploymentRuntime(self, self.employment, self._emit_event)
         self._rivalry_ledgers = {}
         self._relationship_ledgers = {}
         self._relationship_window_ticks = 600
@@ -505,6 +506,12 @@ class WorldState:
             self._affordance_runtime = runtime_obj
         else:
             self._affordance_runtime = AffordanceCoordinator(runtime_obj)
+        self._affordance_service = AffordanceRuntimeService(
+            world=self,
+            context=context,
+            coordinator=self._affordance_runtime,
+            hook_registry=self._hook_registry,
+        )
         self._economy_baseline: dict[str, float] = {
             key: float(value) for key, value in self.config.economy.items()
         }
@@ -519,7 +526,7 @@ class WorldState:
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
-        return self._affordance_runtime.runtime
+        return self._affordance_service.runtime()
 
     @property
     def runtime_instrumentation_level(self) -> str:
@@ -597,17 +604,35 @@ class WorldState:
 
         return self._console_controller
 
+    @property
+    def employment_runtime(self) -> EmploymentRuntime:
+        """Access the employment runtime facade (tests/back-compat)."""
+
+        return self._employment_runtime
+
+    @property
+    def affordance_service(self) -> AffordanceRuntimeService:
+        """Access affordance runtime service (tests/back-compat)."""
+
+        return self._affordance_service
+
     def register_affordance_hook(
         self, name: str, handler: Callable[[dict[str, Any]], None]
     ) -> None:
         """Register a callable invoked when a manifest hook fires."""
 
-        self._hook_registry.register(name, handler)
+        if hasattr(self, "_affordance_service"):
+            self._affordance_service.register_hook(name, handler)
+        else:
+            self._hook_registry.register(name, handler)
 
     def clear_affordance_hooks(self, name: str | None = None) -> None:
         """Clear registered affordance hooks (used primarily for tests)."""
 
-        self._hook_registry.clear(name)
+        if hasattr(self, "_affordance_service"):
+            self._affordance_service.clear_hooks(name)
+        else:
+            self._hook_registry.clear(name)
 
     def consume_console_results(self) -> list[ConsoleCommandResult]:
         """Return and clear buffered console results."""
@@ -629,65 +654,20 @@ class WorldState:
     ) -> bool:
         if not hook_names or spec is None:
             return True
-        continue_execution = True
         debug_enabled = (
             self._runtime_instrumentation_level == "timings"
             or logger.isEnabledFor(logging.DEBUG)
         )
-        for hook_name in hook_names:
-            handlers = self._hook_registry.handlers_for(hook_name)
-            if not handlers:
-                continue
-            hook_timer = time.perf_counter() if debug_enabled else None
-            base_payload: HookPayload = build_hook_payload(
-                stage=stage,
-                hook=hook_name,
-                tick=self.tick,
-                agent_id=agent_id,
-                object_id=object_id,
-                affordance_id=spec.affordance_id,
-                world=self,
-                spec=spec,
-                extra=extra,
-            )
-            for handler in handlers:
-                context: dict[str, object] = dict(base_payload)
-                handler_timer = time.perf_counter() if debug_enabled else None
-                try:
-                    handler(context)
-                except Exception:  # pragma: no cover - defensive
-                    logger.exception("Affordance hook '%s' failed", hook_name)
-                    continue_execution = False
-                    continue
-                if debug_enabled and handler_timer is not None:
-                    handler_duration_ms = (time.perf_counter() - handler_timer) * 1000.0
-                    handler_name = getattr(
-                        handler,
-                        "__qualname__",
-                        getattr(handler, "__name__", handler.__class__.__name__),
-                    )
-                    logger.debug(
-                        (
-                            "world.resolve_affordances.hook_handler stage=%s hook=%s "
-                            "handler=%s duration_ms=%.2f"
-                        ),
-                        stage,
-                        hook_name,
-                        handler_name,
-                        handler_duration_ms,
-                    )
-                if context.get("cancel"):
-                    continue_execution = False
-            if debug_enabled and hook_timer is not None:
-                hook_duration_ms = (time.perf_counter() - hook_timer) * 1000.0
-                logger.debug(
-                    "world.resolve_affordances.hook stage=%s hook=%s handlers=%s duration_ms=%.2f",
-                    stage,
-                    hook_name,
-                    len(handlers),
-                    hook_duration_ms,
-                )
-        return continue_execution
+        return self._affordance_service.dispatch_hooks(
+            stage,
+            hook_names,
+            agent_id=agent_id,
+            object_id=object_id,
+            spec=spec,
+            extra=extra,
+            debug_enabled=debug_enabled,
+        )
+
 
     def _build_precondition_context(
         self,
@@ -779,7 +759,7 @@ class WorldState:
             return None
         self._spatial_index.remove_agent(agent_id)
         self.queue_manager.remove_agent(agent_id, tick)
-        self._affordance_runtime.remove_agent(agent_id)
+        self._affordance_service.remove_agent(agent_id)
         for object_id, occupant in list(self._active_reservations.items()):
             if occupant == agent_id:
                 self.queue_manager.release(object_id, agent_id, tick, success=False)
@@ -789,7 +769,7 @@ class WorldState:
                     obj.occupied_by = None
                     self._spatial_index.set_reservation(obj.position, False)
         self.embedding_allocator.release(agent_id, tick)
-        self.employment.remove_agent(self, agent_id)
+        self._employment_runtime.remove_agent(agent_id)
         self._relationship_ledgers.pop(agent_id, None)
         for ledger in self._relationship_ledgers.values():
             ledger.remove_tie(agent_id, reason="removed")
@@ -888,7 +868,7 @@ class WorldState:
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
         if snapshot.home_position is None:
             snapshot.home_position = snapshot.position
-        self.employment.reset_context(snapshot.agent_id)
+        self._employment_runtime.reset_context(snapshot.agent_id)
         self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
 
     def _release_queue_membership(self, agent_id: str) -> None:
@@ -995,7 +975,7 @@ class WorldState:
     def apply_actions(self, actions: dict[str, Any]) -> None:
         """Apply agent actions for the current tick."""
         current_tick = self.tick
-        runtime = self._affordance_runtime
+        runtime = self._affordance_service
         for agent_id, action in actions.items():
             snapshot = self.agents.get(agent_id)
             if snapshot is None:
@@ -1090,12 +1070,12 @@ class WorldState:
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
-        self._affordance_runtime.resolve(tick=current_tick)
+        self._affordance_service.resolve(tick=current_tick)
 
     def running_affordances_snapshot(self) -> dict[str, RunningAffordanceState]:
         """Return a serializable view of running affordances (for tests/telemetry)."""
 
-        return self._affordance_runtime.running_snapshot()
+        return self._affordance_service.running_snapshot()
 
     def request_ctx_reset(self, agent_id: str) -> None:
         """Mark an agent so the next observation toggles ctx_reset_flag."""
@@ -1549,10 +1529,10 @@ class WorldState:
                 self._spatial_index.set_reservation(obj.position, True)
 
     def _handle_blocked(self, object_id: str, tick: int) -> None:
-        self._affordance_runtime.handle_blocked(object_id, tick)
+        self._affordance_service.handle_blocked(object_id, tick)
 
     def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
-        success, _ = self._affordance_runtime.start(
+        success, _ = self._affordance_service.start(
             agent_id,
             object_id,
             affordance_id,
@@ -1721,10 +1701,10 @@ class WorldState:
     def assign_jobs_to_agents(self) -> None:
         """Assign jobs to agents lacking a valid role."""
 
-        self.employment.assign_jobs_to_agents(self)
+        self._employment_runtime.assign_jobs_to_agents()
 
     def _apply_job_state(self) -> None:
-        self.employment.apply_job_state(self)
+        self._employment_runtime.apply_job_state()
 
     def _apply_job_state_legacy(self) -> None:
         self.employment._apply_job_state_legacy(self)
@@ -1736,61 +1716,25 @@ class WorldState:
     # Employment helpers
     # ------------------------------------------------------------------
     def _employment_context_defaults(self) -> dict[str, Any]:
-        return self.employment.context_defaults()
+        return self._employment_runtime.context_defaults()
 
     def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        return self.employment.get_context(self, agent_id)
+        return self._employment_runtime.get_context(agent_id)
 
     def _employment_context_wages(self, agent_id: str) -> float:
-        return self.employment.employment_context_wages(agent_id)
+        return self._employment_runtime.context_wages(agent_id)
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
-        return self.employment.employment_context_punctuality(agent_id)
+        return self._employment_runtime.context_punctuality(agent_id)
 
     def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        if ctx["state"] != "pre_shift":
-            ctx["state"] = "pre_shift"
-            ctx["late_penalty_applied"] = False
-            ctx["absence_penalty_applied"] = False
-            ctx["late_event_emitted"] = False
-            ctx["absence_event_emitted"] = False
-            ctx["departure_event_emitted"] = False
-            ctx["late_help_event_emitted"] = False
-            ctx["took_shift_event_emitted"] = False
-            ctx["shift_started_tick"] = None
-            ctx["shift_end_tick"] = None
-            ctx["last_present_tick"] = None
-            ctx["ever_on_time"] = False
-            ctx["scheduled_ticks"] = 0
-            ctx["on_time_ticks"] = 0
-            ctx["shift_outcome_recorded"] = False
-        snapshot.shift_state = "pre_shift"
-        snapshot.on_shift = False
+        self._employment_runtime.idle_state(snapshot, ctx)
 
     def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        ctx["state"] = "await_start"
-        snapshot.shift_state = "await_start"
-        snapshot.on_shift = False
+        self._employment_runtime.prepare_state(snapshot, ctx)
 
     def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        if ctx["shift_started_tick"] != start:
-            ctx["shift_started_tick"] = start
-            ctx["shift_end_tick"] = end
-            ctx["scheduled_ticks"] = max(1, end - start + 1)
-            ctx["on_time_ticks"] = 0
-            ctx["late_ticks"] = 0
-            ctx["wages_paid"] = 0.0
-            ctx["late_penalty_applied"] = False
-            ctx["absence_penalty_applied"] = False
-            ctx["late_event_emitted"] = False
-            ctx["absence_event_emitted"] = False
-            ctx["departure_event_emitted"] = False
-            ctx["late_help_event_emitted"] = False
-            ctx["took_shift_event_emitted"] = False
-            ctx["shift_outcome_recorded"] = False
-            ctx["ever_on_time"] = False
-            ctx["last_present_tick"] = None
-            ctx["late_counter_recorded"] = False
+        self._employment_runtime.begin_shift(ctx, start, end)
 
     def _employment_determine_state(
         self,
@@ -1801,30 +1745,13 @@ class WorldState:
         at_required_location: bool,
         employment_cfg: EmploymentConfig,
     ) -> str:
-        ticks_since_start = tick - start
-        state = ctx["state"]
-
-        if at_required_location:
-            ctx["last_present_tick"] = tick
-            if ctx["ever_on_time"] or ticks_since_start <= employment_cfg.grace_ticks:
-                state = "on_time"
-                ctx["ever_on_time"] = True
-            else:
-                state = "late"
-        else:
-            if ticks_since_start <= employment_cfg.grace_ticks:
-                state = "late"
-            elif ticks_since_start > employment_cfg.absent_cutoff:
-                state = "absent"
-            elif (
-                ctx["last_present_tick"] is not None
-                and tick - ctx["last_present_tick"] > employment_cfg.absence_slack
-            ):
-                state = "absent"
-            else:
-                state = "late"
-
-        return state
+        return self._employment_runtime.determine_state(
+            ctx=ctx,
+            tick=tick,
+            start=start,
+            at_required_location=at_required_location,
+            employment_cfg=employment_cfg,
+        )
 
     def _employment_apply_state_effects(
         self,
@@ -1837,119 +1764,15 @@ class WorldState:
         lateness_penalty: float,
         employment_cfg: EmploymentConfig,
     ) -> None:
-        previous_state = ctx["state"]
-        ctx["state"] = state
-        snapshot.shift_state = state
-        eligible_for_wage = state in {"on_time", "late"} and at_required_location
-        coworkers = self._employment_coworkers_on_shift(snapshot)
-
-        if state == "on_time":
-            ctx["on_time_ticks"] += 1
-        if state == "late":
-            ctx["late_ticks"] += 1
-            snapshot.late_ticks_today += 1
-            if not ctx["late_penalty_applied"] and previous_state not in {
-                "on_time",
-                "late",
-            }:
-                snapshot.wallet = max(0.0, snapshot.wallet - lateness_penalty)
-                ctx["late_penalty_applied"] = True
-                if not ctx["late_counter_recorded"]:
-                    snapshot.lateness_counter += 1
-                    ctx["late_counter_recorded"] = True
-            if not ctx["late_event_emitted"]:
-                self._emit_event(
-                    "shift_late_start",
-                    {
-                        "agent_id": snapshot.agent_id,
-                        "job_id": snapshot.job_id,
-                        "ticks_late": ctx["late_ticks"],
-                    },
-                )
-                ctx["late_event_emitted"] = True
-            if not at_required_location:
-                penalty = employment_cfg.late_tick_penalty
-                if penalty:
-                    snapshot.wallet = max(0.0, snapshot.wallet - penalty)
-                snapshot.wages_withheld += wage_rate
-            if coworkers and not ctx["late_help_event_emitted"]:
-                for other_id in coworkers:
-                    self.update_relationship(
-                        snapshot.agent_id,
-                        other_id,
-                        trust=0.2,
-                        familiarity=0.1,
-                        rivalry=-0.1,
-                        event="employment_help",
-                    )
-                self._emit_event(
-                    "employment_helped_when_late",
-                    {
-                        "agent_id": snapshot.agent_id,
-                        "coworkers": coworkers,
-                    },
-                )
-                ctx["late_help_event_emitted"] = True
-
-        if state == "absent":
-            if not ctx["absence_penalty_applied"]:
-                snapshot.wallet = max(0.0, snapshot.wallet - employment_cfg.absence_penalty)
-                ctx["absence_penalty_applied"] = True
-            snapshot.wages_withheld += wage_rate
-            if not ctx["absence_event_emitted"]:
-                self._emit_event(
-                    "shift_absent",
-                    {
-                        "agent_id": snapshot.agent_id,
-                        "job_id": snapshot.job_id,
-                    },
-                )
-                ctx["absence_event_emitted"] = True
-                ctx["absence_events"].append(self.tick)
-                snapshot.absent_shifts_7d = len(ctx["absence_events"])
-            if coworkers and not ctx["took_shift_event_emitted"]:
-                for other_id in coworkers:
-                    self.update_relationship(
-                        snapshot.agent_id,
-                        other_id,
-                        trust=-0.1,
-                        familiarity=0.0,
-                        rivalry=0.3,
-                        event="employment_shift_taken",
-                    )
-                self._emit_event(
-                    "employment_took_my_shift",
-                    {
-                        "agent_id": snapshot.agent_id,
-                        "coworkers": coworkers,
-                    },
-                )
-                ctx["took_shift_event_emitted"] = True
-        else:
-            # Reset absence penalty if they return during the same shift.
-            if state in {"on_time", "late"}:
-                ctx["absence_penalty_applied"] = False
-
-        if eligible_for_wage and state != "absent":
-            snapshot.on_shift = True
-            snapshot.wallet += wage_rate
-            snapshot.inventory["wages_earned"] = snapshot.inventory.get("wages_earned", 0) + 1
-            ctx["wages_paid"] += wage_rate
-        else:
-            snapshot.on_shift = False
-            if previous_state in {"on_time", "late"} and state not in {
-                "on_time",
-                "late",
-            }:
-                if not ctx["departure_event_emitted"] and previous_state != "absent":
-                    self._emit_event(
-                        "shift_departed_early",
-                        {
-                            "agent_id": snapshot.agent_id,
-                            "job_id": snapshot.job_id,
-                        },
-                    )
-                    ctx["departure_event_emitted"] = True
+        self._employment_runtime.apply_state_effects(
+            snapshot=snapshot,
+            ctx=ctx,
+            state=state,
+            at_required_location=at_required_location,
+            wage_rate=wage_rate,
+            lateness_penalty=lateness_penalty,
+            employment_cfg=employment_cfg,
+        )
 
     def _employment_finalize_shift(
         self,
@@ -1959,68 +1782,36 @@ class WorldState:
         employment_cfg: EmploymentConfig,
         job_id: str | None,
     ) -> None:
-        if ctx["shift_started_tick"] is None or ctx["shift_outcome_recorded"]:
-            snapshot.shift_state = "post_shift"
-            snapshot.on_shift = False
-            return
-
-        scheduled = max(1, ctx["scheduled_ticks"])
-        attendance_value = ctx["on_time_ticks"] / scheduled
-        ctx["attendance_samples"].append(attendance_value)
-        if ctx["absence_event_emitted"] or ctx["state"] == "absent":
-            # absence already recorded when event emitted.
-            pass
-        snapshot.attendance_ratio = sum(ctx["attendance_samples"]) / len(ctx["attendance_samples"])
-        ctx["shift_outcome_recorded"] = True
-        ctx["state"] = "post_shift"
-        snapshot.shift_state = "post_shift"
-        snapshot.on_shift = False
-        # Reset per-shift counters ready for next cycle.
-        ctx["shift_started_tick"] = None
-        ctx["shift_end_tick"] = None
-        ctx["last_present_tick"] = None
-        ctx["late_penalty_applied"] = False
-        ctx["absence_penalty_applied"] = False
-        ctx["late_event_emitted"] = False
-        ctx["absence_event_emitted"] = False
-        ctx["departure_event_emitted"] = False
-        ctx["late_counter_recorded"] = False
-        snapshot.late_ticks_today = ctx["late_ticks"]
-        ctx["late_ticks"] = 0
+        self._employment_runtime.finalize_shift(
+            snapshot=snapshot,
+            ctx=ctx,
+            employment_cfg=employment_cfg,
+            job_id=job_id,
+        )
 
     def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
-        job_id = snapshot.job_id
-        if job_id is None:
-            return []
-        coworkers: list[str] = []
-        for other in self.agents.values():
-            if other.agent_id == snapshot.agent_id or other.job_id != job_id:
-                continue
-            other_ctx = self._get_employment_context(other.agent_id)
-            if other_ctx["state"] in {"on_time", "late"}:
-                coworkers.append(other.agent_id)
-        return coworkers
+        return self._employment_runtime.coworkers_on_shift(snapshot)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
-        return self.employment.queue_snapshot()
+        return self._employment_runtime.queue_snapshot()
 
     def employment_request_manual_exit(self, agent_id: str, tick: int) -> bool:
-        return self.employment.request_manual_exit(self, agent_id, tick)
+        return self._employment_runtime.request_manual_exit(agent_id, tick)
 
     def employment_defer_exit(self, agent_id: str) -> bool:
-        return self.employment.defer_exit(self, agent_id)
+        return self._employment_runtime.defer_exit(agent_id)
 
     def employment_exits_today(self) -> int:
-        return self.employment.exits_today
+        return self._employment_runtime.exits_today()
 
     def set_employment_exits_today(self, value: int) -> None:
-        self.employment.set_exits_today(value)
+        self._employment_runtime.set_exits_today(value)
 
     def reset_employment_exits_today(self) -> None:
-        self.employment.reset_exits_today()
+        self._employment_runtime.reset_exits_today()
 
     def increment_employment_exits_today(self) -> None:
-        self.employment.increment_exits_today()
+        self._employment_runtime.increment_exits_today()
 
     def _update_basket_metrics(self) -> None:
         basket_cost = (
