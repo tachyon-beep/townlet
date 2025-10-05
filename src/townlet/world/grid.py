@@ -716,7 +716,10 @@ class WorldState:
         inventory: dict[str, int] = {}
         if agent is not None:
             needs = {key: float(value) for key, value in agent.needs.items()}
-            inventory = {key: int(value) for key, value in agent.inventory.items()}
+            inventory = {}
+            for key, value in agent.inventory.items():
+                if isinstance(value, (int, float)):
+                    inventory[key] = int(value)
             agent_context = {
                 "agent_id": agent.agent_id,
                 "position": list(agent.position),

@@ -58,12 +58,12 @@ def main() -> None:
     loop = SimulationLoop(config=config)
     policy_provider = policy_provider_name(loop)
     telemetry_provider = telemetry_provider_name(loop)
-    if is_stub_policy(loop.policy, policy_provider):
+    if hasattr(loop, "policy") and is_stub_policy(getattr(loop, "policy"), policy_provider):
         print(
             f"Warning: stub policy backend active (provider={policy_provider}); scripted decisions only.",
             file=sys.stderr,
         )
-    if is_stub_telemetry(loop.telemetry, telemetry_provider):
+    if hasattr(loop, "telemetry") and is_stub_telemetry(getattr(loop, "telemetry"), telemetry_provider):
         print(
             f"Warning: stub telemetry sink active (provider={telemetry_provider}); streaming disabled.",
             file=sys.stderr,

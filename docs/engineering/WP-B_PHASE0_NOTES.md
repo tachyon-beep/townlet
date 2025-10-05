@@ -52,4 +52,6 @@
 - Registry now registers `policy.pytorch`/`telemetry.http` helpers that fall back to stub implementations when optional dependencies are missing, logging structured warnings for visibility.
 - Stub policy and telemetry providers live in `townlet.policy.fallback` and `townlet.telemetry.fallback`, satisfying the core protocols while reducing behaviour to safe no-ops.
 - Tests exercise fallback behaviour (`tests/test_fallbacks.py`), ensuring CI covers minimal environments without ML or HTTP extras.
+- `townlet.policy.resolve_policy_backend` provides a registry-backed helper so callers no longer import `PolicyRuntime` directly.
+- `run_dashboard` now accepts provider overrides so scripts can surface the resolved policy/telemetry metadata to downstream consumers.
 - Core protocol documentation highlights provider selection, stub behaviour, and guidance for opting into extras.

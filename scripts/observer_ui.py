@@ -7,6 +7,7 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 from townlet_ui.dashboard import run_dashboard
 
 
@@ -75,6 +76,8 @@ def main() -> None:
         agent_page_size=args.agent_page_size,
         agent_rotate_interval=args.agent_rotate_interval,
         agent_autorotate=not args.disable_agent_autorotate,
+        telemetry_provider=telemetry_provider_name(loop),
+        policy_provider=policy_provider_name(loop),
     )
 
 

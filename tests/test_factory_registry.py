@@ -5,11 +5,7 @@ from typing import Any, Iterable, Mapping
 
 import pytest
 
-from townlet.config import (
-    RuntimeProviderConfig,
-    RuntimeProviders,
-    load_config,
-)
+from townlet.config import RuntimeProviderConfig, RuntimeProviders, load_config
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.core import (
     SimulationLoop,
@@ -25,6 +21,7 @@ from townlet.core.interfaces import (
     TelemetrySinkProtocol,
     WorldRuntimeProtocol,
 )
+from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.scheduler.perturbations import PerturbationScheduler
 
@@ -296,3 +293,8 @@ def test_simulation_loop_reads_runtime_from_config(sample_config: Any) -> None:
     finally:
         if hasattr(loop.telemetry, "close"):
             loop.telemetry.close()
+
+
+def test_policy_module_helper_returns_backend(sample_config: Any) -> None:
+    backend = resolve_policy_backend(DEFAULT_POLICY_PROVIDER, config=sample_config)
+    assert isinstance(backend, PolicyBackendProtocol)

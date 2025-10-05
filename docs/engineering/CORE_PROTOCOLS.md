@@ -12,4 +12,8 @@ Configuration files can select providers via the `runtime` block on `SimulationC
 
 Built-in fallback providers (`policy.stub`, `policy.pytorch`, `telemetry.stub`, `telemetry.http`) automatically degrade to stub implementations when optional dependencies such as PyTorch or `httpx` are absent. The stubs log structured warnings so operators know that reduced capability is active.
 
+The `townlet.policy` package exposes `resolve_policy_backend(provider="scripted", **kwargs)` and a `DEFAULT_POLICY_PROVIDER` constant as convenience wrappers around the registry. Legacy `PolicyRuntime` remains available but new consumers should prefer the resolver and protocol interfaces to stay aligned with the modular architecture.
+
+Training CLIs use `PolicyTrainingOrchestrator` to detect stub backends and emit warnings like `capture_rollout_stub_policy` during rollout capture, ensuring reduced capability is visible in automated runs. Dashboard helpers accept explicit provider names so UI callers can surface the same metadata.
+
 Future refactors (WP-B onward) should extend these contracts rather than re-introducing direct dependencies on concrete classes.

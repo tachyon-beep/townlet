@@ -292,6 +292,8 @@ def run_demo_dashboard(
     palette_state: PaletteState | None,
     personality_filter: str | None = None,
     show_personality_narration: bool = True,
+    telemetry_provider: str | None = None,
+    policy_provider: str | None = None,
 ) -> None:
     """Run the interactive Rich dashboard with the supplied timeline."""
 
@@ -304,4 +306,6 @@ def run_demo_dashboard(
         on_tick=scheduler.on_tick,
         personality_filter=personality_filter,
         show_personality_narration=show_personality_narration,
+        telemetry_provider=telemetry_provider,
+        policy_provider=policy_provider,
     )

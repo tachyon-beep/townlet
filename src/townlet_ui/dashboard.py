@@ -1967,6 +1967,8 @@ def run_dashboard(
     agent_autorotate: bool = True,
     personality_filter: str | None = None,
     show_personality_narration: bool = True,
+    telemetry_provider: str | None = None,
+    policy_provider: str | None = None,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
     from townlet.world.grid import AgentSnapshot
@@ -1983,13 +1985,16 @@ def run_dashboard(
         )
         loop.world.assign_jobs_to_agents()
 
+    resolved_telemetry = telemetry_provider or telemetry_provider_name(loop)
+    resolved_policy = policy_provider or policy_provider_name(loop)
+
     router = create_console_router(
         loop.telemetry,
         loop.world,
         promotion=loop.promotion,
         policy=loop.policy,
-        policy_provider=policy_provider_name(loop),
-        telemetry_provider=telemetry_provider_name(loop),
+        policy_provider=resolved_policy,
+        telemetry_provider=resolved_telemetry,
         config=loop.config,
     )
     client = TelemetryClient()

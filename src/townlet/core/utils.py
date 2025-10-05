@@ -14,12 +14,29 @@ class _ProviderCarrier(Protocol):
     def provider_info(self) -> dict[str, str]: ...
 
 
+def _provider_lookup(loop: object, key: str, fallback_attr: str) -> str:
+    info = getattr(loop, "provider_info", None)
+    if isinstance(info, dict):
+        return str(info.get(key, "unknown") or "unknown")
+    if info is not None:
+        try:
+            value = info.get(key, "unknown")  # type: ignore[attr-defined]
+            if value:
+                return str(value)
+        except AttributeError:
+            pass
+    attr_value = getattr(loop, fallback_attr, None)
+    if attr_value:
+        return str(attr_value)
+    return "unknown"
+
+
 def policy_provider_name(loop: _ProviderCarrier) -> str:
-    return loop.provider_info.get("policy", "unknown")
+    return _provider_lookup(loop, "policy", "_policy_provider")
 
 
 def telemetry_provider_name(loop: _ProviderCarrier) -> str:
-    return loop.provider_info.get("telemetry", "unknown")
+    return _provider_lookup(loop, "telemetry", "_telemetry_provider")
 
 
 def is_stub_policy(policy: PolicyBackendProtocol, provider: str | None = None) -> bool:
