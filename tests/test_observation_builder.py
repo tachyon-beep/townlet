@@ -183,7 +183,7 @@ def test_ctx_reset_flag_on_teleport_and_possession() -> None:
         cmd_id="test-teleport-ctx",
         mode="admin",
     )
-    world._console_teleport_agent(envelope)
+    world.console_controller.teleport_agent(envelope)
 
     observations = builder.build_batch(world, terminated={})
     alice_obs = observations["alice"]
