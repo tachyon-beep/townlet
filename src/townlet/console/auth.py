@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
-import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, ConsoleMode
 
@@ -117,15 +118,18 @@ class ConsoleAuthenticator:
         payload = self._to_mapping(command)
         identity = self._identity(payload)
         if not self.enabled:
-            safe_payload = dict(payload)
-            safe_payload.pop("auth", None)
             requested = self._normalise_role(payload.get("mode"))
             if requested == "admin":
                 logger.warning(
-                    "console_admin_request_blocked name=%s issuer=%s",
+                    "console_admin_request_rejected name=%s issuer=%s reason=auth_disabled",
                     identity.get("name"),
                     identity.get("issuer"),
                 )
+                raise ConsoleAuthenticationError(
+                    "Console admin commands require authentication", identity
+                )
+            safe_payload = dict(payload)
+            safe_payload.pop("auth", None)
             safe_payload["mode"] = "viewer"
             return safe_payload, AuthPrincipal(role="viewer", label=None)
 

@@ -68,16 +68,20 @@ def test_console_command_assigns_admin_role() -> None:
         publisher.close()
 
 
-def test_console_command_forces_viewer_when_auth_disabled() -> None:
+def test_console_command_rejects_admin_when_auth_disabled(caplog) -> None:
+    caplog.set_level(logging.WARNING, "townlet.console.auth")
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     publisher = TelemetryPublisher(config)
     try:
         publisher.queue_console_command({"name": "telemetry_snapshot", "mode": "admin"})
-        queued = list(publisher.drain_console_buffer())
-        assert len(queued) == 1
-        payload = queued[0]
-        assert payload["mode"] == "viewer"
-        assert "auth" not in payload
+        results = publisher.latest_console_results()
+        assert results and results[0]["error"]["code"] == "unauthorized"
+        assert publisher.export_console_buffer() == []
+        assert any(
+            "console_admin_request_rejected" in record.getMessage()
+            for record in caplog.records
+            if record.name == "townlet.console.auth"
+        )
     finally:
         publisher.close()
 
@@ -104,14 +108,27 @@ def test_console_command_warns_when_admin_requested_with_auth_disabled(caplog) -
     publisher = TelemetryPublisher(config)
     try:
         publisher.queue_console_command({"name": "telemetry_snapshot", "mode": "admin"})
-        queued = list(publisher.drain_console_buffer())
-        assert len(queued) == 1
-        payload = queued[0]
-        assert payload["mode"] == "viewer"
+        results = publisher.latest_console_results()
+        assert results and results[0]["error"]["code"] == "unauthorized"
+        assert publisher.export_console_buffer() == []
         assert any(
-            "console_admin_request_blocked" in record.getMessage()
+            "console_admin_request_rejected" in record.getMessage()
             for record in caplog.records
             if record.name == "townlet.console.auth"
         )
     finally:
         publisher.close()
+
+def test_transport_status_includes_auth_flag() -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    console_auth = ConsoleAuthConfig(
+        enabled=True, tokens=[ConsoleAuthTokenConfig(token="secret", role="admin")]
+    )
+    config = config.model_copy(update={"console_auth": console_auth})
+    publisher = TelemetryPublisher(config)
+    try:
+        status = publisher.latest_transport_status()
+        assert status.get("auth_enabled") is True
+    finally:
+        publisher.close()
+

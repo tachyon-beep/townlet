@@ -135,6 +135,7 @@ class TelemetryPublisher:
             "worker_error": None,
             "worker_restart_count": 0,
             "last_worker_error": None,
+            "auth_enabled": bool(config.console_auth.enabled),
         }
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))

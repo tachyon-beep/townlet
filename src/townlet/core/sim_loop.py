@@ -314,6 +314,7 @@ class SimulationLoop:
             "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
             "telemetry_worker_error": transport_status.get("worker_error"),
             "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
+            "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
             "perturbations_pending": self.perturbations.pending_count(),
             "perturbations_active": self.perturbations.active_count(),
             "employment_exit_queue": self.world.employment.exit_queue_length(),

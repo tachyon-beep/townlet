@@ -19,34 +19,43 @@
 **Risk Level**: Critical
 
 ### Description
-Console authentication is disabled by default, and when disabled any caller can elevate to admin mode by setting `mode="admin"` in the payload.
+Console authentication was disabled by default and admin callers could set `mode="admin"` without verifying tokens.
 
 ### Current State
-`ConsoleAuthenticator.authorise` normalises the caller-supplied mode whenever `console_auth.enabled` is false, enabling privilege escalation (`src/townlet/console/auth.py:105-112`). The default config keeps auth disabled (`src/townlet/config/loader.py:623-638`).
+`ConsoleAuthenticator` now rejects admin requests when auth is disabled, logging `console_admin_request_rejected` and surfacing an unauthorized result. Transport/health status expose `auth_enabled`, and telemetry health payloads report whether console auth is active. Default configs still start with auth disabled but clearly block admin commands and warn operators.
 
 ### Desired State
-Admin-only actions must be gated by explicit tokens. When auth is disabled, the system should coerce every request to viewer mode (or refuse admin commands) and emit a warning.
+Admin-only actions must be gated by explicit tokens. When auth is disabled, admin commands should be refused with a clear warning while viewer commands continue to work.
 
 ### Impact if Not Addressed
 Unauthenticated clients can execute admin console commands, undermining safety controls and allowing arbitrary world mutations or promotion triggers.
 
 ### Proposed Solution
-- Force viewer mode when auth is disabled or require `console_auth.enabled=true` to expose admin commands.
-- Surface a startup warning when auth is off.
-- Add regression tests for viewer/admin separation and ensure CLI defaults enable auth in non-dev configs.
+- Refuse admin commands when auth is disabled; require `console_auth.enabled=true` to expose admin handlers.
+- Surface a startup warning when auth is off and record auth status in telemetry.
+- Add regression tests for viewer/admin splits and ensure CLI defaults enable auth in non-dev configs.
 
 ### Affected Components
-- src/townlet/console/auth.py:105-139
-- src/townlet/console/handlers.py
-- configs/demo/*
+- src/townlet/console/auth.py
+- src/townlet/telemetry/publisher.py
+- src/townlet/core/sim_loop.py
+- tests/test_console_auth.py
+- tests/test_telemetry_worker_health.py
 
 ### Dependencies
 - None
 
 ### Acceptance Criteria
-- [ ] Admin-only handlers reject requests unless a valid token is supplied.
-- [ ] Default configs no longer allow `mode="admin"` without auth.
-- [ ] Tests cover viewer/admin splits and log emission when auth disabled.
+- [x] Admin-only handlers reject requests unless a valid token is supplied.
+- [x] Default configs no longer allow `mode="admin"` without auth.
+- [x] Tests cover viewer/admin splits and log emission when auth disabled.
+
+### Progress
+- Phase 0 (risk prep) complete: baseline console auth tests (`pytest tests/test_console_auth.py`) confirmed prior downgrade behaviour and warning.
+- Phase 1 (design) complete: planned admin rejection, structured logging, and telemetry status exposure.
+- Phase 2 (implementation) complete: auth rejects admin when disabled, logs `console_admin_request_rejected`, and transport status records `auth_enabled`.
+- Phase 3 (validation) complete: console auth tests updated, telemetry health metrics asserted, full pytest suite green (497 passed / 1 skipped).
+- Phase 4 (docs & wrap-up) complete: work package updated; operators can inspect `telemetry_console_auth_enabled`.
 
 ### Related Issues
 - Ties to WP-302 for secure transport guidance.

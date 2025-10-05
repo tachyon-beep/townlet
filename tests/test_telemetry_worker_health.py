@@ -4,7 +4,7 @@ import logging
 import time
 from pathlib import Path
 
-from townlet.config import load_config
+from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.telemetry.publisher import TelemetryPublisher
 
@@ -81,8 +81,27 @@ def test_health_metrics_include_worker_status(tmp_path: Path) -> None:
         _ensure_agents(loop)
         loop.step()
         metrics = loop.telemetry.latest_health_status()
+
         assert metrics["telemetry_worker_alive"] is True
         assert metrics["telemetry_worker_error"] is None
         assert metrics["telemetry_worker_restart_count"] == 0
+        assert metrics["telemetry_console_auth_enabled"] is False
+    finally:
+        loop.telemetry.close()
+
+def test_health_metrics_reflect_auth_enabled(tmp_path: Path) -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    console_auth = ConsoleAuthConfig(enabled=True, tokens=[ConsoleAuthTokenConfig(token="secret", role="admin")])
+    config = config.model_copy(update={"console_auth": console_auth})
+    config.telemetry.transport.type = "file"
+    config.telemetry.transport.file_path = tmp_path / "telemetry_auth.jsonl"
+    config.telemetry.transport.buffer.max_batch_size = 1
+    config.telemetry.transport.buffer.flush_interval_ticks = 1
+    loop = SimulationLoop(config)
+    try:
+        _ensure_agents(loop)
+        loop.step()
+        metrics = loop.telemetry.latest_health_status()
+        assert metrics["telemetry_console_auth_enabled"] is True
     finally:
         loop.telemetry.close()
