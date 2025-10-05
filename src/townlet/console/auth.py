@@ -115,6 +115,8 @@ class ConsoleAuthenticator:
         return default
 
     def authorise(self, command: object) -> tuple[dict[str, Any], AuthPrincipal | None]:
+        """Validate a console payload and return the sanitised mapping + principal."""
+
         payload = self._to_mapping(command)
         identity = self._identity(payload)
         if not self.enabled:

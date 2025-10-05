@@ -15,23 +15,33 @@ class TrajectoryService:
     _current_tick: int = 0
 
     def begin_tick(self, tick: int) -> None:
+        """Record the simulation tick associated with subsequent transitions."""
+
         self._current_tick = tick
 
     def transition_entry(self, agent_id: str) -> dict[str, Any]:
+        """Return (and create if needed) the transition entry for ``agent_id``."""
+
         return self._transitions.setdefault(agent_id, {})
 
     def record_action(self, agent_id: str, action_payload: dict[str, Any], action_id: int) -> dict[str, Any]:
+        """Attach the selected action to ``agent_id``'s transition entry."""
+
         entry = self.transition_entry(agent_id)
         entry["action"] = action_payload
         entry["action_id"] = action_id
         return entry
 
     def append_reward(self, agent_id: str, reward: float, done: bool) -> None:
+        """Append reward and termination signals to the current transition."""
+
         entry = self.transition_entry(agent_id)
         entry.setdefault("rewards", []).append(reward)
         entry.setdefault("dones", []).append(bool(done))
 
     def flush_transitions(self, observations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        """Combine transitions with observations and clear the per-agent cache."""
+
         frames: list[dict[str, Any]] = []
         for agent_id, payload in observations.items():
             entry = self._transitions.get(agent_id, {})
@@ -51,23 +61,33 @@ class TrajectoryService:
         return frames
 
     def extend_trajectory(self, frames: list[dict[str, Any]]) -> None:
+        """Extend the stored trajectory list with freshly generated frames."""
+
         self._trajectory.extend(frames)
 
     def collect_trajectory(self, clear: bool = True) -> list[dict[str, Any]]:
+        """Return the accumulated trajectory and optionally clear the buffer."""
+
         result = list(self._trajectory)
         if clear:
             self._trajectory.clear()
         return result
 
     def reset_state(self) -> None:
+        """Clear cached transitions and trajectory information."""
+
         self._transitions.clear()
         self._trajectory.clear()
 
     @property
     def transitions(self) -> dict[str, dict[str, Any]]:
+        """Return the raw transition buffer keyed by agent identifier."""
+
         return self._transitions
 
     @property
     def trajectory(self) -> list[dict[str, Any]]:
+        """Return the accumulated trajectory frames without clearing them."""
+
         return self._trajectory
 

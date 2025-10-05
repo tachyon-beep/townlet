@@ -107,6 +107,8 @@ class SimulationLoop:
                 runtime.bind_world(value)
 
     def _build_components(self) -> None:
+        """Instantiate runtime dependencies based on the simulation config."""
+
         self._rng_world = random.Random(self._derive_seed("world"))
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
@@ -241,7 +243,7 @@ class SimulationLoop:
             self._rng_policy.setstate(policy_state)
 
     def run(self, max_ticks: int | None = None) -> Iterable[TickArtifacts]:
-        """Run the loop until `max_ticks` or indefinitely."""
+        """Run the loop until ``max_ticks`` or indefinitely."""
         while max_ticks is None or self.tick < max_ticks:
             yield self.step()
 
@@ -263,6 +265,7 @@ class SimulationLoop:
         self.run_for_ticks(max_ticks, collect=False)
 
     def step(self) -> TickArtifacts:
+        """Advance the simulation loop by one tick and return observations/rewards."""
         tick_start = time.perf_counter()
         next_tick = self.tick + 1
         console_ops = self.telemetry.drain_console_buffer()
@@ -389,6 +392,7 @@ class SimulationLoop:
 
 
     def _record_step_success(self, duration_ms: float) -> None:
+        """Update health metadata after a successful tick."""
         self._health.last_tick = self.tick
         self._health.last_duration_ms = duration_ms
         self._health.last_error = None
@@ -396,6 +400,7 @@ class SimulationLoop:
         self._health.last_snapshot_path = None
 
     def _handle_step_failure(self, tick: int, duration_ms: float, exc: BaseException) -> None:
+        """Record failure metadata, emit telemetry, and invoke failure handlers."""
         error_message = f"{exc.__class__.__name__}: {exc}"
         self._health.last_tick = max(self._health.last_tick, tick)
         self._health.last_duration_ms = duration_ms

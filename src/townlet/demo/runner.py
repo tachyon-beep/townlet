@@ -1,3 +1,5 @@
+"""Utilities for running scripted Townlet demos and dashboards."""
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +41,7 @@ class DemoScheduler:
         executor: ConsoleCommandExecutor,
         tick: int,
     ) -> None:
+        """Dispatch due timeline entries for the current tick."""
         due = self.timeline.pop_due(tick)
         if not due:
             self._set_palette(executor, None)
@@ -70,6 +73,7 @@ class DemoScheduler:
                 self._set_palette(executor, warning, "red")
 
     def _execute_action(self, world: WorldState, command: ScheduledCommand) -> str:
+        """Execute action-style commands that mutate the world directly."""
         name = command.name
         kwargs = command.kwargs or {}
         if name == "spawn_agent":
@@ -133,6 +137,7 @@ class DemoScheduler:
         tick: int,
         command: ScheduledCommand,
     ) -> tuple[str, str]:
+        """Submit a narration command while respecting throttling rules."""
         kwargs = command.kwargs or {}
         raw_message = kwargs.get("message")
         if raw_message is None and command.args:
@@ -194,6 +199,7 @@ class DemoScheduler:
         message: str | None,
         style: str = "dim",
     ) -> None:
+        """Update dashboard palette state with the most recent status message."""
         if self.palette_state is None:
             return
         if message is not None:
@@ -292,6 +298,8 @@ def run_demo_dashboard(
     personality_filter: str | None = None,
     show_personality_narration: bool = True,
 ) -> None:
+    """Run the interactive Rich dashboard with the supplied timeline."""
+
     scheduler = DemoScheduler(timeline=timeline, palette_state=palette_state)
     run_dashboard(
         loop,

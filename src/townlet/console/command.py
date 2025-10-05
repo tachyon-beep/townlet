@@ -136,6 +136,8 @@ class ConsoleCommandResult:
         tick: int | None = None,
         latency_ms: int | None = None,
     ) -> ConsoleCommandResult:
+        """Build a successful result payload from an executed envelope."""
+
         result_payload = dict(payload) if payload is not None else {}
         return cls(
             name=envelope.name,
@@ -158,6 +160,8 @@ class ConsoleCommandResult:
         tick: int | None = None,
         latency_ms: int | None = None,
     ) -> ConsoleCommandResult:
+        """Return an error result describing why the command failed."""
+
         error_payload = {"code": code, "message": message}
         if details is not None:
             error_payload["details"] = dict(details)
@@ -172,6 +176,8 @@ class ConsoleCommandResult:
         )
 
     def clone(self) -> ConsoleCommandResult:
+        """Return a shallow copy suitable for caching/idempotency."""
+
         return ConsoleCommandResult(
             name=self.name,
             status=self.status,
@@ -184,6 +190,8 @@ class ConsoleCommandResult:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise the result to a JSON-friendly dictionary."""
+
         payload: dict[str, Any] = {
             "name": self.name,
             "status": self.status,

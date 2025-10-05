@@ -87,6 +87,8 @@ class PersonalityProfiles:
 
     @classmethod
     def get(cls, name: str) -> PersonalityProfile:
+        """Return the personality profile registered under ``name``."""
+
         key = name.lower()
         if key not in cls._profiles:
             raise KeyError(name)
@@ -94,22 +96,30 @@ class PersonalityProfiles:
 
     @classmethod
     def names(cls) -> tuple[str, ...]:
+        """Return all profile names registered on this class."""
+
         return tuple(sorted(cls._profiles.keys()))
 
     @classmethod
     def resolve(cls, name: str | None) -> PersonalityProfile:
+        """Resolve ``name`` to a profile, falling back to balanced."""
+
         if not name:
             return cls._profiles["balanced"]
         return cls.get(name)
 
 
 def personality_from_profile(name: str | None) -> tuple[str, Personality]:
+    """Resolve an optional profile name to `(profile_name, personality)`."""
+
     profile = PersonalityProfiles.resolve(name)
     return profile.name, profile.personality
 
 
 @dataclass
 class RelationshipEdge:
+    """Directed relationship edge from one agent to another."""
+
     other_id: str
     trust: float
     familiarity: float

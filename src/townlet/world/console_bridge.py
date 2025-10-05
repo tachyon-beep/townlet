@@ -1,4 +1,10 @@
-"""Console command management for WorldState."""
+"""Console command management for :mod:`townlet.world`.
+
+The bridge isolates console handler registration, result buffering, and
+idempotency guarantees from the rest of the world runtime. Simulation code feeds
+incoming console payloads into :meth:`ConsoleBridge.apply` each tick while
+telemetry drains results via :meth:`consume_results`.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ConsoleHandlerEntry:
+    """Metadata describing a registered console handler."""
+
     handler: Callable[[ConsoleCommandEnvelope], ConsoleCommandResult]
     mode: str
     require_cmd_id: bool
@@ -48,6 +56,15 @@ class ConsoleBridge:
         mode: str = "viewer",
         require_cmd_id: bool = False,
     ) -> None:
+        """Register a console handler.
+
+        Args:
+            name: Command name exposed to the operator.
+            handler: Callable invoked with the normalised command envelope.
+            mode: Required privilege level (``"viewer"`` or ``"admin"``).
+            require_cmd_id: When ``True``, commands lacking ``cmd_id`` are
+                rejected for idempotency purposes.
+        """
         self._handlers[name] = ConsoleHandlerEntry(
             handler=handler,
             mode=mode,
@@ -55,9 +72,13 @@ class ConsoleBridge:
         )
 
     def handlers(self) -> Mapping[str, ConsoleHandlerEntry]:
+        """Return the registered handlers keyed by command name."""
+
         return self._handlers
 
     def record_result(self, result: ConsoleCommandResult) -> None:
+        """Persist a console command result in both caches."""
+
         if result.cmd_id:
             self._cmd_history[result.cmd_id] = result.clone()
             while len(self._cmd_history) > self._history_limit:
@@ -65,11 +86,15 @@ class ConsoleBridge:
         self._result_buffer.append(result)
 
     def consume_results(self) -> list[ConsoleCommandResult]:
+        """Return buffered results and clear the short-term buffer."""
+
         results = list(self._result_buffer)
         self._result_buffer.clear()
         return results
 
     def cached_result(self, cmd_id: str) -> ConsoleCommandResult | None:
+        """Return a cached copy of the response for ``cmd_id`` if stored."""
+
         cached = self._cmd_history.get(cmd_id)
         if cached is None:
             return None
@@ -78,6 +103,12 @@ class ConsoleBridge:
         return clone
 
     def apply(self, operations: Iterable[Any]) -> None:
+        """Execute console operations and record their results.
+
+        Payloads that fail validation produce structured error results so
+        operators still receive meaningful feedback. Duplicate commands (with
+        matching ``cmd_id``) are short-circuited to the cached response.
+        """
         for operation in operations:
             try:
                 envelope = ConsoleCommandEnvelope.from_payload(operation)

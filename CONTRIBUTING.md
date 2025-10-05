@@ -12,11 +12,13 @@ Thank you for your interest in shaping Townlet. This guide summarises how we wor
    ruff check src tests
    mypy src
    pytest
+   scripts/check_docstrings.py src/townlet --min-module 95 --min-callable 40
    ```
 5. Open a pull request using the template. Summarise behaviour, risks, and validation evidence.
 
 ## Coding Standards
 
+- Refer to `docs/guides/DOCSTRING_GUIDE.md` for docstring tone and formatting.
 - Target Python 3.11+ with type annotations and `from __future__ import annotations` in new modules.
 - Keep modules small and cohesive. Cross-module interactions should use clearly defined dataclasses or protocols.
 - Use feature flags (`features.*`) to guard work-in-progress systems. Do not couple experimental behaviour to ad-hoc conditionals.

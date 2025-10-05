@@ -36,9 +36,10 @@ if TYPE_CHECKING:
 
 
 class TelemetryPublisher:
-    """Publishes observer snapshots and consumes console commands."""
+    """Publish telemetry snapshots, manage console ingress, and track health."""
 
     def __init__(self, config: SimulationConfig) -> None:
+        """Capture world snapshots and emit telemetry for a simulation tick."""
         self.config = config
         self.schema_version = "0.9.7"
         self._relationship_narration_cfg = self.config.telemetry.relationship_narration
@@ -178,6 +179,7 @@ class TelemetryPublisher:
             self._pending_restart = False
 
     def queue_console_command(self, command: object) -> None:
+        """Authorise and enqueue an incoming console command payload."""
         try:
             sanitized, _principal = self._console_auth.authorise(command)
         except ConsoleAuthenticationError as exc:
@@ -212,6 +214,7 @@ class TelemetryPublisher:
         self._console_buffer.append(sanitized)
 
     def drain_console_buffer(self) -> Iterable[object]:
+        """Return queued console commands and clear the buffer."""
         drained = list(self._console_buffer)
         self._console_buffer.clear()
         return drained
@@ -553,6 +556,7 @@ class TelemetryPublisher:
         self._console_buffer = list(buffer)
 
     def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
+        """Persist console results for audit logs and downstream subscribers."""
         batch: list[dict[str, Any]] = []
         for result in results:
             payload = result.to_dict()
@@ -608,9 +612,11 @@ class TelemetryPublisher:
         )
 
     def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
+        """Update health telemetry derived from the simulation loop."""
         self._latest_health_status = dict(metrics)
 
     def latest_health_status(self) -> dict[str, object]:
+        """Return the most recently recorded health payload."""
         return dict(self._latest_health_status)
 
     def _build_transport_client(self):

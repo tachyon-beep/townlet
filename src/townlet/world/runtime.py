@@ -1,4 +1,10 @@
-"""Runtime façade coordinating world tick sequencing."""
+"""Runtime façade coordinating world tick sequencing.
+
+The runtime acts as the glue between the simulation loop and the sprawling
+`WorldState` helpers. It is responsible for staging policy actions, applying
+console commands, advancing perturbations, and yielding the artefacts other
+subsystems consume (policy, telemetry, rewards, etc.).
+"""
 
 from __future__ import annotations
 
@@ -20,7 +26,12 @@ ActionProvider = Callable[["WorldState", int], ActionMapping]
 
 @dataclass(slots=True)
 class RuntimeStepResult:
-    """Outcome of a world runtime tick."""
+    """Outcome of a world runtime tick.
+
+    The runtime reports the console responses, emitted events and the action
+    payload applied during the tick so downstream systems (telemetry, rewards,
+    policy training) can consume a consistent view of what happened.
+    """
 
     console_results: list[ConsoleCommandResult] = field(default_factory=list)
     events: list[dict[str, object]] = field(default_factory=list)
@@ -30,7 +41,13 @@ class RuntimeStepResult:
 
 
 class WorldRuntime:
-    """Facade that sequences world-side operations each tick."""
+    """Facade that sequences world-side operations each tick.
+
+    The object is intentionally stateful: it buffers console operations and
+    actions staged by the simulation loop so they are consumed exactly once per
+    tick. `SimulationLoop` injects dependencies during construction and calls
+    :meth:`tick` on every iteration.
+    """
 
     def __init__(
         self,
@@ -57,12 +74,20 @@ class WorldRuntime:
         self._world = world
 
     def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
-        """Buffer console operations for the next tick."""
+        """Buffer console operations for the next tick.
+
+        The buffered operations are drained the next time :meth:`tick` executes.
+        Callers typically pass in commands drained from the telemetry layer.
+        """
 
         self._queued_console.extend(list(operations))
 
     def apply_actions(self, actions: ActionMapping) -> None:
-        """Stage policy actions for the next tick."""
+        """Stage policy actions for the next tick.
+
+        Actions staged here are consumed unless :meth:`tick` is provided with a
+        dedicated ``policy_actions`` mapping or an ``action_provider`` callable.
+        """
 
         self._pending_actions = dict(actions)
 
@@ -82,7 +107,19 @@ class WorldRuntime:
         action_provider: ActionProvider | None = None,
         policy_actions: ActionMapping | None = None,
     ) -> RuntimeStepResult:
-        """Advance the world by one tick and return observable artefacts."""
+        """Advance the world by one tick and return observable artefacts.
+
+        Args:
+            tick: Simulation tick to stamp on the world state and output.
+            console_operations: Optional override for the buffered console queue.
+            action_provider: Callback used to fetch staged policy actions when
+                ``policy_actions`` is not supplied.
+            policy_actions: Explicit mapping of actions to apply this tick.
+
+        Returns:
+            RuntimeStepResult containing console outputs, emitted events and
+            termination state for each agent.
+        """
 
         world = self._world
         lifecycle = self._lifecycle

@@ -1,3 +1,5 @@
+"""Timeline helpers for scheduling demo console commands and actions."""
+
 from __future__ import annotations
 
 import json
@@ -41,9 +43,13 @@ class DemoTimeline:
 
     @property
     def remaining(self) -> int:
+        """Return the number of scheduled entries pending execution."""
+
         return len(self._commands) - self._index
 
     def pop_due(self, current_tick: int) -> list[ScheduledCommand]:
+        """Return all commands whose tick is <= ``current_tick`` and advance."""
+
         due: list[ScheduledCommand] = []
         while self._index < len(self._commands) and self._commands[self._index].tick <= current_tick:
             due.append(self._commands[self._index])
@@ -51,9 +57,13 @@ class DemoTimeline:
         return due
 
     def upcoming(self) -> Iterator[ScheduledCommand]:
+        """Yield commands that have not yet fired."""
+
         yield from self._commands[self._index :]
 
     def next_tick(self) -> int | None:
+        """Return the next scheduled tick or ``None`` when exhausted."""
+
         if self._index < len(self._commands):
             return self._commands[self._index].tick
         return None

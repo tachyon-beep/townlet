@@ -40,32 +40,46 @@ class BehaviorBridge:
     # Configuration and callbacks
     # ------------------------------------------------------------------
     def seed_anneal_rng(self, seed: int) -> None:
+        """Seed the RNG used when sampling between scripted and policy intents."""
+
         self._anneal_rng.seed(seed)
 
     def set_anneal_ratio(self, ratio: float | None) -> None:
+        """Set blend ratio between scripted behaviour and policy actions."""
+
         if ratio is None:
             self._anneal_ratio = None
         else:
             self._anneal_ratio = max(0.0, min(1.0, float(ratio)))
 
     def current_anneal_ratio(self) -> float | None:
+        """Return the currently configured anneal blend ratio."""
+
         return self._anneal_ratio
 
     def enable_anneal_blend(self, enabled: bool) -> None:
+        """Toggle anneal blending of policy and scripted intents."""
+
         self._anneal_blend_enabled = bool(enabled)
 
     def register_ctx_reset_callback(self, callback: Callable[[str], None] | None) -> None:
+        """Register a callback invoked when an agent context is reset."""
+
         self._ctx_reset_callback = callback
 
     def set_policy_action_provider(
         self, provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None]
     ) -> None:
+        """Override action selection for possessed agents."""
+
         self._policy_action_provider = provider
 
     # ------------------------------------------------------------------
     # Possession helpers
     # ------------------------------------------------------------------
     def acquire_possession(self, agent_id: str) -> bool:
+        """Mark an agent as externally controlled, clearing commit state."""
+
         if agent_id in self._possessed_agents:
             return False
         self._possessed_agents.add(agent_id)
@@ -75,15 +89,21 @@ class BehaviorBridge:
         return True
 
     def release_possession(self, agent_id: str) -> bool:
+        """Release possession acquired via :meth:`acquire_possession`."""
+
         if agent_id not in self._possessed_agents:
             return False
         self._possessed_agents.discard(agent_id)
         return True
 
     def is_possessed(self, agent_id: str) -> bool:
+        """Return whether ``agent_id`` is currently possessed."""
+
         return agent_id in self._possessed_agents
 
     def possessed_agents(self) -> list[str]:
+        """Return a sorted list of possessed agent identifiers."""
+
         return sorted(self._possessed_agents)
 
     # ------------------------------------------------------------------
@@ -96,6 +116,8 @@ class BehaviorBridge:
         tick: int,
         guardrail_fn: Callable[[WorldState, str, AgentIntent], AgentIntent],
     ) -> tuple[AgentIntent, bool]:
+        """Determine an agent intent and enforce option commit guardrails."""
+
         scripted = self.behavior.decide(world, agent_id)
         blended = self._select_intent_with_blend(world, agent_id, scripted)
         guarded = guardrail_fn(world, agent_id, blended)
@@ -110,6 +132,8 @@ class BehaviorBridge:
         entry: dict[str, object],
         commit_enforced: bool,
     ) -> None:
+        """Annotate transition frames with option commit metadata."""
+
         commit_until = self._option_commit_until.get(agent_id)
         if commit_until is not None and commit_until > tick:
             entry["option_commit_remaining"] = commit_until - tick
@@ -123,20 +147,28 @@ class BehaviorBridge:
             entry.pop("option_commit_enforced", None)
 
     def consume_option_switch_counts(self) -> dict[str, int]:
+        """Return option switch counts and clear accumulated data."""
+
         snapshot = dict(self._option_switch_counts)
         self._option_switch_counts.clear()
         return snapshot
 
     def mark_termination(self, agent_id: str) -> None:
+        """Reset commit/option tracking for ``agent_id`` after termination."""
+
         self._last_option.pop(agent_id, None)
         self._option_switch_counts.pop(agent_id, None)
         self.clear_commit_state(agent_id)
 
     def clear_commit_state(self, agent_id: str) -> None:
+        """Remove tracked commit state for ``agent_id``."""
+
         self._option_commit_until.pop(agent_id, None)
         self._option_committed_intent.pop(agent_id, None)
 
     def reset_state(self) -> None:
+        """Clear all cached option/possession state."""
+
         self._option_commit_until.clear()
         self._option_committed_intent.clear()
         self._last_option.clear()
@@ -227,4 +259,3 @@ class BehaviorBridge:
             and lhs.target_agent == rhs.target_agent
             and lhs.quality == rhs.quality
         )
-

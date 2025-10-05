@@ -222,7 +222,13 @@ class AffordanceSpec:
 
 
 class WorldSpatialIndex:
-    """Tracks agent placement and reservation tiles for fast lookups."""
+    """Maintains spatial lookups to accelerate world queries.
+
+    World code calls into the index whenever agents move, spawn, or despawn so
+    other subsystems (observations, telemetry) can run O(radius²) queries rather
+    than scanning every agent. Reservation tiles are tracked separately because
+    they are derived from objects instead of the agent registry.
+    """
 
     def __init__(self) -> None:
         self._agents_by_position: dict[tuple[int, int], list[str]] = {}
@@ -236,6 +242,8 @@ class WorldSpatialIndex:
         objects: Mapping[str, InteractiveObject],
         active_reservations: Mapping[str, str],
     ) -> None:
+        """Recalculate cached lookups from authoritative world state."""
+
         self._agents_by_position.clear()
         self._positions_by_agent.clear()
         for agent_id, snapshot in agents.items():
@@ -255,12 +263,16 @@ class WorldSpatialIndex:
             self._reservation_tiles.add(obj.position)
 
     def insert_agent(self, agent_id: str, position: tuple[int, int]) -> None:
+        """Register a new agent at ``position`` without rebuilding all indexes."""
+
         self._positions_by_agent[agent_id] = position
         bucket = self._agents_by_position.setdefault(position, [])
         if agent_id not in bucket:
             bucket.append(agent_id)
 
     def move_agent(self, agent_id: str, position: tuple[int, int]) -> None:
+        """Update cached lookups when an agent moves to ``position``."""
+
         previous = self._positions_by_agent.get(agent_id)
         if previous is not None:
             bucket = self._agents_by_position.get(previous)
@@ -274,6 +286,8 @@ class WorldSpatialIndex:
         self.insert_agent(agent_id, position)
 
     def remove_agent(self, agent_id: str) -> None:
+        """Remove agent entries from cached indices."""
+
         previous = self._positions_by_agent.pop(agent_id, None)
         if previous is None:
             return
@@ -288,13 +302,19 @@ class WorldSpatialIndex:
             self._agents_by_position.pop(previous, None)
 
     def position_of(self, agent_id: str) -> tuple[int, int] | None:
+        """Return the cached grid position for ``agent_id`` if known."""
+
         return self._positions_by_agent.get(agent_id)
 
     def agents_at(self, position: tuple[int, int]) -> tuple[str, ...]:
+        """Return agent identifiers occupying ``position``."""
+
         return tuple(self._agents_by_position.get(position, ()))
 
     # Reservation bookkeeping -------------------------------------------
     def set_reservation(self, position: tuple[int, int] | None, active: bool) -> None:
+        """Toggle reservation state for the tile at ``position``."""
+
         if position is None:
             return
         if active:
@@ -303,6 +323,8 @@ class WorldSpatialIndex:
             self._reservation_tiles.discard(position)
 
     def reservation_tiles(self) -> frozenset[tuple[int, int]]:
+        """Return a frozen copy of tiles reserved by active affordances."""
+
         return frozenset(self._reservation_tiles)
 
 

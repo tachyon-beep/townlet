@@ -1,4 +1,4 @@
-"""Policy orchestration scaffolding."""
+"""Orchestration layer between the simulation loop and policy backends."""
 
 from __future__ import annotations
 
@@ -57,9 +57,17 @@ def _pretty_action(action_repr: str) -> str:
 
 
 class PolicyRuntime:
-    """Bridges the simulation with PPO/backends via PettingZoo."""
+    """Bridge between the simulation loop, scripted behaviour, and policy backends.
+
+    The runtime owns the behaviour controller, optional neural policy, and the
+    trajectory buffers consumed by training jobs. It presents a PettingZoo-like
+    façade (`decide`, `post_step`, `flush_transitions`) while hiding optional
+    dependencies such as PyTorch.
+    """
 
     def __init__(self, config: SimulationConfig) -> None:
+        """Initialise behaviour bridges, trajectory buffers, and policy metadata."""
+
         self.config = config
         behavior_controller: BehaviorController = build_behavior(config)
         self._tick: int = 0
@@ -115,21 +123,29 @@ class PolicyRuntime:
         return self._behavior_bridge._option_committed_intent
 
     def seed_anneal_rng(self, seed: int) -> None:
+        """Seed the RNG used by anneal blend scheduling."""
+
         self._behavior_bridge.seed_anneal_rng(seed)
 
     def enable_anneal_blend(self, enabled: bool) -> None:
+        """Toggle anneal blending behaviour on the underlying controller."""
+
         self._behavior_bridge.enable_anneal_blend(enabled)
 
     def register_ctx_reset_callback(self, callback: Callable[[str], None] | None) -> None:
+        """Install a callback invoked whenever an agent context reset is requested."""
+
         self._behavior_bridge.register_ctx_reset_callback(callback)
 
     def set_policy_action_provider(
         self, provider: Callable[[WorldState, str, AgentIntent], AgentIntent | None]
     ) -> None:
+        """Override scripted action selection for possessed agents."""
+
         self._behavior_bridge.set_policy_action_provider(provider)
 
     def decide(self, world: WorldState, tick: int) -> dict[str, object]:
-        """Return a primitive action per agent."""
+        """Return an action dictionary per agent for the current tick."""
         self._tick = tick
         self._trajectory_service.begin_tick(tick)
         actions: dict[str, object] = {}
@@ -225,7 +241,7 @@ class PolicyRuntime:
         return intent
 
     def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
-        """Record rewards and termination signals into buffers."""
+        """Record rewards and termination signals into internal buffers."""
         for agent_id, reward in rewards.items():
             done = bool(terminated.get(agent_id, False))
             self._trajectory_service.append_reward(agent_id, reward, done)
@@ -239,7 +255,7 @@ class PolicyRuntime:
     def flush_transitions(
         self, observations: dict[str, dict[str, object]]
     ) -> list[dict[str, object]]:
-        """Combine stored transition data with observations and return trajectory frames."""
+        """Combine stored transition data with observations and return frames."""
         frames = self._trajectory_service.flush_transitions(observations)
         for frame in frames:
             self._annotate_with_policy_outputs(frame)
@@ -248,24 +264,32 @@ class PolicyRuntime:
         return frames
 
     def collect_trajectory(self, clear: bool = True) -> list[dict[str, object]]:
-        """Return accumulated trajectory frames and reset internal buffer."""
+        """Return accumulated trajectory frames and optionally clear the buffer."""
         return self._trajectory_service.collect_trajectory(clear=clear)
 
     def consume_option_switch_counts(self) -> dict[str, int]:
-        """Return per-agent option switch counts accumulated since last call."""
+        """Return per-agent option switch counts accumulated since the last call."""
 
         return self._behavior_bridge.consume_option_switch_counts()
 
     def acquire_possession(self, agent_id: str) -> bool:
+        """Mark an agent as possessed so scripted logic controls actions."""
+
         return self._behavior_bridge.acquire_possession(agent_id)
 
     def release_possession(self, agent_id: str) -> bool:
+        """Release possession acquired via :meth:`acquire_possession`."""
+
         return self._behavior_bridge.release_possession(agent_id)
 
     def is_possessed(self, agent_id: str) -> bool:
+        """Return whether ``agent_id`` is currently possessed."""
+
         return self._behavior_bridge.is_possessed(agent_id)
 
     def possessed_agents(self) -> list[str]:
+        """Return a list of possessed agent identifiers."""
+
         return self._behavior_bridge.possessed_agents()
 
     def reset_state(self) -> None:
@@ -444,4 +468,3 @@ class TrainingHarness(PolicyTrainingOrchestrator):
             stacklevel=2,
         )
         super().__init__(config=config)
-

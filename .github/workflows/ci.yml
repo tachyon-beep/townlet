@@ -24,6 +24,12 @@ jobs:
         run: |
           ruff check src tests
           mypy src
+
+      - name: Docstring coverage
+        run: |
+          python scripts/check_docstrings.py src/townlet --min-module 90 --min-callable 25
+          python -m interrogate -c pyproject.toml src/townlet
+
       - name: Unit tests
         run: pytest -k "not rollout_capture"
 

@@ -46,10 +46,14 @@ class AffordanceManifest:
 
     @property
     def object_count(self) -> int:
+        """Return number of object entries defined in the manifest."""
+
         return len(self.objects)
 
     @property
     def affordance_count(self) -> int:
+        """Return number of affordance entries defined in the manifest."""
+
         return len(self.affordances)
 
 

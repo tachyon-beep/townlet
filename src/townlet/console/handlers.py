@@ -43,9 +43,13 @@ class ConsoleRouter:
         self._handlers: dict[str, ConsoleHandler] = {}
 
     def register(self, name: str, handler: ConsoleHandler) -> None:
+        """Register ``handler`` under ``name`` for later dispatch."""
+
         self._handlers[name] = handler
 
     def dispatch(self, command: ConsoleCommand) -> object:
+        """Route the command to its registered handler and return the result."""
+
         handler = self._handlers.get(command.name)
         if handler is None:
             raise KeyError(f"Unknown console command: {command.name}")
@@ -59,12 +63,16 @@ class EventStream:
         self._latest: list[dict[str, object]] = []
 
     def connect(self, publisher: TelemetryPublisher) -> None:
+        """Subscribe to telemetry events produced by ``publisher``."""
+
         publisher.register_event_subscriber(self._record)
 
     def _record(self, events: list[dict[str, object]]) -> None:
         self._latest = events
 
     def latest(self) -> list[dict[str, object]]:
+        """Return a copy of the latest recorded events."""
+
         return list(self._latest)
 
 
