@@ -1,6 +1,6 @@
+import sys
 from pathlib import Path
 from subprocess import CalledProcessError, run
-import sys
 
 import pytest
 

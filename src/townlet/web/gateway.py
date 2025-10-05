@@ -7,11 +7,9 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
-
-from townlet_ui.telemetry import TelemetryClient
 
 # ---------------------------------------------------------------------------
 # Metrics
@@ -162,7 +160,7 @@ class ReplayStreamFactory:
         return 0.05
 
 
-__all__ = ["TelemetryGateway", "OperatorGateway", "create_app", "ReplayStreamFactory"]
+__all__ = ["OperatorGateway", "ReplayStreamFactory", "TelemetryGateway", "create_app"]
 
 
 class OperatorGateway:
@@ -202,7 +200,7 @@ class OperatorGateway:
                     result = self._dispatch(payload)
                     await websocket.send_json({"type": "command_ack", "status": "ok", "result": result})
                     OPERATOR_COMMANDS.labels(status="ok").inc()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     await websocket.send_json({
                         "type": "command_ack",
                         "status": "error",

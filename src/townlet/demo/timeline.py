@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List
-
-import json
+from typing import Any
 
 import yaml
 
@@ -33,7 +33,7 @@ class DemoTimeline:
     """Ordered queue of scheduled console commands for demos."""
 
     def __init__(self, commands: Iterable[ScheduledCommand]) -> None:
-        self._commands: List[ScheduledCommand] = sorted(commands, key=lambda item: item.tick)
+        self._commands: list[ScheduledCommand] = sorted(commands, key=lambda item: item.tick)
         self._index = 0
 
     def __bool__(self) -> bool:  # pragma: no cover - convenience

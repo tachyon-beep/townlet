@@ -1,14 +1,11 @@
+import json
 from pathlib import Path
 
-import pytest
-
 from townlet.config import load_config
-import json
-
+from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet.demo.runner import DemoScheduler, default_timeline, seed_demo_state
 from townlet.demo.timeline import load_timeline
-from townlet.console.handlers import create_console_router
 from townlet_ui.commands import ConsoleCommandExecutor
 
 

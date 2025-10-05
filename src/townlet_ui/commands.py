@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from townlet.console.handlers import ConsoleCommand
 

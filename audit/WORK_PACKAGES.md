@@ -57,6 +57,53 @@ Unauthenticated clients can execute admin console commands, undermining safety c
 - Phase 3 (validation) complete: console auth tests updated, telemetry health metrics asserted, full pytest suite green (497 passed / 1 skipped).
 - Phase 4 (docs & wrap-up) complete: work package updated; operators can inspect `telemetry_console_auth_enabled`.
 
+## WP-302: Require Secure Telemetry Transport Defaults
+
+**Category**: Security
+**Priority**: HIGH
+**Effort**: M (1-3 days)
+**Risk Level**: High
+
+### Description
+Telemetry transport defaults to plaintext TCP unless operators opt into TLS, leaving data in transit exposed.
+
+### Current State
+`TelemetryTransportConfig` now defaults TCP endpoints to TLS, plaintext overrides demand explicit dev flags and localhost targets, and telemetry publisher logs whenever plaintext is enabled. Documentation and operator guides capture the new safeguards.
+
+### Desired State
+TLS should be the default for TCP transport, with plaintext limited to explicit dev overrides that require multiple safeguards. Misconfigurations must surface clear errors/warnings.
+
+### Impact if Not Addressed
+Telemetry data and console responses could traverse networks unencrypted, exposing sensitive behavioural metrics and allowing tampering.
+
+### Proposed Solution
+- Default TCP transports to TLS unless plaintext is explicitly allowed.
+- Tighten validation for plaintext overrides (require dev flag + localhost + explicit opt-in).
+- Emit warnings/status flags when running in plaintext.
+- Update docs/tests to cover certificate configuration and insecure overrides.
+
+### Affected Components
+- src/townlet/config/loader.py
+- src/townlet/telemetry/transport.py
+- src/townlet/telemetry/publisher.py
+- tests/test_telemetry_transport.py
+- docs/ops/CONSOLE_ACCESS.md
+
+### Dependencies
+- None
+
+### Acceptance Criteria
+- [x] TLS-enabled TCP transport works out of the box with sample certs.
+- [x] Plaintext overrides require explicit dev flags and localhost targets.
+- [x] Tests/documentation updated to reflect secure defaults.
+
+### Progress
+- Phase 0 (risk prep) complete: baseline transport tests (`pytest tests/test_telemetry_transport.py`) and default config inspection confirmed the insecure defaults.
+- Phase 1 (design) complete: planned TLS-by-default, dev-only plaintext overrides, structured warnings/status flags, and documentation updates.
+- Phase 2 (implementation) complete: validator now defaults TCP transports to TLS, restricts plaintext to localhost dev overrides, and telemetry publisher logs plaintext usage.
+- Phase 3 (validation) complete: targeted tests (`tests/test_telemetry_transport.py`, `tests/test_console_auth.py`, `tests/test_telemetry_worker_health.py`) passed; simulation smoke (`scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 200`) captured in `tmp/wp302_phase3/` with plaintext warning evidence.
+- Phase 4 (docs & wrap-up) complete: updated `docs/ops/CONSOLE_ACCESS.md`, `docs/audit/M4_ROLLOUT_PLAN.md`, and checked acceptance criteria into this audit log.
+
 ### Related Issues
 - Ties to WP-302 for secure transport guidance.
 

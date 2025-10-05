@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable
-from typing import Callable, Dict, List
+from collections.abc import Callable, Iterable
 
 from .timeline import DemoTimeline, ScheduledCommand
 
 StorylineBuilder = Callable[[], Iterable[ScheduledCommand]]
 
 
-def _legacy_default() -> List[ScheduledCommand]:
+def _legacy_default() -> list[ScheduledCommand]:
     """Maintain historical default demo timeline for backward compatibility."""
 
     return [
@@ -35,7 +34,7 @@ def _legacy_default() -> List[ScheduledCommand]:
     ]
 
 
-def _demo_story_arc() -> List[ScheduledCommand]:
+def _demo_story_arc() -> list[ScheduledCommand]:
     """Narrative beats for the Milestone 1 demo story arc."""
 
     return [
@@ -101,7 +100,7 @@ def _demo_story_arc() -> List[ScheduledCommand]:
     ]
 
 
-_STORYLINES: Dict[str, StorylineBuilder] = {
+_STORYLINES: dict[str, StorylineBuilder] = {
     "legacy": _legacy_default,
     "demo_story_arc": _demo_story_arc,
 }

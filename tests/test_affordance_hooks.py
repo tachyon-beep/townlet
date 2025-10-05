@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot, WorldState

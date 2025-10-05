@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from tests.test_affordance_hooks import make_world, request_object
 from townlet.world.affordances import AffordanceOutcome, apply_affordance_outcome
 from townlet.world.grid import AgentSnapshot
-
-from tests.test_affordance_hooks import make_world, request_object
 
 
 def test_affordance_runtime_snapshot_contains_ids() -> None:

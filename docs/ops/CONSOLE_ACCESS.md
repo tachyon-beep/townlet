@@ -25,6 +25,13 @@ console_auth:
 
 Missing or invalid tokens result in an immediate `unauthorized` console result and the command is not queued.
 
+## Telemetry Transport Security
+
+- TCP telemetry transports now default to TLS. When `type: tcp`, operators only need to set certificate paths (see `configs/demo/poc_demo_tls.yaml`) and the connection negotiates TLS automatically.
+- Development plaintext requires three explicit opt-ins: set `enable_tls: false`, `allow_plaintext: true`, and `dev_allow_plaintext: true`, and point the endpoint at `localhost` or `127.0.0.1`. Any other host raises a configuration error.
+- When plaintext is enabled, Townlet logs `telemetry_tcp_plaintext_enabled` and telemetry status exposes `allow_plaintext: true`. Treat this as temporary and prefer TLS even in staging.
+- The default example config (`configs/examples/poc_hybrid.yaml`) uses stdout transport for local work; switch to TCP+TLS before deploying multi-host collectors.
+
 ## Client Expectations
 
 When auth is enabled, clients must attach an `auth` block to each command payload:

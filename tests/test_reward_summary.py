@@ -1,8 +1,7 @@
+import json
 from pathlib import Path
 
-import json
-
-from scripts.reward_summary import ComponentStats, RewardAggregator, collect_statistics, render_text
+from scripts.reward_summary import ComponentStats, collect_statistics, render_text
 
 
 def test_component_stats_mean_and_extremes() -> None:

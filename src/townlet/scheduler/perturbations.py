@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Optional
 
 from townlet.config import (
     ArrangedMeetEventConfig,
@@ -41,7 +40,7 @@ class PerturbationScheduler:
         self,
         config: SimulationConfig,
         *,
-        rng: Optional[random.Random] = None,
+        rng: random.Random | None = None,
     ) -> None:
         self.config = config
         self.settings: PerturbationSchedulerConfig = config.perturbations
@@ -152,8 +151,8 @@ class PerturbationScheduler:
         *,
         starts_in: int = 0,
         duration: int | None = None,
-        targets: Optional[list[str]] = None,
-        payload_overrides: Optional[dict[str, object]] = None,
+        targets: list[str] | None = None,
+        payload_overrides: dict[str, object] | None = None,
     ) -> ScheduledPerturbation:
         spec = self.spec_for(spec_name)
         if spec is None:
@@ -343,9 +342,9 @@ class PerturbationScheduler:
         world: WorldState,
         *,
         duration_override: int | None = None,
-        targets_override: Optional[list[str]] = None,
-        payload_override: Optional[dict[str, object]] = None,
-    ) -> Optional[ScheduledPerturbation]:
+        targets_override: list[str] | None = None,
+        payload_override: dict[str, object] | None = None,
+    ) -> ScheduledPerturbation | None:
         duration_range = spec.duration
         if duration_override is not None:
             length = max(int(duration_override), 0)
@@ -505,7 +504,7 @@ class PerturbationScheduler:
         self._next_id += 1
         return event_id
 
-    def spec_for(self, name: str) -> Optional[PerturbationEventConfig]:
+    def spec_for(self, name: str) -> PerturbationEventConfig | None:
         return self.specs.get(name)
 
     def rng_state(self) -> tuple:

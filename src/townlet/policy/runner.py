@@ -7,12 +7,10 @@ import math
 import random
 import statistics
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
-
-from typing import Callable
 
 from townlet.config import PPOConfig, SimulationConfig
 from townlet.policy.bc import BCTrainer, BCTrajectoryDataset, load_bc_samples

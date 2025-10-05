@@ -1,7 +1,8 @@
 """Stub affordance runtime implementations used by tests."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from townlet.world.affordances import AffordanceRuntimeContext
 

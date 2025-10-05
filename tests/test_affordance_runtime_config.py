@@ -9,7 +9,6 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.world.affordances import DefaultAffordanceRuntime
 
 
 @pytest.mark.parametrize("instrumentation", ["off", "timings"])
@@ -20,7 +19,7 @@ def test_runtime_config_factory_and_instrumentation(instrumentation: str, tmp_pa
     loop = SimulationLoop(config)
     runtime = loop.world.affordance_runtime
     assert runtime.__class__.__name__ == "StubAffordanceRuntime"
-    assert getattr(runtime, "instrumentation_level") == instrumentation
+    assert runtime.instrumentation_level == instrumentation
     assert loop.world.runtime_instrumentation_level == instrumentation
 
 

@@ -137,6 +137,12 @@ class TelemetryPublisher:
             "last_worker_error": None,
             "auth_enabled": bool(config.console_auth.enabled),
         }
+        if transport_cfg.type == "tcp" and not self._transport_status["tls_enabled"]:
+            endpoint = getattr(transport_cfg, "endpoint", None) or ""
+            logger.warning(
+                "telemetry_transport_plaintext host=%s message='TLS disabled; plaintext transport is intended for localhost dev only.'",
+                endpoint,
+            )
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
         self._flush_poll_interval = max(0.01, poll_interval)

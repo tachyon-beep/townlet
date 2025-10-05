@@ -9,7 +9,6 @@ from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.behavior import AgentIntent
 from townlet.world.grid import AgentSnapshot
 
-
 logger = logging.getLogger(__name__)
 
 

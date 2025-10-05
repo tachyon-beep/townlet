@@ -8,7 +8,7 @@ import random
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from townlet.agents.models import Personality, personality_from_profile
 from townlet.config import SimulationConfig
@@ -56,7 +56,7 @@ class SnapshotState:
     embeddings: dict[str, object] = field(default_factory=dict)
     employment: dict[str, object] = field(default_factory=dict)
     lifecycle: dict[str, object] = field(default_factory=dict)
-    rng_state: Optional[str] = None
+    rng_state: str | None = None
     rng_streams: dict[str, str] = field(default_factory=dict)
     telemetry: dict[str, object] = field(default_factory=dict)
     console_buffer: list[object] = field(default_factory=list)
@@ -103,7 +103,7 @@ class SnapshotState:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "SnapshotState":
+    def from_dict(cls, payload: Mapping[str, object]) -> SnapshotState:
         if "config_id" not in payload or "tick" not in payload:
             raise ValueError("Snapshot payload missing required fields")
         config_id = str(payload["config_id"])
@@ -147,7 +147,7 @@ class SnapshotState:
             lifecycle = {}
 
         rng_state = payload.get("rng_state")
-        rng_state_str: Optional[str]
+        rng_state_str: str | None
         if isinstance(rng_state, str):
             rng_state_str = rng_state
         else:
@@ -275,13 +275,13 @@ def snapshot_from_world(
     config: SimulationConfig,
     world: WorldState,
     *,
-    lifecycle: Optional[LifecycleManager] = None,
-    telemetry: Optional["TelemetryPublisher"] = None,
-    perturbations: Optional[PerturbationScheduler] = None,
-    stability: Optional["StabilityMonitor"] = None,
-    promotion: Optional["PromotionManager"] = None,
-    rng_streams: Optional[Mapping[str, random.Random]] = None,
-    identity: Optional[Mapping[str, object]] = None,
+    lifecycle: LifecycleManager | None = None,
+    telemetry: TelemetryPublisher | None = None,
+    perturbations: PerturbationScheduler | None = None,
+    stability: StabilityMonitor | None = None,
+    promotion: PromotionManager | None = None,
+    rng_streams: Mapping[str, random.Random] | None = None,
+    identity: Mapping[str, object] | None = None,
 ) -> SnapshotState:
     """Capture the current world state into a snapshot payload."""
 
@@ -406,7 +406,7 @@ def apply_snapshot_to_world(
     world: WorldState,
     snapshot: SnapshotState,
     *,
-    lifecycle: Optional[LifecycleManager] = None,
+    lifecycle: LifecycleManager | None = None,
 ) -> None:
     """Restore world, queue, embeddings, and lifecycle state from snapshot."""
 
@@ -516,7 +516,7 @@ def apply_snapshot_to_world(
 
 
 def apply_snapshot_to_telemetry(
-    telemetry: "TelemetryPublisher",
+    telemetry: TelemetryPublisher,
     snapshot: SnapshotState,
 ) -> None:
     telemetry.import_state(snapshot.telemetry)

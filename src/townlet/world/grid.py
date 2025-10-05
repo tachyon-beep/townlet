@@ -344,7 +344,7 @@ class WorldState:
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
     _console: ConsoleService = field(init=False)
-    _spatial_index: "WorldSpatialIndex" = field(init=False, repr=False)
+    _spatial_index: WorldSpatialIndex = field(init=False, repr=False)
     _queue_conflicts: QueueConflictTracker = field(init=False)
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)

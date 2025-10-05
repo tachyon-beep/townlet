@@ -10,6 +10,7 @@
   - `.venv/bin/python -m pytest` (full suite or targeted observation/employment/telemetry suites during iteration).
   - `.venv/bin/ruff check src/townlet/world src/townlet/observations`.
   - `.venv/bin/mypy src/townlet/world/observation.py src/townlet/observations` (ongoing debt noted below).
+  - For TCP telemetry deployments, run a handshake smoke test with `configs/demo/poc_demo_tls.yaml` (or staging config) to confirm TLS negotiation and cert loading before promotion.
 - Capture telemetry snapshots via `scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 500 --telemetry-path tmp/rollout/telemetry.jsonl` and compare the `runtime_variant`, queue metrics, and observation tensors against the Phase 3 baselines.
 
 ## Monitoring Hooks
@@ -18,6 +19,7 @@
   - Telemetry drop counts exceeding historical thresholds.
   - Employment exit queue length spikes.
 - Telemetry payloads include `runtime_variant`; confirm dashboards ingest the field and add a quick visualization to verify all environments report `facade`.
+- Alert on `telemetry_tcp_plaintext_enabled` warnings in log aggregation; plaintext transport should only appear in localhost development environments.
 - For UI smoke testing, run `scripts/observer_ui.py configs/examples/poc_hybrid.yaml --ticks 0 --refresh 1.0` in staging once per release candidate to ensure dashboards render with the facade.
 
 ## Stakeholder Sign-off

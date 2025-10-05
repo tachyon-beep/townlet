@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
+from townlet.config.loader import TelemetryTransportConfig
 from townlet.core.sim_loop import SimulationLoop
 from townlet.telemetry.transport import (
     TelemetryTransportError,
@@ -295,3 +296,29 @@ def test_create_transport_plaintext_disallowed() -> None:
             key_file=None,
             allow_plaintext=False,
         )
+
+
+def test_tcp_transport_defaults_to_tls() -> None:
+    cfg = TelemetryTransportConfig(type="tcp", endpoint="localhost:9000")
+    assert cfg.enable_tls is True
+    assert cfg.allow_plaintext is False
+
+
+def test_tcp_transport_plaintext_requires_dev_flags() -> None:
+    with pytest.raises(ValueError):
+        TelemetryTransportConfig(type="tcp", endpoint="localhost:9000", allow_plaintext=True, dev_allow_plaintext=False, enable_tls=False)
+    with pytest.raises(ValueError):
+        TelemetryTransportConfig(type="tcp", endpoint="example.com:9000", allow_plaintext=True, dev_allow_plaintext=True, enable_tls=False)
+
+
+def test_tcp_transport_plaintext_valid_for_localhost() -> None:
+    cfg = TelemetryTransportConfig(type="tcp", endpoint="127.0.0.1:5000", allow_plaintext=True, dev_allow_plaintext=True, enable_tls=False)
+    assert cfg.enable_tls is False
+    assert cfg.allow_plaintext is True
+
+
+def test_tcp_transport_ignores_plaintext_flags_when_tls_enabled() -> None:
+    cfg = TelemetryTransportConfig(type="tcp", endpoint="localhost:9000", allow_plaintext=True, dev_allow_plaintext=True, enable_tls=True)
+    assert cfg.enable_tls is True
+    assert cfg.allow_plaintext is False
+    assert cfg.dev_allow_plaintext is False

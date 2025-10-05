@@ -1,35 +1,35 @@
+import threading
 from pathlib import Path
 from types import SimpleNamespace
-import threading
 
 from rich.console import Console
 
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.dashboard import (
     AgentCardState,
+    PaletteState,
     _build_agent_cards_panel,
     _build_palette_overlay,
     _build_perturbation_panel,
-    PaletteState,
     dispatch_palette_selection,
     render_snapshot,
 )
 from townlet_ui.telemetry import (
     AgentSummary,
     FriendSummary,
+    NarrationEntry,
     PersonalitySnapshotEntry,
     PerturbationSnapshot,
     RelationshipSummaryEntry,
     RelationshipSummarySnapshot,
     RivalSummary,
     SocialEventEntry,
-    NarrationEntry,
-    TelemetryHistory,
     TelemetryClient,
+    TelemetryHistory,
 )
-from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 
 
 def _make_loop() -> SimulationLoop:

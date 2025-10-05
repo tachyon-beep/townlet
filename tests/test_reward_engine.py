@@ -1,4 +1,3 @@
-from types import MappingProxyType
 from pathlib import Path
 from types import MappingProxyType
 
@@ -107,7 +106,7 @@ def test_chat_reward_applied_for_successful_conversation() -> None:
     world.record_chat_success("alice", "bob", quality=1.0)
 
     engine = RewardEngine(world.config)
-    terminated = {agent_id: False for agent_id in world.agents}
+    terminated = dict.fromkeys(world.agents, False)
     rewards = engine.compute(world, terminated)
 
     base = world.config.rewards.survival_tick
@@ -140,7 +139,7 @@ def test_chat_reward_skipped_when_needs_override_triggers() -> None:
     world.record_chat_success("alice", "bob", quality=1.0)
 
     engine = RewardEngine(world.config)
-    terminated = {agent_id: False for agent_id in world.agents}
+    terminated = dict.fromkeys(world.agents, False)
     rewards = engine.compute(world, terminated)
 
     assert rewards["bob"] > rewards["alice"]
@@ -163,7 +162,7 @@ def test_chat_events_ignored_when_social_stage_disabled() -> None:
     world.record_chat_success("alice", "bob", quality=1.0)
 
     engine = RewardEngine(config)
-    terminated = {agent_id: False for agent_id in world.agents}
+    terminated = dict.fromkeys(world.agents, False)
     rewards = engine.compute(world, terminated)
 
     for agent_id in ("alice", "bob"):
@@ -219,7 +218,7 @@ def test_chat_failure_penalty() -> None:
     world.record_chat_failure("alice", "bob")
 
     engine = RewardEngine(world.config)
-    rewards = engine.compute(world, {agent_id: False for agent_id in world.agents})
+    rewards = engine.compute(world, dict.fromkeys(world.agents, False))
 
     assert rewards["alice"] < world.config.rewards.survival_tick
 
@@ -243,7 +242,7 @@ def test_rivalry_avoidance_reward() -> None:
     )
 
     engine = RewardEngine(config)
-    rewards = engine.compute(world, {agent_id: False for agent_id in world.agents})
+    rewards = engine.compute(world, dict.fromkeys(world.agents, False))
 
     assert rewards["alice"] > config.rewards.survival_tick
 

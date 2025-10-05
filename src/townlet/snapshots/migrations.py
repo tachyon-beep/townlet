@@ -81,9 +81,9 @@ class SnapshotMigrationRegistry:
     def apply_path(
         self,
         path: list[MigrationEdge],
-        state: "SnapshotState",
-        config: "SimulationConfig",
-    ) -> tuple["SnapshotState", list[str]]:
+        state: SnapshotState,
+        config: SimulationConfig,
+    ) -> tuple[SnapshotState, list[str]]:
         applied: list[str] = []
         current = state
         for edge in path:

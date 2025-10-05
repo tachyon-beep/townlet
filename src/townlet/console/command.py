@@ -1,8 +1,9 @@
 """Console command envelope and result helpers."""
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import Any
 
 _VALID_MODES = {"viewer", "admin"}
 
@@ -32,7 +33,7 @@ class ConsoleCommandEnvelope:
     raw: Mapping[str, Any] | None = None
 
     @classmethod
-    def from_payload(cls, payload: object) -> "ConsoleCommandEnvelope":
+    def from_payload(cls, payload: object) -> ConsoleCommandEnvelope:
         """Parse a payload emitted by the console transport."""
 
         if hasattr(payload, "__dict__") and not isinstance(payload, Mapping):
@@ -134,7 +135,7 @@ class ConsoleCommandResult:
         *,
         tick: int | None = None,
         latency_ms: int | None = None,
-    ) -> "ConsoleCommandResult":
+    ) -> ConsoleCommandResult:
         result_payload = dict(payload) if payload is not None else {}
         return cls(
             name=envelope.name,
@@ -156,7 +157,7 @@ class ConsoleCommandResult:
         details: Mapping[str, Any] | None = None,
         tick: int | None = None,
         latency_ms: int | None = None,
-    ) -> "ConsoleCommandResult":
+    ) -> ConsoleCommandResult:
         error_payload = {"code": code, "message": message}
         if details is not None:
             error_payload["details"] = dict(details)
@@ -170,7 +171,7 @@ class ConsoleCommandResult:
             latency_ms=latency_ms,
         )
 
-    def clone(self) -> "ConsoleCommandResult":
+    def clone(self) -> ConsoleCommandResult:
         return ConsoleCommandResult(
             name=self.name,
             status=self.status,

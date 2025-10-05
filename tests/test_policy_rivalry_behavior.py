@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from townlet.config.loader import load_config
 from townlet.agents.models import Personality
+from townlet.config.loader import load_config
 from townlet.policy.behavior import ScriptedBehavior
 from townlet.world.grid import AgentSnapshot, WorldState
 

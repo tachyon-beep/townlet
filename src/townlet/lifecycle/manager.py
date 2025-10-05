@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
 
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
@@ -25,7 +25,7 @@ class LifecycleManager:
         self._employment_day = -1
         self.mortality_enabled = True
         self.respawn_delay_ticks = max(0, int(getattr(config.lifecycle, "respawn_delay_ticks", 0)))
-        self._pending_respawns: List[_RespawnTicket] = []
+        self._pending_respawns: list[_RespawnTicket] = []
         self._termination_reasons: dict[str, str] = {}
 
     def evaluate(self, world: WorldState, tick: int) -> dict[str, bool]:

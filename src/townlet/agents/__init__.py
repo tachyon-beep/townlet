@@ -21,9 +21,9 @@ __all__ = [
     "Personality",
     "PersonalityProfile",
     "PersonalityProfiles",
-    "personality_from_profile",
     "RelationshipDelta",
     "RelationshipEdge",
     "RelationshipEvent",
     "apply_personality_modifiers",
+    "personality_from_profile",
 ]

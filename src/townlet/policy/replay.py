@@ -6,7 +6,7 @@ import json
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import yaml
@@ -88,7 +88,7 @@ class ReplaySample:
         self.metadata.setdefault("value_pred_steps", int(value_steps))
 
     @property
-    def feature_names(self) -> Optional[list[str]]:
+    def feature_names(self) -> list[str] | None:
         names = self.metadata.get("feature_names")
         if isinstance(names, list):
             return list(names)
@@ -119,7 +119,7 @@ def _ensure_conflict_features(metadata: dict[str, Any]) -> None:
 
 
 def load_replay_sample(
-    sample_path: Path, meta_path: Optional[Path] = None
+    sample_path: Path, meta_path: Path | None = None
 ) -> ReplaySample:
     """Load observation tensors and metadata for replay-driven training scaffolds."""
     if not sample_path.exists():
@@ -279,14 +279,14 @@ def build_batch(samples: Sequence[ReplaySample]) -> ReplayBatch:
 class ReplayDatasetConfig:
     """Configuration for building replay datasets."""
 
-    entries: list[tuple[Path, Optional[Path]]]
+    entries: list[tuple[Path, Path | None]]
     batch_size: int = 1
     shuffle: bool = False
-    seed: Optional[int] = None
+    seed: int | None = None
     drop_last: bool = False
     streaming: bool = False
-    metrics_map: Optional[dict[str, dict[str, float]]] = None
-    label: Optional[str] = None
+    metrics_map: dict[str, dict[str, float]] | None = None
+    label: str | None = None
 
     @classmethod
     def from_manifest(
@@ -294,10 +294,10 @@ class ReplayDatasetConfig:
         manifest_path: Path,
         batch_size: int = 1,
         shuffle: bool = False,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         drop_last: bool = False,
         streaming: bool = False,
-    ) -> "ReplayDatasetConfig":
+    ) -> ReplayDatasetConfig:
         entries = _load_manifest(manifest_path)
         return cls(
             entries=entries,
@@ -315,10 +315,10 @@ class ReplayDatasetConfig:
         capture_dir: Path,
         batch_size: int = 1,
         shuffle: bool = False,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         drop_last: bool = False,
         streaming: bool = False,
-    ) -> "ReplayDatasetConfig":
+    ) -> ReplayDatasetConfig:
         manifest_path = capture_dir / "rollout_sample_manifest.json"
         if not manifest_path.exists():
             raise FileNotFoundError(manifest_path)
@@ -360,7 +360,7 @@ def _resolve_manifest_path(path_spec: Path, base: Path) -> Path:
     return (base / path_spec).resolve()
 
 
-def _load_manifest(manifest_path: Path) -> list[tuple[Path, Optional[Path]]]:
+def _load_manifest(manifest_path: Path) -> list[tuple[Path, Path | None]]:
     if not manifest_path.exists():
         raise FileNotFoundError(manifest_path)
     data: Any
@@ -378,7 +378,7 @@ def _load_manifest(manifest_path: Path) -> list[tuple[Path, Optional[Path]]]:
         manifest_entries = data
     else:
         raise ValueError("Replay manifest must be a list or mapping with 'samples'")
-    entries: list[tuple[Path, Optional[Path]]] = []
+    entries: list[tuple[Path, Path | None]] = []
     base = manifest_path.parent
     for item in manifest_entries:
         if isinstance(item, str):
@@ -414,7 +414,7 @@ class ReplayDataset:
         self._entries = config.entries
         self._rng = np.random.default_rng(config.seed) if config.shuffle else None
         self._streaming = config.streaming
-        self._cached_samples: Optional[list[ReplaySample]] = None
+        self._cached_samples: list[ReplaySample] | None = None
         self.metrics_map = config.metrics_map or {}
         if self._streaming:
             first_sample = load_replay_sample(*self._entries[0])
@@ -510,7 +510,7 @@ class ReplayDataset:
         return sample
 
     def _ensure_sample_metrics(
-        self, sample: ReplaySample, entry: tuple[Path, Optional[Path]]
+        self, sample: ReplaySample, entry: tuple[Path, Path | None]
     ) -> None:
         existing = sample.metadata.get("metrics")
         if isinstance(existing, dict) and existing:

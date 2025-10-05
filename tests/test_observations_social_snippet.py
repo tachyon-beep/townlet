@@ -5,11 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests.helpers.social import seed_relationship_activity
 from townlet.config import SimulationConfig, load_config
 from townlet.observations.builder import ObservationBuilder
 from townlet.world.grid import AgentSnapshot, WorldState
-
-from tests.helpers.social import seed_relationship_activity
 
 
 @pytest.fixture(scope="module")

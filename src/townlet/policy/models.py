@@ -71,7 +71,7 @@ else:
     class ConflictAwarePolicyNetwork:  # type: ignore[too-few-public-methods,misc]
         """Placeholder that raises if PyTorch is unavailable."""
 
-        def __init__(self, cfg: ConflictAwarePolicyConfig) -> None:  # noqa: D401
+        def __init__(self, cfg: ConflictAwarePolicyConfig) -> None:
             raise TorchNotAvailableError(
                 "PyTorch is required to build ConflictAwarePolicyNetwork. "
                 "Install torch (pip install torch) or use the replay-only workflow."
