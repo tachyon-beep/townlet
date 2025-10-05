@@ -48,6 +48,7 @@ from townlet.world.console_handlers import (
     WorldConsoleController,
     install_world_console_handlers,
 )
+from townlet.world.core.context import WorldContext
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -440,8 +441,6 @@ class WorldState:
             buffer_limit=_CONSOLE_RESULT_BUFFER_LIMIT,
         )
         self._console_controller = install_world_console_handlers(self, self._console)
-        from townlet.world.queue_conflict import QueueConflictTracker
-
         self._queue_conflicts = QueueConflictTracker(
             world=self,
             record_rivalry_conflict=self._apply_rivalry_conflict,
@@ -545,6 +544,24 @@ class WorldState:
         }
         self._object_utility_baselines: dict[str, dict[str, float]] = {}
         self.rebuild_spatial_index()
+        self.context = WorldContext(
+            agents=self.agents,
+            objects=self.objects,
+            affordances=self.affordances,
+            running_affordances=self._running_affordances,
+            queue_manager=self.queue_manager,
+            queue_conflicts=self._queue_conflicts,
+            affordance_service=self._affordance_service,
+            console=self._console,
+            employment=self.employment,
+            employment_runtime=self._employment_runtime,
+            relationship_ledgers=self._relationship_ledgers,
+            rivalry_ledgers=self._rivalry_ledgers,
+            relationship_churn=self._relationship_churn,
+            config=self.config,
+            emit_event_callback=self._emit_event,
+            sync_reservation_callback=self._sync_reservation,
+        )
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:

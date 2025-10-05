@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-from .employment import EmploymentEngine
+from .agents import EmploymentEngine
+from .core import WorldContext
 from .grid import AgentSnapshot, WorldState
-from .observation import (
+from .observations import (
     agent_context as observation_agent_context,
 )
-from .observation import (
+from .observations import (
     build_local_cache as observation_build_local_cache,
 )
-from .observation import (
+from .observations import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )
-from .observation import (
+from .observations import (
     local_view as observation_local_view,
 )
-from .observation import (
+from .observations import (
     snapshot_precondition_context,
 )
-from .queue_manager import QueueManager
+from .queue import QueueManager
 from .relationships import RelationshipLedger, RelationshipParameters, RelationshipTie
 from .runtime import RuntimeStepResult, WorldRuntime
 
@@ -32,6 +33,7 @@ __all__ = [
     "RelationshipTie",
     "RuntimeStepResult",
     "WorldRuntime",
+    "WorldContext",
     "WorldState",
     "observation_agent_context",
     "observation_build_local_cache",

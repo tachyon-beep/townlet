@@ -42,6 +42,7 @@ from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
 from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
+from townlet.world.core import WorldContext
 from townlet.world.grid import WorldState
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,12 @@ class SimulationLoop:
         """Expose the currently resolved providers for world, policy, and telemetry."""
 
         return dict(self._resolved_providers)
+
+    @property
+    def world_context(self) -> WorldContext:
+        """Return a façade over the active world services."""
+
+        return self.world.context
 
     def register_failure_handler(self, handler: Callable[[SimulationLoop, int, BaseException], None]) -> None:
         """Register a callback that runs whenever the loop records a failure."""
