@@ -13,7 +13,7 @@ import yaml
 
 REQUIRED_CONFLICT_FEATURES: tuple[str, ...] = ("rivalry_max", "rivalry_avoid_count")
 STEP_ARRAY_FIELDS: tuple[str, ...] = ("actions", "old_log_probs", "rewards", "dones")
-TRAINING_ARRAY_FIELDS: tuple[str, ...] = STEP_ARRAY_FIELDS + ("value_preds",)
+TRAINING_ARRAY_FIELDS: tuple[str, ...] = (*STEP_ARRAY_FIELDS, "value_preds")
 
 
 @dataclass

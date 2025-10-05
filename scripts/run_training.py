@@ -8,7 +8,7 @@ from pathlib import Path
 from townlet.config import PPOConfig
 from townlet.config.loader import load_config
 from townlet.policy.replay import ReplayDatasetConfig
-from townlet.policy.runner import TrainingHarness
+from townlet.policy.training_orchestrator import PolicyTrainingOrchestrator
 
 
 def parse_args() -> argparse.Namespace:
@@ -254,13 +254,13 @@ def _build_dataset_config_from_args(
     args: argparse.Namespace,
     default_manifest: Path | None,
 ) -> ReplayDatasetConfig | None:
-    common_kwargs = dict(
-        batch_size=args.replay_batch_size,
-        shuffle=args.replay_shuffle,
-        seed=args.replay_seed,
-        drop_last=args.replay_drop_last,
-        streaming=args.replay_streaming,
-    )
+    common_kwargs = {
+        "batch_size": args.replay_batch_size,
+        "shuffle": args.replay_shuffle,
+        "seed": args.replay_seed,
+        "drop_last": args.replay_drop_last,
+        "streaming": args.replay_streaming,
+    }
     if args.capture_dir is not None:
         return ReplayDatasetConfig.from_capture_dir(
             args.capture_dir, **common_kwargs
@@ -280,7 +280,7 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     _apply_ppo_overrides(config, _collect_ppo_overrides(args))
-    harness = TrainingHarness(config=config)
+    harness = PolicyTrainingOrchestrator(config=config)
 
     if args.capture_dir is not None and args.replay_manifest is not None:
         raise ValueError("Specify either --capture-dir or --replay-manifest, not both")
@@ -307,7 +307,8 @@ def main() -> None:
         )
         if dataset_config is None:
             raise ValueError(
-                "Anneal mode requires replay dataset via --capture-dir, --replay-manifest, --replay-sample, or config.training.replay_manifest"
+                "Anneal mode requires replay dataset via --capture-dir, --replay-manifest, "
+                "--replay-sample, or config.training.replay_manifest"
             )
         results = harness.run_anneal(
             dataset_config=dataset_config,
@@ -427,7 +428,8 @@ def main() -> None:
         elif mode == "mixed":
             if dataset_config is None:
                 raise ValueError(
-                    "Mixed mode requires replay dataset via --capture-dir, --replay-manifest, --replay-sample, or config.training.replay_manifest"
+                    "Mixed mode requires replay dataset via --capture-dir, --replay-manifest, "
+                    "--replay-sample, or config.training.replay_manifest"
                 )
             if buffer_dataset is None:
                 raise ValueError("Mixed mode requires rollout capture; set --rollout-ticks or config.training.rollout_ticks")

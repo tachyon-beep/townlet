@@ -856,6 +856,7 @@ class SnapshotConfig(BaseModel):
     identity: SnapshotIdentityConfig = SnapshotIdentityConfig()
     migrations: SnapshotMigrationsConfig = SnapshotMigrationsConfig()
     guardrails: SnapshotGuardrailsConfig = SnapshotGuardrailsConfig()
+    capture_on_failure: bool = False
 
     @model_validator(mode="after")
     def _validate_observation_override(self) -> SnapshotConfig:

@@ -47,6 +47,13 @@ loop.telemetry.queue_console_command(
 
 Tokens are stripped before commands reach the simulation world; audit logs record the command name, `cmd_id`, and issuer label.
 
+
+## Simulation Loop Health
+
+- The simulation loop now records a `loop_failure` telemetry event whenever a tick raises an exception. Operators can inspect `telemetry.latest_health_status()` or subscribe to the event stream to capture failure details (tick, error summary, failure count). Enable automatic failure snapshots with `snapshot.capture_on_failure: true`; the failure payload and telemetry health status include the saved snapshot path.
+- CLI or automation clients may register a failure handler via `SimulationLoop.register_failure_handler` to perform cleanup or trigger graceful shutdowns before exiting with a non-zero status. The default `scripts/run_simulation.py` entry point now surfaces the failure summary and exits with status 1 when a tick fails.
+- Health payloads include the last tick duration, transporter queue depth, and whether telemetry workers are still alive, enabling dashboards to surface anomalies quickly.
+
 ## Operational Guidance
 
 - Rotate tokens regularly and keep them out of version control. Use environment variables or secret stores for runtime injection.

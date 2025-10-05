@@ -11,8 +11,9 @@ import hashlib
 import logging
 import random
 import time
+import traceback
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
 
@@ -37,6 +38,29 @@ from townlet.world.grid import WorldState
 from townlet.world.runtime import WorldRuntime
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SimulationLoopHealth:
+    """Tracks loop health information for telemetry and debugging."""
+
+    last_tick: int = 0
+    last_duration_ms: float = 0.0
+    last_error: str | None = None
+    last_traceback: str | None = None
+    failure_count: int = 0
+    last_failure_ts: float | None = None
+    last_snapshot_path: str | None = None
+
+
+class SimulationLoopError(RuntimeError):
+    """Raised when the simulation loop encounters an unrecoverable failure."""
+
+    def __init__(self, tick: int, message: str, *, cause: BaseException | None = None) -> None:
+        super().__init__(f"{message} (tick={tick})")
+        self.tick = tick
+        if cause is not None:
+            self.__cause__ = cause
 
 
 @dataclass
@@ -71,6 +95,8 @@ class SimulationLoop:
             )
         self.runtime: WorldRuntime | None = None
         self._runtime_variant: str = "facade"
+        self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
+        self._health = SimulationLoopHealth()
         self._build_components()
 
     def __setattr__(self, name: str, value: object) -> None:  # pragma: no cover - delegation glue
@@ -115,6 +141,21 @@ class SimulationLoop:
         )
         self._runtime_variant = "facade"
         self.telemetry.set_runtime_variant(self._runtime_variant)
+        self._health = SimulationLoopHealth(last_tick=self.tick)
+
+
+    @property
+    def health(self) -> SimulationLoopHealth:
+        """Return a snapshot of the loop health state."""
+
+        return SimulationLoopHealth(**asdict(self._health))
+
+    def register_failure_handler(
+        self, handler: Callable[[SimulationLoop, int, BaseException], None]
+    ) -> None:
+        """Register a callback that runs whenever the loop records a failure."""
+
+        self._failure_handlers.append(handler)
 
     def reset(self) -> None:
         """Reset the simulation loop to its initial state."""
@@ -223,118 +264,179 @@ class SimulationLoop:
 
     def step(self) -> TickArtifacts:
         tick_start = time.perf_counter()
-        self.tick += 1
+        next_tick = self.tick + 1
         console_ops = self.telemetry.drain_console_buffer()
         runtime = self.runtime
         if runtime is None:  # pragma: no cover - defensive guard
             raise RuntimeError("WorldRuntime is not initialised")
 
-        runtime.queue_console(console_ops)
+        try:
+            self.tick = next_tick
+            runtime.queue_console(console_ops)
 
-        def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
-            return self.policy.decide(world, current_tick)
+            def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
+                return self.policy.decide(world, current_tick)
 
-        runtime_result = runtime.tick(
-            tick=self.tick,
-            action_provider=_action_provider,
-        )
-        console_results = runtime_result.console_results
-        events = runtime_result.events
-        terminated = runtime_result.terminated
-        termination_reasons = runtime_result.termination_reasons
+            runtime_result = runtime.tick(
+                tick=self.tick,
+                action_provider=_action_provider,
+            )
+            console_results = runtime_result.console_results
+            events = runtime_result.events
+            terminated = runtime_result.terminated
+            termination_reasons = runtime_result.termination_reasons
 
-        self.telemetry.record_console_results(console_results)
-        episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
-        for snapshot in self.world.agents.values():
-            snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
-        rewards = self.rewards.compute(self.world, terminated, termination_reasons)
-        reward_breakdown = self.rewards.latest_reward_breakdown()
-        self.policy.post_step(rewards, terminated)
-        observations = self.observations.build_batch(self.world, terminated)
-        self.policy.flush_transitions(observations)
-        policy_snapshot = self.policy.latest_policy_snapshot()
-        possessed_agents = self.policy.possessed_agents()
-        option_switch_counts = self.policy.consume_option_switch_counts()
-        hunger_levels = {
-            agent_id: float(snapshot.needs.get("hunger", 1.0))
-            for agent_id, snapshot in self.world.agents.items()
-        }
-        stability_inputs = {
-            "hunger_levels": hunger_levels,
-            "option_switch_counts": option_switch_counts,
-            "reward_samples": dict(rewards),
-        }
-        perturbation_state = self.perturbations.latest_state()
-        policy_identity = self.config.build_snapshot_identity(
-            policy_hash=self.policy.active_policy_hash(),
-            runtime_observation_variant=self.config.observation_variant,
-            runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+            self.telemetry.record_console_results(console_results)
+            episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
+            for snapshot in self.world.agents.values():
+                snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
+            rewards = self.rewards.compute(self.world, terminated, termination_reasons)
+            reward_breakdown = self.rewards.latest_reward_breakdown()
+            self.policy.post_step(rewards, terminated)
+            observations = self.observations.build_batch(self.world, terminated)
+            self.policy.flush_transitions(observations)
+            policy_snapshot = self.policy.latest_policy_snapshot()
+            possessed_agents = self.policy.possessed_agents()
+            option_switch_counts = self.policy.consume_option_switch_counts()
+            hunger_levels = {
+                agent_id: float(snapshot.needs.get("hunger", 1.0))
+                for agent_id, snapshot in self.world.agents.items()
+            }
+            stability_inputs = {
+                "hunger_levels": hunger_levels,
+                "option_switch_counts": option_switch_counts,
+                "reward_samples": dict(rewards),
+            }
+            perturbation_state = self.perturbations.latest_state()
+            policy_identity = self.config.build_snapshot_identity(
+                policy_hash=self.policy.active_policy_hash(),
+                runtime_observation_variant=self.config.observation_variant,
+                runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+            )
+            self.telemetry.publish_tick(
+                tick=self.tick,
+                world=self.world,
+                observations=observations,
+                rewards=rewards,
+                events=events,
+                policy_snapshot=policy_snapshot,
+                kpi_history=True,
+                reward_breakdown=reward_breakdown,
+                stability_inputs=stability_inputs,
+                perturbations=perturbation_state,
+                policy_identity=policy_identity,
+                possessed_agents=possessed_agents,
+                social_events=self.rewards.latest_social_events(),
+                runtime_variant=self._runtime_variant,
+            )
+            self.stability.track(
+                tick=self.tick,
+                rewards=rewards,
+                terminated=terminated,
+                queue_metrics=self.telemetry.latest_queue_metrics(),
+                embedding_metrics=self.telemetry.latest_embedding_metrics(),
+                job_snapshot=self.telemetry.latest_job_snapshot(),
+                events=self.telemetry.latest_events(),
+                employment_metrics=self.telemetry.latest_employment_metrics(),
+                hunger_levels=hunger_levels,
+                option_switch_counts=option_switch_counts,
+                rivalry_events=self.telemetry.latest_rivalry_events(),
+            )
+            stability_metrics = self.stability.latest_metrics()
+            self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
+            stability_metrics["promotion_state"] = self.promotion.snapshot()
+            self.telemetry.record_stability_metrics(stability_metrics)
+            self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
+            duration_ms = (time.perf_counter() - tick_start) * 1000.0
+            transport_status = self.telemetry.latest_transport_status()
+            health_payload = {
+                "tick": self.tick,
+                "status": "ok",
+                "tick_duration_ms": duration_ms,
+                "failure_count": self._health.failure_count,
+                "telemetry_queue": transport_status.get("queue_length", 0),
+                "telemetry_dropped": transport_status.get("dropped_messages", 0),
+                "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
+                "telemetry_worker_error": transport_status.get("worker_error"),
+                "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
+                "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
+                "perturbations_pending": self.perturbations.pending_count(),
+                "perturbations_active": self.perturbations.active_count(),
+                "employment_exit_queue": self.world.employment.exit_queue_length(),
+            }
+            self.telemetry.record_health_metrics(health_payload)
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(
+                    (
+                        "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
+                        "perturbations_pending=%s perturbations_active=%s exit_queue=%s"
+                    ),
+                    self.tick,
+                    duration_ms,
+                    health_payload["telemetry_queue"],
+                    health_payload["telemetry_dropped"],
+                    health_payload["perturbations_pending"],
+                    health_payload["perturbations_active"],
+                    health_payload["employment_exit_queue"],
+                )
+            self._record_step_success(duration_ms)
+            return TickArtifacts(observations=observations, rewards=rewards)
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - tick_start) * 1000.0
+            self.tick = max(0, self.tick - 1)
+            self._handle_step_failure(next_tick, duration_ms, exc)
+            raise SimulationLoopError(next_tick, "Simulation step failed", cause=exc) from exc
+
+
+    def _record_step_success(self, duration_ms: float) -> None:
+        self._health.last_tick = self.tick
+        self._health.last_duration_ms = duration_ms
+        self._health.last_error = None
+        self._health.last_traceback = None
+        self._health.last_snapshot_path = None
+
+    def _handle_step_failure(self, tick: int, duration_ms: float, exc: BaseException) -> None:
+        error_message = f"{exc.__class__.__name__}: {exc}"
+        self._health.last_tick = max(self._health.last_tick, tick)
+        self._health.last_duration_ms = duration_ms
+        self._health.last_error = error_message
+        self._health.last_traceback = "".join(
+            traceback.format_exception(exc.__class__, exc, exc.__traceback__)
         )
-        self.telemetry.publish_tick(
-            tick=self.tick,
-            world=self.world,
-            observations=observations,
-            rewards=rewards,
-            events=events,
-            policy_snapshot=policy_snapshot,
-            kpi_history=True,
-            reward_breakdown=reward_breakdown,
-            stability_inputs=stability_inputs,
-            perturbations=perturbation_state,
-            policy_identity=policy_identity,
-            possessed_agents=possessed_agents,
-            social_events=self.rewards.latest_social_events(),
-            runtime_variant=self._runtime_variant,
-        )
-        self.stability.track(
-            tick=self.tick,
-            rewards=rewards,
-            terminated=terminated,
-            queue_metrics=self.telemetry.latest_queue_metrics(),
-            embedding_metrics=self.telemetry.latest_embedding_metrics(),
-            job_snapshot=self.telemetry.latest_job_snapshot(),
-            events=self.telemetry.latest_events(),
-            employment_metrics=self.telemetry.latest_employment_metrics(),
-            hunger_levels=hunger_levels,
-            option_switch_counts=option_switch_counts,
-            rivalry_events=self.telemetry.latest_rivalry_events(),
-        )
-        stability_metrics = self.stability.latest_metrics()
-        self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
-        stability_metrics["promotion_state"] = self.promotion.snapshot()
-        self.telemetry.record_stability_metrics(stability_metrics)
-        self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
-        duration_ms = (time.perf_counter() - tick_start) * 1000.0
+        self._health.failure_count += 1
+        self._health.last_failure_ts = time.time()
+        snapshot_path: str | None = None
+        if getattr(self.config.snapshot, "capture_on_failure", False):
+            try:
+                timestamp = time.strftime("%Y%m%dT%H%M%S")
+                failure_root = (
+                    self.config.snapshot_root()
+                    / "failures"
+                    / f"tick_{tick:09d}_{timestamp}"
+                )
+                snapshot_path = str(self.save_snapshot(root=failure_root))
+            except Exception:  # pragma: no cover - snapshot capture best effort
+                logger.exception("Failed to capture failure snapshot")
+                snapshot_path = None
+        self._health.last_snapshot_path = snapshot_path
         transport_status = self.telemetry.latest_transport_status()
-        health_payload = {
-            "tick": self.tick,
+        payload = {
+            "tick": tick,
+            "status": "error",
             "tick_duration_ms": duration_ms,
+            "failure_count": self._health.failure_count,
+            "error": error_message,
             "telemetry_queue": transport_status.get("queue_length", 0),
             "telemetry_dropped": transport_status.get("dropped_messages", 0),
-            "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
-            "telemetry_worker_error": transport_status.get("worker_error"),
-            "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
-            "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
-            "perturbations_pending": self.perturbations.pending_count(),
-            "perturbations_active": self.perturbations.active_count(),
-            "employment_exit_queue": self.world.employment.exit_queue_length(),
         }
-        self.telemetry.record_health_metrics(health_payload)
-        if logger.isEnabledFor(logging.INFO):
-            logger.info(
-                (
-                    "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
-                    "perturbations_pending=%s perturbations_active=%s exit_queue=%s"
-                ),
-                self.tick,
-                duration_ms,
-                health_payload["telemetry_queue"],
-                health_payload["telemetry_dropped"],
-                health_payload["perturbations_pending"],
-                health_payload["perturbations_active"],
-                health_payload["employment_exit_queue"],
-            )
-        return TickArtifacts(observations=observations, rewards=rewards)
+        if snapshot_path:
+            payload["snapshot_path"] = snapshot_path
+        self.telemetry.record_loop_failure(payload)
+        for handler in list(self._failure_handlers):
+            try:
+                handler(self, tick, exc)
+            except Exception:  # pragma: no cover - handlers should not break the loop
+                logger.exception("Simulation loop failure handler raised")
 
     def _load_affordance_runtime_factory(
         self, runtime_config: AffordanceRuntimeConfig

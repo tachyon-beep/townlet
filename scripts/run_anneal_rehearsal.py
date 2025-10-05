@@ -1,16 +1,15 @@
 #!/usr/bin/env python
 """Run BC + anneal rehearsal using production manifests and capture artefacts."""
+
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
-from typing import Dict
 
 from townlet.config import load_config
-from townlet.policy.runner import TrainingHarness
 from townlet.policy.replay import ReplayDatasetConfig
-
+from townlet.policy.training_orchestrator import PolicyTrainingOrchestrator
 
 DEFAULT_CONFIG = Path("artifacts/m5/acceptance/config_idle_v1.yaml")
 DEFAULT_MANIFEST = Path("data/bc_datasets/manifests/idle_v1.json")
@@ -46,9 +45,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_rehearsal(config_path: Path, manifest_path: Path, log_dir: Path) -> Dict[str, object]:
+def run_rehearsal(config_path: Path, manifest_path: Path, log_dir: Path) -> dict[str, object]:
     config = load_config(config_path)
-    harness = TrainingHarness(config)
+    harness = PolicyTrainingOrchestrator(config)
     dataset = ReplayDatasetConfig.from_manifest(manifest_path)
     results = harness.run_anneal(
         dataset_config=dataset,
@@ -73,7 +72,7 @@ def run_rehearsal(config_path: Path, manifest_path: Path, log_dir: Path) -> Dict
 
 
 
-def evaluate_summary(summary: Dict[str, object]) -> Dict[str, object]:
+def evaluate_summary(summary: dict[str, object]) -> dict[str, object]:
     if __package__:
         from . import promotion_evaluate as _promotion_eval  # type: ignore[attr-defined]
     else:  # pragma: no cover - script execution path

@@ -118,7 +118,7 @@ def test_option_commit_blocks_switch_until_expiry() -> None:
     def run_tick(tick: int) -> tuple[dict[str, object], dict[str, object]]:
         world.tick = tick
         actions = runtime.decide(world, tick=tick)
-        entry = dict(runtime._transitions.get("alice", {}))
+        entry = dict(runtime.transitions.get("alice", {}))
         runtime.post_step({"alice": 0.0}, {"alice": False})
         return actions, entry
 
@@ -171,6 +171,6 @@ def test_option_commit_respects_disabled_setting() -> None:
     world.tick = 0
     actions = runtime.decide(world, tick=0)
     assert actions["alice"]["kind"] == "move"
-    entry = runtime._transitions.get("alice", {})
+    entry = runtime.transitions.get("alice", {})
     assert "option_commit_remaining" not in entry
     assert "alice" not in runtime._option_commit_until

@@ -51,6 +51,7 @@ Unauthenticated clients can execute admin console commands, undermining safety c
 - [x] Tests cover viewer/admin splits and log emission when auth disabled.
 
 ### Progress
+- Phase 4 (integration & validation) now removing PolicyRuntime shims; training suites passing with the new orchestrator surface.
 - Phase 0 (risk prep) complete: baseline console auth tests (`pytest tests/test_console_auth.py`) confirmed prior downgrade behaviour and warning.
 - Phase 1 (design) complete: planned admin rejection, structured logging, and telemetry status exposure.
 - Phase 2 (implementation) complete: auth rejects admin when disabled, logs `console_admin_request_rejected`, and transport status records `auth_enabled`.
@@ -256,6 +257,7 @@ Compact-mode experiments and documentation remain blocked, reducing flexibility 
 ## WP-306: Decompose WorldState and PolicyRuntime
 
 **Category**: Quality
+**Status**: Complete
 **Priority**: MEDIUM
 **Effort**: L (3-10 days)
 **Risk Level**: High
@@ -287,9 +289,9 @@ Future changes risk cross-cutting regressions, slowing development and making bu
 - Coordinate with WP-305 to avoid conflicting structural changes.
 
 ### Acceptance Criteria
-- [ ] Responsibilities distributed across focused modules with matching tests.
-- [ ] Public APIs documented and consumed by `SimulationLoop` without behavioural drift.
-- [ ] CI suite extended to guard extracted modules.
+- [x] Responsibilities distributed across focused modules with matching tests.
+- [x] Public APIs documented and consumed by `SimulationLoop` without behavioural drift.
+- [x] CI suite extended to guard extracted modules.
 
 ### Related Issues
 - Mitigates maintainability portion of risk R-004.
@@ -327,12 +329,19 @@ Transient bugs crash long-running runs silently, causing data loss and unobserve
 - Complements WP-303 for holistic health coverage.
 
 ### Acceptance Criteria
-- [ ] Loop surfaces structured failure telemetry and console output.
-- [ ] Hooks allow CLI to exit gracefully with non-zero status.
-- [ ] Regression tests verify snapshot capture on crash.
+- [x] Loop surfaces structured failure telemetry and console output.
+- [x] Hooks allow CLI to exit gracefully with non-zero status.
+- [x] Regression tests verify snapshot capture on crash.
 
 ### Related Issues
 - Linked to operational risk R-003.
+
+### Progress
+- Phase 0 (risk prep) complete: baseline `tests/test_sim_loop_structure.py` run recorded in `tmp/wp304/baseline_tests.log`.
+- Phase 1 (design) captured in `tmp/wp304/design.md` outlining health state and failure hooks.
+- Phase 2 (implementation) complete: added `SimulationLoopHealth`, failure handler registration, and telemetry failure reporting (`src/townlet/core/sim_loop.py`, `src/townlet/telemetry/publisher.py`).
+- Phase 3 (validation) complete: see `tmp/wp304/validation_tests.log` for pytest/ruff commands (all green).
+- Phase 4 (docs & integration) complete: CLI failure handling wired in `scripts/run_simulation.py`, policy docs/tests updated, and orchestrator surfaces documented.
 
 
 ## WP-307: Raise API Docstring Coverage & Developer Docs

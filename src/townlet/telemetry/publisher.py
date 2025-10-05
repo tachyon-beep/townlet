@@ -586,6 +586,27 @@ class TelemetryPublisher:
 
         return dict(self._transport_status)
 
+
+    def record_loop_failure(self, payload: Mapping[str, object]) -> None:
+        """Persist loop failure telemetry and append a failure event."""
+
+        failure_data = dict(payload)
+        failure_data.setdefault("status", "error")
+        self._latest_health_status = failure_data
+        event = {
+            "kind": "loop_failure",
+            "tick": failure_data.get("tick"),
+            "error": failure_data.get("error"),
+        }
+        self._latest_events.append(event)
+        if len(self._latest_events) > 128:
+            self._latest_events = self._latest_events[-128:]
+        logger.error(
+            "simulation_loop_failure tick=%s error=%s",
+            failure_data.get("tick"),
+            failure_data.get("error"),
+        )
+
     def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
         self._latest_health_status = dict(metrics)
 

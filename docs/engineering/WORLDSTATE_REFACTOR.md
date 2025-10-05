@@ -280,3 +280,10 @@ These invariants should carry forward into the runtime extraction; introduce reg
   - Decide on permanent home for DEBUG timing probes before production rollout (`TODO-AFF-002`).
   - Consider making `DefaultAffordanceRuntime` injectable for specialised scenarios/tests (`TODO-AFF-003`).
 - **Handoff**: Update PR/issue templates to mention new runtime entry points and remind collaborators to coordinate when touching `world/affordances.py` or `WorldState.affordance_runtime`.
+
+## Policy Runtime Surface (Phase 3)
+
+- Behaviour/anneal logic lives in `townlet.policy.behavior_bridge.BehaviorBridge`; the simulation loop interacts through `PolicyRuntime.behavior` APIs.
+- Trajectory management is handled by `townlet.policy.trajectory_service.TrajectoryService`, shared between `PolicyRuntime` and `PolicyTrainingOrchestrator`.
+- PPO/BC/anneal tooling should use `townlet.policy.training_orchestrator.PolicyTrainingOrchestrator`; the legacy `TrainingHarness` remains as a compatibility alias but is slated for removal once downstream callers migrate.
+- Public surfaces now expose `transitions`/`trajectory` properties; direct access to private `_transitions` buffers has been removed. Update tests and integrations accordingly.

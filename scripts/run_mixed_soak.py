@@ -10,9 +10,9 @@ SRC = ROOT / "src"
 if SRC.is_dir():
     sys.path.insert(0, str(SRC))
 
-from townlet.config.loader import load_config
-from townlet.policy.replay import ReplayDatasetConfig
-from townlet.policy.runner import TrainingHarness
+from townlet.config.loader import load_config  # noqa: E402
+from townlet.policy.replay import ReplayDatasetConfig  # noqa: E402
+from townlet.policy.training_orchestrator import PolicyTrainingOrchestrator  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    harness = TrainingHarness(config)
+    harness = PolicyTrainingOrchestrator(config)
 
     dataset_config = ReplayDatasetConfig.from_capture_dir(
         args.baseline_dir,
