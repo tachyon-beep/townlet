@@ -10,6 +10,13 @@ features:
     curiosity: "phase_A"
   console:
     mode: "viewer"
+runtime:
+  world:
+    provider: "default"
+  policy:
+    provider: "scripted"
+  telemetry:
+    provider: "stdout"
 rewards:
   needs_weights:
     hunger: 1.0

@@ -114,9 +114,7 @@ class PersonalityAssignmentConfig(BaseModel):
             key = str(name).lower()
             value = float(weight)
             if value < 0.0:
-                raise ValueError(
-                    f"Personality distribution weight for {name!r} must be non-negative"
-                )
+                raise ValueError(f"Personality distribution weight for {name!r} must be non-negative")
             normalized[key] = normalized.get(key, 0.0) + value
 
         total = sum(normalized.values())
@@ -132,9 +130,7 @@ class PersonalityAssignmentConfig(BaseModel):
         for agent_id, profile in self.overrides.items():
             profile_key = str(profile).lower()
             if profile_key not in valid_profiles:
-                raise ValueError(
-                    f"Override for agent {agent_id!r} references unknown profile {profile!r}"
-                )
+                raise ValueError(f"Override for agent {agent_id!r} references unknown profile {profile!r}")
             cleaned_overrides[str(agent_id)] = profile_key
 
         cumulative = 0.0
@@ -171,6 +167,7 @@ class PersonalityAssignmentConfig(BaseModel):
         if not self._cumulative_weights:
             return ("balanced",)
         return tuple(name for name, _ in self._cumulative_weights)
+
 
 class NeedsWeights(BaseModel):
     """Weighting applied to hunger/hygiene/energy reward terms."""
@@ -219,9 +216,7 @@ class RewardsConfig(BaseModel):
     @model_validator(mode="after")
     def _sanity_check_punctuality(self) -> RewardsConfig:
         if self.punctuality_bonus > self.needs_weights.hunger:
-            raise ValueError(
-                "Punctuality bonus must remain below hunger weight (see REQUIREMENTS#6)."
-            )
+            raise ValueError("Punctuality bonus must remain below hunger weight (see REQUIREMENTS#6).")
         return self
 
 
@@ -343,6 +338,7 @@ class SocialSnippetConfig(BaseModel):
 
 class ObservationsConfig(BaseModel):
     """Bundle observation variants consumed by ObservationBuilder."""
+
     hybrid: HybridObservationConfig = HybridObservationConfig()
     compact: CompactObservationConfig = CompactObservationConfig()
     social_snippet: SocialSnippetConfig = SocialSnippetConfig()
@@ -350,6 +346,7 @@ class ObservationsConfig(BaseModel):
 
 class StarvationCanaryConfig(BaseModel):
     """Detect prolonged starvation incidents for stability monitoring."""
+
     window_ticks: int = Field(1000, ge=1, le=100_000)
     max_incidents: int = Field(0, ge=0, le=10_000)
     hunger_threshold: float = Field(0.05, ge=0.0, le=1.0)
@@ -358,6 +355,7 @@ class StarvationCanaryConfig(BaseModel):
 
 class RewardVarianceCanaryConfig(BaseModel):
     """Alert when episodic reward variance spikes beyond limits."""
+
     window_ticks: int = Field(1000, ge=1, le=100_000)
     max_variance: float = Field(0.25, ge=0.0)
     min_samples: int = Field(20, ge=1, le=100_000)
@@ -365,6 +363,7 @@ class RewardVarianceCanaryConfig(BaseModel):
 
 class OptionThrashCanaryConfig(BaseModel):
     """Track how frequently agents swap options to flag thrashing."""
+
     window_ticks: int = Field(600, ge=1, le=100_000)
     max_switch_rate: float = Field(0.25, ge=0.0, le=10.0)
     min_samples: int = Field(10, ge=1, le=100_000)
@@ -372,6 +371,7 @@ class OptionThrashCanaryConfig(BaseModel):
 
 class PromotionGateConfig(BaseModel):
     """Thresholds applied when deciding whether to promote policies."""
+
     required_passes: int = Field(2, ge=1, le=10)
     window_ticks: int = Field(1000, ge=1, le=100_000)
     allowed_alerts: tuple[str, ...] = ()
@@ -396,11 +396,13 @@ class PromotionGateConfig(BaseModel):
 
 class LifecycleConfig(BaseModel):
     """Lifecycle timing controls for respawn/reset flows."""
+
     respawn_delay_ticks: int = Field(0, ge=0, le=100_000)
 
 
 class StabilityConfig(BaseModel):
     """Aggregate stability thresholds surfaced to telemetry & promotion."""
+
     affordance_fail_threshold: int = Field(5, ge=0, le=100)
     lateness_threshold: int = Field(3, ge=0, le=100)
     starvation: StarvationCanaryConfig = StarvationCanaryConfig()
@@ -423,6 +425,7 @@ class StabilityConfig(BaseModel):
 
 class IntRange(BaseModel):
     """Helper schema describing inclusive integer ranges."""
+
     min: int = Field(ge=0)
     max: int = Field(ge=0)
 
@@ -453,6 +456,7 @@ class IntRange(BaseModel):
 
 class FloatRange(BaseModel):
     """Helper schema describing inclusive float ranges."""
+
     min: float
     max: float
 
@@ -483,6 +487,7 @@ class FloatRange(BaseModel):
 
 class PerturbationKind(str, Enum):
     """Supported perturbation event identifiers."""
+
     PRICE_SPIKE = "price_spike"
     BLACKOUT = "blackout"
     OUTAGE = "outage"
@@ -541,6 +546,7 @@ PerturbationEventConfig = Annotated[
 
 class PerturbationSchedulerConfig(BaseModel):
     """Configure the perturbation scheduler and event catalogue."""
+
     max_concurrent_events: int = Field(1, ge=1)
     global_cooldown_ticks: int = Field(0, ge=0)
     per_agent_cooldown_ticks: int = Field(0, ge=0)
@@ -559,6 +565,7 @@ class PerturbationSchedulerConfig(BaseModel):
 
 class AffordanceRuntimeConfig(BaseModel):
     """Runtime affordance tuning flags."""
+
     factory: str | None = None
     instrumentation: Literal["off", "timings"] = "off"
     options: dict[str, object] = Field(default_factory=dict)
@@ -570,12 +577,14 @@ class AffordanceRuntimeConfig(BaseModel):
 
 class AffordanceConfig(BaseModel):
     """Top-level affordance configuration (manifest + runtime)."""
+
     affordances_file: str = Field("configs/affordances/core.yaml")
     runtime: AffordanceRuntimeConfig = AffordanceRuntimeConfig()
 
 
 class EmploymentConfig(BaseModel):
     """Employment system knobs for queues and wages."""
+
     grace_ticks: int = Field(5, ge=0, le=120)
     absent_cutoff: int = Field(30, ge=0, le=600)
     absence_slack: int = Field(20, ge=0, le=600)
@@ -591,6 +600,7 @@ class EmploymentConfig(BaseModel):
 
 class BehaviorConfig(BaseModel):
     """Configuration namespace for scripted behaviours."""
+
     hunger_threshold: float = Field(0.4, ge=0.0, le=1.0)
     hygiene_threshold: float = Field(0.4, ge=0.0, le=1.0)
     energy_threshold: float = Field(0.4, ge=0.0, le=1.0)
@@ -599,12 +609,14 @@ class BehaviorConfig(BaseModel):
 
 class SocialRewardScheduleEntry(BaseModel):
     """Single entry in the social reward schedule."""
+
     cycle: int = Field(0, ge=0)
     stage: SocialRewardStage
 
 
 class BCTrainingSettings(BaseModel):
     """Behaviour-cloning training parameters for anneal stages."""
+
     manifest: Path | None = None
     learning_rate: float = Field(1e-3, gt=0.0)
     batch_size: int = Field(64, ge=1)
@@ -615,6 +627,7 @@ class BCTrainingSettings(BaseModel):
 
 class AnnealStage(BaseModel):
     """Defines a single phase within the anneal schedule."""
+
     cycle: int = Field(0, ge=0)
     mode: Literal["bc", "ppo"] = "ppo"
     epochs: int = Field(1, ge=1)
@@ -623,6 +636,7 @@ class AnnealStage(BaseModel):
 
 class NarrationThrottleConfig(BaseModel):
     """Rate limiting knobs for narration output."""
+
     global_cooldown_ticks: int = Field(30, ge=0, le=10_000)
     category_cooldown_ticks: dict[str, int] = Field(default_factory=dict)
     dedupe_window_ticks: int = Field(20, ge=0, le=10_000)
@@ -638,6 +652,7 @@ class NarrationThrottleConfig(BaseModel):
 
 class PersonalityNarrationConfig(BaseModel):
     """Narration toggles tied to personality events."""
+
     enabled: bool = True
     chat_extroversion_threshold: float = Field(0.5, ge=-1.0, le=1.0)
     chat_priority_threshold: float = Field(0.75, ge=-1.0, le=1.0)
@@ -647,6 +662,7 @@ class PersonalityNarrationConfig(BaseModel):
 
 class RelationshipNarrationConfig(BaseModel):
     """Narration thresholds for relationship events."""
+
     friendship_trust_threshold: float = Field(0.6, ge=-1.0, le=1.0)
     friendship_delta_threshold: float = Field(0.25, ge=0.0, le=2.0)
     friendship_priority_threshold: float = Field(0.85, ge=-1.0, le=1.0)
@@ -656,26 +672,22 @@ class RelationshipNarrationConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_thresholds(self) -> RelationshipNarrationConfig:
         if self.friendship_priority_threshold < self.friendship_trust_threshold:
-            raise ValueError(
-                "telemetry.relationship_narration.friendship_priority_threshold must be "
-                ">= friendship_trust_threshold"
-            )
+            raise ValueError("telemetry.relationship_narration.friendship_priority_threshold must be >= friendship_trust_threshold")
         if self.rivalry_escalation_threshold < self.rivalry_avoid_threshold:
-            raise ValueError(
-                "telemetry.relationship_narration.rivalry_escalation_threshold must be "
-                ">= rivalry_avoid_threshold"
-            )
+            raise ValueError("telemetry.relationship_narration.rivalry_escalation_threshold must be >= rivalry_avoid_threshold")
         return self
 
 
 class TelemetryRetryPolicy(BaseModel):
     """Retry/backoff policy applied to telemetry transports."""
+
     max_attempts: int = Field(default=3, ge=0, le=10)
     backoff_seconds: float = Field(default=0.5, ge=0.0, le=30.0)
 
 
 class TelemetryBufferConfig(BaseModel):
     """Buffering thresholds controlling flush cadence."""
+
     max_batch_size: int = Field(default=32, ge=1, le=500)
     max_buffer_bytes: int = Field(default=256_000, ge=1_024, le=16_777_216)
     flush_interval_ticks: int = Field(default=1, ge=1, le=10_000)
@@ -683,6 +695,7 @@ class TelemetryBufferConfig(BaseModel):
 
 class TelemetryTransportConfig(BaseModel):
     """Transport-specific telemetry configuration."""
+
     type: TelemetryTransportType = "stdout"
     endpoint: str | None = None
     file_path: Path | None = None
@@ -782,14 +795,50 @@ class TelemetryTransportConfig(BaseModel):
         raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
 
 
-
 class TelemetryConfig(BaseModel):
     """Top-level telemetry configuration surfaces."""
+
     narration: NarrationThrottleConfig = NarrationThrottleConfig()
     transport: TelemetryTransportConfig = TelemetryTransportConfig()
     relationship_narration: RelationshipNarrationConfig = RelationshipNarrationConfig()
     personality_narration: PersonalityNarrationConfig = PersonalityNarrationConfig()
     diff_enabled: bool = True
+
+
+class RuntimeProviderConfig(BaseModel):
+    """Selects a runtime provider registered in the factory registry."""
+
+    provider: str = "default"
+    options: dict[str, object] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_mapping(cls, value: object) -> object:
+        if isinstance(value, str):
+            return {"provider": value}
+        return value
+
+    @model_validator(mode="after")
+    def _validate_provider(self) -> RuntimeProviderConfig:
+        provider = str(self.provider).strip()
+        if not provider:
+            raise ValueError("runtime provider must not be blank")
+        self.provider = provider
+        if not isinstance(self.options, dict):
+            raise TypeError("runtime.options must be a mapping")
+        return self
+
+
+class RuntimeProviders(BaseModel):
+    """Grouping of runtime provider descriptors."""
+
+    world: RuntimeProviderConfig = Field(default_factory=lambda: RuntimeProviderConfig(provider="default"))
+    policy: RuntimeProviderConfig = Field(default_factory=lambda: RuntimeProviderConfig(provider="scripted"))
+    telemetry: RuntimeProviderConfig = Field(default_factory=lambda: RuntimeProviderConfig(provider="stdout"))
+
+    model_config = ConfigDict(extra="allow")
 
 
 class ConsoleAuthTokenConfig(BaseModel):
@@ -804,9 +853,7 @@ class ConsoleAuthTokenConfig(BaseModel):
     def _validate_token_source(self) -> ConsoleAuthTokenConfig:
         provided = [value for value in (self.token, self.token_env) if value]
         if len(provided) != 1:
-            raise ValueError(
-                "console.auth.tokens entries must define exactly one of 'token' or 'token_env'"
-            )
+            raise ValueError("console.auth.tokens entries must define exactly one of 'token' or 'token_env'")
         if self.token is not None and not self.token.strip():
             raise ValueError("console.auth.tokens.token must not be blank")
         if self.token_env is not None and not self.token_env.strip():
@@ -830,6 +877,7 @@ class ConsoleAuthConfig(BaseModel):
 
 class SnapshotStorageConfig(BaseModel):
     """Location and retention policy for snapshot storage."""
+
     root: Path = Field(default=Path("snapshots"))
 
     @model_validator(mode="after")
@@ -841,20 +889,20 @@ class SnapshotStorageConfig(BaseModel):
 
 class SnapshotAutosaveConfig(BaseModel):
     """Autosave cadence and retention settings."""
+
     cadence_ticks: int | None = Field(default=None, ge=1)
     retain: int = Field(default=3, ge=1, le=1000)
 
     @model_validator(mode="after")
     def _validate_cadence(self) -> SnapshotAutosaveConfig:
         if self.cadence_ticks is not None and self.cadence_ticks < 100:
-            raise ValueError(
-                "snapshot.autosave.cadence_ticks must be at least 100 ticks when enabled"
-            )
+            raise ValueError("snapshot.autosave.cadence_ticks must be at least 100 ticks when enabled")
         return self
 
 
 class SnapshotIdentityConfig(BaseModel):
     """Identity metadata embedded in snapshot files."""
+
     policy_hash: str | None = None
     policy_artifact: Path | None = None
     observation_variant: ObservationVariant | Literal["infer"] = "infer"
@@ -871,14 +919,8 @@ class SnapshotIdentityConfig(BaseModel):
         candidate = self.policy_hash.strip()
         if not candidate:
             raise ValueError("snapshot.identity.policy_hash must not be blank if provided")
-        if not (
-            self._HEX40.match(candidate)
-            or self._HEX64.match(candidate)
-            or self._BASE64.match(candidate)
-        ):
-            raise ValueError(
-                "snapshot.identity.policy_hash must be a 40/64-char hex or base64-encoded digest"
-            )
+        if not (self._HEX40.match(candidate) or self._HEX64.match(candidate) or self._BASE64.match(candidate)):
+            raise ValueError("snapshot.identity.policy_hash must be a 40/64-char hex or base64-encoded digest")
         self.policy_hash = candidate
         return self
 
@@ -888,14 +930,13 @@ class SnapshotIdentityConfig(BaseModel):
             return self
         supported: set[str] = {"hybrid", "full", "compact"}
         if self.observation_variant not in supported:
-            raise ValueError(
-                f"snapshot.identity.observation_variant must be one of {sorted(supported)} or 'infer'"
-            )
+            raise ValueError(f"snapshot.identity.observation_variant must be one of {sorted(supported)} or 'infer'")
         return self
 
 
 class SnapshotMigrationsConfig(BaseModel):
     """Toggle for applying snapshot migrations on load."""
+
     handlers: dict[str, str] = Field(default_factory=dict)
     auto_apply: bool = False
     allow_minor: bool = False
@@ -912,6 +953,7 @@ class SnapshotMigrationsConfig(BaseModel):
 
 class SnapshotGuardrailsConfig(BaseModel):
     """Snapshot validation guardrails and allowlists."""
+
     require_exact_config: bool = True
     allow_downgrade: bool = False
     allowed_paths: list[Path] = Field(default_factory=list)
@@ -919,6 +961,7 @@ class SnapshotGuardrailsConfig(BaseModel):
 
 class SnapshotConfig(BaseModel):
     """Grouping of snapshot-related configuration sections."""
+
     storage: SnapshotStorageConfig = SnapshotStorageConfig()
     autosave: SnapshotAutosaveConfig = SnapshotAutosaveConfig()
     identity: SnapshotIdentityConfig = SnapshotIdentityConfig()
@@ -928,19 +971,14 @@ class SnapshotConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_observation_override(self) -> SnapshotConfig:
-        if (
-            self.identity.observation_variant != "infer"
-            and self.identity.observation_variant not in {"hybrid", "full", "compact"}
-        ):
-            raise ValueError(
-                "snapshot.identity.observation_variant must be one of "
-                "['hybrid', 'full', 'compact', 'infer']"
-            )
+        if self.identity.observation_variant != "infer" and self.identity.observation_variant not in {"hybrid", "full", "compact"}:
+            raise ValueError("snapshot.identity.observation_variant must be one of ['hybrid', 'full', 'compact', 'infer']")
         return self
 
 
 class TrainingConfig(BaseModel):
     """Aggregate training configuration (BC, PPO, anneal)."""
+
     source: TrainingSource = "replay"
     rollout_ticks: int = Field(100, ge=0)
     rollout_auto_seed_agents: bool = False
@@ -963,6 +1001,7 @@ class JobSpec(BaseModel):
 
 class SimulationConfig(BaseModel):
     """Top-level simulation configuration assembled from YAML."""
+
     config_id: str
     features: FeatureFlags
     rewards: RewardsConfig
@@ -1013,6 +1052,7 @@ class SimulationConfig(BaseModel):
     snapshot: SnapshotConfig = SnapshotConfig()
     perturbations: PerturbationSchedulerConfig = PerturbationSchedulerConfig()
     lifecycle: LifecycleConfig = LifecycleConfig()
+    runtime: RuntimeProviders = RuntimeProviders()
 
     model_config = ConfigDict(extra="allow")
 
@@ -1021,9 +1061,7 @@ class SimulationConfig(BaseModel):
         variant = self.features.systems.observations
         supported = {"hybrid", "full", "compact"}
         if variant not in supported:
-            raise ValueError(
-                f"Observation variant '{variant}' is not supported yet; supported variants: {sorted(supported)}"
-            )
+            raise ValueError(f"Observation variant '{variant}' is not supported yet; supported variants: {sorted(supported)}")
         return self
 
     @property
@@ -1036,9 +1074,7 @@ class SimulationConfig(BaseModel):
         """Ensure the simulation is configured with the requested observation variant."""
 
         if self.observation_variant != expected:
-            raise ValueError(
-                f"Observation variant mismatch: expected {expected}, got {self.observation_variant}"
-            )
+            raise ValueError(f"Observation variant mismatch: expected {expected}, got {self.observation_variant}")
 
     def snapshot_root(self) -> Path:
         """Return the root directory used for snapshot storage."""
@@ -1046,9 +1082,7 @@ class SimulationConfig(BaseModel):
         root = Path(self.snapshot.storage.root)
         return root.expanduser().resolve()
 
-    def resolve_personality_profile(
-        self, agent_id: str, profile_name: str | None = None
-    ) -> str:
+    def resolve_personality_profile(self, agent_id: str, profile_name: str | None = None) -> str:
         """Resolve an agent to a personality profile key, honoring overrides."""
 
         if profile_name:
@@ -1076,10 +1110,7 @@ class SimulationConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_personality_bias_keys(self) -> SimulationConfig:
-        if not (
-            self.personality_profiles_enabled()
-            or self.reward_personality_scaling_enabled()
-        ):
+        if not (self.personality_profiles_enabled() or self.reward_personality_scaling_enabled()):
             return self
         from townlet.agents.models import PersonalityProfiles
 
@@ -1087,19 +1118,13 @@ class SimulationConfig(BaseModel):
             profile = PersonalityProfiles.get(profile_name)
             unknown_needs = set(profile.need_multipliers) - PERSONALITY_NEED_KEYS
             if unknown_needs:
-                raise ValueError(
-                    f"Unknown need multipliers {sorted(unknown_needs)} in personality profile '{profile_name}'"
-                )
+                raise ValueError(f"Unknown need multipliers {sorted(unknown_needs)} in personality profile '{profile_name}'")
             unknown_reward = set(profile.reward_bias) - PERSONALITY_REWARD_KEYS
             if unknown_reward:
-                raise ValueError(
-                    f"Unknown reward bias keys {sorted(unknown_reward)} in personality profile '{profile_name}'"
-                )
+                raise ValueError(f"Unknown reward bias keys {sorted(unknown_reward)} in personality profile '{profile_name}'")
             unknown_behaviour = set(profile.behaviour_bias) - PERSONALITY_BEHAVIOUR_KEYS
             if unknown_behaviour:
-                raise ValueError(
-                    f"Unknown behaviour bias keys {sorted(unknown_behaviour)} in personality profile '{profile_name}'"
-                )
+                raise ValueError(f"Unknown behaviour bias keys {sorted(unknown_behaviour)} in personality profile '{profile_name}'")
         return self
 
     def snapshot_allowed_roots(self) -> tuple[Path, ...]:
@@ -1160,21 +1185,15 @@ class SimulationConfig(BaseModel):
         for legacy_config, handler_path in handlers.items():
             module_name, separator, attribute = handler_path.partition(":")
             if not module_name or not attribute or separator != ":":
-                raise ValueError(
-                    "snapshot.migrations.handlers entries must use 'module:function' format"
-                )
+                raise ValueError("snapshot.migrations.handlers entries must use 'module:function' format")
             try:
                 module = importlib.import_module(module_name)
             except ImportError as exc:  # pragma: no cover - defensive path
-                raise ImportError(
-                    f"Failed to import snapshot migration module '{module_name}'"
-                ) from exc
+                raise ImportError(f"Failed to import snapshot migration module '{module_name}'") from exc
             try:
                 handler = getattr(module, attribute)
             except AttributeError as exc:  # pragma: no cover - defensive path
-                raise AttributeError(
-                    f"Snapshot migration handler '{attribute}' not found in module '{module_name}'"
-                ) from exc
+                raise AttributeError(f"Snapshot migration handler '{attribute}' not found in module '{module_name}'") from exc
             register_migration(legacy_config, self.config_id, handler)
 
 

@@ -12,6 +12,7 @@ from typing import Any
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import is_stub_telemetry
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,12 +76,17 @@ def inspect_config(path: Path, ticks: int) -> dict[str, Any]:
         def close(self) -> None:  # pragma: no cover - simple sink
             return None
 
-    loop.telemetry.stop_worker(wait=True)
-    loop.telemetry._transport_client = _NullTransport()  # type: ignore[attr-defined]
+    telemetry = loop.telemetry
+    is_stub = is_stub_telemetry(telemetry)
+    if hasattr(telemetry, "stop_worker"):
+        telemetry.stop_worker(wait=True)  # type: ignore[attr-defined]
+    if not is_stub and hasattr(telemetry, "_transport_client"):
+        telemetry._transport_client = _NullTransport()  # type: ignore[attr-defined]
     for _ in range(max(0, int(ticks))):
         with contextlib.redirect_stdout(io.StringIO()):
             loop.step()
-    loop.telemetry.stop_worker(wait=True)
+    if hasattr(telemetry, "stop_worker"):
+        telemetry.stop_worker(wait=True)  # type: ignore[attr-defined]
     running = loop.world.running_affordances_snapshot()
     report = {
         "source": "config",
@@ -94,6 +100,8 @@ def inspect_config(path: Path, ticks: int) -> dict[str, Any]:
             "active_reservations": loop.world.active_reservations,
         },
     }
+    if is_stub:
+        report["telemetry_warning"] = "Telemetry stub active; transport metrics unavailable."
     return report
 
 
@@ -103,9 +111,7 @@ def render_text(report: dict[str, Any]) -> str:
     if report["source"] == "config":
         lines.append(f"Config ID   : {report['config_id']}")
         lines.append(f"Tick        : {report['tick']}")
-        lines.append(
-            f"Instrumentation: {runtime.get('instrumentation', 'off')}"
-        )
+        lines.append(f"Instrumentation: {runtime.get('instrumentation', 'off')}")
     else:
         lines.append(f"Snapshot tick: {report['tick']}")
     lines.append(f"Running count: {runtime['running_count']}")
@@ -116,9 +122,7 @@ def render_text(report: dict[str, Any]) -> str:
             agent = state.get("agent_id")
             affordance = state.get("affordance_id")
             duration = state.get("duration_remaining")
-            lines.append(
-                f"  - {object_id}: agent={agent} affordance={affordance} duration_remaining={duration}"
-            )
+            lines.append(f"  - {object_id}: agent={agent} affordance={affordance} duration_remaining={duration}")
     else:
         lines.append("No active affordances")
     reservations = runtime.get("active_reservations", {})

@@ -16,6 +16,7 @@ def poc_config(tmp_path: Path) -> Path:
     target.write_text(source.read_text())
     return target
 
+
 def test_demo_config_uses_file_transport() -> None:
     config = load_config(Path("configs/demo/poc_demo.yaml"))
     transport = config.telemetry.transport
@@ -23,6 +24,7 @@ def test_demo_config_uses_file_transport() -> None:
     assert transport.file_path == Path("logs/demo_stream.jsonl")
     assert transport.buffer.max_batch_size == 32
     assert transport.buffer.flush_interval_ticks == 1
+
 
 def test_load_config(poc_config: Path) -> None:
     config = load_config(poc_config)
@@ -57,6 +59,9 @@ def test_load_config(poc_config: Path) -> None:
     assert config.employment.daily_exit_cap == 2
     assert config.employment.enforce_job_loop is True
     assert config.lifecycle.respawn_delay_ticks == 0
+    assert config.runtime.world.provider == "default"
+    assert config.runtime.policy.provider == "scripted"
+    assert config.runtime.telemetry.provider == "stdout"
     assert config.observations_config.hybrid.local_window == 11
     assert config.observations_config.hybrid.include_targets is False
     assert config.ppo is None
@@ -71,6 +76,7 @@ def test_load_config(poc_config: Path) -> None:
     assert rivalry.eviction_threshold == pytest.approx(0.05)
     assert rivalry.max_edges == 6
 
+
 def test_invalid_queue_cooldown_rejected(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -80,6 +86,7 @@ def test_invalid_queue_cooldown_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         load_config(target)
+
 
 def test_tcp_transport_defaults_to_tls(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -98,6 +105,7 @@ def test_tcp_transport_defaults_to_tls(tmp_path: Path) -> None:
     assert transport.allow_plaintext is False
     assert transport.dev_allow_plaintext is False
 
+
 def test_tcp_plaintext_requires_dev_override(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -112,6 +120,7 @@ def test_tcp_plaintext_requires_dev_override(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="requires dev_allow_plaintext=true"):
         load_config(target)
+
 
 def test_tcp_plaintext_requires_localhost(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -128,6 +137,22 @@ def test_tcp_plaintext_requires_localhost(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="only permitted for localhost endpoints"):
         load_config(target)
+
+
+def test_runtime_provider_shorthand(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["runtime"] = {
+        "policy": "scripted",
+        "telemetry": {"provider": "stdout", "options": {"flush_interval": 2}},
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    config = load_config(target)
+    assert config.runtime.policy.provider == "scripted"
+    assert config.runtime.telemetry.options == {"flush_interval": 2}
+
 
 def test_tcp_plaintext_dev_override_success(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -148,6 +173,7 @@ def test_tcp_plaintext_dev_override_success(tmp_path: Path) -> None:
     assert transport.allow_plaintext is True
     assert transport.dev_allow_plaintext is True
 
+
 def test_tcp_transport_tls_requires_cert_and_key_pair(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -162,6 +188,7 @@ def test_tcp_transport_tls_requires_cert_and_key_pair(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="cert_file must be provided when key_file is set"):
         load_config(target)
+
 
 def test_tcp_transport_tls_loads_with_hostname_disabled(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -182,6 +209,7 @@ def test_tcp_transport_tls_loads_with_hostname_disabled(tmp_path: Path) -> None:
     assert transport.enable_tls is True
     assert transport.verify_hostname is False
 
+
 def test_invalid_embedding_threshold_rejected(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -191,6 +219,7 @@ def test_invalid_embedding_threshold_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         load_config(target)
+
 
 def test_invalid_embedding_slot_count(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -202,6 +231,7 @@ def test_invalid_embedding_slot_count(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         load_config(target)
 
+
 def test_invalid_affordance_file_absent(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -212,6 +242,7 @@ def test_invalid_affordance_file_absent(tmp_path: Path) -> None:
     config = load_config(target)
     assert config.affordances.affordances_file.endswith("missing.yaml")
 
+
 def test_observation_variant_guard(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -221,6 +252,7 @@ def test_observation_variant_guard(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Input should be 'full', 'hybrid' or 'compact'"):
         load_config(target)
+
 
 def test_ppo_config_defaults_roundtrip(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -237,6 +269,7 @@ def test_ppo_config_defaults_roundtrip(tmp_path: Path) -> None:
     assert config.ppo.advantage_normalization is True
     assert config.ppo.num_mini_batches == 4
 
+
 def test_observation_variant_full_supported(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -247,6 +280,7 @@ def test_observation_variant_full_supported(tmp_path: Path) -> None:
     config = load_config(target)
     assert config.observation_variant == "full"
 
+
 def test_observation_variant_compact_supported(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -256,6 +290,7 @@ def test_observation_variant_compact_supported(tmp_path: Path) -> None:
 
     config = load_config(target)
     assert config.observation_variant == "compact"
+
 
 def test_snapshot_autosave_cadence_validation(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -268,6 +303,7 @@ def test_snapshot_autosave_cadence_validation(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="cadence_ticks"):
         load_config(target)
+
 
 def test_snapshot_identity_overrides_take_precedence(poc_config: Path) -> None:
     config = load_config(poc_config)
@@ -292,6 +328,7 @@ def test_snapshot_identity_overrides_take_precedence(poc_config: Path) -> None:
     assert identity["observation_variant"] == "full"
     assert identity["anneal_ratio"] == pytest.approx(0.75)
     assert identity["policy_artifact"] == "artifacts/policy.pt"
+
 
 def test_register_snapshot_migrations_from_config(poc_config: Path) -> None:
     module_name = "tests.snapshot_fake_migration"
@@ -324,6 +361,7 @@ def test_register_snapshot_migrations_from_config(poc_config: Path) -> None:
         clear_registry()
         sys.modules.pop(module_name, None)
 
+
 def test_telemetry_transport_defaults(poc_config: Path) -> None:
     config = load_config(poc_config)
     transport = config.telemetry.transport
@@ -331,6 +369,7 @@ def test_telemetry_transport_defaults(poc_config: Path) -> None:
     assert transport.retry.max_attempts == 3
     assert transport.buffer.max_batch_size == 32
     assert transport.buffer.flush_interval_ticks == 1
+
 
 def test_telemetry_file_transport_requires_path(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
@@ -341,6 +380,7 @@ def test_telemetry_file_transport_requires_path(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="file_path is required"):
         load_config(target)
+
 
 def test_telemetry_tcp_transport_requires_endpoint(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")

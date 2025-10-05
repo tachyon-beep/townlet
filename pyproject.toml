@@ -29,6 +29,13 @@ optional-dependencies.dev = [
   "pytest-cov>=4.1",
   "interrogate>=1.7",
 ]
+optional-dependencies.ml = [
+  "torch>=2.2",
+  "torchvision>=0.17",
+]
+optional-dependencies.api = [
+  "httpx>=0.28",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/townlet/townlet"

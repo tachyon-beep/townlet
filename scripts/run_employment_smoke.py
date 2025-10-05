@@ -1,13 +1,15 @@
 """Employment loop smoke test runner for R2 mitigation."""
+
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import is_stub_telemetry, telemetry_provider_name
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,15 +35,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_smoke(config_path: Path, ticks: int, enforce: bool) -> Dict[str, Any]:
+def run_smoke(config_path: Path, ticks: int, enforce: bool) -> dict[str, Any]:
     config = load_config(config_path)
     if enforce:
         config.employment.enforce_job_loop = True
 
     loop = SimulationLoop(config=config)
-    alerts: List[Dict[str, Any]] = []
-    employment_events: List[Dict[str, Any]] = []
-    conflict_events: List[Dict[str, Any]] = []
+    alerts: list[dict[str, Any]] = []
+    employment_events: list[dict[str, Any]] = []
+    conflict_events: list[dict[str, Any]] = []
+    telemetry_stub = is_stub_telemetry(loop.telemetry, telemetry_provider_name(loop))
 
     for _ in range(ticks):
         loop.step()
@@ -58,7 +61,7 @@ def run_smoke(config_path: Path, ticks: int, enforce: bool) -> Dict[str, Any]:
     employment_metrics = loop.telemetry.latest_employment_metrics()
     conflict_snapshot = loop.telemetry.latest_conflict_snapshot()
     queue_metrics = loop.telemetry.latest_queue_metrics()
-    return {
+    summary = {
         "ticks": loop.tick,
         "enforce_job_loop": config.employment.enforce_job_loop,
         "alerts": alerts,
@@ -68,6 +71,9 @@ def run_smoke(config_path: Path, ticks: int, enforce: bool) -> Dict[str, Any]:
         "conflict_events": conflict_events,
         "queue_metrics": queue_metrics,
     }
+    if telemetry_stub:
+        summary["telemetry_warning"] = "Telemetry stub active; conflict metrics may be incomplete."
+    return summary
 
 
 def main() -> None:

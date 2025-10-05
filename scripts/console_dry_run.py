@@ -1,8 +1,9 @@
 """Employment console dry-run harness."""
+
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from townlet.config import (
     ConsoleAuthConfig,
@@ -11,7 +12,7 @@ from townlet.config import (
 )
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
-from townlet.snapshots import SnapshotManager
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 from townlet.snapshots.state import snapshot_from_world
 from townlet.world.grid import AgentSnapshot
 
@@ -53,6 +54,8 @@ def main() -> None:
         world,
         promotion=loop.promotion,
         policy=loop.policy,
+        policy_provider=policy_provider_name(loop),
+        telemetry_provider=telemetry_provider_name(loop),
         lifecycle=loop.lifecycle,
         config=config,
     )
@@ -79,19 +82,16 @@ def main() -> None:
             restored.telemetry,
             restored.world,
             policy=restored.policy,
+            policy_provider=policy_provider_name(restored),
+            telemetry_provider=telemetry_provider_name(restored),
             config=config,
         )
 
         print("=== restored telemetry_snapshot ===")
-        print(
-            restored_router.dispatch(
-                ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})
-            )
-        )
+        print(restored_router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={})))
         print(
             "Snapshot equality:",
-            snapshot_from_world(config, restored.world).as_dict()
-            == snapshot_from_world(config, loop.world).as_dict(),
+            snapshot_from_world(config, restored.world).as_dict() == snapshot_from_world(config, loop.world).as_dict(),
         )
 
     print("=== employment_exit review (before) ===")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -11,16 +12,18 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from townlet.config import SimulationConfig
     from townlet.lifecycle.manager import LifecycleManager
-    from townlet.policy.runner import PolicyRuntime
     from townlet.scheduler.perturbations import PerturbationScheduler
-    from townlet.telemetry.publisher import TelemetryPublisher
     from townlet.world.grid import WorldState
 
+from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
+from townlet.core.utils import is_stub_policy, is_stub_telemetry
 from townlet.snapshots import SnapshotManager
 from townlet.stability.promotion import PromotionManager
 
 SUPPORTED_SCHEMA_PREFIX = "0.9"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -62,7 +65,7 @@ class EventStream:
     def __init__(self) -> None:
         self._latest: list[dict[str, object]] = []
 
-    def connect(self, publisher: TelemetryPublisher) -> None:
+    def connect(self, publisher: TelemetrySinkProtocol) -> None:
         """Subscribe to telemetry events produced by ``publisher``."""
 
         publisher.register_event_subscriber(self._record)
@@ -79,8 +82,14 @@ class EventStream:
 class TelemetryBridge:
     """Provides access to the latest telemetry snapshots for console consumers."""
 
-    def __init__(self, publisher: TelemetryPublisher) -> None:
+    def __init__(
+        self,
+        publisher: TelemetrySinkProtocol,
+        *,
+        provider_name: str | None = None,
+    ) -> None:
         self._publisher = publisher
+        self._provider_name = provider_name or ("stub" if is_stub_telemetry(publisher) else "unknown")
 
     def snapshot(self) -> dict[str, dict[str, object]]:
         version, warning = _schema_metadata(self._publisher)
@@ -106,7 +115,7 @@ class TelemetryBridge:
                 "description": "Push an operator narration entry to observers",
             },
         }
-        return {
+        payload = {
             "schema_version": version,
             "schema_warning": warning,
             "console_commands": command_metadata,
@@ -136,9 +145,7 @@ class TelemetryBridge:
             "stability": {
                 "alerts": self._publisher.latest_stability_alerts(),
                 "metrics": self._publisher.latest_stability_metrics(),
-                "promotion_state": getattr(
-                    self._publisher, "latest_promotion_state", lambda: None
-                )(),
+                "promotion_state": getattr(self._publisher, "latest_promotion_state", lambda: None)(),
             },
             "perturbations": self._publisher.latest_perturbations(),
             "transport": self._publisher.latest_transport_status(),
@@ -147,6 +154,13 @@ class TelemetryBridge:
             "possessed_agents": self._publisher.latest_possessed_agents(),
             "precondition_failures": self._publisher.latest_precondition_failures(),
         }
+        provider = self._provider_name
+        if is_stub_telemetry(self._publisher, provider):
+            payload["telemetry_warning"] = {
+                "provider": provider,
+                "message": "Telemetry running in stub mode; real-time streaming disabled.",
+            }
+        return payload
 
     def relationship_summary_payload(self) -> dict[str, object]:
         """Return normalised relationship summary data for console consumers."""
@@ -259,12 +273,14 @@ class TelemetryBridge:
 
 
 def create_console_router(
-    publisher: TelemetryPublisher,
+    publisher: TelemetrySinkProtocol,
     world: WorldState | None = None,
     scheduler: PerturbationScheduler | None = None,
     promotion: PromotionManager | None = None,
     *,
-    policy: PolicyRuntime | None = None,
+    policy: PolicyBackendProtocol | None = None,
+    policy_provider: str | None = None,
+    telemetry_provider: str | None = None,
     mode: str = "viewer",
     config: SimulationConfig | None = None,
     lifecycle: LifecycleManager | None = None,
@@ -274,7 +290,25 @@ def create_console_router(
     if config is not None:
         config.register_snapshot_migrations()
         allowed_snapshot_roots = config.snapshot_allowed_roots()
-    bridge = TelemetryBridge(publisher)
+    inferred_policy_provider = policy_provider
+    if inferred_policy_provider is None and policy is not None:
+        inferred_policy_provider = "stub" if is_stub_policy(policy) else "unknown"
+    if policy is not None and is_stub_policy(policy, inferred_policy_provider):
+        logger.warning(
+            "console_router_stub_policy provider=%s message='Console operating with stub policy backend'",
+            inferred_policy_provider,
+        )
+
+    inferred_telemetry_provider = telemetry_provider
+    if inferred_telemetry_provider is None:
+        inferred_telemetry_provider = "stub" if is_stub_telemetry(publisher) else "unknown"
+    if is_stub_telemetry(publisher, inferred_telemetry_provider):
+        logger.warning(
+            "console_router_stub_telemetry provider=%s message='Console telemetry limited to in-memory data'",
+            inferred_telemetry_provider,
+        )
+
+    bridge = TelemetryBridge(publisher, provider_name=inferred_telemetry_provider)
 
     def _forbidden(_: ConsoleCommand) -> object:
         return {
@@ -329,10 +363,7 @@ def create_console_router(
             publisher.update_policy_identity(identity)
 
     def _is_path_allowed(resolved: Path) -> bool:
-        return any(
-            resolved == root or resolved.is_relative_to(root)
-            for root in allowed_snapshot_roots
-        )
+        return any(resolved == root or resolved.is_relative_to(root) for root in allowed_snapshot_roots)
 
     def _resolve_snapshot_input(
         value: object,
@@ -368,9 +399,7 @@ def create_console_router(
             }
         return resolved, None
 
-    def _parse_snapshot_path(
-        command: ConsoleCommand, usage: str
-    ) -> tuple[Path | None, dict[str, object] | None]:
+    def _parse_snapshot_path(command: ConsoleCommand, usage: str) -> tuple[Path | None, dict[str, object] | None]:
         path_arg = command.kwargs.get("path")
         if path_arg is None and command.args:
             path_arg = command.args[0]
@@ -488,15 +517,10 @@ def create_console_router(
         if not isinstance(message_arg, str) or not message_arg.strip():
             return {
                 "error": "usage",
-                "message": (
-                    "announce_story <message> [--category tag] [--priority true|false]"
-                ),
+                "message": ("announce_story <message> [--category tag] [--priority true|false]"),
             }
         message = message_arg.strip()
-        category = (
-            str(command.kwargs.get("category", "operator_story")).strip()
-            or "operator_story"
-        )
+        category = str(command.kwargs.get("category", "operator_story")).strip() or "operator_story"
         priority = _coerce_priority(command.kwargs.get("priority", False))
         dedupe_key_arg = command.kwargs.get("dedupe_key")
         dedupe_key = str(dedupe_key_arg) if dedupe_key_arg is not None else None
@@ -609,9 +633,7 @@ def create_console_router(
             return {"error": "unsupported"}
         payload = command.kwargs.get("payload")
         agent_id: str | None = None
-        action = (
-            command.kwargs.get("action") if isinstance(command.kwargs.get("action"), str) else None
-        )
+        action = command.kwargs.get("action") if isinstance(command.kwargs.get("action"), str) else None
         if isinstance(payload, Mapping):
             candidate = payload.get("agent_id")
             if isinstance(candidate, str):
@@ -692,11 +714,7 @@ def create_console_router(
         if lifecycle is None:
             return {"error": "unsupported"}
         payload = command.kwargs.get("payload")
-        value = (
-            command.kwargs.get("enabled")
-            if isinstance(command.kwargs.get("enabled"), bool)
-            else None
-        )
+        value = command.kwargs.get("enabled") if isinstance(command.kwargs.get("enabled"), bool) else None
         if isinstance(payload, Mapping) and "enabled" in payload:
             candidate = payload.get("enabled")
             if isinstance(candidate, bool):
@@ -713,11 +731,7 @@ def create_console_router(
         if world is None:
             return {"error": "unsupported"}
         payload = command.kwargs.get("payload")
-        cap_value = (
-            command.kwargs.get("daily_exit_cap")
-            if isinstance(command.kwargs.get("daily_exit_cap"), int)
-            else None
-        )
+        cap_value = command.kwargs.get("daily_exit_cap") if isinstance(command.kwargs.get("daily_exit_cap"), int) else None
         if isinstance(payload, Mapping) and "daily_exit_cap" in payload:
             candidate = payload.get("daily_exit_cap")
             if isinstance(candidate, int):
@@ -854,10 +868,7 @@ def create_console_router(
                 sorted_rivals = sorted_rivals[:limit]
             return {
                 "agent_id": agent_id,
-                "rivals": [
-                    {"agent_id": other, "intensity": intensity}
-                    for other, intensity in sorted_rivals
-                ],
+                "rivals": [{"agent_id": other, "intensity": intensity} for other, intensity in sorted_rivals],
             }
         edges: list[tuple[str, str, float]] = []
         for owner, rivals in ledger.items():
@@ -869,9 +880,7 @@ def create_console_router(
         if limit > 0:
             edges = edges[:limit]
         return {
-            "pairs": [
-                {"agent_a": a, "agent_b": b, "intensity": intensity} for a, b, intensity in edges
-            ],
+            "pairs": [{"agent_a": a, "agent_b": b, "intensity": intensity} for a, b, intensity in edges],
             "agent_count": len(ledger),
         }
 
@@ -1006,11 +1015,7 @@ def create_console_router(
         starts_in = int(payload.get("starts_in", 0) or 0)
         duration = payload.get("duration")
         duration_int = int(duration) if duration is not None else None
-        overrides = (
-            dict(payload.get("payload", {}))
-            if isinstance(payload.get("payload"), Mapping)
-            else None
-        )
+        overrides = dict(payload.get("payload", {})) if isinstance(payload.get("payload"), Mapping) else None
         try:
             event = scheduler.schedule_manual(
                 world,
@@ -1240,12 +1245,9 @@ def create_console_router(
     return router
 
 
-def _schema_metadata(publisher: TelemetryPublisher) -> tuple[str, str | None]:
+def _schema_metadata(publisher: TelemetrySinkProtocol) -> tuple[str, str | None]:
     version = publisher.schema()
     warning = None
     if not version.startswith(SUPPORTED_SCHEMA_PREFIX):
-        warning = (
-            "Console supports telemetry schema "
-            f"{SUPPORTED_SCHEMA_PREFIX}.x; shard reported {version}. Upgrade required."
-        )
+        warning = f"Console supports telemetry schema {SUPPORTED_SCHEMA_PREFIX}.x; shard reported {version}. Upgrade required."
     return version, warning

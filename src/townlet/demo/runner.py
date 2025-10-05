@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from townlet.core.interfaces import TelemetrySinkProtocol
 from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import is_stub_telemetry
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
-from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import AgentSnapshot, WorldState
 from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.dashboard import PaletteState, run_dashboard
@@ -56,9 +57,7 @@ class DemoScheduler:
                     logger.info(message)
                     self._set_palette(executor, message, "green")
                 except CommandQueueFull as exc:
-                    warning = (
-                        f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
-                    )
+                    warning = f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
                     logger.warning(warning)
                     self._set_palette(executor, warning, "yellow")
             elif item.kind == "action":
@@ -107,9 +106,7 @@ class DemoScheduler:
             message = f"Spawned agent {agent_id}"
         elif name == "force_chat":
             speaker = kwargs.get("speaker") or (command.args[0] if command.args else None)
-            listener = kwargs.get("listener") or (
-                command.args[1] if len(command.args) > 1 else None
-            )
+            listener = kwargs.get("listener") or (command.args[1] if len(command.args) > 1 else None)
             quality = float(kwargs.get("quality", 0.85))
             if speaker and listener:
                 world.record_chat_success(speaker, listener, quality)
@@ -166,10 +163,7 @@ class DemoScheduler:
 
         payload_kwargs: dict[str, object] = {
             "message": message_text,
-            "category": str(
-                kwargs.get("category", self.narration_category)
-                or self.narration_category
-            ),
+            "category": str(kwargs.get("category", self.narration_category) or self.narration_category),
             "tick": tick_value,
         }
         if "priority" in kwargs:
@@ -183,9 +177,7 @@ class DemoScheduler:
         try:
             executor.submit_payload(payload)
         except CommandQueueFull as exc:
-            warning = (
-                f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
-            )
+            warning = f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
             logger.warning(warning)
             return (warning, "yellow")
 
@@ -213,7 +205,7 @@ def seed_demo_state(
     *,
     agents_required: int = 3,
     history_window: int | None = 30,
-    telemetry: TelemetryPublisher | None = None,
+    telemetry: TelemetrySinkProtocol | None = None,
     narration_level: str | None = None,
 ) -> None:
     """Populate world with starter agents, relationships, and history for demos."""
@@ -221,7 +213,7 @@ def seed_demo_state(
     seeded = False
     if not world.agents:
         for index in range(agents_required):
-            agent_id = f"demo_{index+1}"
+            agent_id = f"demo_{index + 1}"
             profile_name, resolved_personality = world.select_personality_profile(agent_id)
             world.agents[agent_id] = AgentSnapshot(
                 agent_id=agent_id,
@@ -249,43 +241,46 @@ def seed_demo_state(
 
     telemetry_source = telemetry or getattr(world, "telemetry", None)
     if telemetry_source is not None:
-        mode = (narration_level or "summary").strip().lower()
-        if mode not in {"off", "none"}:
-            summary = "Avery and Kai prep the town for Blair's arrival."
-            payload_data = {
-                "stage": "warmup",
-                "agents_seeded": len(agent_ids),
-            }
-            priority = mode in {"summary", "highlight", "verbose", "priority"}
-            emitted = telemetry_source.emit_manual_narration(
-                message=summary,
-                category="demo_story",
-                tick=world.tick,
-                priority=priority,
-                data=payload_data,
-                dedupe_key="demo_seed_warmup",
-            )
-            if emitted is None:
-                logger.debug(
-                    "Opening demo narration throttled",
-                    extra={"tick": world.tick, "mode": mode},
+        if is_stub_telemetry(telemetry_source):
+            logger.warning("demo_seed_stub_telemetry message='Telemetry stub active; demo narration/history not populated.'")
+        else:
+            mode = (narration_level or "summary").strip().lower()
+            if mode not in {"off", "none"} and hasattr(telemetry_source, "emit_manual_narration"):
+                summary = "Avery and Kai prep the town for Blair's arrival."
+                payload_data = {
+                    "stage": "warmup",
+                    "agents_seeded": len(agent_ids),
+                }
+                priority = mode in {"summary", "highlight", "verbose", "priority"}
+                emitted = telemetry_source.emit_manual_narration(
+                    message=summary,
+                    category="demo_story",
+                    tick=world.tick,
+                    priority=priority,
+                    data=payload_data,
+                    dedupe_key="demo_seed_warmup",
                 )
+                if emitted is None:
+                    logger.debug(
+                        "Opening demo narration throttled",
+                        extra={"tick": world.tick, "mode": mode},
+                    )
 
-    if telemetry_source is not None and history_window and history_window > 0 and seeded:
-        telemetry_source.publish_tick(
-            tick=world.tick,
-            world=world,
-            observations={},
-            rewards={},
-            events=[],
-            policy_snapshot={},
-            kpi_history=False,
-            reward_breakdown={},
-            stability_inputs={},
-            perturbations={},
-            policy_identity={},
-            possessed_agents=[],
-        )
+            if history_window and history_window > 0 and seeded and hasattr(telemetry_source, "publish_tick"):
+                telemetry_source.publish_tick(
+                    tick=world.tick,
+                    world=world,
+                    observations={},
+                    rewards={},
+                    events=[],
+                    policy_snapshot={},
+                    kpi_history=False,
+                    reward_breakdown={},
+                    stability_inputs={},
+                    perturbations={},
+                    policy_identity={},
+                    possessed_agents=[],
+                )
 
 
 def run_demo_dashboard(

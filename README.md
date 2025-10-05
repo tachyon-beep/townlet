@@ -40,6 +40,7 @@ Townlet is a small-town life simulation that explores emergent behaviour in a po
    ```bash
    pip install -e .[dev]
    ```
+   Optional extras: `pip install -e .[ml]` enables PyTorch-backed policy features, and `pip install -e .[api]` installs the lightweight HTTP client used by FastAPI integration tests.
 2. Run the placeholder smoke test:
    ```bash
    pytest
