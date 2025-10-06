@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
@@ -45,6 +48,23 @@ def test_apply_nightly_reset_returns_agents_home() -> None:
     assert snapshot.needs["energy"] >= 0.5
     assert snapshot.shift_state == "pre_shift"
     assert any(event.get("event") == "agent_nightly_reset" for event in events)
+
+
+def test_apply_nightly_reset_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    world = _setup_world()
+    captured: list[int] = []
+
+    def fake_apply(self: NightlyResetService, tick: int) -> list[str]:
+        captured.append(tick)
+        return ["delegated"]
+
+    monkeypatch.setattr(NightlyResetService, "apply", fake_apply)
+    world.tick = 99
+
+    result = world.apply_nightly_reset()
+
+    assert captured == [99]
+    assert result == ["delegated"]
 
 
 def test_simulation_loop_triggers_nightly_reset() -> None:

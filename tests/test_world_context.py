@@ -7,6 +7,7 @@ import pytest
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world import AgentSnapshot
+from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.core import WorldContext
 
 
@@ -37,7 +38,7 @@ def test_world_context_mirrors_world_state(simulation_loop: SimulationLoop) -> N
     assert context.objects_view()["fridge_1"].object_type == "fridge"
     assert "alice" in context.agents_view()
     assert context.queue_manager is world.queue_manager
-    assert context.affordance_service is getattr(world, "_affordance_service")
+    assert context.affordance_service is world._affordance_service  # pylint: disable=protected-access
 
     adapter = simulation_loop.world_adapter
     assert adapter.queue_manager is world.queue_manager
@@ -53,6 +54,25 @@ def test_world_context_event_and_console_bridge(simulation_loop: SimulationLoop)
     events = world.drain_events()
     assert events and events[-1]["event"] == "test_event"
 
-    console_service = getattr(world, "_console")
+    console_service = world._console  # pylint: disable=protected-access
     assert context.console is console_service
     assert context.console_bridge is console_service.bridge
+
+
+def test_world_context_nightly_reset_proxy(
+    simulation_loop: SimulationLoop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = simulation_loop.world
+    captured: list[int] = []
+
+    def fake_apply(self: NightlyResetService, tick: int) -> list[str]:
+        captured.append(tick)
+        return ["ok"]
+
+    monkeypatch.setattr(NightlyResetService, "apply", fake_apply)
+    world.tick = 123
+
+    result = world.context.apply_nightly_reset(world.tick)
+
+    assert captured == [123]
+    assert result == ["ok"]

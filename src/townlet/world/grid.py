@@ -35,20 +35,21 @@ from townlet.world.affordances import (
     RunningAffordanceState,
     apply_affordance_outcome,
 )
-from townlet.world.console import (
-    WorldConsoleController,
-    install_world_console_handlers,
-)
-from townlet.world.core.context import WorldContext
+from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.agents.personality import (
     default_personality,
     normalize_profile_name,
     resolve_personality_profile,
 )
-from townlet.world.agents.employment import EmploymentService
 from townlet.world.agents.registry import AgentRegistry
 from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.agents.snapshot import AgentSnapshot
+from townlet.world.console import (
+    WorldConsoleController,
+    install_world_console_handlers,
+)
+from townlet.world.core.context import WorldContext
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -265,6 +266,7 @@ class WorldState:
     employment: EmploymentCoordinator = field(init=False, repr=False)
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
     _employment_service: EmploymentService = field(init=False, repr=False)
+    _nightly_reset_service: NightlyResetService = field(init=False, repr=False)
 
     _relationships: RelationshipService = field(init=False, repr=False)
     _relationship_window_ticks: int = 600
@@ -329,6 +331,16 @@ class WorldState:
         self._employment_service = EmploymentService(
             coordinator=self.employment,
             runtime=self._employment_runtime,
+        )
+        self._nightly_reset_service = NightlyResetService(
+            agents=self.agents,
+            queue_manager=self.queue_manager,
+            active_reservations=self._active_reservations,
+            employment_service=self._employment_service,
+            emit_event=self._emit_event,
+            sync_reservation=self._sync_reservation,
+            sync_reservation_for_agent=self._sync_reservation_for_agent,
+            is_tile_blocked=lambda position: position in self._objects_by_position,
         )
         self._relationship_window_ticks = 600
         self._relationships = RelationshipService(
@@ -476,6 +488,7 @@ class WorldState:
             employment=self.employment,
             employment_runtime=self._employment_runtime,
             employment_service=self._employment_service,
+            nightly_reset_service=self._nightly_reset_service,
             relationships=self._relationships,
             config=self.config,
             emit_event_callback=self._emit_event,
@@ -497,6 +510,10 @@ class WorldState:
     @property
     def employment_service(self) -> EmploymentService:
         return self._employment_service
+
+    @property
+    def nightly_reset_service(self) -> NightlyResetService:
+        return self._nightly_reset_service
 
     @property
     def _relationship_ledgers(self):
@@ -955,14 +972,8 @@ class WorldState:
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
         if snapshot.home_position is None:
             snapshot.home_position = snapshot.position
-        self._employment_runtime.reset_context(snapshot.agent_id)
+        self._employment_service.reset_context(snapshot.agent_id)
         self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
-
-    def _release_queue_membership(self, agent_id: str) -> None:
-        self.queue_manager.remove_agent(agent_id, self.tick)
-        for object_id, occupant in list(self._active_reservations.items()):
-            if occupant == agent_id:
-                self._sync_reservation(object_id)
 
     def _sync_reservation_for_agent(self, agent_id: str) -> None:
         for object_id, occupant in list(self._active_reservations.items()):
@@ -1604,79 +1615,15 @@ class WorldState:
         self._update_basket_metrics()
 
     def apply_nightly_reset(self) -> list[str]:
-        """Return agents home, refresh needs, and reset employment flags."""
-
-        if not self.agents:
-            return []
-        reset_agents: list[str] = []
-        for snapshot in self.agents.values():
-            previous_position = snapshot.position
-            home = snapshot.home_position or snapshot.position
-            if home is None:
-                home = snapshot.position
-                snapshot.home_position = home
-
-            target = home
-            if target is not None and target != snapshot.position:
-                occupied = any(
-                    other.agent_id != snapshot.agent_id and other.position == target
-                    for other in self.agents.values()
-                )
-                blocked = target in self._objects_by_position
-                if not occupied and not blocked:
-                    self._release_queue_membership(snapshot.agent_id)
-                    snapshot.position = target
-                    self._sync_reservation_for_agent(snapshot.agent_id)
-
-            for need_name, value in snapshot.needs.items():
-                snapshot.needs[need_name] = max(0.5, min(1.0, float(value)))
-
-            snapshot.exit_pending = False
-            snapshot.on_shift = False
-            snapshot.shift_state = "pre_shift"
-            snapshot.late_ticks_today = 0
-            ctx = self._get_employment_context(snapshot.agent_id)
-            ctx.update(
-                {
-                    "state": "pre_shift",
-                    "late_penalty_applied": False,
-                    "absence_penalty_applied": False,
-                    "late_event_emitted": False,
-                    "absence_event_emitted": False,
-                    "departure_event_emitted": False,
-                    "late_help_event_emitted": False,
-                    "took_shift_event_emitted": False,
-                    "shift_started_tick": None,
-                    "shift_end_tick": None,
-                    "last_present_tick": None,
-                    "late_ticks": 0,
-                    "shift_outcome_recorded": False,
-                    "ever_on_time": False,
-                    "late_counter_recorded": False,
-                }
-            )
-
-            reset_agents.append(snapshot.agent_id)
-            self._emit_event(
-                "agent_nightly_reset",
-                {
-                    "agent_id": snapshot.agent_id,
-                    "moved": snapshot.position != previous_position,
-                    "home_position": list(snapshot.home_position)
-                    if snapshot.home_position
-                    else None,
-                },
-            )
-
-        return reset_agents
+        return self._nightly_reset_service.apply(self.tick)
 
     def assign_jobs_to_agents(self) -> None:
         """Assign jobs to agents lacking a valid role."""
 
-        self._employment_runtime.assign_jobs_to_agents()
+        self._employment_service.assign_jobs_to_agents()
 
     def _apply_job_state(self) -> None:
-        self._employment_runtime.apply_job_state()
+        self._employment_service.apply_job_state()
 
     def _apply_job_state_legacy(self) -> None:
         self.employment._apply_job_state_legacy(self)
@@ -1688,25 +1635,25 @@ class WorldState:
     # Employment helpers
     # ------------------------------------------------------------------
     def _employment_context_defaults(self) -> dict[str, Any]:
-        return self._employment_runtime.context_defaults()
+        return self._employment_service.context_defaults()
 
     def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        return self._employment_runtime.get_context(agent_id)
+        return self._employment_service.get_context(agent_id)
 
     def _employment_context_wages(self, agent_id: str) -> float:
-        return self._employment_runtime.context_wages(agent_id)
+        return self._employment_service.context_wages(agent_id)
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
-        return self._employment_runtime.context_punctuality(agent_id)
+        return self._employment_service.context_punctuality(agent_id)
 
     def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_runtime.idle_state(snapshot, ctx)
+        self._employment_service.idle_state(snapshot, ctx)
 
     def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_runtime.prepare_state(snapshot, ctx)
+        self._employment_service.prepare_state(snapshot, ctx)
 
     def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        self._employment_runtime.begin_shift(ctx, start, end)
+        self._employment_service.begin_shift(ctx, start, end)
 
     def _employment_determine_state(
         self,
@@ -1717,7 +1664,7 @@ class WorldState:
         at_required_location: bool,
         employment_cfg: EmploymentConfig,
     ) -> str:
-        return self._employment_runtime.determine_state(
+        return self._employment_service.determine_state(
             ctx=ctx,
             tick=tick,
             start=start,
@@ -1736,7 +1683,7 @@ class WorldState:
         lateness_penalty: float,
         employment_cfg: EmploymentConfig,
     ) -> None:
-        self._employment_runtime.apply_state_effects(
+        self._employment_service.apply_state_effects(
             snapshot=snapshot,
             ctx=ctx,
             state=state,
@@ -1754,7 +1701,7 @@ class WorldState:
         employment_cfg: EmploymentConfig,
         job_id: str | None,
     ) -> None:
-        self._employment_runtime.finalize_shift(
+        self._employment_service.finalize_shift(
             snapshot=snapshot,
             ctx=ctx,
             employment_cfg=employment_cfg,
@@ -1762,28 +1709,28 @@ class WorldState:
         )
 
     def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
-        return self._employment_runtime.coworkers_on_shift(snapshot)
+        return self._employment_service.coworkers_on_shift(snapshot)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
-        return self._employment_runtime.queue_snapshot()
+        return self._employment_service.queue_snapshot()
 
     def employment_request_manual_exit(self, agent_id: str, tick: int) -> bool:
-        return self._employment_runtime.request_manual_exit(agent_id, tick)
+        return self._employment_service.request_manual_exit(agent_id, tick)
 
     def employment_defer_exit(self, agent_id: str) -> bool:
-        return self._employment_runtime.defer_exit(agent_id)
+        return self._employment_service.defer_exit(agent_id)
 
     def employment_exits_today(self) -> int:
-        return self._employment_runtime.exits_today()
+        return self._employment_service.exits_today()
 
     def set_employment_exits_today(self, value: int) -> None:
-        self._employment_runtime.set_exits_today(value)
+        self._employment_service.set_exits_today(value)
 
     def reset_employment_exits_today(self) -> None:
-        self._employment_runtime.reset_exits_today()
+        self._employment_service.reset_exits_today()
 
     def increment_employment_exits_today(self) -> None:
-        self._employment_runtime.increment_exits_today()
+        self._employment_service.increment_exits_today()
 
     def _update_basket_metrics(self) -> None:
         basket_cost = (

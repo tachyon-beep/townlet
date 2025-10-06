@@ -48,6 +48,7 @@ The target architecture keeps the existing simulation loop as the orchestrator w
 - **Affordances & Hooks**: Encapsulates interaction logic and environment-driven extensions.
 - **Console & Narration**: Manages operator commands, logging, and optional streaming outputs.
 - **Observation Builders**: Generate policy-facing observations behind the `WorldRuntime` interface. A read-only `WorldRuntimeAdapter` (exported from `townlet.world.core`) brokers access to shared services (`agents`, `objects`, `queue_manager`, `relationships`) so downstream consumers avoid binding to the monolithic grid.
+- **Nightly & Employment Services**: `townlet.world.agents.nightly_reset.NightlyResetService` centralises nightly upkeep, and the expanded `townlet.world.agents.employment.EmploymentService` exposes employment APIs consumed by observations, adapters, and telemetry.
 
 ### 3.2 Policy Backends
 - **Backend Interface**: Defines `initialize()`, `select_actions(observation, world_state)`, `record_outcome()`, and `train()` methods.

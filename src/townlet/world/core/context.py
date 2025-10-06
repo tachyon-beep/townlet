@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, MutableMapping
+from typing import Any
 
 from townlet.console.service import ConsoleService
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator
@@ -34,6 +36,7 @@ class WorldContext:
     employment: EmploymentCoordinator
     employment_runtime: EmploymentRuntime
     employment_service: EmploymentService
+    nightly_reset_service: NightlyResetService
     relationships: RelationshipService
     config: object
     emit_event_callback: Callable[[str, dict[str, Any]], None]
@@ -56,6 +59,11 @@ class WorldContext:
 
     def sync_reservation(self, object_id: str) -> None:
         self.sync_reservation_callback(object_id)
+
+    def apply_nightly_reset(self, tick: int) -> list[str]:
+        """Delegate nightly reset to the configured service."""
+
+        return self.nightly_reset_service.apply(tick)
 
     @property
     def console_bridge(self):  # pragma: no cover - thin proxy

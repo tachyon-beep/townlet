@@ -12,6 +12,7 @@
     Objective: decompose world/grid.py into cohesive packages (agents, relationships, console, observation builders).
     Key Tasks: introduce WorldContext façade; migrate clusters iteratively with targeted unit tests; harden interface boundaries.
     Exit Criteria: legacy file <500 LOC; new modules own discrete responsibilities; façade satisfies protocol contract (docs/architecture_review/townlet-target-architecture.md:33; src/townlet/world/grid.py).
+    Notes: Nightly upkeep now flows through `townlet.world.agents.nightly_reset.NightlyResetService`, and `WorldContext.apply_nightly_reset()` exposes the façade for downstream callers. Employment helpers delegate via the expanded `townlet.world.agents.employment.EmploymentService`; regression tests cover the delegation paths (`tests/test_world_nightly_reset.py`, `tests/test_world_employment_delegation.py`).
 - WP-D: Telemetry Pipeline Refactor
     Objective: split telemetry into aggregation, transform, and transport layers with clear lifecycle management.
     Key Tasks: extract worker management; define event schemas; implement stdout/file adapters plus hooks for future sinks; add shutdown/backpressure tests.

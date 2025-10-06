@@ -13,6 +13,9 @@
 - Observation builders and helper modules now coerce incoming world references through `ensure_world_adapter`, enabling adapter/`WorldState` parity tests (`tests/test_observation_builder_parity.py`).
 - Telemetry publisher and snapshot capture lean on the adapter for queue, relationship, and personality metrics, reducing direct `WorldState` coupling while retaining raw access for specialised exports (economy/employment). Adapter smoke tests cover telemetry publishing (`tests/test_telemetry_adapter_smoke.py`).
 - Documentation and migration notes updated to reflect the adapter boundary; future subsystem extractions should depend on the façade rather than the concrete grid.
+- Nightly upkeep moved into `townlet.world.agents.nightly_reset.NightlyResetService`, which `WorldState` wires during `__post_init__` and `WorldContext` now exposes via `apply_nightly_reset()`. This keeps queue release, need refill, and employment reset logic isolated from the grid orchestrator.
+- Employment helpers route through the expanded `townlet.world.agents.employment.EmploymentService`; `WorldRuntimeAdapter` and nightly reset alike depend on the façade for context lookups and shift lifecycle operations.
+- Dedicated delegation tests cover nightly reset and employment service calls (`tests/test_world_nightly_reset.py`, `tests/test_world_employment_delegation.py`).
 
 ## Phase 6 Validation (2025-10-24)
 

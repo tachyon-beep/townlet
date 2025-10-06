@@ -120,10 +120,10 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
         return []
 
     def _employment_context_wages(self, agent_id: str) -> float:
-        return self._world._employment_context_wages(agent_id)
+        return self._world.employment_service.context_wages(agent_id)
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
-        return self._world._employment_context_punctuality(agent_id)
+        return self._world.employment_service.context_punctuality(agent_id)
 
     def running_affordances_snapshot(self) -> Mapping[str, object]:
         snapshot_getter = getattr(self._world, "running_affordances_snapshot", None)

@@ -33,6 +33,9 @@ This roadmap decomposes the transition from the current Townlet implementation t
   - `world/agents/` now houses the agent registry, employment façade, and relationship service protocols; `WorldState` delegates lifecycle hooks through these services.
   - Affordance runtime/service split into `world/affordances/` with an injected `AffordanceEnvironment`, removing direct `WorldState` coupling.
   - Console/queue suites and new service-focused unit tests (`tests/test_agents_services.py`) guard the refactored boundaries.
+- **2025-10-24 Update**:
+  - Nightly resets moved into `townlet.world.agents.nightly_reset.NightlyResetService`; `WorldContext.apply_nightly_reset()` provides a façade entry point and tests assert delegation (`tests/test_world_nightly_reset.py`).
+  - Employment helpers now route through the expanded `townlet.world.agents.employment.EmploymentService`, and the runtime adapter uses the façade for context lookups (`tests/test_world_employment_delegation.py`).
 - **Dependencies**: Work Package 1 interfaces to ensure consumers rely on abstractions, reducing coupling risk.
 - **Estimated Duration**: 2–3 weeks with staged merges.
 - **Exit Criteria**: `world/grid.py` shrinks to orchestration glue (<500 LOC) and all imports reference new submodules.
