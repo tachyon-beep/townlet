@@ -11,7 +11,7 @@ import hashlib
 import importlib
 import random
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Final, Literal
@@ -26,7 +26,8 @@ LifecycleToggle = Literal["on", "off"]
 CuriosityToggle = Literal["phase_A", "off"]
 ConsoleMode = Literal["viewer", "admin"]
 TrainingSource = Literal["replay", "rollout", "mixed", "bc", "anneal"]
-TelemetryTransportType = Literal["stdout", "file", "tcp"]
+TelemetryTransportType = Literal["stdout", "file", "tcp", "websocket"]
+TelemetryBackpressureStrategy = Literal["drop_oldest", "block", "fan_out"]
 
 PERSONALITY_NEED_KEYS: Final[set[str]] = {"hunger", "hygiene", "energy"}
 PERSONALITY_REWARD_KEYS: Final[set[str]] = {"social", "employment", "survival"}
@@ -708,6 +709,7 @@ class TelemetryTransportConfig(BaseModel):
     key_file: Path | None = None
     allow_plaintext: bool = False
     dev_allow_plaintext: bool = False
+    websocket_url: str | None = None
     retry: TelemetryRetryPolicy = TelemetryRetryPolicy()
     buffer: TelemetryBufferConfig = TelemetryBufferConfig()
     worker_poll_seconds: float = Field(default=0.5, ge=0.01, le=10.0)
@@ -792,7 +794,89 @@ class TelemetryTransportConfig(BaseModel):
             self.enable_tls = False
             return self
 
+        if transport_type == "websocket":
+            if self.endpoint is not None:
+                raise ValueError("telemetry.transport.endpoint must be omitted for websocket transport")
+            if self.file_path is not None:
+                raise ValueError("telemetry.transport.file_path must be omitted for websocket transport")
+            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
+                raise ValueError("telemetry.transport websocket does not support TLS certificate options")
+            if self.allow_plaintext or self.dev_allow_plaintext:
+                raise ValueError("telemetry.transport websocket does not use allow_plaintext flags")
+            url = (self.websocket_url or "").strip()
+            if not url:
+                raise ValueError("telemetry.transport.websocket_url is required when type is 'websocket'")
+            self.websocket_url = url
+            self.enable_tls = False
+            self.allow_plaintext = False
+            self.dev_allow_plaintext = False
+            return self
+
         raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
+
+
+class TelemetryWorkerConfig(BaseModel):
+    """Worker coordination and backpressure strategy settings."""
+
+    backpressure: TelemetryBackpressureStrategy = "drop_oldest"
+    block_timeout_seconds: float = Field(default=0.5, ge=0.05, le=5.0)
+    restart_limit: int = Field(default=3, ge=1, le=10)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+SUPPORTED_TELEMETRY_TRANSFORMS = {
+    "snapshot_normalizer",
+    "redact_fields",
+    "ensure_fields",
+    "schema_validator",
+}
+
+
+class TelemetryTransformEntry(BaseModel):
+    """Describes a single transform within the telemetry pipeline."""
+
+    id: str
+    options: dict[str, object] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_transform_entry(cls, value: object) -> object:
+        if isinstance(value, str):
+            return {"id": value}
+        if isinstance(value, Mapping):
+            data = dict(value)
+            data.setdefault("id", data.get("name"))
+            if "options" not in data:
+                options = {key: data.pop(key) for key in list(data.keys()) if key not in {"id", "options"}}
+                data["options"] = options
+            elif not isinstance(data["options"], Mapping):
+                raise TypeError("telemetry.transforms.pipeline.options must be a mapping")
+            return data
+        return value
+
+    @model_validator(mode="after")
+    def _validate_transform(self) -> TelemetryTransformEntry:
+        transform_id = str(self.id).strip().lower()
+        if not transform_id:
+            raise ValueError("telemetry.transforms entries must define a non-empty id")
+        if transform_id not in SUPPORTED_TELEMETRY_TRANSFORMS:
+            supported = ", ".join(sorted(SUPPORTED_TELEMETRY_TRANSFORMS))
+            raise ValueError(f"Unsupported telemetry transform id '{self.id}'. Supported transforms: {supported}")
+        self.id = transform_id
+        if not isinstance(self.options, dict):
+            raise TypeError("telemetry.transforms options must be a mapping")
+        return self
+
+
+class TelemetryTransformsConfig(BaseModel):
+    """Configuration block describing telemetry transform pipeline."""
+
+    pipeline: list[TelemetryTransformEntry] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class TelemetryConfig(BaseModel):
@@ -803,6 +887,8 @@ class TelemetryConfig(BaseModel):
     relationship_narration: RelationshipNarrationConfig = RelationshipNarrationConfig()
     personality_narration: PersonalityNarrationConfig = PersonalityNarrationConfig()
     diff_enabled: bool = True
+    transforms: TelemetryTransformsConfig = TelemetryTransformsConfig()
+    worker: TelemetryWorkerConfig = TelemetryWorkerConfig()
 
 
 class RuntimeProviderConfig(BaseModel):

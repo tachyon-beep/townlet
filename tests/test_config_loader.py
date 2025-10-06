@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from townlet.config import SimulationConfig, load_config
+from townlet.config.loader import TelemetryTransformEntry, TelemetryTransformsConfig
 from townlet.snapshots.migrations import clear_registry, migration_registry
 
 
@@ -221,6 +222,28 @@ def test_invalid_embedding_threshold_rejected(tmp_path: Path) -> None:
         load_config(target)
 
 
+def test_telemetry_transform_entry_from_string() -> None:
+    entry = TelemetryTransformEntry.model_validate("snapshot_normalizer")
+    assert entry.id == "snapshot_normalizer"
+    assert entry.options == {}
+
+
+def test_telemetry_transform_entry_inline_options() -> None:
+    entry = TelemetryTransformEntry.model_validate({"id": "redact_fields", "fields": ["secret"]})
+    assert entry.id == "redact_fields"
+    assert entry.options == {"fields": ["secret"]}
+
+
+def test_telemetry_transform_entry_rejects_unknown_id() -> None:
+    with pytest.raises(ValueError):
+        TelemetryTransformEntry.model_validate("unknown_transform")
+
+
+def test_telemetry_transforms_config_default() -> None:
+    cfg = TelemetryTransformsConfig()
+    assert cfg.pipeline == []
+
+
 def test_invalid_embedding_slot_count(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
@@ -391,3 +414,44 @@ def test_telemetry_tcp_transport_requires_endpoint(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="endpoint is required"):
         load_config(target)
+
+
+def test_telemetry_schema_transform_config(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    schema_path = str((Path("tests/data/telemetry_schema/snapshot_minimal.schema.json").resolve()))
+    config_data.setdefault("telemetry", {})
+    config_data["telemetry"]["transforms"] = {
+        "pipeline": [
+            {
+                "id": "schema_validator",
+                "schemas": {"snapshot": schema_path},
+                "mode": "warn",
+            }
+        ]
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    config = load_config(target)
+    pipeline = config.telemetry.transforms.pipeline
+    assert pipeline[0].id == "schema_validator"
+    assert pipeline[0].options["mode"] == "warn"
+
+
+def test_websocket_transport_requires_url(tmp_path: Path) -> None:
+    source = Path("configs/examples/poc_hybrid.yaml")
+    config_data = yaml.safe_load(source.read_text())
+    config_data["telemetry"]["transport"] = {
+        "type": "websocket",
+    }
+    target = tmp_path / "config.yaml"
+    target.write_text(yaml.safe_dump(config_data))
+
+    with pytest.raises(ValueError, match="websocket_url is required"):
+        load_config(target)
+
+    config_data["telemetry"]["transport"]["websocket_url"] = "wss://localhost/telemetry"
+    target.write_text(yaml.safe_dump(config_data))
+    config = load_config(target)
+    assert config.telemetry.transport.websocket_url == "wss://localhost/telemetry"

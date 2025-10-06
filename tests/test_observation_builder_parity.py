@@ -52,7 +52,7 @@ def test_observation_builder_matches_baseline_snapshot(tmp_path):
         assert len(metadata["feature_names"]) == features.shape[0]
         assert metadata["variant"] == builder.variant
         assert metadata["map_channels"] == list(builder.MAP_CHANNELS)
-    loop.telemetry.close()
+    loop.close()
 
 
 def test_observation_builder_adapter_parity():
@@ -67,4 +67,4 @@ def test_observation_builder_adapter_parity():
         adapter_payload = batch_adapter[agent_id]
         np.testing.assert_allclose(raw_payload["features"], adapter_payload["features"])
         assert raw_payload["metadata"]["map_channels"] == adapter_payload["metadata"]["map_channels"]
-    loop.telemetry.close()
+    loop.close()

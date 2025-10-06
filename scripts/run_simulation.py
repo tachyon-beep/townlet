@@ -86,7 +86,7 @@ def main() -> None:
         failure_payload = (exc.tick, error_summary, latest_health)
     finally:
         try:
-            loop.telemetry.close()
+            loop.close()
         except Exception:  # pragma: no cover - shutdown guard
             pass
     duration = time.perf_counter() - start

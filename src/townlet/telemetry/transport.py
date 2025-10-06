@@ -7,8 +7,9 @@ import socket
 import ssl
 import sys
 from collections import deque
+from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Protocol
+from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -17,47 +18,73 @@ class TelemetryTransportError(RuntimeError):
     """Raised when telemetry messages cannot be delivered."""
 
 
-class TransportClient(Protocol):
-    """Common interface for transport implementations."""
+class BaseTransport(AbstractContextManager):
+    """Common lifecycle helpers for telemetry transports."""
 
-    def send(self, payload: bytes) -> None:  # pragma: no cover - Protocol stub
+    def start(self) -> None:
+        """Initialise resources (default no-op)."""
+
+    def stop(self) -> None:
+        """Tear down resources (default no-op)."""
+
+    def send(self, payload: bytes) -> None:  # pragma: no cover - interface stub
         raise NotImplementedError
 
-    def close(self) -> None:  # pragma: no cover - Protocol stub
-        raise NotImplementedError
+    # Context manager helpers -------------------------------------------------
+    def __enter__(self):  # pragma: no cover - rarely used
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):  # pragma: no cover - rarely used
+        self.stop()
+        return False
 
 
-class StdoutTransport:
+class StdoutTransport(BaseTransport):
     """Writes telemetry payloads to stdout (for development/debug)."""
 
     def __init__(self) -> None:
+        self._stream = None
+
+    def start(self) -> None:
         self._stream = sys.stdout.buffer
 
+    def stop(self) -> None:
+        if self._stream is not None:
+            self._stream.flush()
+        self._stream = None
+
     def send(self, payload: bytes) -> None:
+        if self._stream is None:
+            raise TelemetryTransportError("StdoutTransport used before start()")
         self._stream.write(payload)
         self._stream.flush()
 
-    def close(self) -> None:
-        self._stream.flush()
 
-
-class FileTransport:
+class FileTransport(BaseTransport):
     """Appends newline-delimited payloads to a local file."""
 
     def __init__(self, path: Path) -> None:
         self._path = path.expanduser()
+        self._handle = None
+
+    def start(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._handle = self._path.open("ab", buffering=0)
 
+    def stop(self) -> None:
+        if self._handle is not None:
+            self._handle.close()
+        self._handle = None
+
     def send(self, payload: bytes) -> None:
+        if self._handle is None:
+            raise TelemetryTransportError("FileTransport used before start()")
         self._handle.write(payload)
         self._handle.flush()
 
-    def close(self) -> None:
-        self._handle.close()
 
-
-class TcpTransport:
+class TcpTransport(BaseTransport):
     """Sends telemetry payloads to a TCP endpoint."""
 
     def __init__(
@@ -99,6 +126,9 @@ class TcpTransport:
                 "Plaintext TCP transport is disabled; enable TLS or allow plaintext explicitly"
             )
         self._ssl_context: ssl.SSLContext | None = None
+        self._socket = None
+
+    def start(self) -> None:
         self._connect()
 
     def _connect(self) -> None:
@@ -146,12 +176,32 @@ class TcpTransport:
         except OSError as exc:  # pragma: no cover - socket error
             raise TelemetryTransportError(str(exc)) from exc
 
-    def close(self) -> None:
+    def stop(self) -> None:
         if self._socket is not None:
             try:
                 self._socket.close()
             finally:
                 self._socket = None
+
+
+class WebsocketTransport(BaseTransport):
+    """Stub implementation for future WebSocket streaming."""
+
+    def __init__(self, url: str) -> None:
+        self._url = url
+        self._started = False
+
+    def start(self) -> None:
+        logger.info("WebsocketTransport start requested url=%s (stub)", self._url)
+        self._started = True
+
+    def stop(self) -> None:
+        if self._started:
+            logger.info("WebsocketTransport stop requested url=%s (stub)", self._url)
+        self._started = False
+
+    def send(self, payload: bytes) -> None:
+        raise TelemetryTransportError("WebsocketTransport is not implemented yet")
 
 
 class TransportBuffer:
@@ -210,7 +260,8 @@ def create_transport(
     cert_file: Path | None,
     key_file: Path | None,
     allow_plaintext: bool,
-) -> TransportClient:
+    websocket_url: str | None = None,
+) -> BaseTransport:
     """Factory helper for `TelemetryPublisher`."""
 
     if transport_type == "stdout":
@@ -241,6 +292,12 @@ def create_transport(
             key_file=key_file,
             allow_plaintext=allow_plaintext,
         )
+    if transport_type == "websocket":
+        if websocket_url is None:
+            raise TelemetryTransportError(
+                "telemetry.transport.websocket_url required for websocket transport"
+            )
+        return WebsocketTransport(websocket_url)
     raise TelemetryTransportError(
         f"Unsupported telemetry transport type: {transport_type}"
     )

@@ -29,7 +29,7 @@ def test_policy_stub_resolution(sample_config: Any, monkeypatch: pytest.MonkeyPa
         assert isinstance(loop.policy, StubPolicyBackend)
     finally:
         if hasattr(loop.telemetry, "close"):
-            loop.telemetry.close()
+            loop.close()
 
 
 def test_telemetry_stub_resolution(sample_config: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -44,4 +44,4 @@ def test_telemetry_stub_resolution(sample_config: Any, monkeypatch: pytest.Monke
         assert isinstance(loop.telemetry, StubTelemetrySink)
     finally:
         if hasattr(loop.telemetry, "close"):
-            loop.telemetry.close()
+            loop.close()

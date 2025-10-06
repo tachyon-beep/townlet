@@ -39,4 +39,4 @@ def test_policy_observations_via_adapter(short_loop: SimulationLoop) -> None:
     builder = loop.observations
     batch = builder.build_batch(loop.world_adapter, terminated={})
     assert isinstance(batch, dict)
-    loop.telemetry.close()
+    loop.close()

@@ -272,8 +272,7 @@ def test_simulation_loop_uses_registered_providers(sample_config: Any) -> None:
         assert isinstance(loop.policy, _StubPolicy)
         assert isinstance(loop.telemetry, _StubTelemetry)
     finally:
-        if hasattr(loop.telemetry, "close"):
-            loop.telemetry.close()
+        loop.close()
 
 
 def test_simulation_loop_reads_runtime_from_config(sample_config: Any) -> None:
@@ -291,8 +290,7 @@ def test_simulation_loop_reads_runtime_from_config(sample_config: Any) -> None:
         assert isinstance(loop.policy, _StubPolicy)
         assert isinstance(loop.telemetry, _StubTelemetry)
     finally:
-        if hasattr(loop.telemetry, "close"):
-            loop.telemetry.close()
+        loop.close()
 
 
 def test_policy_module_helper_returns_backend(sample_config: Any) -> None:

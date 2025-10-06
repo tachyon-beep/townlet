@@ -141,6 +141,14 @@ class SimulationLoop:
     def _build_components(self) -> None:
         """Instantiate runtime dependencies based on the simulation config."""
 
+        previous_telemetry = getattr(self, "telemetry", None)
+        if previous_telemetry is not None:
+            close = getattr(previous_telemetry, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # pragma: no cover - best effort
+                    logger.debug("Failed to close previous telemetry sink", exc_info=True)
         self._rng_world = random.Random(self._derive_seed("world"))
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
@@ -573,6 +581,25 @@ class SimulationLoop:
             return getattr(module, attribute)
         except AttributeError as exc:  # pragma: no cover - defensive
             raise AttributeError(f"Runtime factory '{attribute}' not found in module '{module_name}'") from exc
+
+    def close(self) -> None:
+        """Release resources held by the loop (telemetry, runtime, policy)."""
+
+        telemetry = getattr(self, "telemetry", None)
+        if telemetry is not None:
+            close = getattr(telemetry, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # pragma: no cover - defensive cleanup
+                    logger.debug("Telemetry close raised during loop shutdown", exc_info=True)
+
+    def __enter__(self) -> "SimulationLoop":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.close()
+        return False
 
     def _derive_seed(self, stream: str) -> int:
         digest = hashlib.sha256(f"{self.config.config_id}:{stream}".encode())
