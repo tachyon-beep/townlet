@@ -18,6 +18,7 @@ from townlet.scheduler.perturbations import PerturbationScheduler
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.lifecycle.manager import LifecycleManager
     from townlet.world.grid import WorldState
+    from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
 
 ActionMapping = Mapping[str, object]
@@ -63,6 +64,7 @@ class WorldRuntime:
         self._ticks_per_day = max(0, int(ticks_per_day))
         self._queued_console: list[ConsoleCommandEnvelope] = []
         self._pending_actions: dict[str, object] = {}
+        self._world_adapter: WorldRuntimeAdapterProtocol | None = None
 
     @property
     def world(self) -> WorldState:
@@ -72,6 +74,15 @@ class WorldRuntime:
         """Rebind the runtime to a freshly constructed ``WorldState``."""
 
         self._world = world
+
+    def bind_world_adapter(
+        self, adapter: "WorldRuntimeAdapterProtocol"
+    ) -> None:  # pragma: no cover - thin setter
+        self._world_adapter = adapter
+
+    @property
+    def world_adapter(self) -> "WorldRuntimeAdapterProtocol | None":
+        return self._world_adapter
 
     def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
         """Buffer console operations for the next tick.

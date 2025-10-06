@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
-from townlet.world.console_bridge import ConsoleBridge
+from townlet.world.console import ConsoleBridge
 
 
 class ConsoleService:

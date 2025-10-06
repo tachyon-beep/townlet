@@ -6,7 +6,7 @@ full extraction is complete.
 
 from __future__ import annotations
 
-from townlet.world.queue_conflict import QueueConflictTracker
-from townlet.world.queue_manager import QueueManager
+from .conflict import QueueConflictTracker
+from .manager import QueueManager
 
 __all__ = ["QueueConflictTracker", "QueueManager"]

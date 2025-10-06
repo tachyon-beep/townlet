@@ -1,207 +1,56 @@
-"""Helper utilities for building observation-friendly world snapshots."""
+"""Legacy observation helper module.
+
+The functions here now proxy to ``townlet.world.observations`` submodules. They
+will be removed once downstream consumers migrate to the new import paths.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+import warnings
+from typing import Any
 
-if TYPE_CHECKING:  # pragma: no cover
-    from townlet.world.grid import AgentSnapshot, WorldState
-else:  # pragma: no cover - runtime typing fallbacks
-    AgentSnapshot = Any  # type: ignore[assignment]
-    WorldState = Any  # type: ignore[assignment]
-
-
-def build_local_cache(
-    world: WorldState,
-    snapshots: Mapping[str, AgentSnapshot],
-) -> tuple[
-    dict[tuple[int, int], list[str]],
-    dict[tuple[int, int], list[str]],
-    set[tuple[int, int]],
-]:
-    """Return lookup tables describing nearby agents, objects, and reservations."""
-
-    agent_lookup: dict[tuple[int, int], list[str]] = {}
-    for agent_id, snapshot in snapshots.items():
-        position = world.agent_position(agent_id) or snapshot.position
-        agent_lookup.setdefault(position, []).append(agent_id)
-
-    object_lookup: dict[tuple[int, int], list[str]] = {}
-    for position, object_ids_tuple in world.objects_by_position_view().items():
-        filtered = [obj_id for obj_id in object_ids_tuple if obj_id in world.objects]
-        if filtered:
-            object_lookup[position] = filtered
-
-    reservation_tiles = set(world.reservation_tiles())
-    return agent_lookup, object_lookup, reservation_tiles
+from townlet.world.observations.cache import build_local_cache as _build_local_cache
+from townlet.world.observations.context import (
+    agent_context as _agent_context,
+    snapshot_precondition_context as _snapshot_precondition_context,
+)
+from townlet.world.observations.views import (
+    find_nearest_object_of_type as _find_nearest_object_of_type,
+    local_view as _local_view,
+)
 
 
-def local_view(
-    world: WorldState,
-    agent_id: str,
-    radius: int,
-    *,
-    include_agents: bool = True,
-    include_objects: bool = True,
-) -> dict[str, Any]:
-    """Return a structured neighborhood snapshot around ``agent_id``."""
-
-    snapshots = world.agent_snapshots_view()
-    target_snapshot = snapshots.get(agent_id)
-    if target_snapshot is None:
-        return {
-            "center": None,
-            "radius": radius,
-            "tiles": [],
-            "agents": [],
-            "objects": [],
-        }
-
-    cx, cy = target_snapshot.position
-    objects_by_position = world.objects_by_position_view() if include_objects else {}
-    reservation_tiles = world.reservation_tiles() if include_objects else frozenset()
-
-    tiles: list[list[dict[str, Any]]] = []
-    seen_agents: dict[str, dict[str, Any]] = {}
-    seen_objects: dict[str, dict[str, Any]] = {}
-
-    for dy in range(-radius, radius + 1):
-        row: list[dict[str, Any]] = []
-        for dx in range(-radius, radius + 1):
-            x = cx + dx
-            y = cy + dy
-            position = (x, y)
-            agent_ids_tuple = world.agents_at_tile(position) if include_agents else ()
-            agent_ids = list(agent_ids_tuple)
-            object_ids_for_tile = (
-                list(objects_by_position.get(position, ())) if include_objects else []
-            )
-
-            if include_agents:
-                for agent_id_at_tile in agent_ids:
-                    if agent_id_at_tile == agent_id:
-                        continue
-                    other_snapshot = snapshots.get(agent_id_at_tile)
-                    if other_snapshot is None:
-                        continue
-                    seen_agents.setdefault(
-                        agent_id_at_tile,
-                        {
-                            "agent_id": agent_id_at_tile,
-                            "position": other_snapshot.position,
-                            "on_shift": other_snapshot.on_shift,
-                        },
-                    )
-
-            if include_objects:
-                for object_id in object_ids_for_tile:
-                    obj = world.objects.get(object_id)
-                    if obj is None:
-                        continue
-                    seen_objects.setdefault(
-                        object_id,
-                        {
-                            "object_id": object_id,
-                            "object_type": obj.object_type,
-                            "position": obj.position,
-                            "occupied_by": obj.occupied_by,
-                        },
-                    )
-
-            reservation_active = bool(object_ids_for_tile) and position in reservation_tiles
-
-            row.append(
-                {
-                    "position": position,
-                    "self": position == (cx, cy),
-                    "agent_ids": agent_ids,
-                    "object_ids": object_ids_for_tile,
-                    "reservation_active": reservation_active,
-                }
-            )
-        tiles.append(row)
-
-    return {
-        "center": (cx, cy),
-        "radius": radius,
-        "tiles": tiles,
-        "agents": list(seen_agents.values()),
-        "objects": list(seen_objects.values()),
-    }
+def _warn(target: str) -> None:
+    warnings.warn(
+        f"{target} is deprecated; import from townlet.world.observations.* instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
 
-def agent_context(world: WorldState, agent_id: str) -> dict[str, Any]:
-    """Return scalar context fields consumed by observation builders."""
-
-    snapshot = world.agent_snapshots_view().get(agent_id)
-    if snapshot is None:
-        return {}
-    return {
-        "needs": dict(getattr(snapshot, "needs", {})),
-        "wallet": float(getattr(snapshot, "wallet", 0.0)),
-        "lateness_counter": getattr(snapshot, "lateness_counter", 0),
-        "on_shift": bool(getattr(snapshot, "on_shift", False)),
-        "attendance_ratio": float(getattr(snapshot, "attendance_ratio", 0.0)),
-        "wages_withheld": float(getattr(snapshot, "wages_withheld", 0.0)),
-        "shift_state": getattr(snapshot, "shift_state", "pre_shift"),
-        "last_action_id": getattr(snapshot, "last_action_id", ""),
-        "last_action_success": bool(getattr(snapshot, "last_action_success", False)),
-        "last_action_duration": getattr(snapshot, "last_action_duration", 0),
-        "wages_paid": _maybe_call(
-            world,
-            "_employment_context_wages",
-            getattr(snapshot, "agent_id", agent_id),
-            default=float(getattr(snapshot, "wages_paid", 0.0)),
-        ),
-        "punctuality_bonus": _maybe_call(
-            world,
-            "_employment_context_punctuality",
-            getattr(snapshot, "agent_id", agent_id),
-            default=float(getattr(snapshot, "punctuality_bonus", 0.0)),
-        ),
-    }
+def build_local_cache(*args: Any, **kwargs: Any):
+    _warn("townlet.world.observation.build_local_cache")
+    return _build_local_cache(*args, **kwargs)
 
 
-def _maybe_call(world: object, attr: str, *args: object, default: float = 0.0) -> float:
-    func = getattr(world, attr, None)
-    if callable(func):
-        try:
-            return float(func(*args))
-        except Exception:  # pragma: no cover - defensive fallback
-            return default
-    return default
+def local_view(*args: Any, **kwargs: Any):
+    _warn("townlet.world.observation.local_view")
+    return _local_view(*args, **kwargs)
 
 
-def find_nearest_object_of_type(
-    world: WorldState, object_type: str, origin: tuple[int, int]
-) -> tuple[int, int] | None:
-    """Return the location of the closest object matching ``object_type``."""
-
-    targets = [
-        obj.position
-        for obj in world.objects.values()
-        if obj.object_type == object_type and obj.position is not None
-    ]
-    if not targets:
-        return None
-    ox, oy = origin
-    return min(targets, key=lambda pos: (pos[0] - ox) ** 2 + (pos[1] - oy) ** 2)
+def agent_context(*args: Any, **kwargs: Any):
+    _warn("townlet.world.observation.agent_context")
+    return _agent_context(*args, **kwargs)
 
 
-def snapshot_precondition_context(context: Mapping[str, Any]) -> dict[str, Any]:
-    """Deep-copy precondition context into a JSON-serialisable structure."""
+def find_nearest_object_of_type(*args: Any, **kwargs: Any):
+    _warn("townlet.world.observation.find_nearest_object_of_type")
+    return _find_nearest_object_of_type(*args, **kwargs)
 
-    def _clone(value: Any) -> Any:
-        if isinstance(value, dict):
-            return {str(key): _clone(val) for key, val in value.items()}
-        if isinstance(value, list):
-            return [_clone(item) for item in value]
-        if isinstance(value, tuple):
-            return [_clone(item) for item in value]
-        return value
 
-    return {str(key): _clone(val) for key, val in context.items()}
+def snapshot_precondition_context(*args: Any, **kwargs: Any):
+    _warn("townlet.world.observation.snapshot_precondition_context")
+    return _snapshot_precondition_context(*args, **kwargs)
 
 
 __all__ = [

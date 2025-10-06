@@ -6,9 +6,9 @@ import pytest
 
 from townlet.config import load_config
 from townlet.world.grid import AgentSnapshot, WorldState
-from townlet.world.observation import (
-    agent_context,
-    build_local_cache,
+from townlet.world.observations.cache import build_local_cache
+from townlet.world.observations.context import agent_context
+from townlet.world.observations.views import (
     find_nearest_object_of_type,
     local_view,
 )

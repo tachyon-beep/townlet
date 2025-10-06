@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-from .agents import EmploymentEngine
+from .agents import AgentSnapshot, EmploymentEngine
 from .core import WorldContext
-from .grid import AgentSnapshot, WorldState
-from .observations import (
-    agent_context as observation_agent_context,
-)
-from .observations import (
+from .grid import WorldState
+from .observations.cache import (
     build_local_cache as observation_build_local_cache,
 )
-from .observations import (
+from .observations.context import (
+    agent_context as observation_agent_context,
+)
+from .observations.context import snapshot_precondition_context
+from .observations.views import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )
-from .observations import (
+from .observations.views import (
     local_view as observation_local_view,
-)
-from .observations import (
-    snapshot_precondition_context,
 )
 from .queue import QueueManager
 from .relationships import RelationshipLedger, RelationshipParameters, RelationshipTie

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from math import cos, sin, tau
 from typing import TYPE_CHECKING
@@ -12,18 +12,20 @@ import numpy as np
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import ObservationVariant, SimulationConfig
-from townlet.world.observation import (
-    agent_context as observation_agent_context,
-)
-from townlet.world.observation import (
+from townlet.world.core.runtime_adapter import ensure_world_adapter
+from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
+from townlet.world.observations.cache import (
     build_local_cache as observation_build_local_cache,
 )
-from townlet.world.observation import (
+from townlet.world.observations.context import (
+    agent_context as observation_agent_context,
+)
+from townlet.world.observations.views import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )
 
 if TYPE_CHECKING:
-    from townlet.world.grid import AgentSnapshot, WorldState
+    from townlet.world.agents.snapshot import AgentSnapshot
 
 
 @dataclass(frozen=True)
@@ -197,29 +199,32 @@ class ObservationBuilder:
             self._personality_feature_indices = {}
 
     def build_batch(
-        self, world: WorldState, terminated: dict[str, bool]
+        self,
+        world: WorldRuntimeAdapterProtocol | object,
+        terminated: Mapping[str, bool],
     ) -> dict[str, dict[str, np.ndarray]]:
         """Return a mapping from agent_id to observation payloads."""
+        adapter = ensure_world_adapter(world)
         observations: dict[str, dict[str, np.ndarray]] = {}
-        snapshots = world.snapshot()
-        pending_resets = world.consume_ctx_reset_requests()
+        snapshots = dict(adapter.agent_snapshots_view())
+        pending_resets = adapter.consume_ctx_reset_requests()
 
-        cache = self._build_local_cache(world, snapshots)
+        cache = self._build_local_cache(adapter, snapshots)
         for agent_id, snapshot in snapshots.items():
-            slot = world.embedding_allocator.allocate(agent_id, world.tick)
-            obs = self._build_single(world, snapshot, slot, cache)
+            slot = adapter.embedding_allocator.allocate(agent_id, adapter.tick)
+            obs = self._build_single(adapter, snapshot, slot, cache)
             if agent_id in pending_resets:
                 obs["features"][self._feature_index["ctx_reset_flag"]] = 1.0
                 pending_resets.discard(agent_id)
-            if terminated.get(agent_id):
+            if terminated.get(agent_id, False):
                 obs["features"][self._feature_index["ctx_reset_flag"]] = 1.0
-                world.embedding_allocator.release(agent_id, world.tick)
+                adapter.embedding_allocator.release(agent_id, adapter.tick)
             observations[agent_id] = obs
         return observations
 
     def _build_local_cache(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshots: dict[str, AgentSnapshot],
     ) -> _LocalCache:
         agent_lookup, object_lookup, reservation_tiles = observation_build_local_cache(
@@ -295,7 +300,7 @@ class ObservationBuilder:
     def _encode_rivalry(
         self,
         features: np.ndarray,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> None:
         top_rivals = world.rivalry_top(
@@ -310,7 +315,7 @@ class ObservationBuilder:
     def _encode_environmental_flags(
         self,
         features: np.ndarray,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> None:
         reservation_idx = self._feature_index.get("reservation_active")
@@ -332,7 +337,7 @@ class ObservationBuilder:
     def _encode_path_hint(
         self,
         features: np.ndarray,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> None:
         if not self._path_hint_indices:
@@ -457,7 +462,7 @@ class ObservationBuilder:
 
     def _build_compact_map(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
         radius: int,
         cache: _LocalCache,
@@ -525,7 +530,6 @@ class ObservationBuilder:
     def _encode_local_summary(
         self,
         features: np.ndarray,
-        world: WorldState,
         snapshot: AgentSnapshot,
         cache: _LocalCache,
         summary_override: dict[str, float] | None = None,
@@ -599,7 +603,7 @@ class ObservationBuilder:
 
     def _initialise_feature_vector(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
@@ -617,7 +621,7 @@ class ObservationBuilder:
         self._encode_environmental_flags(features, world, snapshot)
         self._encode_path_hint(features, world, snapshot)
         local_summary = self._encode_local_summary(
-            features, world, snapshot, cache, summary_override=local_summary
+            features, snapshot, cache, summary_override=local_summary
         )
 
         if self.hybrid_cfg.include_targets and self._landmark_slices:
@@ -672,7 +676,7 @@ class ObservationBuilder:
 
     def _build_single(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
@@ -687,7 +691,7 @@ class ObservationBuilder:
 
     def _build_hybrid(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
@@ -724,7 +728,7 @@ class ObservationBuilder:
 
     def _build_full(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
@@ -761,7 +765,7 @@ class ObservationBuilder:
 
     def _build_compact(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
@@ -805,7 +809,7 @@ class ObservationBuilder:
     # ------------------------------------------------------------------
     def _build_social_vector(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> tuple[np.ndarray, dict[str, object]]:
         if not self._social_vector_length:
@@ -854,7 +858,7 @@ class ObservationBuilder:
 
     def _collect_social_slots(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> tuple[list[dict[str, float]], dict[str, object]]:
         total_slots = self._social_slots
@@ -897,7 +901,7 @@ class ObservationBuilder:
 
     def _resolve_relationships(
         self,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         agent_id: str,
     ) -> tuple[list[dict[str, float]], str]:
         snapshot_getter = getattr(world, "relationships_snapshot", None)
@@ -942,7 +946,7 @@ class ObservationBuilder:
     def _encode_landmarks(
         self,
         features: np.ndarray,
-        world: WorldState,
+        world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> None:
         cx, cy = snapshot.position

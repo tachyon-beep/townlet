@@ -29,6 +29,10 @@ This roadmap decomposes the transition from the current Townlet implementation t
   - Identify logical clusters (agents, affordances, console, employment, relationships, hooks) and move code into dedicated modules.
   - Establish a `WorldContext` façade exposing stable methods consumed by policy, telemetry, and scheduler layers.
   - Add unit tests around migrated modules plus regression tests for representative ticks.
+- **Current Status (2025-04-12)**:
+  - `world/agents/` now houses the agent registry, employment façade, and relationship service protocols; `WorldState` delegates lifecycle hooks through these services.
+  - Affordance runtime/service split into `world/affordances/` with an injected `AffordanceEnvironment`, removing direct `WorldState` coupling.
+  - Console/queue suites and new service-focused unit tests (`tests/test_agents_services.py`) guard the refactored boundaries.
 - **Dependencies**: Work Package 1 interfaces to ensure consumers rely on abstractions, reducing coupling risk.
 - **Estimated Duration**: 2–3 weeks with staged merges.
 - **Exit Criteria**: `world/grid.py` shrinks to orchestration glue (<500 LOC) and all imports reference new submodules.

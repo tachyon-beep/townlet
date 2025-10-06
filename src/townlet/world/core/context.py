@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, MutableMapping
 
 from townlet.console.service import ConsoleService
-from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
+from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator
-from townlet.world.queue_conflict import QueueConflictTracker
-from townlet.world.queue_manager import QueueManager
+from townlet.world.queue import QueueConflictTracker, QueueManager
 
 
 @dataclass(slots=True)
@@ -33,9 +33,8 @@ class WorldContext:
     console: ConsoleService
     employment: EmploymentCoordinator
     employment_runtime: EmploymentRuntime
-    relationship_ledgers: Mapping[str, object]
-    rivalry_ledgers: Mapping[str, object]
-    relationship_churn: RelationshipChurnAccumulator
+    employment_service: EmploymentService
+    relationships: RelationshipService
     config: object
     emit_event_callback: Callable[[str, dict[str, Any]], None]
     sync_reservation_callback: Callable[[str], None]
@@ -61,3 +60,15 @@ class WorldContext:
     @property
     def console_bridge(self):  # pragma: no cover - thin proxy
         return self.console.bridge
+
+    @property
+    def relationship_ledgers(self) -> Mapping[str, object]:
+        return self.relationships.relationships_snapshot()
+
+    @property
+    def rivalry_ledgers(self) -> Mapping[str, object]:
+        return self.relationships.rivalry_snapshot()
+
+    @property
+    def relationship_churn(self) -> dict[str, object]:
+        return self.relationships.relationship_metrics_snapshot()

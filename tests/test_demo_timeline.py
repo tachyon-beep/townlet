@@ -64,9 +64,7 @@ def test_demo_scheduler_actions_update_world(tmp_path: Path) -> None:
     # force_chat should have increased trust
     speaker = "guest_1"
     listener = "demo_1"
-    ledger = loop.world._relationship_ledgers.get(speaker)
-    assert ledger is not None
-    tie = ledger.tie_for(listener)
+    tie = loop.world.relationship_tie(speaker, listener)
     assert tie is not None and tie.trust > 0
     # console command should have been queued
     assert any(cmd["name"] == "perturbation_trigger" for cmd in executor.commands)

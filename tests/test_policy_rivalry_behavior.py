@@ -84,7 +84,7 @@ def test_agents_request_again_after_rivalry_decay(base_config):
     world, fridge_id = _build_world(base_config)
     _occupy(world, fridge_id, "bob")
     world.register_rivalry_conflict("alice", "bob", intensity=2.0)
-    ledger = world._rivalry_ledgers["alice"]  
+    ledger = world.get_rivalry_ledger("alice")
     ledger.decay(ticks=200)
     behaviour = ScriptedBehavior(base_config)
 

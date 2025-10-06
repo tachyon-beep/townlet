@@ -1,6 +1,16 @@
-"""Agent and relationship primitives (migration placeholder)."""
+"""Agent-facing services and primitives."""
 
 from __future__ import annotations
+
+from .employment import EmploymentService
+from .interfaces import (
+    AgentRegistryProtocol,
+    EmploymentServiceProtocol,
+    RelationshipServiceProtocol,
+)
+from .registry import AgentRegistry
+from .relationships_service import RelationshipService
+from .snapshot import AgentSnapshot
 
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import (
@@ -15,11 +25,18 @@ from townlet.world.relationships import (
 )
 
 __all__ = [
-    "EmploymentRuntime",
+    "AgentRegistry",
+    "AgentSnapshot",
     "EmploymentCoordinator",
     "EmploymentEngine",
-    "create_employment_coordinator",
+    "EmploymentRuntime",
+    "EmploymentService",
+    "EmploymentServiceProtocol",
     "RelationshipLedger",
     "RelationshipParameters",
+    "RelationshipServiceProtocol",
+    "RelationshipService",
     "RelationshipTie",
+    "create_employment_coordinator",
+    "AgentRegistryProtocol",
 ]

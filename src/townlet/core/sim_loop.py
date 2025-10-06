@@ -42,7 +42,7 @@ from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
 from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
-from townlet.world.core import WorldContext
+from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.grid import WorldState
 
 logger = logging.getLogger(__name__)
@@ -122,6 +122,7 @@ class SimulationLoop:
         self._resolved_providers: dict[str, str] = {}
         self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
         self._health = SimulationLoopHealth()
+        self._world_adapter: WorldRuntimeAdapter | None = None
         self._apply_runtime_overrides_from_config()
         self._build_components()
 
@@ -129,8 +130,13 @@ class SimulationLoop:
         super().__setattr__(name, value)
         if name == "world":
             runtime = getattr(self, "runtime", None)
-            if isinstance(runtime, WorldRuntimeProtocol) and isinstance(value, WorldState):
-                runtime.bind_world(value)
+            if isinstance(value, WorldState):
+                super().__setattr__("_world_adapter", WorldRuntimeAdapter(value))
+                if isinstance(runtime, WorldRuntimeProtocol):
+                    runtime.bind_world(value)
+                    bind_adapter = getattr(runtime, "bind_world_adapter", None)
+                    if callable(bind_adapter):  # pragma: no cover - delegation glue
+                        bind_adapter(self._world_adapter)
 
     def _build_components(self) -> None:
         """Instantiate runtime dependencies based on the simulation config."""
@@ -177,6 +183,10 @@ class SimulationLoop:
         runtime_instance: WorldRuntimeProtocol = resolve_world(self._world_provider, **world_kwargs)
         self.runtime = runtime_instance
         self._resolved_providers["world"] = self._world_provider
+        if self._world_adapter is not None:
+            bind_adapter = getattr(runtime_instance, "bind_world_adapter", None)
+            if callable(bind_adapter):
+                bind_adapter(self._world_adapter)
         self._runtime_variant = "facade"
         self.telemetry.set_runtime_variant(self._runtime_variant)
         self._health = SimulationLoopHealth(last_tick=self.tick)
@@ -198,6 +208,16 @@ class SimulationLoop:
         """Return a façade over the active world services."""
 
         return self.world.context
+
+    @property
+    def world_adapter(self) -> WorldRuntimeAdapter:
+        """Return the read-only adapter for the active world instance."""
+
+        adapter = self._world_adapter
+        if adapter is None:
+            adapter = WorldRuntimeAdapter(self.world)
+            super().__setattr__("_world_adapter", adapter)
+        return adapter
 
     def register_failure_handler(self, handler: Callable[[SimulationLoop, int, BaseException], None]) -> None:
         """Register a callback that runs whenever the loop records a failure."""
@@ -341,7 +361,7 @@ class SimulationLoop:
             rewards = self.rewards.compute(self.world, terminated, termination_reasons)
             reward_breakdown = self.rewards.latest_reward_breakdown()
             self.policy.post_step(rewards, terminated)
-            observations = self.observations.build_batch(self.world, terminated)
+            observations = self.observations.build_batch(self.world_adapter, terminated)
             self.policy.flush_transitions(observations)
             policy_snapshot = self.policy.latest_policy_snapshot()
             possessed_agents = self.policy.possessed_agents()

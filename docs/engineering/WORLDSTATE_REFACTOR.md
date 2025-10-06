@@ -1,5 +1,12 @@
 # WorldState Refactor Tracking (Phase 0)
 
+## Phase 3 Update (2025-04-12)
+
+- Introduced runtime-checkable protocols for the agent registry, relationship service, and employment façade (`townlet.world.agents.interfaces`). `WorldContext` now exposes the composed services so downstream layers can depend on the interfaces.
+- Extracted `AffordanceEnvironment` under `world/affordances/` and rewired the runtime/service stack to consume the environment instead of raw `WorldState` attributes. Hook payloads now receive both the environment and an optional world reference for backwards compatibility.
+- `AgentRegistry`, `RelationshipService`, and affordance context delegation gained focused unit coverage (`tests/test_agents_services.py`). Behaviour/queue/console integration suites were refreshed to rely on public helpers (`relationship_tie`, `get_rivalry_ledger`).
+- The demo timeline and rivalry behaviour tests no longer reach into `_relationship_ledgers`/`_rivalry_ledgers`, reducing direct coupling on internal state while preserving existing assertions.
+
 ## Baseline Assets
 - Telemetry snapshot & stream: `audit/baselines/worldstate_phase0/snapshots/`
 - Console command baselines:

@@ -12,17 +12,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from townlet.agents.models import (
-    Personality,
-    PersonalityProfile,
-    PersonalityProfiles,
-    personality_from_profile,
-)
-from townlet.agents.relationship_modifiers import (
-    RelationshipDelta,
-    RelationshipEvent,
-    apply_personality_modifiers,
-)
+from townlet.agents.models import Personality, PersonalityProfile, PersonalityProfiles
+from townlet.agents.relationship_modifiers import RelationshipEvent
 from townlet.config import AffordanceRuntimeConfig, EmploymentConfig, SimulationConfig
 from townlet.config.affordance_manifest import (
     AffordanceManifestError,
@@ -34,21 +25,30 @@ from townlet.console.command import (
 )
 from townlet.console.service import ConsoleService
 from townlet.observations.embedding import EmbeddingAllocator
-from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.affordance_runtime import AffordanceCoordinator
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import (
+    AffordanceEnvironment,
     AffordanceOutcome,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
     RunningAffordanceState,
     apply_affordance_outcome,
 )
-from townlet.world.console_handlers import (
+from townlet.world.console import (
     WorldConsoleController,
     install_world_console_handlers,
 )
 from townlet.world.core.context import WorldContext
+from townlet.world.agents.personality import (
+    default_personality,
+    normalize_profile_name,
+    resolve_personality_profile,
+)
+from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.registry import AgentRegistry
+from townlet.world.agents.relationships_service import RelationshipService
+from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -63,14 +63,8 @@ from townlet.world.preconditions import (
     PreconditionSyntaxError,
     compile_preconditions,
 )
-from townlet.world.queue_conflict import QueueConflictTracker
-from townlet.world.queue_manager import QueueManager
-from townlet.world.relationships import (
-    RelationshipLedger,
-    RelationshipParameters,
-    RelationshipTie,
-)
-from townlet.world.rivalry import RivalryLedger, RivalryParameters
+from townlet.world.queue import QueueConflictTracker, QueueManager
+from townlet.world.relationships import RelationshipTie
 
 logger = logging.getLogger(__name__)
 
@@ -100,89 +94,6 @@ class HookRegistry:
             return
         self._handlers.pop(name, None)
 
-
-_DEFAULT_PROFILE_NAME = "balanced"
-
-
-def _default_personality() -> Personality:
-    """Provide a neutral personality for agents lacking explicit traits."""
-
-    return personality_from_profile(_DEFAULT_PROFILE_NAME)[1]
-
-
-def _resolve_personality_profile(name: str | None) -> tuple[str, Personality]:
-    try:
-        return personality_from_profile(name)
-    except KeyError:
-        logger.warning(
-            "unknown_personality_profile name=%s fallback=%s",
-            name,
-            _DEFAULT_PROFILE_NAME,
-        )
-        return personality_from_profile(_DEFAULT_PROFILE_NAME)
-
-
-def _normalize_profile_name(name: str | None) -> str | None:
-    if name is None:
-        return None
-    trimmed = str(name).strip()
-    return trimmed.lower() if trimmed else None
-
-
-_BASE_NEEDS: tuple[str, ...] = ("hunger", "hygiene", "energy")
-
-
-@dataclass
-class AgentSnapshot:
-    """Minimal agent view used for scaffolding."""
-
-    agent_id: str
-    position: tuple[int, int]
-    needs: dict[str, float]
-    wallet: float = 0.0
-    home_position: tuple[int, int] | None = None
-    origin_agent_id: str | None = None
-    personality: Personality = field(default_factory=_default_personality)
-    personality_profile: str = _DEFAULT_PROFILE_NAME
-    inventory: dict[str, int] = field(default_factory=dict)
-    job_id: str | None = None
-    on_shift: bool = False
-    lateness_counter: int = 0
-    last_late_tick: int = -1
-    shift_state: str = "pre_shift"
-    late_ticks_today: int = 0
-    attendance_ratio: float = 0.0
-    absent_shifts_7d: int = 0
-    wages_withheld: float = 0.0
-    exit_pending: bool = False
-    last_action_id: str = ""
-    last_action_success: bool = False
-    last_action_duration: int = 0
-    episode_tick: int = 0
-
-    def __post_init__(self) -> None:
-        clamped: dict[str, float] = {}
-        for key, value in self.needs.items():
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError):
-                numeric = 0.0
-            clamped[key] = max(0.0, min(1.0, numeric))
-        for key in _BASE_NEEDS:
-            clamped.setdefault(key, 0.5)
-        self.needs = clamped
-        if self.home_position is not None:
-            x, y = int(self.home_position[0]), int(self.home_position[1])
-            self.home_position = (x, y)
-        if self.origin_agent_id is None:
-            self.origin_agent_id = self.agent_id
-        profile_name = (self.personality_profile or "").strip().lower()
-        if profile_name:
-            resolved_name, resolved = _resolve_personality_profile(profile_name)
-            self.personality_profile = resolved_name
-            current_personality = getattr(self, "personality", None)
-            if current_personality is None or current_personality == resolved:
-                self.personality = resolved
 
 
 @dataclass
@@ -334,8 +245,8 @@ class WorldState:
     """Holds mutable world state for the simulation tick."""
 
     config: SimulationConfig
-    agents: dict[str, AgentSnapshot] = field(default_factory=dict)
     tick: int = 0
+    _agents: AgentRegistry = field(init=False, repr=False)
     queue_manager: QueueManager = field(init=False)
     embedding_allocator: EmbeddingAllocator = field(init=False)
     _personality_reward_enabled: bool = field(init=False, default=False, repr=False)
@@ -353,10 +264,9 @@ class WorldState:
     _job_keys: list[str] = field(init=False, default_factory=list)
     employment: EmploymentCoordinator = field(init=False, repr=False)
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
+    _employment_service: EmploymentService = field(init=False, repr=False)
 
-    _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
-    _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
-    _relationship_churn: RelationshipChurnAccumulator = field(init=False)
+    _relationships: RelationshipService = field(init=False, repr=False)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
     _rng_seed: int | None = field(init=False, default=None)
@@ -402,6 +312,7 @@ class WorldState:
     def __post_init__(self) -> None:
         self._personality_reward_enabled = self.config.reward_personality_scaling_enabled()
         self._personality_profile_cache.clear()
+        self._agents = AgentRegistry()
         self.queue_manager = QueueManager(config=self.config)
         self._spatial_index = WorldSpatialIndex()
         self.embedding_allocator = EmbeddingAllocator(config=self.config)
@@ -415,12 +326,16 @@ class WorldState:
         self.employment = create_employment_coordinator(self.config, self._emit_event)
         self.employment.reset_exits_today()
         self._employment_runtime = EmploymentRuntime(self, self.employment, self._emit_event)
-        self._rivalry_ledgers = {}
-        self._relationship_ledgers = {}
+        self._employment_service = EmploymentService(
+            coordinator=self.employment,
+            runtime=self._employment_runtime,
+        )
         self._relationship_window_ticks = 600
-        self._relationship_churn = RelationshipChurnAccumulator(
-            window_ticks=self._relationship_window_ticks,
-            max_samples=8,
+        self._relationships = RelationshipService(
+            self.config,
+            tick_supplier=lambda: self.tick,
+            personality_resolver=self._personality_for,
+            churn_window=self._relationship_window_ticks,
         )
         self._recent_meal_participants = {}
         runtime_cfg = self.affordance_runtime_config
@@ -497,9 +412,10 @@ class WorldState:
                 "affordance_hooks_loaded modules=%s",
                 ",".join(accepted),
             )
-        context = AffordanceRuntimeContext(
-            world=self,
+        affordance_env = AffordanceEnvironment(
             queue_manager=self.queue_manager,
+            agents=self.agents,
+            relationships=self.relationships_service,
             objects=self.objects,
             affordances=self.affordances,
             running_affordances=self._running_affordances,
@@ -507,12 +423,15 @@ class WorldState:
             emit_event=self._emit_event,
             sync_reservation=self._sync_reservation,
             apply_affordance_effects=self._apply_affordance_effects,
-            dispatch_hooks=self._dispatch_affordance_hooks,
+            dispatch_hooks=lambda *args, **kwargs: True,
             record_queue_conflict=self._record_queue_conflict,
             apply_need_decay=self._apply_need_decay,
             build_precondition_context=self._build_precondition_context,
             snapshot_precondition_context=snapshot_precondition_context,
+            tick_supplier=lambda: self.tick,
+            world_ref=self,
         )
+        context = AffordanceRuntimeContext(environment=affordance_env)
         runtime_obj: DefaultAffordanceRuntime | AffordanceCoordinator
         if self.affordance_runtime_factory is not None:
             runtime_obj = self.affordance_runtime_factory(self, context)
@@ -528,11 +447,12 @@ class WorldState:
         else:
             self._affordance_runtime = AffordanceCoordinator(runtime_obj)
         self._affordance_service = AffordanceRuntimeService(
-            world=self,
+            environment=affordance_env,
             context=context,
             coordinator=self._affordance_runtime,
             hook_registry=self._hook_registry,
         )
+        affordance_env.dispatch_hooks = self._affordance_service.dispatch_hooks
         self._economy_baseline: dict[str, float] = {
             key: float(value) for key, value in self.config.economy.items()
         }
@@ -555,9 +475,8 @@ class WorldState:
             console=self._console,
             employment=self.employment,
             employment_runtime=self._employment_runtime,
-            relationship_ledgers=self._relationship_ledgers,
-            rivalry_ledgers=self._rivalry_ledgers,
-            relationship_churn=self._relationship_churn,
+            employment_service=self._employment_service,
+            relationships=self._relationships,
             config=self.config,
             emit_event_callback=self._emit_event,
             sync_reservation_callback=self._sync_reservation,
@@ -568,8 +487,30 @@ class WorldState:
         return self._affordance_service.runtime()
 
     @property
+    def agents(self) -> AgentRegistry:
+        return self._agents
+
+    @property
     def runtime_instrumentation_level(self) -> str:
         return getattr(self, "_runtime_instrumentation_level", "off")
+
+    @property
+    def employment_service(self) -> EmploymentService:
+        return self._employment_service
+
+    @property
+    def _relationship_ledgers(self):
+        return self._relationships._relationship_ledgers
+
+    @property
+    def _rivalry_ledgers(self):
+        return self._relationships._rivalry_ledgers
+
+    @property
+    def relationships_service(self) -> RelationshipService:
+        """Expose the relationship service for integrations/tests."""
+
+        return self._relationships
 
     def generate_agent_id(self, base_id: str) -> str:
         base = base_id or "agent"
@@ -677,6 +618,99 @@ class WorldState:
         """Return and clear buffered console results."""
 
         return self._console.consume_results()
+
+    def spawn_agent(
+        self,
+        agent_id: str,
+        position: tuple[int, int],
+        *,
+        needs: Mapping[str, float] | None = None,
+        home_position: tuple[int, int] | None = None,
+        wallet: float | None = None,
+        personality_profile: str | None = None,
+    ) -> AgentSnapshot:
+        """Create a new agent at ``position`` and register supporting state."""
+
+        if agent_id in self.agents:
+            raise ValueError(f"agent '{agent_id}' already exists")
+
+        dest = (int(position[0]), int(position[1]))
+        if not self._is_position_walkable(dest):
+            raise ValueError("spawn position not walkable")
+
+        if home_position is None:
+            home_coord = dest
+        else:
+            home_coord = (int(home_position[0]), int(home_position[1]))
+        wallet_value = float(wallet) if wallet is not None else 0.0
+        resolved_needs = dict(needs or {})
+        profile_name = personality_profile or ""
+
+        snapshot = AgentSnapshot(
+            agent_id=agent_id,
+            position=dest,
+            needs=resolved_needs,
+            wallet=wallet_value,
+            home_position=home_coord,
+            personality_profile=profile_name,
+        )
+        self.agents[agent_id] = snapshot
+        self._spatial_index.insert_agent(agent_id, snapshot.position)
+        self._assign_job_if_missing(snapshot)
+        self._sync_agent_spawn(snapshot)
+        self._update_basket_metrics()
+        self.request_ctx_reset(agent_id)
+        self._emit_event(
+            "agent_spawned",
+            {"agent_id": agent_id, "position": list(snapshot.position)},
+        )
+        return snapshot
+
+    def teleport_agent(self, agent_id: str, position: tuple[int, int]) -> tuple[int, int]:
+        """Teleport ``agent_id`` to ``position`` if the tile is available."""
+
+        snapshot = self.agents.get(agent_id)
+        if snapshot is None:
+            raise KeyError(agent_id)
+
+        dest = (int(position[0]), int(position[1]))
+        if dest in self._objects_by_position:
+            raise ValueError("destination blocked by object")
+
+        occupied = {
+            other_id
+            for other_id, other in self.agents.items()
+            if other_id != agent_id and other.position == dest
+        }
+        if occupied:
+            raise ValueError("destination occupied")
+
+        snapshot.position = dest
+        self._spatial_index.move_agent(agent_id, dest)
+        self._sync_reservation_for_agent(agent_id)
+        self.request_ctx_reset(agent_id)
+        self._emit_event(
+            "agent_teleported",
+            {"agent_id": agent_id, "position": list(dest)},
+        )
+        return dest
+
+    def set_price_target(self, key: str, value: float) -> float:
+        """Update the economy price target for ``key`` and refresh metrics."""
+
+        normalised = str(key)
+        if normalised not in self.config.economy:
+            raise KeyError(normalised)
+
+        numeric = float(value)
+        self.config.economy[normalised] = numeric
+        self._economy_baseline[normalised] = numeric
+        self._update_basket_metrics()
+        self._emit_event(
+            "economy_price_update",
+            {"key": normalised, "value": numeric},
+        )
+        return numeric
 
     def _record_console_result(self, result: ConsoleCommandResult) -> None:
         self._console.record_result(result)
@@ -812,12 +846,7 @@ class WorldState:
                     self._spatial_index.set_reservation(obj.position, False)
         self.embedding_allocator.release(agent_id, tick)
         self._employment_runtime.remove_agent(agent_id)
-        self._relationship_ledgers.pop(agent_id, None)
-        for ledger in self._relationship_ledgers.values():
-            ledger.remove_tie(agent_id, reason="removed")
-        self._rivalry_ledgers.pop(agent_id, None)
-        for ledger in self._rivalry_ledgers.values():
-            ledger.remove(agent_id, reason="removed")
+        self._relationships.remove_agent(agent_id)
         for record in self._recent_meal_participants.values():
             participants = record.get("agents")
             if isinstance(participants, set):
@@ -1232,15 +1261,10 @@ class WorldState:
     ) -> None:
         if agent_a == agent_b:
             return
-        ledger_a = self._get_rivalry_ledger(agent_a)
-        ledger_b = self._get_rivalry_ledger(agent_b)
-        ledger_a.apply_conflict(agent_b, intensity=intensity)
-        ledger_b.apply_conflict(agent_a, intensity=intensity)
-        self.update_relationship(
+        self._relationships.apply_rivalry_conflict(
             agent_a,
             agent_b,
-            rivalry=0.1 * intensity,
-            event="conflict",
+            intensity=intensity,
         )
         self._queue_conflicts.record_rivalry_event(
             tick=self.tick,
@@ -1252,28 +1276,22 @@ class WorldState:
 
     def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
-        snapshot: dict[str, dict[str, float]] = {}
-        for agent_id, ledger in self._rivalry_ledgers.items():
-            data = ledger.snapshot()
-            if data:
-                snapshot[agent_id] = data
-        return snapshot
+        return self._relationships.rivalry_snapshot()
 
     def relationships_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
-        snapshot: dict[str, dict[str, dict[str, float]]] = {}
-        for agent_id, ledger in self._relationship_ledgers.items():
-            data = ledger.snapshot()
-            if data:
-                snapshot[agent_id] = data
-        return snapshot
+        return self._relationships.relationships_snapshot()
 
     def relationship_tie(self, agent_id: str, other_id: str) -> RelationshipTie | None:
         """Return the current relationship tie between two agents, if any."""
+        return self._relationships.relationship_tie(agent_id, other_id)
 
-        ledger = self._relationship_ledgers.get(agent_id)
-        if ledger is None:
-            return None
-        return ledger.tie_for(other_id)
+    def get_rivalry_ledger(self, agent_id: str):
+        """Return the rivalry ledger for ``agent_id``."""
+
+        return self._relationships.get_rivalry_ledger(agent_id)
+
+    def _get_rivalry_ledger(self, agent_id: str):
+        return self.get_rivalry_ledger(agent_id)
 
     def consume_chat_events(self) -> list[dict[str, Any]]:
         """Return chat events staged for reward calculations and clear the buffer."""
@@ -1287,64 +1305,23 @@ class WorldState:
 
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            return 0.0
-        return ledger.score_for(other_id)
+        return self._relationships.rivalry_value(agent_id, other_id)
 
     def rivalry_should_avoid(self, agent_id: str, other_id: str) -> bool:
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            return False
-        return ledger.should_avoid(other_id)
+        return self._relationships.rivalry_should_avoid(agent_id, other_id)
 
     def rivalry_top(self, agent_id: str, limit: int) -> list[tuple[str, float]]:
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            return []
-        return ledger.top_rivals(limit)
+        return self._relationships.rivalry_top(agent_id, limit)
 
     def consume_rivalry_events(self) -> list[dict[str, Any]]:
         """Return rivalry events recorded since the last call."""
 
         return self._queue_conflicts.consume_rivalry_events()
 
-    def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            ledger = RivalryLedger(
-                owner_id=agent_id,
-                params=self._rivalry_parameters(),
-                eviction_hook=self._record_relationship_eviction,
-            )
-            self._rivalry_ledgers[agent_id] = ledger
-        else:
-            ledger.eviction_hook = self._record_relationship_eviction
-        return ledger
-
-    def _get_relationship_ledger(self, agent_id: str) -> RelationshipLedger:
-        ledger = self._relationship_ledgers.get(agent_id)
-        if ledger is None:
-            ledger = RelationshipLedger(
-                owner_id=agent_id,
-                params=self._relationship_parameters(),
-                eviction_hook=self._record_relationship_eviction,
-            )
-            self._relationship_ledgers[agent_id] = ledger
-        else:
-            ledger.set_eviction_hook(
-                owner_id=agent_id,
-                hook=self._record_relationship_eviction,
-            )
-        return ledger
-
-    def _relationship_parameters(self) -> RelationshipParameters:
-        return RelationshipParameters(max_edges=self.config.conflict.rivalry.max_edges)
-
     def _choose_personality_profile(
         self, agent_id: str, profile_name: str | None = None
     ) -> tuple[str, Personality]:
-        candidate = _normalize_profile_name(profile_name)
+        candidate = normalize_profile_name(profile_name)
         config = getattr(self, "config", None)
         if config is not None and hasattr(config, "resolve_personality_profile"):
             try:
@@ -1353,7 +1330,7 @@ class WorldState:
                 chosen = candidate
         else:
             chosen = candidate
-        return _resolve_personality_profile(chosen)
+        return resolve_personality_profile(chosen)
 
     def select_personality_profile(
         self, agent_id: str, profile_name: str | None = None
@@ -1365,7 +1342,7 @@ class WorldState:
     def _personality_for(self, agent_id: str) -> Personality:
         snapshot = self.agents.get(agent_id)
         if snapshot is None or snapshot.personality is None:
-            return _default_personality()
+            return default_personality()
         return snapshot.personality
 
     def _profile_for_snapshot(
@@ -1388,101 +1365,18 @@ class WorldState:
             self._personality_profile_cache[key] = profile
         return profile
 
-    def _apply_relationship_delta(
-        self,
-        owner_id: str,
-        other_id: str,
-        *,
-        delta: RelationshipDelta,
-        event: RelationshipEvent,
-    ) -> None:
-        ledger = self._get_relationship_ledger(owner_id)
-        adjusted = apply_personality_modifiers(
-            delta=delta,
-            personality=self._personality_for(owner_id),
-            event=event,
-            enabled=bool(self.config.features.relationship_modifiers),
-        )
-        ledger.apply_delta(
-            other_id,
-            trust=adjusted.trust,
-            familiarity=adjusted.familiarity,
-            rivalry=adjusted.rivalry,
-        )
-
-    def _rivalry_parameters(self) -> RivalryParameters:
-        cfg = self.config.conflict.rivalry
-        return RivalryParameters(
-            increment_per_conflict=cfg.increment_per_conflict,
-            decay_per_tick=cfg.decay_per_tick,
-            min_value=cfg.min_value,
-            max_value=cfg.max_value,
-            avoid_threshold=cfg.avoid_threshold,
-            eviction_threshold=cfg.eviction_threshold,
-            max_edges=cfg.max_edges,
-        )
-
-    def _decay_rivalry_ledgers(self) -> None:
-        if not self._rivalry_ledgers:
-            return
-        empty_agents: list[str] = []
-        for agent_id, ledger in self._rivalry_ledgers.items():
-            ledger.decay(ticks=1)
-            if not ledger.snapshot():
-                empty_agents.append(agent_id)
-        for agent_id in empty_agents:
-            self._rivalry_ledgers.pop(agent_id, None)
-        self._decay_relationship_ledgers()
-
-    def _decay_relationship_ledgers(self) -> None:
-        if not self._relationship_ledgers:
-            return
-        empty_agents: list[str] = []
-        for agent_id, ledger in self._relationship_ledgers.items():
-            ledger.decay()
-            if not ledger.snapshot():
-                empty_agents.append(agent_id)
-        for agent_id in empty_agents:
-            self._relationship_ledgers.pop(agent_id, None)
-
-    def _record_relationship_eviction(self, owner_id: str, other_id: str, reason: str) -> None:
-        self._relationship_churn.record_eviction(
-            tick=self.tick,
-            owner_id=owner_id,
-            evicted_id=other_id,
-            reason=reason,
-        )
-
     def relationship_metrics_snapshot(self) -> dict[str, object]:
-        return self._relationship_churn.latest_payload()
+        return self._relationships.relationship_metrics_snapshot()
 
     def load_relationship_metrics(self, payload: Mapping[str, object] | None) -> None:
-        if not payload:
-            self._relationship_churn = RelationshipChurnAccumulator(
-                window_ticks=self._relationship_window_ticks,
-                max_samples=8,
-            )
-            return
-        self._relationship_churn.ingest_payload(dict(payload))
+        self._relationships.load_relationship_metrics(payload)
 
     def load_relationship_snapshot(
         self,
         snapshot: dict[str, dict[str, dict[str, float]]],
     ) -> None:
         """Restore relationship ledgers from persisted snapshot data."""
-
-        self._relationship_ledgers.clear()
-        for owner_id, edges in snapshot.items():
-            ledger = RelationshipLedger(
-                owner_id=owner_id,
-                params=self._relationship_parameters(),
-            )
-            ledger.inject(edges)
-            ledger.set_eviction_hook(
-                owner_id=owner_id,
-                hook=self._record_relationship_eviction,
-            )
-            self._relationship_ledgers[owner_id] = ledger
+        self._relationships.load_relationship_snapshot(snapshot)
 
     def update_relationship(
         self,
@@ -1494,11 +1388,31 @@ class WorldState:
         rivalry: float = 0.0,
         event: RelationshipEvent = "generic",
     ) -> None:
-        if agent_a == agent_b:
-            return
-        delta = RelationshipDelta(trust=trust, familiarity=familiarity, rivalry=rivalry)
-        self._apply_relationship_delta(agent_a, agent_b, delta=delta, event=event)
-        self._apply_relationship_delta(agent_b, agent_a, delta=delta, event=event)
+        self._relationships.update_relationship(
+            agent_a,
+            agent_b,
+            trust=trust,
+            familiarity=familiarity,
+            rivalry=rivalry,
+            event=event,
+        )
+
+    def set_relationship(
+        self,
+        agent_a: str,
+        agent_b: str,
+        *,
+        trust: float,
+        familiarity: float,
+        rivalry: float,
+    ) -> None:
+        self._relationships.set_relationship(
+            agent_a,
+            agent_b,
+            trust=trust,
+            familiarity=familiarity,
+            rivalry=rivalry,
+        )
 
     def record_chat_success(self, speaker: str, listener: str, quality: float) -> None:
         clipped_quality = max(0.0, min(1.0, quality))
@@ -1685,7 +1599,7 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        self._decay_rivalry_ledgers()
+        self._relationships.decay()
         self._apply_job_state()
         self._update_basket_metrics()
 
