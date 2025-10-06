@@ -3,6 +3,15 @@
 ## Overview
 This roadmap decomposes the transition from the current Townlet implementation to the target modular architecture into bounded work packages. Each package defines its objective, primary activities, dependencies, expected duration, and success criteria. The sequence assumes iterative delivery, allowing earlier milestones to unblock later refactors while keeping the simulation usable.
 
+## Work Package C (Completed 2025-10-06): World Modularization
+- **Status**: ✅ Complete (Phases 0–6 delivered; telemetry parity confirmed, docs/CHANGELOG updated).
+- **Highlights**:
+  - `WorldContext` façade, `WorldRuntimeAdapter`, and service packages (`agents/`, `affordances/`, `console/`, `queue/`, `observations/`) now front the grid orchestrator; `world/grid.py` trimmed to 1 647 LOC.
+  - Console, queue, employment, economy, perturbation, and lifecycle flows delegate through explicit facades (`townlet.world.console`, `townlet.world.queue`, `townlet.world.agents.*`, `townlet.world.economy`, `townlet.world.perturbations`, `townlet.world.agents.lifecycle`).
+  - Observation/telemetry layers consume the adapter; targeted tests and 50-tick smokes keep outputs aligned with baselines.
+  - Documentation refreshed (`docs/architecture_review/townlet-target-architecture.md`, `wp-c_modularization_plan.md`, `docs/engineering/WORLDSTATE_REFACTOR.md`); CHANGELOG records the new module surfaces.
+  - Full validation bundle (`ruff`, focused pytest suites, `pytest -q`) executed; telemetry diff shows only additional zeroed ticks from extended smoke runs.
+
 ## Work Package 0: Enable Reliable Tooling Baseline
 - **Objective**: Restore a dependable developer experience so subsequent refactors can run linting, typing, and targeted tests without heavy optional dependencies.
 - **Key Activities**:
