@@ -7,6 +7,21 @@
 - `AgentRegistry`, `RelationshipService`, and affordance context delegation gained focused unit coverage (`tests/test_agents_services.py`). Behaviour/queue/console integration suites were refreshed to rely on public helpers (`relationship_tie`, `get_rivalry_ledger`).
 - The demo timeline and rivalry behaviour tests no longer reach into `_relationship_ledgers`/`_rivalry_ledgers`, reducing direct coupling on internal state while preserving existing assertions.
 
+## Phase 4–5 Update (2025-10-18)
+
+- Added `WorldRuntimeAdapter` (`townlet.world.core.runtime_adapter`) to expose read-only accessors for agents, objects, queue metrics, relationships, and embedding allocator state. `SimulationLoop.world_adapter` caches the façade for reuse by policy, telemetry, and snapshot codepaths.
+- Observation builders and helper modules now coerce incoming world references through `ensure_world_adapter`, enabling adapter/`WorldState` parity tests (`tests/test_observation_builder_parity.py`).
+- Telemetry publisher and snapshot capture lean on the adapter for queue, relationship, and personality metrics, reducing direct `WorldState` coupling while retaining raw access for specialised exports (economy/employment). Adapter smoke tests cover telemetry publishing (`tests/test_telemetry_adapter_smoke.py`).
+- Documentation and migration notes updated to reflect the adapter boundary; future subsystem extractions should depend on the façade rather than the concrete grid.
+
+## Phase 6 Validation (2025-10-24)
+
+- Executed `pytest -q` (533 passed / 1 skipped) after routing observation and telemetry consumers through the adapter; log archived at `tmp/wp-c/phase4_validation.txt`.
+- `ruff check src tests` continues to surface pre-existing style violations in legacy console/config modules; Phase 4 additions now lint clean (see targeted check summary in the same log).
+- `mypy src` still fails due to historical typing gaps (≈531 errors). Adapter modules remain type-hint complete; remediation is deferred to WP-D typing follow-up.
+- `tox -e docstrings` maintains the callable coverage guard (45.18 %, minimum 40 %).
+- Captured a 50-tick smoke run via `python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 50 --telemetry-path tmp/wp-c/phase6_smoke_telemetry.jsonl`; telemetry diff matches Phase 0 baselines.
+
 ## Baseline Assets
 - Telemetry snapshot & stream: `audit/baselines/worldstate_phase0/snapshots/`
 - Console command baselines:

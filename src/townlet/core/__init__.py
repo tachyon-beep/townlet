@@ -15,7 +15,6 @@ from .interfaces import (
     TelemetrySinkProtocol,
     WorldRuntimeProtocol,
 )
-from .sim_loop import SimulationLoop
 from .utils import (
     is_stub_policy,
     is_stub_telemetry,
@@ -39,3 +38,15 @@ __all__ = [
     "telemetry_registry",
     "world_registry",
 ]
+
+
+def __getattr__(name: str):  # pragma: no cover - lazy import glue
+    if name == "SimulationLoop":
+        from .sim_loop import SimulationLoop as _SimulationLoop
+
+        return _SimulationLoop
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:  # pragma: no cover - module reflection helper
+    return sorted(__all__)

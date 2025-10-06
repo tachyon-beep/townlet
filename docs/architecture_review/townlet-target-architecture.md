@@ -47,7 +47,7 @@ The target architecture keeps the existing simulation loop as the orchestrator w
 - **Agents & Relationships**: Handles employment, rivalry, and interpersonal mechanics.
 - **Affordances & Hooks**: Encapsulates interaction logic and environment-driven extensions.
 - **Console & Narration**: Manages operator commands, logging, and optional streaming outputs.
-- **Observation Builders**: Generate policy-facing observations behind the `WorldRuntime` interface.
+- **Observation Builders**: Generate policy-facing observations behind the `WorldRuntime` interface. A read-only `WorldRuntimeAdapter` (exported from `townlet.world.core`) brokers access to shared services (`agents`, `objects`, `queue_manager`, `relationships`) so downstream consumers avoid binding to the monolithic grid.
 
 ### 3.2 Policy Backends
 - **Backend Interface**: Defines `initialize()`, `select_actions(observation, world_state)`, `record_outcome()`, and `train()` methods.
@@ -58,7 +58,7 @@ The target architecture keeps the existing simulation loop as the orchestrator w
 ### 3.3 Telemetry Pipelines
 - **Aggregation Services**: Domain-focused collectors produce structured events (employment metrics, queue lengths, stability indicators).
 - **Transformation Layer**: Normalizes events, applies redaction, and attaches metadata.
-- **Transport Adapters**: Implement protocols for stdout, file, WebSocket, or HTTP streaming. Each adapter lives in its own module and can be toggled via configuration.
+- **Transport Adapters**: Implement protocols for stdout, file, WebSocket, or HTTP streaming. Each adapter lives in its own module and can be toggled via configuration. Telemetry collectors consume the same `WorldRuntimeAdapter` façade as policy/observation code, ensuring queue/relationship metrics rely on a stable contract rather than ad-hoc `WorldState` attributes.
 - **Lifecycle Management**: Worker pools and threads are managed via context managers with explicit startup/shutdown hooks exposed through the `TelemetrySink` interface.
 
 ## 4. Optional Dependency Adapters

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Iterable, Mapping, MutableMapping
+from typing import TYPE_CHECKING
 
 from townlet.world.observations.interfaces import (
     EmbeddingAllocatorProtocol,
@@ -23,7 +24,7 @@ class _EmbeddingAllocatorAdapter(EmbeddingAllocatorProtocol):
 
     __slots__ = ("_allocator",)
 
-    def __init__(self, allocator: "EmbeddingAllocator") -> None:
+    def __init__(self, allocator: EmbeddingAllocator) -> None:
         self._allocator = allocator
 
     def allocate(self, agent_id: str, tick: int) -> int:
@@ -42,9 +43,9 @@ class _EmbeddingAllocatorAdapter(EmbeddingAllocatorProtocol):
 class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
     """Facade providing read-only access to world state helpers."""
 
-    __slots__ = ("_world", "_allocator_adapter")
+    __slots__ = ("_allocator_adapter", "_world")
 
-    def __init__(self, world: "WorldState") -> None:
+    def __init__(self, world: WorldState) -> None:
         self._world = world
         self._allocator_adapter = _EmbeddingAllocatorAdapter(world.embedding_allocator)
 
@@ -53,10 +54,10 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
         return self._world.tick
 
     @property
-    def config(self) -> "SimulationConfig":  # pragma: no cover - simple accessor
+    def config(self) -> SimulationConfig:  # pragma: no cover - simple accessor
         return self._world.config
 
-    def agent_snapshots_view(self) -> Mapping[str, "AgentSnapshot"]:
+    def agent_snapshots_view(self) -> Mapping[str, AgentSnapshot]:
         return self._world.agent_snapshots_view()
 
     def agent_position(self, agent_id: str) -> tuple[int, int] | None:
@@ -87,14 +88,36 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
         return self._world.active_reservations_view()
 
     @property
-    def queue_manager(self) -> "QueueManager":
+    def queue_manager(self) -> QueueManager:
         return self._world.queue_manager
 
     def relationships_snapshot(self) -> Mapping[str, Mapping[str, Mapping[str, float]]]:
         return self._world.relationships_snapshot()
 
+    def relationship_metrics_snapshot(self) -> Mapping[str, object]:
+        getter = getattr(self._world, "relationship_metrics_snapshot", None)
+        if callable(getter):
+            metrics = getter()
+            if isinstance(metrics, Mapping):
+                return metrics
+        return {}
+
     def rivalry_top(self, agent_id: str, limit: int) -> Iterable[tuple[str, float]]:
         return tuple(self._world.rivalry_top(agent_id, limit))
+
+    def rivalry_snapshot(self) -> Mapping[str, Mapping[str, float]]:
+        snapshot_getter = getattr(self._world, "rivalry_snapshot", None)
+        if callable(snapshot_getter):
+            return snapshot_getter()
+        return {}
+
+    def consume_rivalry_events(self) -> Iterable[Mapping[str, object]]:
+        consumer = getattr(self._world, "consume_rivalry_events", None)
+        if callable(consumer):
+            events = consumer() or []
+            if isinstance(events, Iterable):
+                return list(events)
+        return []
 
     def _employment_context_wages(self, agent_id: str) -> float:
         return self._world._employment_context_wages(agent_id)
@@ -102,9 +125,15 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
     def _employment_context_punctuality(self, agent_id: str) -> float:
         return self._world._employment_context_punctuality(agent_id)
 
+    def running_affordances_snapshot(self) -> Mapping[str, object]:
+        snapshot_getter = getattr(self._world, "running_affordances_snapshot", None)
+        if callable(snapshot_getter):
+            return snapshot_getter()
+        return {}
+
 
 def ensure_world_adapter(
-    world: WorldRuntimeAdapterProtocol | "WorldState",
+    world: WorldRuntimeAdapterProtocol | WorldState,
 ) -> WorldRuntimeAdapterProtocol:
     """Return a runtime adapter, wrapping ``world`` when necessary."""
 

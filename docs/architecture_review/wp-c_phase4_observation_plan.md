@@ -4,6 +4,16 @@
 - `tmp/wp-c/phase4_baseline_shapes.json` — observation tensor summary built from the test fixture world (see `tests/test_observation_builder.py:1`).
 - `tmp/wp-c/phase4_baseline_telemetry.jsonl` — 10-tick telemetry capture from `scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 10`.
 
+## Execution Summary (Phase 6)
+- Adapters continue to back all observation, telemetry, and snapshot consumers; `SimulationLoop` exposes a cached `world_adapter` used across builders and publishers.
+- Observation parity suite (`tests/test_observation_builder_parity.py`) verifies feature order against the Phase 0 baseline, and telemetry smoke tests exercise publishing through the adapter.
+- Validation snapshot (see `tmp/wp-c/phase4_validation.txt`):
+  - `pytest -q` passes (533 passed, 1 skipped) using the adapter surfaces exclusively.
+  - `ruff check src tests` still reports legacy style issues (e.g., `townlet.core.interfaces`, console handlers); targeted checks for the Phase 4 modules/tests run clean after addressing new warnings.
+  - `mypy src` continues to fail at the repository baseline (~531 errors centred on legacy console/config/telemetry code). No new adapter-specific errors were introduced; follow-up tracked under WP-D typing initiative.
+  - `tox -e docstrings` passes with module coverage at 100 % and callable coverage at 45.18 % (threshold 40 %).
+- Long-run smoke (`python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 50 --telemetry-path tmp/wp-c/phase6_smoke_telemetry.jsonl`) shows telemetry payload parity; stdout captured in `tmp/wp-c/phase6_smoke_stdout.log`.
+
 ## Consumer Inventory (`townlet.world.observation.*`)
 | Module | Entry Points | Notes |
 | --- | --- | --- |
@@ -87,3 +97,26 @@ Key policy/telemetry entrypoints:
 - `ObservationBuilder` and observation helper modules accept either a `WorldState` or adapter, coercing via `ensure_world_adapter` to maintain backward compatibility while steering new callers toward the read-only surface.
 - Introduced adapter-focused tests (`tests/test_world_runtime_adapter.py`) and expanded `tests/test_world_context.py` to assert immutability guarantees.
 - Remaining mutable dependency: the queue manager is still returned directly; document consumers must treat it as read-mostly until a dedicated view is introduced.
+
+## Phase 4 Snapshot (Telemetry & Snapshots)
+- Telemetry publisher now coalesces world reads through the adapter (`ensure_world_adapter`), covering queue metrics, relationship snapshots/metrics, and embedding allocator data. Missing data paths log debug warnings to preserve stub-friendly behaviour (`src/townlet/telemetry/publisher.py:957`).
+- Snapshot capture uses the adapter for agents/objects/queue/relationship serialization while retaining direct exports for runtime-only state (`src/townlet/snapshots/state.py:261`). Circular package imports were resolved with lazy `__getattr__` loaders in `townlet.core` and `townlet.world.core`.
+- Validation: `pytest tests/test_snapshot_manager.py tests/test_world_runtime_adapter.py tests/test_observation_builder.py tests/test_world_observation_helpers.py tests/test_world_local_view.py tests/test_console_dispatcher.py tests/test_world_queue_integration.py -q` and `python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 10 --telemetry-path tmp/wp-c/phase4_smoke.log`.
+
+## Phase 5 Snapshot (Tests & Fixtures)
+- Added parity/adapter tests for the observation builder (`tests/test_observation_builder_parity.py`) and routed existing suites through `loop.world_adapter` to assert feature order against the Phase 0 baseline (`tmp/wp-c/phase4_baseline_shapes.json`).
+- Introduced adapter smoke coverage for telemetry publishing and policy observation retrieval (`tests/test_telemetry_adapter_smoke.py`).
+- Fixture docs (`tests/world/observations/README.md`) already reference the new validation plan; no golden artefacts required updates this round.
+- Validation: `pytest tests/test_observation_builder.py tests/test_observation_builder_parity.py tests/test_world_runtime_adapter.py tests/test_telemetry_adapter_smoke.py tests/test_console_dispatcher.py tests/test_world_queue_integration.py -q`.
+
+## Risks & Follow-ups
+- Queue manager remains mutable; document consumers must treat `adapter.queue_manager` reads as observational until a read-only façade lands (tracked for WP-D telemetry refactor).
+- Employment/economy exports still call through the concrete `WorldState` for advanced metrics; future work should formalise lightweight views for these subsystems.
+- Baseline assets (`tmp/wp-c/phase4_baseline_shapes.json`, `tmp/wp-c/phase4_baseline_telemetry.jsonl`, `tmp/wp-c/phase4_smoke.log`) should be regenerated whenever observation schemas change; retain the capture script in `docs/testing/QA_CHECKLIST.md`.
+
+## Migration Checklist for Downstream Consumers
+- Import `ensure_world_adapter` from `townlet.world.core` (lazy loader exports the helper) and wrap any direct `WorldState` references before accessing shared services.
+- Update telemetry or policy modules instantiating observation builders to pass `loop.world_adapter` (or the result of `ensure_world_adapter(world)`) instead of the mutable grid instance.
+- Replace imports from `townlet.world.observation` with `townlet.world.observations.{cache,context,views}`; legacy shims emit deprecation warnings during the transition.
+- Snapshot or replay tooling relying on raw `world.agents` should switch to `adapter.agent_snapshots_view()` to avoid mutating live registries.
+- Validate integrations against the updated smoke tests (`tests/test_observation_builder_parity.py`, `tests/test_telemetry_adapter_smoke.py`); regenerate local baselines if observation schemas change.

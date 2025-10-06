@@ -15,8 +15,12 @@ def agent_context(
 ) -> dict[str, Any]:
     """Return scalar context fields consumed by observation builders."""
 
-    adapter = ensure_world_adapter(world)
-    snapshot = adapter.agent_snapshots_view().get(agent_id)
+    try:
+        adapter = ensure_world_adapter(world)
+    except TypeError:
+        adapter = None
+
+    snapshot = _resolve_agent_snapshot(adapter, world, agent_id)
     if snapshot is None:
         return {}
     return {
@@ -31,13 +35,13 @@ def agent_context(
         "last_action_success": bool(getattr(snapshot, "last_action_success", False)),
         "last_action_duration": getattr(snapshot, "last_action_duration", 0),
         "wages_paid": _maybe_call(
-            adapter,
+            adapter or world,
             "_employment_context_wages",
             getattr(snapshot, "agent_id", agent_id),
             default=float(getattr(snapshot, "wages_paid", 0.0)),
         ),
         "punctuality_bonus": _maybe_call(
-            adapter,
+            adapter or world,
             "_employment_context_punctuality",
             getattr(snapshot, "agent_id", agent_id),
             default=float(getattr(snapshot, "punctuality_bonus", 0.0)),
@@ -68,6 +72,28 @@ def _maybe_call(world: object, attr: str, *args: object, default: float = 0.0) -
         except Exception:  # pragma: no cover - defensive fallback
             return default
     return default
+
+
+def _resolve_agent_snapshot(
+    adapter: WorldRuntimeAdapterProtocol | None,
+    world: object,
+    agent_id: str,
+) -> Any:
+    if adapter is not None:
+        view = adapter.agent_snapshots_view()
+        return view.get(agent_id)
+
+    fallback = getattr(world, "agent_snapshots_view", lambda: {})
+    try:
+        view = fallback() if callable(fallback) else fallback
+    except Exception:  # pragma: no cover - legacy surface defensive guard
+        return None
+
+    if isinstance(view, Mapping):
+        return view.get(agent_id)
+    if hasattr(view, "get"):
+        return view.get(agent_id)
+    return None
 
 
 __all__ = ["agent_context", "snapshot_precondition_context"]

@@ -28,11 +28,13 @@ from townlet.telemetry.transport import (
     TransportBuffer,
     create_transport,
 )
+from townlet.world.core.runtime_adapter import ensure_world_adapter
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from townlet.world.grid import WorldState
+    from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
 
 class TelemetryPublisher:
@@ -950,11 +952,12 @@ class TelemetryPublisher:
     def _capture_affordance_runtime(
         self,
         *,
-        world: WorldState,
+        world: WorldState | "WorldRuntimeAdapterProtocol",
         events: Iterable[Mapping[str, object]] | None,
         tick: int,
     ) -> None:
-        runtime_snapshot = world.running_affordances_snapshot()
+        adapter = ensure_world_adapter(world)
+        runtime_snapshot = adapter.running_affordances_snapshot()
         running_payload = {
             str(object_id): asdict(state)
             for object_id, state in runtime_snapshot.items()
@@ -981,7 +984,7 @@ class TelemetryPublisher:
             "tick": int(tick),
             "running": running_payload,
             "running_count": len(running_payload),
-            "active_reservations": dict(world.active_reservations),
+            "active_reservations": dict(adapter.active_reservations),
             "event_counts": event_counts,
         }
 
@@ -1009,11 +1012,21 @@ class TelemetryPublisher:
         if runtime_variant is not None:
             self._runtime_variant = runtime_variant
         self._current_tick = tick
+        adapter = ensure_world_adapter(world)
+        raw_world = getattr(adapter, "_world", world)
         self._narration_limiter.begin_tick(tick)
         manual_narrations = self._consume_manual_narrations()
         self._latest_narrations = manual_narrations
         previous_queue_metrics = dict(self._latest_queue_metrics or {})
-        queue_metrics = world.queue_manager.metrics()
+        try:
+            queue_metrics = adapter.queue_manager.metrics()
+        except Exception:  # pragma: no cover - defensive guard for stubs
+            logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+            queue_metrics = {
+                "cooldown_events": 0,
+                "ghost_step_events": 0,
+                "rotation_events": 0,
+            }
         self._latest_queue_metrics = queue_metrics
         fairness_delta = {
             "cooldown_events": max(
@@ -1032,10 +1045,7 @@ class TelemetryPublisher:
                 - int(previous_queue_metrics.get("rotation_events", 0)),
             ),
         }
-        rivalry_snapshot: dict[str, object] = {}
-        rivalry_getter = getattr(world, "rivalry_snapshot", None)
-        if callable(rivalry_getter):
-            rivalry_snapshot = dict(rivalry_getter())
+        rivalry_snapshot = dict(adapter.rivalry_snapshot())
         self._queue_fairness_history.append(
             {
                 "tick": int(tick),
@@ -1046,20 +1056,20 @@ class TelemetryPublisher:
         if len(self._queue_fairness_history) > 120:
             self._queue_fairness_history.pop(0)
 
-        consume_rivalry_events = getattr(world, "consume_rivalry_events", None)
-        if callable(consume_rivalry_events):
-            new_events = consume_rivalry_events() or []
-            for event in new_events:
-                payload = {
-                    "tick": int(event.get("tick", tick)),
-                    "agent_a": str(event.get("agent_a", "")),
-                    "agent_b": str(event.get("agent_b", "")),
-                    "intensity": float(event.get("intensity", 0.0)),
-                    "reason": str(event.get("reason", "unknown")),
-                }
-                self._rivalry_event_history.append(payload)
-            if len(self._rivalry_event_history) > 120:
-                self._rivalry_event_history = self._rivalry_event_history[-120:]
+        new_events = adapter.consume_rivalry_events()
+        for event in new_events:
+            if not isinstance(event, Mapping):
+                continue
+            payload = {
+                "tick": int(event.get("tick", tick)),
+                "agent_a": str(event.get("agent_a", "")),
+                "agent_b": str(event.get("agent_b", "")),
+                "intensity": float(event.get("intensity", 0.0)),
+                "reason": str(event.get("reason", "unknown")),
+            }
+            self._rivalry_event_history.append(payload)
+        if len(self._rivalry_event_history) > 120:
+            self._rivalry_event_history = self._rivalry_event_history[-120:]
 
         self._latest_conflict_snapshot = {
             "queues": dict(queue_metrics),
@@ -1067,12 +1077,14 @@ class TelemetryPublisher:
             "rivalry": rivalry_snapshot,
             "rivalry_events": list(self._rivalry_event_history[-20:]),
         }
-        relationship_metrics_getter = getattr(world, "relationship_metrics_snapshot", None)
-        if callable(relationship_metrics_getter):
-            metrics_snapshot = relationship_metrics_getter()
-            if metrics_snapshot is not None:
-                self._latest_relationship_metrics = dict(metrics_snapshot)
-        relationship_snapshot = self._capture_relationship_snapshot(world)
+        metrics_snapshot = adapter.relationship_metrics_snapshot()
+        if metrics_snapshot:
+            self._latest_relationship_metrics = dict(metrics_snapshot)
+        else:
+            logger.debug(
+                "Telemetry relationship metrics unavailable; retaining previous snapshot",
+            )
+        relationship_snapshot = self._capture_relationship_snapshot(adapter)
         self._latest_relationship_updates = self._compute_relationship_updates(
             self._previous_relationship_snapshot,
             relationship_snapshot,
@@ -1083,9 +1095,16 @@ class TelemetryPublisher:
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
         self._latest_relationship_summary = self._build_relationship_summary(
-            relationship_snapshot, world
+            relationship_snapshot, adapter
         )
-        raw_embedding_metrics = world.embedding_allocator.metrics()
+        try:
+            raw_embedding_metrics = adapter.embedding_allocator.metrics()
+        except Exception:  # pragma: no cover - defensive guard for stub adapters
+            logger.debug(
+                "Telemetry embedding metrics unavailable; defaulting to empty metrics",
+                exc_info=True,
+            )
+            raw_embedding_metrics = {}
         processed_embedding_metrics: dict[str, object] = {}
         for key, value in raw_embedding_metrics.items():
             if isinstance(value, (int, float)):
@@ -1110,7 +1129,7 @@ class TelemetryPublisher:
         except Exception:  # pragma: no cover - defensive
             personality_enabled = False
         if personality_enabled or self.config.personality_profiles_enabled():
-            self._latest_personality_snapshot = self._build_personality_snapshot(world)
+            self._latest_personality_snapshot = self._build_personality_snapshot(adapter)
         else:
             self._latest_personality_snapshot = {}
         self._capture_affordance_runtime(
@@ -1163,30 +1182,33 @@ class TelemetryPublisher:
                     for need, value in snapshot.needs.items()
                 },
             }
-            for agent_id, snapshot in world.agents.items()
+            for agent_id, snapshot in adapter.agent_snapshots_view().items()
         }
         self._latest_economy_snapshot = {
             object_id: {
                 "type": obj.object_type,
                 "stock": dict(obj.stock),
             }
-            for object_id, obj in world.objects.items()
+            for object_id, obj in raw_world.objects.items()
         }
-        if hasattr(world, "economy_settings"):
-            self._latest_economy_settings = world.economy_settings()
+        if hasattr(raw_world, "economy_settings"):
+            self._latest_economy_settings = raw_world.economy_settings()
         else:
             self._latest_economy_settings = {
                 str(key): float(value) for key, value in self.config.economy.items()
             }
-        if hasattr(world, "active_price_spikes"):
-            self._latest_price_spikes = world.active_price_spikes()
+        if hasattr(raw_world, "active_price_spikes"):
+            self._latest_price_spikes = raw_world.active_price_spikes()
         else:
             self._latest_price_spikes = {}
-        if hasattr(world, "utility_snapshot"):
-            self._latest_utilities = world.utility_snapshot()
+        if hasattr(raw_world, "utility_snapshot"):
+            self._latest_utilities = raw_world.utility_snapshot()
         else:
             self._latest_utilities = {"power": True, "water": True}
-        self._latest_employment_metrics = world.employment_queue_snapshot()
+        if hasattr(raw_world, "employment_queue_snapshot"):
+            self._latest_employment_metrics = raw_world.employment_queue_snapshot()
+        else:
+            self._latest_employment_metrics = {}
         if reward_breakdown is not None:
             self._latest_reward_breakdown = {
                 agent: dict(components) for agent, components in reward_breakdown.items()
@@ -1200,7 +1222,7 @@ class TelemetryPublisher:
         else:
             self._latest_affordance_manifest = {}
         if kpi_history:
-            self._update_kpi_history(world)
+            self._update_kpi_history(adapter)
             self._kpi_history.setdefault("queue_rotation_events", []).append(
                 fairness_delta["rotation_events"]
             )
@@ -1593,12 +1615,10 @@ class TelemetryPublisher:
 
     def _capture_relationship_snapshot(
         self,
-        world: WorldState,
+        world: WorldState | "WorldRuntimeAdapterProtocol",
     ) -> dict[str, dict[str, dict[str, float]]]:
-        snapshot_getter = getattr(world, "relationships_snapshot", None)
-        if not callable(snapshot_getter):
-            return {}
-        raw = snapshot_getter() or {}
+        adapter = ensure_world_adapter(world)
+        raw = adapter.relationships_snapshot() or {}
         if not isinstance(raw, dict):
             return {}
         normalised: dict[str, dict[str, dict[str, float]]] = {}
@@ -1738,8 +1758,9 @@ class TelemetryPublisher:
     def _build_relationship_summary(
         self,
         snapshot: Mapping[str, Mapping[str, Mapping[str, float]]],
-        world: WorldState,
+        world: WorldState | "WorldRuntimeAdapterProtocol",
     ) -> dict[str, object]:
+        adapter = ensure_world_adapter(world)
         summary: dict[str, object] = {}
         max_entries = 3
         for owner, ties in snapshot.items():
@@ -1760,7 +1781,7 @@ class TelemetryPublisher:
             ]
             rivals: list[dict[str, object]] = []
             try:
-                top_rivals = world.rivalry_top(owner, max_entries)
+                top_rivals = adapter.rivalry_top(owner, max_entries)
             except Exception:  # pragma: no cover - defensive
                 top_rivals = []
             for other, value in top_rivals:
@@ -1774,9 +1795,13 @@ class TelemetryPublisher:
 
     def _build_personality_snapshot(
         self,
-        world: WorldState,
+        world: WorldState | "WorldRuntimeAdapterProtocol",
     ) -> dict[str, object]:
-        snapshot = world.snapshot()
+        adapter = ensure_world_adapter(world)
+        snapshot = {
+            agent_id: copy.deepcopy(agent)
+            for agent_id, agent in adapter.agent_snapshots_view().items()
+        }
         payload: dict[str, object] = {}
         for agent_id, agent in snapshot.items():
             profile_name = str(getattr(agent, "personality_profile", "") or "balanced")
@@ -2254,12 +2279,16 @@ class TelemetryPublisher:
             for owner, ties in snapshot.items()
         }
 
-    def _update_kpi_history(self, world: WorldState) -> None:
+    def _update_kpi_history(
+        self,
+        world: WorldState | "WorldRuntimeAdapterProtocol",
+    ) -> None:
+        adapter = ensure_world_adapter(world)
         queue_sum = float(
             self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0)
         )
         lateness_avg = 0.0
-        agents = list(world.agents.values())
+        agents = list(adapter.agent_snapshots_view().values())
         if agents:
             lateness_avg = sum(agent.lateness_counter for agent in agents) / len(agents)
         social_metric = float(

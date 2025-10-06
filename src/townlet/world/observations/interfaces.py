@@ -79,10 +79,19 @@ class WorldRuntimeAdapterProtocol(Protocol):
     def rivalry_top(self, agent_id: str, limit: int) -> Iterable[tuple[str, float]]:
         ...
 
+    def rivalry_snapshot(self) -> Mapping[str, Mapping[str, float]]:
+        ...
+
+    def consume_rivalry_events(self) -> Iterable[Mapping[str, object]]:
+        ...
+
     def _employment_context_wages(self, agent_id: str) -> float:
         ...
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
+        ...
+
+    def running_affordances_snapshot(self) -> Mapping[str, object]:
         ...
 
 

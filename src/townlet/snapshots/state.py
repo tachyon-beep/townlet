@@ -23,6 +23,7 @@ from townlet.snapshots.migrations import (
 )
 from townlet.utils import decode_rng_state, encode_rng, encode_rng_state
 from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
+from townlet.world.core.runtime_adapter import ensure_world_adapter
 
 if TYPE_CHECKING:
     from townlet.stability.monitor import StabilityMonitor
@@ -264,8 +265,10 @@ def snapshot_from_world(
 ) -> SnapshotState:
     """Capture the current world state into a snapshot payload."""
 
+    adapter = ensure_world_adapter(world)
+
     agents_payload: dict[str, dict[str, object]] = {}
-    for agent_id, snapshot in world.agents.items():
+    for agent_id, snapshot in adapter.agent_snapshots_view().items():
         agents_payload[agent_id] = {
             "position": list(snapshot.position),
             "needs": dict(snapshot.needs),
@@ -290,14 +293,14 @@ def snapshot_from_world(
         }
 
     objects_payload: dict[str, dict[str, object]] = {}
-    for object_id, obj in world.objects.items():
+    for object_id, obj in adapter.objects.items():
         objects_payload[object_id] = {
             "object_type": obj.object_type,
             "occupied_by": obj.occupied_by,
             "stock": dict(obj.stock),
         }
 
-    queue_state = world.queue_manager.export_state()
+    queue_state = adapter.queue_manager.export_state()
     employment_payload = world.employment.export_state()
     employment_payload["exits_today"] = world.employment_exits_today()
 
@@ -377,8 +380,8 @@ def snapshot_from_world(
         console_buffer=console_buffer,
         perturbations=perturbations_payload,
         affordances=affordances_payload,
-        relationships=world.relationships_snapshot(),
-        relationship_metrics=world.relationship_metrics_snapshot(),
+        relationships=adapter.relationships_snapshot(),
+        relationship_metrics=dict(adapter.relationship_metrics_snapshot()),
         stability=stability_payload,
         promotion=promotion_payload,
         identity=identity_payload,
