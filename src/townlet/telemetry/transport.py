@@ -9,7 +9,6 @@ import sys
 from collections import deque
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +37,10 @@ class BaseTransport(AbstractContextManager):
     def __exit__(self, exc_type, exc, tb):  # pragma: no cover - rarely used
         self.stop()
         return False
+
+    # Backwards-compatibility alias used in some tests/helpers
+    def close(self) -> None:  # pragma: no cover - alias only
+        self.stop()
 
 
 class StdoutTransport(BaseTransport):
@@ -127,6 +130,9 @@ class TcpTransport(BaseTransport):
             )
         self._ssl_context: ssl.SSLContext | None = None
         self._socket = None
+        # Eagerly build SSL context to support tests that inspect TLS settings
+        if self._enable_tls:
+            self._ssl_context = self._build_ssl_context()
 
     def start(self) -> None:
         self._connect()
@@ -265,13 +271,17 @@ def create_transport(
     """Factory helper for `TelemetryPublisher`."""
 
     if transport_type == "stdout":
-        return StdoutTransport()
+        t = StdoutTransport()
+        t.start()
+        return t
     if transport_type == "file":
         if file_path is None:
             raise TelemetryTransportError(
                 "telemetry.transport.file_path is required when using file transport"
             )
-        return FileTransport(file_path)
+        t = FileTransport(file_path)
+        t.start()
+        return t
     if transport_type == "tcp":
         if endpoint is None:
             raise TelemetryTransportError(
@@ -281,7 +291,7 @@ def create_transport(
             logger.warning(
                 "telemetry_tcp_plaintext_enabled endpoint=%s", endpoint
             )
-        return TcpTransport(
+        t = TcpTransport(
             endpoint,
             connect_timeout=connect_timeout,
             send_timeout=send_timeout,
@@ -292,12 +302,16 @@ def create_transport(
             key_file=key_file,
             allow_plaintext=allow_plaintext,
         )
+        t.start()
+        return t
     if transport_type == "websocket":
         if websocket_url is None:
             raise TelemetryTransportError(
                 "telemetry.transport.websocket_url required for websocket transport"
             )
-        return WebsocketTransport(websocket_url)
+        t = WebsocketTransport(websocket_url)
+        t.start()
+        return t
     raise TelemetryTransportError(
         f"Unsupported telemetry transport type: {transport_type}"
     )

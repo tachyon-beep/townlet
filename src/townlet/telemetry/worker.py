@@ -7,7 +7,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 from townlet.config.loader import TelemetryRetryPolicy
 from townlet.telemetry.transport import TransportBuffer
@@ -99,6 +99,13 @@ class TelemetryWorkerManager:
             self._buffer.append(payload)
             self._latest_enqueue_tick = max(self._latest_enqueue_tick, tick)
             self._status["queue_length"] = len(self._buffer)
+            # Track peak queue length and total buffered bytes
+            try:
+                peak = int(self._status.get("queue_length_peak", 0))
+            except Exception:
+                peak = 0
+            if len(self._buffer) > peak:
+                self._status["queue_length_peak"] = len(self._buffer)
             self._apply_backpressure_locked(overflow_payloads)
         if overflow_payloads:
             for overflow in overflow_payloads:
@@ -200,6 +207,7 @@ class TelemetryWorkerManager:
         start = time.perf_counter()
         flushed_any = False
         flushed_count = 0
+        flushed_bytes = 0
         tick_hint = self._latest_enqueue_tick
         while True:
             with self._buffer_not_full:
@@ -210,6 +218,7 @@ class TelemetryWorkerManager:
                 self._buffer_not_full.notify_all()
             flushed_any = True
             flushed_count += 1
+            flushed_bytes += len(payload)
             if not self._send_with_retry(payload, tick_hint):
                 self._status["dropped_messages"] += 1
                 logger.error("Dropping telemetry payload after repeated send failures")
@@ -224,6 +233,16 @@ class TelemetryWorkerManager:
         if flushed_any:
             duration_ms = (time.perf_counter() - start) * 1_000.0
             self._status["last_flush_duration_ms"] = duration_ms
+            self._status["last_batch_count"] = flushed_count
+            self._status["last_flush_payload_bytes"] = flushed_bytes
+            # Totals
+            try:
+                self._status["payloads_flushed_total"] += flushed_count
+                self._status["bytes_flushed_total"] += flushed_bytes
+            except Exception:
+                # Initialize if missing
+                self._status["payloads_flushed_total"] = int(flushed_count)
+                self._status["bytes_flushed_total"] = int(flushed_bytes)
             self._last_flush_tick = tick_hint
 
     def _send_with_retry(self, payload: bytes, tick: int) -> bool:
@@ -235,12 +254,21 @@ class TelemetryWorkerManager:
                 self._send_callable(payload)
                 self._status["connected"] = True
                 self._status["last_success_tick"] = int(tick)
+                # Reset failure streak on success
+                self._status["consecutive_send_failures"] = 0
                 return True
             except Exception as exc:  # pragma: no cover - transport failure path
                 message = str(exc)
                 self._status["connected"] = False
                 self._status["last_error"] = message
                 self._status["last_failure_tick"] = int(tick)
+                # Count failures
+                try:
+                    self._status["consecutive_send_failures"] += 1
+                    self._status["send_failures_total"] += 1
+                except Exception:
+                    self._status["consecutive_send_failures"] = 1
+                    self._status["send_failures_total"] = 1
                 logger.warning(
                     "Telemetry transport send failed (attempt %s/%s): %s",
                     attempts + 1,

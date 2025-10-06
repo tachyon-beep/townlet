@@ -34,6 +34,13 @@ Townlet is a small-town life simulation that explores emergent behaviour in a po
 └── pyproject.toml         # Tooling configuration (ruff, mypy, pytest, build metadata)
 ```
 
+## Documentation
+
+- High-level architectural notes live under `docs/architecture_review/`.
+- Telemetry reference:
+  - Pipeline guide: `docs/guides/telemetry_pipeline.md`
+  - Phase 7 benchmarking runbook: `docs/architecture_review/wp-d_phase7_runbook.md`
+
 ## Quickstart
 
 1. Install dependencies (Python 3.11+ recommended):

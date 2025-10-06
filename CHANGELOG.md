@@ -5,6 +5,9 @@
 - Runtime-checkable protocols for agent, relationship, and employment services (`townlet.world.agents.interfaces`).
 - `AffordanceEnvironment` wiring in `world/affordances/` plus service-focused unit tests (`tests/test_agents_services.py`).
 - Read-only `WorldRuntimeAdapter` façade (`townlet.world.core.runtime_adapter`) and observation/telemetry adapter smoke tests (`tests/test_observation_builder_parity.py`, `tests/test_telemetry_adapter_smoke.py`).
+- Telemetry benchmark utilities and scripts: `scripts/wp_d_benchmark.py`, `scripts/wp_d_benchmark_compare.py`.
+- Built-in telemetry metrics: queue peaks, flush durations, send failure counters, and totals surfaced via `latest_transport_status()`.
+- Documentation: Phase 7 runbook (docs/architecture_review/wp-d_phase7_runbook.md) and telemetry pipeline guide (docs/guides/telemetry_pipeline.md).
 
 ### Changed
 - `WorldState` now composes services (`AgentRegistry`, `RelationshipService`, `EmploymentService`) and injects them via `WorldContext`.
@@ -18,3 +21,4 @@
 - Phase 5 Step 4 telemetry/observation baselines re-run (`tmp/wp-c/phase5_validation_telemetry.jsonl`) match the prior capture for overlapping ticks, confirming the new services leave runtime outputs unchanged.
 - Spawn/teleport/remove/respawn logic now lives in `townlet.world.agents.lifecycle.LifecycleService`; `WorldState`/`WorldContext` expose the service, and console/lifecycle/telemetry suites rely on the façade instead of private helpers. New unit coverage (`tests/test_world_lifecycle_service.py`) exercises the lifecycle surface.
 - Phase 6 validation logged at `tmp/wp-c/phase4_validation.txt`; 50-tick smoke telemetry captured in `tmp/wp-c/phase6_smoke_telemetry.jsonl`.
+- Telemetry sink protocol expanded with read-only accessors used by consoles and observers; console handlers hardened to use protocol-safe accessors with stub-friendly fallbacks.

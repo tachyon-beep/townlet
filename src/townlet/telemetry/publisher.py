@@ -147,6 +147,13 @@ class TelemetryPublisher:
             "last_success_tick": None,
             "queue_length": 0,
             "last_flush_duration_ms": None,
+            "last_flush_payload_bytes": 0,
+            "last_batch_count": 0,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "queue_length_peak": 0,
+            "consecutive_send_failures": 0,
+            "send_failures_total": 0,
             "tls_enabled": bool(getattr(transport_cfg, "enable_tls", False)),
             "verify_hostname": bool(getattr(transport_cfg, "verify_hostname", True)),
             "allow_plaintext": bool(getattr(transport_cfg, "allow_plaintext", False)),
@@ -165,6 +172,8 @@ class TelemetryPublisher:
             )
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
+        # Expose the flush poll interval for tests/diagnostics (legacy compatibility)
+        self._flush_poll_interval = poll_interval
         self._worker_manager = TelemetryWorkerManager(
             buffer=self._transport_buffer,
             retry_policy=self._transport_retry,
@@ -774,7 +783,9 @@ class TelemetryPublisher:
                 allow_plaintext=bool(getattr(cfg, "allow_plaintext", False)),
                 websocket_url=getattr(cfg, "websocket_url", None),
             )
-            client.start()
+            start = getattr(client, "start", None)
+            if callable(start):
+                start()
             return client
         except TelemetryTransportError as exc:  # pragma: no cover - init failure
             message = f"Failed to initialise telemetry transport '{cfg.type}': {exc}"

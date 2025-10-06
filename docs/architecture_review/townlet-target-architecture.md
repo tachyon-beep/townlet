@@ -64,6 +64,10 @@ The target architecture keeps the existing simulation loop as the orchestrator w
 - **Transport Adapters**: Implement protocols for stdout, file, WebSocket, or HTTP streaming. Each adapter lives in its own module and can be toggled via configuration. Telemetry collectors consume the same `WorldRuntimeAdapter` façade as policy/observation code, ensuring queue/relationship metrics rely on a stable contract rather than ad-hoc `WorldState` attributes.
 - **Lifecycle Management**: Worker pools and threads are managed via context managers with explicit startup/shutdown hooks exposed through the `TelemetrySink` interface.
 
+See also:
+- Telemetry Pipeline Guide: `docs/guides/telemetry_pipeline.md` (layering, config, metrics)
+- Phase 7 Benchmark Runbook: `docs/architecture_review/wp-d_phase7_runbook.md`
+
 ## 4. Optional Dependency Adapters
 - Introduce dedicated extras in `pyproject.toml` (e.g., `[ml]`, `[api]`, `[ui]`).
 - Factories check dependency availability and configuration before instantiating optional components.

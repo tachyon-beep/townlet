@@ -7,7 +7,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 if TYPE_CHECKING:
     from townlet.config import SimulationConfig
@@ -79,6 +79,9 @@ class EventStream:
         return list(self._latest)
 
 
+T = TypeVar("T")
+
+
 class TelemetryBridge:
     """Provides access to the latest telemetry snapshots for console consumers."""
 
@@ -90,6 +93,20 @@ class TelemetryBridge:
     ) -> None:
         self._publisher = publisher
         self._provider_name = provider_name or ("stub" if is_stub_telemetry(publisher) else "unknown")
+
+    def _call_or_default(self, name: str, default: T) -> T:
+        """Call a telemetry method if present; otherwise return default.
+
+        This shields console consumers from transport/provider differences by
+        avoiding direct reliance on publisher-specific attributes.
+        """
+        fn = getattr(self._publisher, name, None)
+        if callable(fn):
+            try:
+                return fn()
+            except Exception:  # pragma: no cover - defensive fallback
+                return default
+        return default
 
     def snapshot(self) -> dict[str, dict[str, object]]:
         version, warning = _schema_metadata(self._publisher)
@@ -119,40 +136,40 @@ class TelemetryBridge:
             "schema_version": version,
             "schema_warning": warning,
             "console_commands": command_metadata,
-            "jobs": self._publisher.latest_job_snapshot(),
-            "economy": self._publisher.latest_economy_snapshot(),
-            "economy_settings": self._publisher.latest_economy_settings(),
-            "price_spikes": self._publisher.latest_price_spikes(),
-            "utilities": self._publisher.latest_utilities(),
-            "employment": self._publisher.latest_employment_metrics(),
-            "conflict": self._publisher.latest_conflict_snapshot(),
-            "relationships": self._publisher.latest_relationship_metrics() or {},
-            "relationship_snapshot": self._publisher.latest_relationship_snapshot(),
-            "relationship_updates": self._publisher.latest_relationship_updates(),
-            "relationship_summary": self._publisher.latest_relationship_summary(),
-            "social_events": self._publisher.latest_social_events(),
-            "events": list(self._publisher.latest_events()),
-            "narrations": self._publisher.latest_narrations(),
-            "narration_state": self._publisher.latest_narration_state(),
-            "anneal_status": self._publisher.latest_anneal_status(),
-            "policy_snapshot": self._publisher.latest_policy_snapshot(),
-            "policy_identity": self._publisher.latest_policy_identity() or {},
-            "snapshot_migrations": self._publisher.latest_snapshot_migrations(),
-            "affordance_manifest": self._publisher.latest_affordance_manifest(),
-            "affordance_runtime": self._publisher.latest_affordance_runtime(),
-            "reward_breakdown": self._publisher.latest_reward_breakdown(),
-            "personalities": self._publisher.latest_personality_snapshot(),
+            "jobs": self._call_or_default("latest_job_snapshot", {}),
+            "economy": self._call_or_default("latest_economy_snapshot", {}),
+            "economy_settings": self._call_or_default("latest_economy_settings", {}),
+            "price_spikes": self._call_or_default("latest_price_spikes", {}),
+            "utilities": self._call_or_default("latest_utilities", {}),
+            "employment": self._call_or_default("latest_employment_metrics", {}),
+            "conflict": self._call_or_default("latest_conflict_snapshot", {}),
+            "relationships": self._call_or_default("latest_relationship_metrics", {}) or {},
+            "relationship_snapshot": self._call_or_default("latest_relationship_snapshot", {}),
+            "relationship_updates": self._call_or_default("latest_relationship_updates", []),
+            "relationship_summary": self._call_or_default("latest_relationship_summary", {}),
+            "social_events": self._call_or_default("latest_social_events", []),
+            "events": list(self._call_or_default("latest_events", [])),
+            "narrations": self._call_or_default("latest_narrations", []),
+            "narration_state": self._call_or_default("latest_narration_state", {}),
+            "anneal_status": self._call_or_default("latest_anneal_status", None),
+            "policy_snapshot": self._call_or_default("latest_policy_snapshot", {}),
+            "policy_identity": self._call_or_default("latest_policy_identity", {}) or {},
+            "snapshot_migrations": self._call_or_default("latest_snapshot_migrations", []),
+            "affordance_manifest": self._call_or_default("latest_affordance_manifest", {}),
+            "affordance_runtime": self._call_or_default("latest_affordance_runtime", {}),
+            "reward_breakdown": self._call_or_default("latest_reward_breakdown", {}),
+            "personalities": self._call_or_default("latest_personality_snapshot", {}),
             "stability": {
-                "alerts": self._publisher.latest_stability_alerts(),
-                "metrics": self._publisher.latest_stability_metrics(),
+                "alerts": self._call_or_default("latest_stability_alerts", []),
+                "metrics": self._call_or_default("latest_stability_metrics", {}),
                 "promotion_state": getattr(self._publisher, "latest_promotion_state", lambda: None)(),
             },
-            "perturbations": self._publisher.latest_perturbations(),
-            "transport": self._publisher.latest_transport_status(),
-            "health": self._publisher.latest_health_status(),
-            "console_results": self._publisher.latest_console_results(),
-            "possessed_agents": self._publisher.latest_possessed_agents(),
-            "precondition_failures": self._publisher.latest_precondition_failures(),
+            "perturbations": self._call_or_default("latest_perturbations", {}),
+            "transport": self._call_or_default("latest_transport_status", {}),
+            "health": self._call_or_default("latest_health_status", {}),
+            "console_results": self._call_or_default("latest_console_results", []),
+            "possessed_agents": self._call_or_default("latest_possessed_agents", []),
+            "precondition_failures": self._call_or_default("latest_precondition_failures", []),
         }
         provider = self._provider_name
         if is_stub_telemetry(self._publisher, provider):
@@ -1246,7 +1263,8 @@ def create_console_router(
 
 
 def _schema_metadata(publisher: TelemetrySinkProtocol) -> tuple[str, str | None]:
-    version = publisher.schema()
+    schema_fn = getattr(publisher, "schema", None)
+    version = str(schema_fn()) if callable(schema_fn) else SUPPORTED_SCHEMA_PREFIX
     warning = None
     if not version.startswith(SUPPORTED_SCHEMA_PREFIX):
         warning = f"Console supports telemetry schema {SUPPORTED_SCHEMA_PREFIX}.x; shard reported {version}. Upgrade required."

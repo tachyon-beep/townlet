@@ -429,10 +429,13 @@ class SimulationLoop:
                 "failure_count": self._health.failure_count,
                 "telemetry_queue": transport_status.get("queue_length", 0),
                 "telemetry_dropped": transport_status.get("dropped_messages", 0),
+                "telemetry_flush_ms": transport_status.get("last_flush_duration_ms"),
                 "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
                 "telemetry_worker_error": transport_status.get("worker_error"),
                 "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
                 "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
+                "telemetry_payloads_total": transport_status.get("payloads_flushed_total", 0),
+                "telemetry_bytes_total": transport_status.get("bytes_flushed_total", 0),
                 "perturbations_pending": self.perturbations.pending_count(),
                 "perturbations_active": self.perturbations.active_count(),
                 "employment_exit_queue": self.world.employment.exit_queue_length(),
@@ -442,12 +445,16 @@ class SimulationLoop:
                 logger.info(
                     (
                         "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
+                        "flush_ms=%s payloads_total=%s bytes_total=%s "
                         "perturbations_pending=%s perturbations_active=%s exit_queue=%s"
                     ),
                     self.tick,
                     duration_ms,
                     health_payload["telemetry_queue"],
                     health_payload["telemetry_dropped"],
+                    health_payload["telemetry_flush_ms"],
+                    health_payload["telemetry_payloads_total"],
+                    health_payload["telemetry_bytes_total"],
                     health_payload["perturbations_pending"],
                     health_payload["perturbations_active"],
                     health_payload["employment_exit_queue"],
