@@ -16,6 +16,16 @@
 - Nightly upkeep moved into `townlet.world.agents.nightly_reset.NightlyResetService`, which `WorldState` wires during `__post_init__` and `WorldContext` now exposes via `apply_nightly_reset()`. This keeps queue release, need refill, and employment reset logic isolated from the grid orchestrator.
 - Employment helpers route through the expanded `townlet.world.agents.employment.EmploymentService`; `WorldRuntimeAdapter` and nightly reset alike depend on the façade for context lookups and shift lifecycle operations.
 - Dedicated delegation tests cover nightly reset and employment service calls (`tests/test_world_nightly_reset.py`, `tests/test_world_employment_delegation.py`).
+- Economy/utility upkeep now lives in `townlet.world.economy.EconomyService`, trimming basket/price/outage logic out of `WorldState` while keeping public methods intact (`tests/test_world_economy_delegation.py`).
+- Perturbation scheduling (`src/townlet/scheduler/perturbations.py`) delegates through `townlet.world.perturbations.PerturbationService`, which reuses the economy façade for price spikes/outages and centralises arranged meet moves (`tests/test_world_perturbation_service.py`).
+- Legacy `WorldState` helpers (`set_price_target`, `apply_price_spike`, `apply_arranged_meet`, `utility_snapshot`, etc.) now proxy directly to the new services. Callers are encouraged to resolve `world.economy_service` / `world.perturbation_service` to avoid future deprecation churn.
+- Console handlers, telemetry publisher, and perturbation scheduler were updated to consume the facades; downstream extensions should follow the same pattern when introducing new price/outage behaviour.
+
+### Migration notes – employment & lifecycle consumers
+
+- Employment-oriented code (telemetry exporters, console manual exits, observation builders) should import from `townlet.world.agents.employment` rather than reaching into `EmploymentRuntime`. The `WorldState` wrappers remain but are strictly delegations.
+- Nightly reset and employment shift helpers are available via `WorldContext.nightly_reset_service` / `WorldContext.employment_service`, ensuring adapters and tests can request the façade without touching grid internals.
+- Lifecycle mechanics (spawn, teleport, remove, respawn, reservation sync) are the next extraction target. Until `townlet.world.agents.lifecycle` lands, continue using the existing `WorldState` APIs, but plan to redirect integration points toward the forthcoming service once published.
 
 ## Phase 6 Validation (2025-10-24)
 

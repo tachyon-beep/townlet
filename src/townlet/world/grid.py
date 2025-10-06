@@ -50,6 +50,7 @@ from townlet.world.console import (
     install_world_console_handlers,
 )
 from townlet.world.core.context import WorldContext
+from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -59,6 +60,7 @@ from townlet.world.observation import (
 from townlet.world.observation import (
     snapshot_precondition_context,
 )
+from townlet.world.perturbations import PerturbationService
 from townlet.world.preconditions import (
     CompiledPrecondition,
     PreconditionSyntaxError,
@@ -267,6 +269,8 @@ class WorldState:
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
     _employment_service: EmploymentService = field(init=False, repr=False)
     _nightly_reset_service: NightlyResetService = field(init=False, repr=False)
+    _economy_service: EconomyService = field(init=False, repr=False)
+    _perturbation_service: PerturbationService = field(init=False, repr=False)
 
     _relationships: RelationshipService = field(init=False, repr=False)
     _relationship_window_ticks: int = 600
@@ -341,6 +345,23 @@ class WorldState:
             sync_reservation=self._sync_reservation,
             sync_reservation_for_agent=self._sync_reservation_for_agent,
             is_tile_blocked=lambda position: position in self._objects_by_position,
+        )
+        self._economy_service = EconomyService(
+            config=self.config,
+            agents=self.agents,
+            objects=self.objects,
+            queue_manager=self.queue_manager,
+            sync_reservation=self._sync_reservation,
+            emit_event=self._emit_event,
+            tick_supplier=lambda: self.tick,
+        )
+        self._perturbation_service = PerturbationService(
+            economy_service=self._economy_service,
+            agents=self.agents,
+            objects=self.objects,
+            emit_event=self._emit_event,
+            request_ctx_reset=self.request_ctx_reset,
+            tick_supplier=lambda: self.tick,
         )
         self._relationship_window_ticks = 600
         self._relationships = RelationshipService(
@@ -465,16 +486,6 @@ class WorldState:
             hook_registry=self._hook_registry,
         )
         affordance_env.dispatch_hooks = self._affordance_service.dispatch_hooks
-        self._economy_baseline: dict[str, float] = {
-            key: float(value) for key, value in self.config.economy.items()
-        }
-        self._price_spike_events: dict[str, dict[str, float]] = {}
-        self._utility_status: dict[str, bool] = {"power": True, "water": True}
-        self._utility_events: dict[str, set[str]] = {
-            "power": set(),
-            "water": set(),
-        }
-        self._object_utility_baselines: dict[str, dict[str, float]] = {}
         self.rebuild_spatial_index()
         self.context = WorldContext(
             agents=self.agents,
@@ -514,6 +525,14 @@ class WorldState:
     @property
     def nightly_reset_service(self) -> NightlyResetService:
         return self._nightly_reset_service
+
+    @property
+    def economy_service(self) -> EconomyService:
+        return self._economy_service
+
+    @property
+    def perturbation_service(self) -> PerturbationService:
+        return self._perturbation_service
 
     @property
     def _relationship_ledgers(self):
@@ -714,20 +733,7 @@ class WorldState:
 
     def set_price_target(self, key: str, value: float) -> float:
         """Update the economy price target for ``key`` and refresh metrics."""
-
-        normalised = str(key)
-        if normalised not in self.config.economy:
-            raise KeyError(normalised)
-
-        numeric = float(value)
-        self.config.economy[normalised] = numeric
-        self._economy_baseline[normalised] = numeric
-        self._update_basket_metrics()
-        self._emit_event(
-            "economy_price_update",
-            {"key": normalised, "value": numeric},
-        )
-        return numeric
+        return self._economy_service.set_price_target(key, value)
 
     def _record_console_result(self, result: ConsoleCommandResult) -> None:
         self._console.record_result(result)
@@ -1733,34 +1739,10 @@ class WorldState:
         self._employment_service.increment_exits_today()
 
     def _update_basket_metrics(self) -> None:
-        basket_cost = (
-            self.config.economy.get("meal_cost", 0.0)
-            + self.config.economy.get("cook_energy_cost", 0.0)
-            + self.config.economy.get("cook_hygiene_cost", 0.0)
-            + self.config.economy.get("ingredients_cost", 0.0)
-        )
-        for snapshot in self.agents.values():
-            snapshot.inventory["basket_cost"] = basket_cost
-        self._restock_economy()
+        self._economy_service.update_basket_metrics()
 
     def _restock_economy(self) -> None:
-        restock_amount = int(self.config.economy.get("stove_stock_replenish", 0))
-        if restock_amount <= 0:
-            return
-        if self.tick % 200 != 0:
-            return
-        for obj in self.objects.values():
-            if obj.object_type == "stove":
-                before = obj.stock.get("raw_ingredients", 0)
-                obj.stock["raw_ingredients"] = before + restock_amount
-                self._emit_event(
-                    "stock_replenish",
-                    {
-                        "object_id": obj.object_id,
-                        "type": "stove",
-                        "amount": restock_amount,
-                    },
-                )
+        self._economy_service.restock_economy()
 
     # ------------------------------------------------------------------
     # Perturbation helpers: price spikes, utilities, arranged meets
@@ -1772,38 +1754,20 @@ class WorldState:
         magnitude: float,
         targets: Iterable[str] | None = None,
     ) -> None:
-        resolved = tuple(self._resolve_price_targets(targets))
-        if not resolved:
-            return
-        self._price_spike_events[event_id] = {
-            "magnitude": max(float(magnitude), 0.0),
-            "targets": resolved,
-        }
-        self._recompute_price_spikes()
+        self._perturbation_service.apply_price_spike(
+            event_id,
+            magnitude=magnitude,
+            targets=targets,
+        )
 
     def clear_price_spike(self, event_id: str) -> None:
-        if event_id not in self._price_spike_events:
-            return
-        self._price_spike_events.pop(event_id, None)
-        self._recompute_price_spikes()
+        self._perturbation_service.clear_price_spike(event_id)
 
     def apply_utility_outage(self, event_id: str, utility: str) -> None:
-        util = utility.lower()
-        events = self._utility_events.setdefault(util, set())
-        if event_id in events:
-            return
-        events.add(event_id)
-        if len(events) == 1:
-            self._set_utility_state(util, online=False)
+        self._perturbation_service.apply_utility_outage(event_id, utility)
 
     def clear_utility_outage(self, event_id: str, utility: str) -> None:
-        util = utility.lower()
-        events = self._utility_events.setdefault(util, set())
-        if event_id not in events:
-            return
-        events.discard(event_id)
-        if not events:
-            self._set_utility_state(util, online=True)
+        self._perturbation_service.clear_utility_outage(event_id, utility)
 
     def apply_arranged_meet(
         self,
@@ -1811,115 +1775,25 @@ class WorldState:
         location: str | None,
         targets: Iterable[str] | None = None,
     ) -> None:
-        if not targets:
-            return
-        obj = None
-        if location:
-            obj = self.objects.get(location)
-            if obj is None:
-                for candidate in self.objects.values():
-                    if candidate.object_type == location:
-                        obj = candidate
-                        break
-        position = None
-        if obj is not None and obj.position is not None:
-            position = (int(obj.position[0]), int(obj.position[1]))
-        if position is None:
-            return
-        for agent_id in targets:
-            snapshot = self.agents.get(str(agent_id))
-            if snapshot is None:
-                continue
-            snapshot.position = position
-            self.request_ctx_reset(snapshot.agent_id)
-            self._emit_event(
-                "arranged_meet_relocated",
-                {
-                    "agent_id": snapshot.agent_id,
-                    "location": obj.object_id if obj is not None else location,
-                    "tick": self.tick,
-                },
-            )
+        self._perturbation_service.apply_arranged_meet(
+            location=location,
+            targets=targets,
+        )
 
     def utility_online(self, utility: str) -> bool:
-        return self._utility_status.get(utility.lower(), True)
-
-    def _resolve_price_targets(self, targets: Iterable[str] | None) -> list[str]:
-        resolved: list[str] = []
-        if not targets:
-            return list(self._economy_baseline.keys())
-        groups = {
-            "global": list(self.config.economy.keys()),
-            "market": [
-                "meal_cost",
-                "cook_energy_cost",
-                "cook_hygiene_cost",
-                "ingredients_cost",
-            ],
-        }
-        for target in targets:
-            key = str(target).lower()
-            if key in groups:
-                for entry in groups[key]:
-                    if entry in self.config.economy and entry not in resolved:
-                        resolved.append(entry)
-                continue
-            if key in self.config.economy and key not in resolved:
-                resolved.append(key)
-        return resolved
-
-    def _recompute_price_spikes(self) -> None:
-        for key, value in self._economy_baseline.items():
-            self.config.economy[key] = value
-        for event in self._price_spike_events.values():
-            magnitude = max(event.get("magnitude", 1.0), 0.0)
-            for key in event.get("targets", ()):  # type: ignore[arg-type]
-                if key in self.config.economy:
-                    self.config.economy[key] = self.config.economy[key] * magnitude
-        self._update_basket_metrics()
-
-    def _set_utility_state(self, utility: str, *, online: bool) -> None:
-        utility_key = utility.lower()
-        self._utility_status[utility_key] = online
-        affected_types = {
-            "power": {"stove"},
-            "water": {"shower", "sink"},
-        }.get(utility_key, set())
-        flag = f"{utility_key}_on"
-        for obj in self.objects.values():
-            if affected_types and obj.object_type not in affected_types:
-                continue
-            baseline_flags = self._object_utility_baselines.setdefault(obj.object_id, {})
-            if not online:
-                baseline_flags.setdefault(flag, float(obj.stock.get(flag, 1.0)))
-                obj.stock[flag] = 0.0
-                active_agent = self.queue_manager.active_agent(obj.object_id)
-                if active_agent is not None:
-                    self.queue_manager.release(
-                        obj.object_id, active_agent, self.tick, success=False
-                    )
-                    self._sync_reservation(obj.object_id)
-            else:
-                baseline = baseline_flags.get(flag, 1.0)
-                obj.stock[flag] = baseline
+        return self._economy_service.utility_online(utility)
 
     def economy_settings(self) -> dict[str, float]:
         """Return the current economy configuration values."""
 
-        return {str(key): float(value) for key, value in self.config.economy.items()}
+        return self._economy_service.economy_settings()
 
     def active_price_spikes(self) -> dict[str, dict[str, object]]:
         """Return a summary of currently active price spike events."""
 
-        snapshot: dict[str, dict[str, object]] = {}
-        for event_id, info in self._price_spike_events.items():
-            snapshot[event_id] = {
-                "magnitude": float(info.get("magnitude", 0.0)),
-                "targets": [str(target) for target in info.get("targets", ())],
-            }
-        return snapshot
+        return self._economy_service.active_price_spikes()
 
     def utility_snapshot(self) -> dict[str, bool]:
         """Return on/off status for tracked utilities."""
 
-        return {str(key): bool(value) for key, value in self._utility_status.items()}
+        return self._economy_service.utility_snapshot()

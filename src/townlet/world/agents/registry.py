@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
-from typing import Callable, Dict, Iterable, Iterator, Optional
+from collections.abc import Callable, Iterable, Iterator, MutableMapping
 
 from .snapshot import AgentSnapshot
 
@@ -21,12 +20,12 @@ class AgentRegistry(MutableMapping[str, AgentSnapshot]):
 
     def __init__(
         self,
-        initial: Optional[Iterable[tuple[str, AgentSnapshot]]] = None,
+        initial: Iterable[tuple[str, AgentSnapshot]] | None = None,
         *,
         on_add: AgentCallback | None = None,
         on_remove: AgentCallback | None = None,
     ) -> None:
-        self._agents: Dict[str, AgentSnapshot] = {}
+        self._agents: dict[str, AgentSnapshot] = {}
         self._on_add = on_add
         self._on_remove = on_remove
         if initial is not None:
@@ -82,10 +81,10 @@ class AgentRegistry(MutableMapping[str, AgentSnapshot]):
         if on_remove is not None:
             self._on_remove = on_remove
 
-    def values_map(self) -> Dict[str, AgentSnapshot]:
+    def values_map(self) -> dict[str, AgentSnapshot]:
         """Return a shallow copy of the underlying agent map."""
 
         return dict(self._agents)
 
 
-__all__ = ["AgentRegistry", "AgentSnapshot", "AgentCallback"]
+__all__ = ["AgentCallback", "AgentRegistry", "AgentSnapshot"]

@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-from townlet.world.affordances.runtime import *  # noqa: F401,F403
+from townlet.world.affordances.runtime import *  # noqa: F403

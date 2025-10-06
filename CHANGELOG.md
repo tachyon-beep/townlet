@@ -13,4 +13,5 @@
 - Telemetry publisher and snapshot capture route through `ensure_world_adapter`, reducing direct `WorldState` access for queue/relationship metrics.
 - Observation builder and helpers accept adapters, ensuring policy/telemetry consumers share the same contract.
 - Nightly reset logic moved into `townlet.world.agents.nightly_reset.NightlyResetService` and exposed through `WorldContext.apply_nightly_reset()`; employment helpers now delegate via the expanded `townlet.world.agents.employment.EmploymentService`.
+- Economy and perturbation logic extracted to `townlet.world.economy.EconomyService` and `townlet.world.perturbations.PerturbationService`; world and scheduler now delegate price spikes, outages, and arranged meets through these façades.
 - Phase 6 validation logged at `tmp/wp-c/phase4_validation.txt`; 50-tick smoke telemetry captured in `tmp/wp-c/phase6_smoke_telemetry.jsonl`.

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 from townlet.agents.models import Personality, personality_from_profile
 
 DEFAULT_PROFILE_NAME = "balanced"
@@ -15,7 +13,7 @@ def default_personality() -> Personality:
     return personality_from_profile(DEFAULT_PROFILE_NAME)[1]
 
 
-def resolve_personality_profile(name: str | None) -> Tuple[str, Personality]:
+def resolve_personality_profile(name: str | None) -> tuple[str, Personality]:
     """Resolve a profile name to canonical id + personality."""
 
     try:
@@ -46,6 +44,6 @@ def normalize_profile_name(name: str | None) -> str | None:
 __all__ = [
     "DEFAULT_PROFILE_NAME",
     "default_personality",
-    "resolve_personality_profile",
     "normalize_profile_name",
+    "resolve_personality_profile",
 ]

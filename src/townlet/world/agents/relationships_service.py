@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Dict, Tuple
 
 from townlet.agents.models import Personality
 from townlet.agents.relationship_modifiers import (
@@ -35,13 +34,13 @@ class RelationshipService:
         self._config = config
         self._tick_supplier = tick_supplier
         self._resolve_personality = personality_resolver
-        self._relationship_ledgers: Dict[str, RelationshipLedger] = {}
-        self._rivalry_ledgers: Dict[str, RivalryLedger] = {}
+        self._relationship_ledgers: dict[str, RelationshipLedger] = {}
+        self._rivalry_ledgers: dict[str, RivalryLedger] = {}
         self._relationship_churn = RelationshipChurnAccumulator(
             window_ticks=churn_window,
             max_samples=8,
         )
-        self._pinned_ties: Dict[tuple[str, str], tuple[float, float, float, int]] = {}
+        self._pinned_ties: dict[tuple[str, str], tuple[float, float, float, int]] = {}
 
     # ------------------------------------------------------------------
     # Core accessors
@@ -52,16 +51,16 @@ class RelationshipService:
             return None
         return ledger.tie_for(other_id)
 
-    def relationships_snapshot(self) -> Dict[str, Dict[str, Dict[str, float]]]:
-        payload: Dict[str, Dict[str, Dict[str, float]]] = {}
+    def relationships_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
+        payload: dict[str, dict[str, dict[str, float]]] = {}
         for agent_id, ledger in self._relationship_ledgers.items():
             data = ledger.snapshot()
             if data:
                 payload[agent_id] = data
         return payload
 
-    def rivalry_snapshot(self) -> Dict[str, Dict[str, float]]:
-        payload: Dict[str, Dict[str, float]] = {}
+    def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
+        payload: dict[str, dict[str, float]] = {}
         for agent_id, ledger in self._rivalry_ledgers.items():
             data = ledger.snapshot()
             if data:

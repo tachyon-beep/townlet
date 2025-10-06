@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from .core import (
-    AffordanceOutcome,
     AffordanceEnvironment,
+    AffordanceOutcome,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
     HookPayload,
@@ -17,8 +17,8 @@ from .service import AffordanceRuntimeService
 
 __all__ = [
     "AffordanceCoordinator",
-    "AffordanceOutcome",
     "AffordanceEnvironment",
+    "AffordanceOutcome",
     "AffordanceRuntimeContext",
     "AffordanceRuntimeService",
     "DefaultAffordanceRuntime",

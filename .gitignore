@@ -43,3 +43,4 @@ tmp/
 townlet_web/test-results/
 
 .ruff_cache/
+.tox/

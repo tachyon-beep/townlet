@@ -7,7 +7,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .runtime import AffordanceCoordinator
 from .core import (
     AffordanceEnvironment,
     AffordanceRuntimeContext,
@@ -16,6 +15,7 @@ from .core import (
     RunningAffordanceState,
     build_hook_payload,
 )
+from .runtime import AffordanceCoordinator
 
 
 @dataclass

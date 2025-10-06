@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-from .console.bridge import *  # noqa: F401,F403
+from .console.bridge import *  # noqa: F403

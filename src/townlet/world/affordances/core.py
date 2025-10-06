@@ -14,12 +14,12 @@ from typing import (
     TypedDict,
 )
 
-from townlet.world.preconditions import evaluate_preconditions
-from townlet.world.queue import QueueManager
 from townlet.world.agents.interfaces import (
     AgentRegistryProtocol,
     RelationshipServiceProtocol,
 )
+from townlet.world.preconditions import evaluate_preconditions
+from townlet.world.queue import QueueManager
 
 logger = logging.getLogger("townlet.world.grid")
 

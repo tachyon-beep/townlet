@@ -236,7 +236,7 @@ class PerturbationScheduler:
     def _apply_event(self, world: WorldState, event: ScheduledPerturbation) -> None:
         if event.kind is PerturbationKind.PRICE_SPIKE:
             magnitude = float(event.payload.get("magnitude", 1.0))
-            world.apply_price_spike(
+            world.perturbation_service.apply_price_spike(
                 event.event_id, magnitude=magnitude, targets=event.targets or ["global"]
             )
             for target in event.targets or ["global"]:
@@ -251,7 +251,7 @@ class PerturbationScheduler:
                 )
         elif event.kind is PerturbationKind.BLACKOUT:
             utility = str(event.payload.get("utility", "power"))
-            world.apply_utility_outage(event.event_id, utility)
+            world.perturbation_service.apply_utility_outage(event.event_id, utility)
             world._emit_event(
                 "perturbation_blackout",
                 {
@@ -262,7 +262,7 @@ class PerturbationScheduler:
             )
         elif event.kind is PerturbationKind.OUTAGE:
             utility = str(event.payload.get("utility", "water"))
-            world.apply_utility_outage(event.event_id, utility)
+            world.perturbation_service.apply_utility_outage(event.event_id, utility)
             world._emit_event(
                 "perturbation_outage",
                 {
@@ -273,7 +273,9 @@ class PerturbationScheduler:
             )
         elif event.kind is PerturbationKind.ARRANGED_MEET:
             location_label = event.payload.get("location")
-            world.apply_arranged_meet(location=location_label, targets=event.targets)
+            world.perturbation_service.apply_arranged_meet(
+                location=location_label, targets=event.targets
+            )
             world._emit_event(
                 "perturbation_arranged_meet",
                 {
@@ -288,10 +290,10 @@ class PerturbationScheduler:
         self, world: WorldState, event: ScheduledPerturbation
     ) -> None:
         if event.kind is PerturbationKind.PRICE_SPIKE:
-            world.clear_price_spike(event.event_id)
+            world.perturbation_service.clear_price_spike(event.event_id)
         elif event.kind in {PerturbationKind.BLACKOUT, PerturbationKind.OUTAGE}:
             utility = str(event.payload.get("utility", "power"))
-            world.clear_utility_outage(event.event_id, utility)
+            world.perturbation_service.clear_utility_outage(event.event_id, utility)
         world._emit_event(
             "perturbation_ended",
             {

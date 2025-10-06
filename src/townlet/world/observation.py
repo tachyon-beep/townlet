@@ -12,10 +12,14 @@ from typing import Any
 from townlet.world.observations.cache import build_local_cache as _build_local_cache
 from townlet.world.observations.context import (
     agent_context as _agent_context,
+)
+from townlet.world.observations.context import (
     snapshot_precondition_context as _snapshot_precondition_context,
 )
 from townlet.world.observations.views import (
     find_nearest_object_of_type as _find_nearest_object_of_type,
+)
+from townlet.world.observations.views import (
     local_view as _local_view,
 )
 

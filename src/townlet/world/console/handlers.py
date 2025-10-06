@@ -21,7 +21,7 @@ class WorldConsoleController:
     def __init__(self, world: WorldState) -> None:
         self._world = world
 
-    def register_handlers(self, console: "ConsoleService") -> None:
+    def register_handlers(self, console: ConsoleService) -> None:
         console.register_handler("noop", self.noop, mode="viewer")
         console.register_handler(
             "employment_status",
@@ -184,12 +184,12 @@ class WorldConsoleController:
             for key, value in needs_payload.items():
                 try:
                     needs[str(key)] = float(value)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError) as err:
                     raise ConsoleCommandError(
                         "invalid_args",
                         "needs must be numeric",
                         details={"needs": needs_payload},
-                    )
+                    ) from err
         wallet = payload.get("wallet")
         try:
             wallet_value = float(wallet) if wallet is not None else None

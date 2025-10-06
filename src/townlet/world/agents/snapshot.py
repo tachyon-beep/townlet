@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
 
 from townlet.agents.models import Personality
 
@@ -13,7 +12,7 @@ from .personality import (
     resolve_personality_profile,
 )
 
-_BASE_NEEDS: Tuple[str, ...] = ("hunger", "hygiene", "energy")
+_BASE_NEEDS: tuple[str, ...] = ("hunger", "hygiene", "energy")
 
 
 @dataclass
@@ -21,14 +20,14 @@ class AgentSnapshot:
     """Minimal agent state shared across world subsystems."""
 
     agent_id: str
-    position: Tuple[int, int]
-    needs: Dict[str, float]
+    position: tuple[int, int]
+    needs: dict[str, float]
     wallet: float = 0.0
-    home_position: Tuple[int, int] | None = None
+    home_position: tuple[int, int] | None = None
     origin_agent_id: str | None = None
     personality: Personality = field(default_factory=default_personality)
     personality_profile: str = DEFAULT_PROFILE_NAME
-    inventory: Dict[str, int] = field(default_factory=dict)
+    inventory: dict[str, int] = field(default_factory=dict)
     job_id: str | None = None
     on_shift: bool = False
     lateness_counter: int = 0
@@ -45,7 +44,7 @@ class AgentSnapshot:
     episode_tick: int = 0
 
     def __post_init__(self) -> None:
-        clamped: Dict[str, float] = {}
+        clamped: dict[str, float] = {}
         for key, value in self.needs.items():
             try:
                 numeric = float(value)

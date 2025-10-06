@@ -17,6 +17,8 @@ def __getattr__(name: str):  # pragma: no cover - lazy import glue
     if name in {"WorldRuntimeAdapter", "ensure_world_adapter"}:
         from .runtime_adapter import (
             WorldRuntimeAdapter as _WorldRuntimeAdapter,
+        )
+        from .runtime_adapter import (
             ensure_world_adapter as _ensure_world_adapter,
         )
 

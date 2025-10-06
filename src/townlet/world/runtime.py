@@ -76,12 +76,12 @@ class WorldRuntime:
         self._world = world
 
     def bind_world_adapter(
-        self, adapter: "WorldRuntimeAdapterProtocol"
+        self, adapter: WorldRuntimeAdapterProtocol
     ) -> None:  # pragma: no cover - thin setter
         self._world_adapter = adapter
 
     @property
-    def world_adapter(self) -> "WorldRuntimeAdapterProtocol | None":
+    def world_adapter(self) -> WorldRuntimeAdapterProtocol | None:
         return self._world_adapter
 
     def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
