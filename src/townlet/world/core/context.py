@@ -9,6 +9,7 @@ from typing import Any
 from townlet.console.service import ConsoleService
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.lifecycle import LifecycleService
 from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.employment_runtime import EmploymentRuntime
@@ -36,6 +37,7 @@ class WorldContext:
     employment: EmploymentCoordinator
     employment_runtime: EmploymentRuntime
     employment_service: EmploymentService
+    lifecycle_service: LifecycleService
     nightly_reset_service: NightlyResetService
     relationships: RelationshipService
     config: object

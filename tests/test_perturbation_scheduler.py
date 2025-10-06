@@ -164,7 +164,7 @@ def test_arranged_meet_relocates_agents() -> None:
             break
     assert meet_location is not None, "expected object with position for arranged meet"
 
-    event = scheduler.schedule_manual(
+    scheduler.schedule_manual(
         world,
         spec_name="arranged_meet",
         current_tick=0,

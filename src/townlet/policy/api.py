@@ -20,4 +20,4 @@ def resolve_policy_backend(
     return resolve_policy(selected, **kwargs)
 
 
-__all__ = ["resolve_policy_backend", "DEFAULT_POLICY_PROVIDER"]
+__all__ = ["DEFAULT_POLICY_PROVIDER", "resolve_policy_backend"]

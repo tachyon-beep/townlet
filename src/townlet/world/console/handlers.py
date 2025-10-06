@@ -168,7 +168,10 @@ class WorldConsoleController:
                     "invalid_args", "home_position must be integers"
                 ) from error
             home_tuple = (hx, hy)
-            if home_tuple != (x, y) and not world._is_position_walkable(home_tuple):
+            if (
+                home_tuple != (x, y)
+                and not world.lifecycle_service.is_position_walkable(home_tuple)
+            ):
                 raise ConsoleCommandError(
                     "invalid_args",
                     "home_position not walkable",

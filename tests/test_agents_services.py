@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from townlet.config import load_config
 from townlet.agents.models import PersonalityProfiles
+from townlet.config import load_config
+from townlet.world.affordances.core import AffordanceEnvironment, AffordanceRuntimeContext
 from townlet.world.agents.registry import AgentRegistry
 from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.agents.snapshot import AgentSnapshot
-from townlet.world.affordances.core import AffordanceEnvironment, AffordanceRuntimeContext
 from townlet.world.queue import QueueManager
 
 

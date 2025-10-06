@@ -45,6 +45,7 @@ def test_affordance_before_after_hooks_fire_once() -> None:
     assert world.affordance_runtime.start("alice", "bed_1", "rest_sleep", tick=world.tick)[0]
 
     running = world.running_affordances_snapshot()["bed_1"]
+    assert running.agent_id == "alice"
     assert hook_log == [("before", "on_attempt_sleep")]
 
     world.affordance_runtime.running_affordances["bed_1"].duration_remaining = 0

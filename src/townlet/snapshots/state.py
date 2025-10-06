@@ -22,8 +22,8 @@ from townlet.snapshots.migrations import (
     migration_registry,
 )
 from townlet.utils import decode_rng_state, encode_rng, encode_rng_state
-from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 from townlet.world.core.runtime_adapter import ensure_world_adapter
+from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
 
 if TYPE_CHECKING:
     from townlet.stability.monitor import StabilityMonitor

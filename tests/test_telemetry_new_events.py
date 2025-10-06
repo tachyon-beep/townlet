@@ -324,15 +324,12 @@ def test_rivalry_events_surface_in_telemetry() -> None:
     telemetry = loop.telemetry
 
     for agent_id, position in (("alice", (0, 0)), ("bob", (1, 0))):
-        snapshot = AgentSnapshot(
-            agent_id=agent_id,
-            position=position,
+        world.lifecycle_service.spawn_agent(
+            agent_id,
+            position,
             needs={"hunger": 0.6, "hygiene": 0.6, "energy": 0.6},
             wallet=1.0,
         )
-        world.agents[agent_id] = snapshot
-        world._assign_job_if_missing(snapshot)
-        world._sync_agent_spawn(snapshot)
 
     world.register_rivalry_conflict("alice", "bob", intensity=1.5, reason="queue_conflict")
     events = world.drain_events()

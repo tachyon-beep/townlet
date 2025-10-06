@@ -69,7 +69,7 @@ class SnapshotMigrationRegistry:
             for edge in self._neighbours(node):
                 if edge.target in visited:
                     continue
-                next_path = path + [edge]
+                next_path = [*path, edge]
                 if edge.target == goal:
                     return next_path
                 visited.add(edge.target)

@@ -27,16 +27,13 @@ def _spawn_agent(
     hygiene: float = 0.7,
     energy: float = 0.6,
 ) -> AgentSnapshot:
-    snapshot = AgentSnapshot(
-        agent_id="alice",
-        position=(0, 0),
+    snapshot = world.lifecycle_service.spawn_agent(
+        "alice",
+        (0, 0),
         needs={"hunger": hunger, "hygiene": hygiene, "energy": energy},
         wallet=0.0,
     )
-    world.agents[snapshot.agent_id] = snapshot
-    world._assign_job_if_missing(snapshot)
-    world._sync_agent_spawn(snapshot)
-    return snapshot
+    return world.agents[snapshot.agent_id]
 
 
 def test_need_decay_matches_config() -> None:

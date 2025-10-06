@@ -490,7 +490,7 @@ def test_dispatch_palette_selection_handles_queue_full() -> None:
     palette.status_message = None
     try:
         dispatch_palette_selection(snapshot, palette, executor)
-        assert False, "Expected CommandQueueFull"
+        raise AssertionError("Expected CommandQueueFull")
     except CommandQueueFull:
         assert palette.status_message is not None
         assert "Queue saturated" in palette.status_message

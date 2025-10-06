@@ -38,6 +38,7 @@ This roadmap decomposes the transition from the current Townlet implementation t
   - Employment helpers now route through the expanded `townlet.world.agents.employment.EmploymentService`, and the runtime adapter uses the façade for context lookups (`tests/test_world_employment_delegation.py`).
   - Economy and utility upkeep extracted to `townlet.world.economy.EconomyService`; `WorldState` and `PerturbationService` delegate price spikes and outages through the façade (`tests/test_world_economy_delegation.py`).
   - Perturbation scheduling now relies on `townlet.world.perturbations.PerturbationService`, removing remaining price/outage logic from `world/grid.py` (`tests/test_world_perturbation_service.py`).
+  - Phase 5 Step 4 validation captured telemetry and observation baselines post-extraction (telemetry identical for the first five ticks; longer run deltas are limited to additional zeroed ticks). `world/grid.py` now sits at 1 799 LOC (down ~180 from Phase 4), with lifecycle/spawn helpers earmarked as the next extraction slice.
 - **Dependencies**: Work Package 1 interfaces to ensure consumers rely on abstractions, reducing coupling risk.
 - **Estimated Duration**: 2–3 weeks with staged merges.
 - **Exit Criteria**: `world/grid.py` shrinks to orchestration glue (<500 LOC) and all imports reference new submodules.

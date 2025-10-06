@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 import pytest
 
@@ -14,15 +15,14 @@ from townlet.core import (
     resolve_telemetry,
     resolve_world,
     telemetry_registry,
-    world_registry,
 )
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
     WorldRuntimeProtocol,
 )
-from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
 from townlet.scheduler.perturbations import PerturbationScheduler
 
 

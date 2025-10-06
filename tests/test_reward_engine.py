@@ -360,7 +360,7 @@ def test_positive_rewards_blocked_within_death_window() -> None:
 
     window = int(config.rewards.clip.no_positive_within_death_ticks)
     engine.compute(world, {"alice": True})
-    for offset in range(1, window):
+    for _offset in range(1, window):
         world.tick += 1
         reward = engine.compute(world, {"alice": False})["alice"]
         assert reward <= 0.0

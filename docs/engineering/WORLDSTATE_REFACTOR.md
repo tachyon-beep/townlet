@@ -20,12 +20,13 @@
 - Perturbation scheduling (`src/townlet/scheduler/perturbations.py`) delegates through `townlet.world.perturbations.PerturbationService`, which reuses the economy façade for price spikes/outages and centralises arranged meet moves (`tests/test_world_perturbation_service.py`).
 - Legacy `WorldState` helpers (`set_price_target`, `apply_price_spike`, `apply_arranged_meet`, `utility_snapshot`, etc.) now proxy directly to the new services. Callers are encouraged to resolve `world.economy_service` / `world.perturbation_service` to avoid future deprecation churn.
 - Console handlers, telemetry publisher, and perturbation scheduler were updated to consume the facades; downstream extensions should follow the same pattern when introducing new price/outage behaviour.
+- Lifecycle orchestration has a dedicated `townlet.world.agents.lifecycle.LifecycleService`; `WorldState` delegates spawn/teleport/remove/kill/respawn, and `WorldContext` exposes the façade for downstream consumers. Console spawn validation and lifecycle-focused tests now rely on the service instead of private grid helpers.
 
 ### Migration notes – employment & lifecycle consumers
 
 - Employment-oriented code (telemetry exporters, console manual exits, observation builders) should import from `townlet.world.agents.employment` rather than reaching into `EmploymentRuntime`. The `WorldState` wrappers remain but are strictly delegations.
 - Nightly reset and employment shift helpers are available via `WorldContext.nightly_reset_service` / `WorldContext.employment_service`, ensuring adapters and tests can request the façade without touching grid internals.
-- Lifecycle mechanics (spawn, teleport, remove, respawn, reservation sync) are the next extraction target. Until `townlet.world.agents.lifecycle` lands, continue using the existing `WorldState` APIs, but plan to redirect integration points toward the forthcoming service once published.
+- Lifecycle mechanics (spawn, teleport, remove, respawn, reservation sync) now live in `townlet.world.agents.lifecycle.LifecycleService`; `WorldState` delegates public helpers to the service and exposes it via `WorldContext.lifecycle_service`. Console handlers, lifecycle manager, and telemetry tests use the façade to avoid private-grid coupling.
 
 ## Phase 6 Validation (2025-10-24)
 

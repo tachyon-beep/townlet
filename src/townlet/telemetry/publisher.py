@@ -952,7 +952,7 @@ class TelemetryPublisher:
     def _capture_affordance_runtime(
         self,
         *,
-        world: WorldState | "WorldRuntimeAdapterProtocol",
+        world: WorldState | WorldRuntimeAdapterProtocol,
         events: Iterable[Mapping[str, object]] | None,
         tick: int,
     ) -> None:
@@ -1615,7 +1615,7 @@ class TelemetryPublisher:
 
     def _capture_relationship_snapshot(
         self,
-        world: WorldState | "WorldRuntimeAdapterProtocol",
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> dict[str, dict[str, dict[str, float]]]:
         adapter = ensure_world_adapter(world)
         raw = adapter.relationships_snapshot() or {}
@@ -1758,7 +1758,7 @@ class TelemetryPublisher:
     def _build_relationship_summary(
         self,
         snapshot: Mapping[str, Mapping[str, Mapping[str, float]]],
-        world: WorldState | "WorldRuntimeAdapterProtocol",
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> dict[str, object]:
         adapter = ensure_world_adapter(world)
         summary: dict[str, object] = {}
@@ -1795,7 +1795,7 @@ class TelemetryPublisher:
 
     def _build_personality_snapshot(
         self,
-        world: WorldState | "WorldRuntimeAdapterProtocol",
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> dict[str, object]:
         adapter = ensure_world_adapter(world)
         snapshot = {
@@ -2281,7 +2281,7 @@ class TelemetryPublisher:
 
     def _update_kpi_history(
         self,
-        world: WorldState | "WorldRuntimeAdapterProtocol",
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> None:
         adapter = ensure_world_adapter(world)
         queue_sum = float(

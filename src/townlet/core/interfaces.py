@@ -26,10 +26,10 @@ TerminationMapping: TypeAlias = Mapping[str, bool]
 class WorldRuntimeProtocol(Protocol):
     """Interface for advancing world state and handling console/actions."""
 
-    def bind_world(self, world: "WorldState") -> None:
+    def bind_world(self, world: WorldState) -> None:
         """Rebind the runtime to a freshly constructed world instance."""
 
-    def queue_console(self, operations: Iterable["ConsoleCommandEnvelope"]) -> None:
+    def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
         """Buffer console operations for the next tick."""
 
     def apply_actions(self, actions: ActionMapping) -> None:
@@ -39,7 +39,7 @@ class WorldRuntimeProtocol(Protocol):
         self,
         *,
         tick: int,
-        console_operations: Iterable["ConsoleCommandEnvelope"] | None = None,
+        console_operations: Iterable[ConsoleCommandEnvelope] | None = None,
         action_provider: ActionProvider | None = None,
         policy_actions: ActionMapping | None = None,
     ) -> RuntimeStepResult:
@@ -65,7 +65,7 @@ class PolicyBackendProtocol(Protocol):
     def reset_state(self) -> None:
         """Reset any cached policy state (e.g., trajectories, RNG streams)."""
 
-    def decide(self, world: "WorldState", tick: int) -> Mapping[str, object]:
+    def decide(self, world: WorldState, tick: int) -> Mapping[str, object]:
         """Return an action mapping for the provided world/tick."""
 
     def post_step(
@@ -107,14 +107,14 @@ class TelemetrySinkProtocol(Protocol):
     def drain_console_buffer(self) -> Iterable[object]:
         """Return buffered console commands collected since the last tick."""
 
-    def record_console_results(self, results: Iterable["ConsoleCommandResult"]) -> None:
+    def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         """Persist console outputs generated during tick execution."""
 
     def publish_tick(
         self,
         *,
         tick: int,
-        world: "WorldState",
+        world: WorldState,
         observations: ObservationBatch,
         rewards: RewardMapping,
         events: Iterable[Mapping[str, object]] | None = None,

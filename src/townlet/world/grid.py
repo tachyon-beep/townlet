@@ -36,6 +36,7 @@ from townlet.world.affordances import (
     apply_affordance_outcome,
 )
 from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.lifecycle import LifecycleService
 from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.agents.personality import (
     default_personality,
@@ -268,6 +269,7 @@ class WorldState:
     employment: EmploymentCoordinator = field(init=False, repr=False)
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
     _employment_service: EmploymentService = field(init=False, repr=False)
+    _lifecycle_service: LifecycleService = field(init=False, repr=False)
     _nightly_reset_service: NightlyResetService = field(init=False, repr=False)
     _economy_service: EconomyService = field(init=False, repr=False)
     _perturbation_service: PerturbationService = field(init=False, repr=False)
@@ -335,16 +337,6 @@ class WorldState:
         self._employment_service = EmploymentService(
             coordinator=self.employment,
             runtime=self._employment_runtime,
-        )
-        self._nightly_reset_service = NightlyResetService(
-            agents=self.agents,
-            queue_manager=self.queue_manager,
-            active_reservations=self._active_reservations,
-            employment_service=self._employment_service,
-            emit_event=self._emit_event,
-            sync_reservation=self._sync_reservation,
-            sync_reservation_for_agent=self._sync_reservation_for_agent,
-            is_tile_blocked=lambda position: position in self._objects_by_position,
         )
         self._economy_service = EconomyService(
             config=self.config,
@@ -486,6 +478,38 @@ class WorldState:
             hook_registry=self._hook_registry,
         )
         affordance_env.dispatch_hooks = self._affordance_service.dispatch_hooks
+        self._lifecycle_service = LifecycleService(
+            agents=self.agents,
+            objects=self.objects,
+            queue_manager=self.queue_manager,
+            spatial_index=self._spatial_index,
+            employment_service=self._employment_service,
+            relationship_service=self._relationships,
+            affordance_service=self._affordance_service,
+            embedding_allocator=self.embedding_allocator,
+            queue_conflicts=self._queue_conflicts,
+            recent_meal_participants=self._recent_meal_participants,
+            job_keys=tuple(self._job_keys),
+            respawn_counters=self._respawn_counters,
+            emit_event=self._emit_event,
+            request_ctx_reset=self.request_ctx_reset,
+            sync_reservation=self._sync_reservation,
+            tick_supplier=lambda: self.tick,
+            update_basket_metrics=self._economy_service.update_basket_metrics,
+            choose_personality_profile=self._choose_personality_profile,
+            objects_by_position=self._objects_by_position,
+            active_reservations=self._active_reservations,
+        )
+        self._nightly_reset_service = NightlyResetService(
+            agents=self.agents,
+            queue_manager=self.queue_manager,
+            active_reservations=self._active_reservations,
+            employment_service=self._employment_service,
+            emit_event=self._emit_event,
+            sync_reservation=self._sync_reservation,
+            sync_reservation_for_agent=self._lifecycle_service.sync_reservation_for_agent,
+            is_tile_blocked=lambda position: position in self._objects_by_position,
+        )
         self.rebuild_spatial_index()
         self.context = WorldContext(
             agents=self.agents,
@@ -499,6 +523,7 @@ class WorldState:
             employment=self.employment,
             employment_runtime=self._employment_runtime,
             employment_service=self._employment_service,
+            lifecycle_service=self._lifecycle_service,
             nightly_reset_service=self._nightly_reset_service,
             relationships=self._relationships,
             config=self.config,
@@ -521,6 +546,10 @@ class WorldState:
     @property
     def employment_service(self) -> EmploymentService:
         return self._employment_service
+
+    @property
+    def lifecycle_service(self) -> LifecycleService:
+        return self._lifecycle_service
 
     @property
     def nightly_reset_service(self) -> NightlyResetService:
@@ -549,14 +578,7 @@ class WorldState:
         return self._relationships
 
     def generate_agent_id(self, base_id: str) -> str:
-        base = base_id or "agent"
-        counter = self._respawn_counters.get(base, 0)
-        while True:
-            counter += 1
-            candidate = f"{base}#{counter}"
-            if candidate not in self.agents:
-                self._respawn_counters[base] = counter
-                return candidate
+        return self._lifecycle_service.generate_agent_id(base_id)
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
@@ -667,69 +689,18 @@ class WorldState:
     ) -> AgentSnapshot:
         """Create a new agent at ``position`` and register supporting state."""
 
-        if agent_id in self.agents:
-            raise ValueError(f"agent '{agent_id}' already exists")
-
-        dest = (int(position[0]), int(position[1]))
-        if not self._is_position_walkable(dest):
-            raise ValueError("spawn position not walkable")
-
-        if home_position is None:
-            home_coord = dest
-        else:
-            home_coord = (int(home_position[0]), int(home_position[1]))
-        wallet_value = float(wallet) if wallet is not None else 0.0
-        resolved_needs = dict(needs or {})
-        profile_name = personality_profile or ""
-
-        snapshot = AgentSnapshot(
-            agent_id=agent_id,
-            position=dest,
-            needs=resolved_needs,
-            wallet=wallet_value,
-            home_position=home_coord,
-            personality_profile=profile_name,
+        return self._lifecycle_service.spawn_agent(
+            agent_id,
+            position,
+            needs=needs,
+            home_position=home_position,
+            wallet=wallet,
+            personality_profile=personality_profile,
         )
-        self.agents[agent_id] = snapshot
-        self._spatial_index.insert_agent(agent_id, snapshot.position)
-        self._assign_job_if_missing(snapshot)
-        self._sync_agent_spawn(snapshot)
-        self._update_basket_metrics()
-        self.request_ctx_reset(agent_id)
-        self._emit_event(
-            "agent_spawned",
-            {"agent_id": agent_id, "position": list(snapshot.position)},
-        )
-        return snapshot
 
     def teleport_agent(self, agent_id: str, position: tuple[int, int]) -> tuple[int, int]:
         """Teleport ``agent_id`` to ``position`` if the tile is available."""
-
-        snapshot = self.agents.get(agent_id)
-        if snapshot is None:
-            raise KeyError(agent_id)
-
-        dest = (int(position[0]), int(position[1]))
-        if dest in self._objects_by_position:
-            raise ValueError("destination blocked by object")
-
-        occupied = {
-            other_id
-            for other_id, other in self.agents.items()
-            if other_id != agent_id and other.position == dest
-        }
-        if occupied:
-            raise ValueError("destination occupied")
-
-        snapshot.position = dest
-        self._spatial_index.move_agent(agent_id, dest)
-        self._sync_reservation_for_agent(agent_id)
-        self.request_ctx_reset(agent_id)
-        self._emit_event(
-            "agent_teleported",
-            {"agent_id": agent_id, "position": list(dest)},
-        )
-        return dest
+        return self._lifecycle_service.teleport_agent(agent_id, position)
 
     def set_price_target(self, key: str, value: float) -> float:
         """Update the economy price target for ``key`` and refresh metrics."""
@@ -848,150 +819,27 @@ class WorldState:
         }
         return context
 
-    def _assign_job_if_missing(self, snapshot: AgentSnapshot) -> None:
-        if snapshot.job_id is None and self._job_keys:
-            snapshot.job_id = self._job_keys[len(self.agents) % len(self._job_keys)]
-
     def remove_agent(self, agent_id: str, tick: int) -> dict[str, Any] | None:
-        snapshot = self.agents.pop(agent_id, None)
-        if snapshot is None:
-            return None
-        self._spatial_index.remove_agent(agent_id)
-        self.queue_manager.remove_agent(agent_id, tick)
-        self._affordance_service.remove_agent(agent_id)
-        for object_id, occupant in list(self._active_reservations.items()):
-            if occupant == agent_id:
-                self.queue_manager.release(object_id, agent_id, tick, success=False)
-                self._active_reservations.pop(object_id, None)
-                obj = self.objects.get(object_id)
-                if obj is not None:
-                    obj.occupied_by = None
-                    self._spatial_index.set_reservation(obj.position, False)
-        self.embedding_allocator.release(agent_id, tick)
-        self._employment_runtime.remove_agent(agent_id)
-        self._relationships.remove_agent(agent_id)
-        for record in self._recent_meal_participants.values():
-            participants = record.get("agents")
-            if isinstance(participants, set):
-                participants.discard(agent_id)
-        self._queue_conflicts.remove_agent(agent_id)
-        blueprint = {
-            "agent_id": snapshot.agent_id,
-            "origin_agent_id": snapshot.origin_agent_id or snapshot.agent_id,
-            "personality": snapshot.personality,
-            "personality_profile": snapshot.personality_profile,
-            "job_id": snapshot.job_id,
-            "position": snapshot.position,
-            "home_position": snapshot.home_position,
-        }
-        self._emit_event(
-            "agent_removed",
-            {
-                "agent_id": snapshot.agent_id,
-                "tick": tick,
-            },
-        )
-        return blueprint
+        return self._lifecycle_service.remove_agent(agent_id, tick)
 
     def kill_agent(self, agent_id: str, *, reason: str | None = None) -> bool:
         """Remove an agent from the world and emit a kill notification."""
-
-        blueprint = self.remove_agent(agent_id, self.tick)
-        if blueprint is None:
-            return False
-        self._emit_event(
-            "agent_killed",
-            {
-                "agent_id": agent_id,
-                "reason": reason,
-                "tick": self.tick,
-            },
-        )
-        return True
+        return self._lifecycle_service.kill_agent(agent_id, reason=reason)
 
     def respawn_agent(self, blueprint: Mapping[str, Any]) -> None:
-        agent_id = str(blueprint.get("agent_id", ""))
-        if not agent_id or agent_id in self.agents:
-            return
-        origin_agent_id = str(
-            blueprint.get("origin_agent_id") or blueprint.get("agent_id") or agent_id
-        )
-        position = blueprint.get("position")
-        position_tuple: tuple[int, int]
-        if (
-            isinstance(position, (list, tuple))
-            and len(position) == 2
-            and all(isinstance(coord, (int, float)) for coord in position)
-        ):
-            x, y = int(position[0]), int(position[1])
-            candidate = (x, y)
-            position_tuple = candidate if self._is_position_walkable(candidate) else (0, 0)
-        else:
-            position_tuple = (0, 0)
+        self._lifecycle_service.respawn_agent(blueprint)
 
-        home_position = blueprint.get("home_position")
-        home_tuple: tuple[int, int] | None
-        if (
-            isinstance(home_position, (list, tuple))
-            and len(home_position) == 2
-            and all(isinstance(coord, (int, float)) for coord in home_position)
-        ):
-            home_tuple = (int(home_position[0]), int(home_position[1]))
-        elif isinstance(home_position, tuple) and len(home_position) == 2:
-            home_tuple = (int(home_position[0]), int(home_position[1]))
-        else:
-            home_tuple = None
-        profile_field = blueprint.get("personality_profile")
-        resolved_profile, resolved_personality = self._choose_personality_profile(
-            agent_id,
-            profile_field if isinstance(profile_field, str) else None,
-        )
-        personality_override = blueprint.get("personality")
-        if isinstance(personality_override, Personality):
-            resolved_personality = personality_override
-        snapshot = AgentSnapshot(
-            agent_id=agent_id,
-            position=position_tuple,
-            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
-            wallet=0.0,
-            home_position=home_tuple,
-            origin_agent_id=origin_agent_id,
-            personality=resolved_personality,
-            personality_profile=resolved_profile,
-        )
-        job_id = blueprint.get("job_id")
-        if isinstance(job_id, str):
-            snapshot.job_id = job_id
-        self.agents[agent_id] = snapshot
-        self._spatial_index.insert_agent(agent_id, snapshot.position)
-        self._assign_job_if_missing(snapshot)
-        self._sync_agent_spawn(snapshot)
-        self._emit_event(
-            "agent_respawn",
-            {
-                "agent_id": agent_id,
-                "original_agent_id": origin_agent_id,
-                "tick": self.tick,
-            },
-        )
+    def _assign_job_if_missing(self, snapshot: AgentSnapshot) -> None:
+        self._lifecycle_service.assign_job_if_missing(snapshot)
 
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
-        if snapshot.home_position is None:
-            snapshot.home_position = snapshot.position
-        self._employment_service.reset_context(snapshot.agent_id)
-        self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
+        self._lifecycle_service.sync_agent_spawn(snapshot)
 
     def _sync_reservation_for_agent(self, agent_id: str) -> None:
-        for object_id, occupant in list(self._active_reservations.items()):
-            if occupant == agent_id:
-                self._sync_reservation(object_id)
+        self._lifecycle_service.sync_reservation_for_agent(agent_id)
 
     def _is_position_walkable(self, position: tuple[int, int]) -> bool:
-        if any(agent.position == position for agent in self.agents.values()):
-            return False
-        if position in self._objects_by_position:
-            return False
-        return True
+        return self._lifecycle_service.is_position_walkable(position)
 
     def register_object(
         self,

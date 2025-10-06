@@ -13,13 +13,13 @@ import numpy as np
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import ObservationVariant, SimulationConfig
 from townlet.world.core.runtime_adapter import ensure_world_adapter
-from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 from townlet.world.observations.cache import (
     build_local_cache as observation_build_local_cache,
 )
 from townlet.world.observations.context import (
     agent_context as observation_agent_context,
 )
+from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 from townlet.world.observations.views import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )

@@ -7,8 +7,8 @@ import pytest
 from townlet.config import RuntimeProviderConfig, load_config
 from townlet.core import policy_registry, telemetry_registry
 from townlet.policy.fallback import StubPolicyBackend
-from townlet.telemetry.fallback import StubTelemetrySink
 from townlet.policy.training_orchestrator import PolicyTrainingOrchestrator
+from townlet.telemetry.fallback import StubTelemetrySink
 
 
 def test_training_orchestrator_run_replay(tmp_path: Path) -> None:

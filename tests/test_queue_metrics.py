@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from townlet.config import load_config
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import WorldState
 
 
 def _make_world() -> WorldState:
@@ -20,16 +20,13 @@ def test_queue_metrics_capture_ghost_step_and_rotation() -> None:
     world.objects["fridge_a"].stock["meals"] = 10
     world.store_stock["fridge_a"] = world.objects["fridge_a"].stock
 
-    for agent_id in ("alice", "bob"):
-        snapshot = AgentSnapshot(
-            agent_id=agent_id,
-            position=(0, 0),
+    for agent_id, position in (("alice", (0, 0)), ("bob", (1, 0))):
+        world.lifecycle_service.spawn_agent(
+            agent_id,
+            position,
             needs={"hunger": 0.6, "hygiene": 0.6, "energy": 0.6},
             wallet=1.0,
         )
-        world.agents[agent_id] = snapshot
-        world._assign_job_if_missing(snapshot)
-        world._sync_agent_spawn(snapshot)
 
     queue = world.queue_manager
     queue._settings.ghost_step_after = 2
@@ -48,15 +45,12 @@ def test_queue_metrics_capture_ghost_step_and_rotation() -> None:
 
 def test_nightly_reset_preserves_queue_metrics() -> None:
     world = _make_world()
-    snapshot = AgentSnapshot(
-        agent_id="alice",
-        position=(0, 0),
+    world.lifecycle_service.spawn_agent(
+        "alice",
+        (0, 0),
         needs={"hunger": 0.6, "hygiene": 0.6, "energy": 0.6},
         wallet=1.0,
     )
-    world.agents[snapshot.agent_id] = snapshot
-    world._assign_job_if_missing(snapshot)
-    world._sync_agent_spawn(snapshot)
     world.queue_manager._metrics["ghost_step_events"] = 5
     world.apply_nightly_reset()
     metrics = world.queue_manager.metrics()
