@@ -11,7 +11,6 @@ from .bc import (
     load_bc_samples,
 )
 from .runner import PolicyRuntime, TrainingHarness
-from .training_orchestrator import PolicyTrainingOrchestrator
 
 __all__ = [
     "DEFAULT_POLICY_PROVIDER",
@@ -19,7 +18,6 @@ __all__ = [
     "BCTrainingConfig",
     "BCTrajectoryDataset",
     "PolicyRuntime",
-    "PolicyTrainingOrchestrator",
     "TrainingHarness",
     "evaluate_bc_policy",
     "load_bc_samples",

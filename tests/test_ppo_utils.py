@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-import torch
+import pytest
 
-from townlet.policy.ppo import utils
+from townlet.policy.models import torch_available
+
+pytestmark = pytest.mark.skipif(not torch_available(), reason="Torch not installed")
+
+import torch  # noqa: E402
+
+from townlet.policy.ppo import utils  # noqa: E402
 
 
 def test_compute_gae_single_step() -> None:

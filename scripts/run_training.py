@@ -7,6 +7,7 @@ from pathlib import Path
 
 from townlet.config import PPOConfig
 from townlet.config.loader import load_config
+from townlet.policy.models import torch_available
 from townlet.policy.replay import ReplayDatasetConfig
 from townlet.policy.training_orchestrator import PolicyTrainingOrchestrator
 
@@ -291,6 +292,10 @@ def main() -> None:
         raise ValueError(f"Unsupported training mode '{mode}'")
 
     if mode == "bc":
+        if not torch_available():
+            raise SystemExit(
+                "PyTorch not installed. Install the 'ml' extra or choose a non-ML mode (e.g., --mode replay)."
+            )
         bc_manifest = args.bc_manifest or config.training.bc.manifest
         if bc_manifest is None:
             raise ValueError("BC mode requires --bc-manifest or config.training.bc.manifest")
@@ -299,6 +304,10 @@ def main() -> None:
         return
 
     if mode == "anneal":
+        if not torch_available():
+            raise SystemExit(
+                "PyTorch not installed. Install the 'ml' extra to run anneal stages."
+            )
         bc_manifest = args.bc_manifest or config.training.bc.manifest
         if bc_manifest is None:
             raise ValueError("Anneal mode requires --bc-manifest or config.training.bc.manifest")
@@ -402,6 +411,10 @@ def main() -> None:
         )
 
     if train_ppo:
+        if not torch_available():
+            raise SystemExit(
+                "PyTorch not installed. Install the 'ml' extra or run with --mode replay to avoid PPO."
+            )
         if mode == "replay":
             if dataset_config is None:
                 raise ValueError(

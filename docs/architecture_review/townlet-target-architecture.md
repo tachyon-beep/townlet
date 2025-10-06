@@ -58,6 +58,11 @@ The target architecture keeps the existing simulation loop as the orchestrator w
 - **PyTorch Backend**: Provided via `[ml]` optional extra, constructed only when dependency available.
 - **External Integrations**: Additional backends (e.g., HTTP microservices) can be registered without altering the loop.
 
+Update (WP‑E): ML‑dependent utilities (PPO ops, BC trainer) are hosted under
+`townlet.policy.backends.pytorch` and imported lazily via shims to ensure
+pytest collection without Torch. See `docs/guides/policy_backends.md` for
+configuration and fallback behavior.
+
 ### 3.3 Telemetry Pipelines
 - **Aggregation Services**: Domain-focused collectors produce structured events (employment metrics, queue lengths, stability indicators).
 - **Transformation Layer**: Normalizes events, applies redaction, and attaches metadata.

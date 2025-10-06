@@ -22,14 +22,6 @@ from townlet.policy.models import (
     TorchNotAvailableError,
     torch_available,
 )
-from townlet.policy.ppo.utils import (
-    AdvantageReturns,
-    clipped_value_loss,
-    compute_gae,
-    normalize_advantages,
-    policy_surrogate,
-    value_baseline_from_old_preds,
-)
 from townlet.policy.replay import (
     ReplayBatch,
     ReplayDataset,
@@ -75,6 +67,21 @@ class PolicyTrainingOrchestrator:
         self._promotion_eval_counter = 0
         self._promotion_pass_streak = 0
         self._last_anneal_status: str | None = None
+
+    @staticmethod
+    def _ppo_ops():
+        """Import PPO ops lazily to avoid Torch dependency at import time.
+
+        Returns a module-like object with the expected functions when PyTorch
+        is available; otherwise raises TorchNotAvailableError when called.
+        """
+        if not torch_available():  # pragma: no cover - exercised in ML-enabled envs
+            raise TorchNotAvailableError(
+                "PyTorch is required for PPO operations. Install the 'ml' extra."
+            )
+        from townlet.policy.backends.pytorch import ppo_utils as _ops  # type: ignore
+
+        return _ops
 
     @property
     def transitions(self) -> dict[str, dict[str, object]]:
@@ -514,7 +521,8 @@ class PolicyTrainingOrchestrator:
                 dones = torch.from_numpy(batch.dones.astype(np.float32)).float().to(device)
                 value_preds_old = torch.from_numpy(batch.value_preds).float().to(device)
 
-                gae: AdvantageReturns = compute_gae(
+                ops = self._ppo_ops()
+                gae = ops.compute_gae(
                     rewards=rewards,
                     value_preds=value_preds_old,
                     dones=dones,
@@ -524,9 +532,9 @@ class PolicyTrainingOrchestrator:
                 advantages = gae.advantages
                 returns = gae.returns
                 if ppo_cfg.advantage_normalization:
-                    advantages = normalize_advantages(advantages.view(-1)).view_as(advantages)
+                    advantages = ops.normalize_advantages(advantages.view(-1)).view_as(advantages)
 
-                baseline = value_baseline_from_old_preds(value_preds_old, timesteps)
+                baseline = ops.value_baseline_from_old_preds(value_preds_old, timesteps)
 
                 flat_advantages = advantages.reshape(-1)
                 flat_returns = returns.reshape(-1)
@@ -569,13 +577,13 @@ class PolicyTrainingOrchestrator:
                     new_log_probs = dist.log_prob(mb_actions)
                     entropy = dist.entropy().mean()
 
-                    policy_loss, clip_frac = policy_surrogate(
+                    policy_loss, clip_frac = ops.policy_surrogate(
                         new_log_probs=new_log_probs,
                         old_log_probs=mb_old_log_probs,
                         advantages=mb_advantages,
                         clip_param=ppo_cfg.clip_param,
                     )
-                    value_loss = clipped_value_loss(
+                    value_loss = ops.clipped_value_loss(
                         new_values=values,
                         returns=mb_returns,
                         old_values=mb_old_values,

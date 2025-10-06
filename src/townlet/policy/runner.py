@@ -20,7 +20,8 @@ from townlet.policy.models import (
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.grid import WorldState
 
-from .training_orchestrator import PolicyTrainingOrchestrator
+# NOTE: Training orchestrator is imported lazily by TrainingHarness to avoid
+# importing Torch-dependent modules during test collection in non-ML envs.
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
@@ -458,8 +459,12 @@ class PolicyRuntime:
         )
         return ConflictAwarePolicyNetwork(config)
 
-class TrainingHarness(PolicyTrainingOrchestrator):
-    """Backward-compatible alias for PolicyTrainingOrchestrator."""
+class TrainingHarness:
+    """Backward-compatible, lazy wrapper around PolicyTrainingOrchestrator.
+
+    This indirection prevents importing Torch-dependent modules at import time
+    when the training harness is not used.
+    """
 
     def __init__(self, config: SimulationConfig) -> None:
         warnings.warn(
@@ -467,4 +472,9 @@ class TrainingHarness(PolicyTrainingOrchestrator):
             DeprecationWarning,
             stacklevel=2,
         )
-        super().__init__(config=config)
+        from .training_orchestrator import PolicyTrainingOrchestrator
+
+        self._impl = PolicyTrainingOrchestrator(config=config)
+
+    def __getattr__(self, name: str):  # pragma: no cover - simple delegation
+        return getattr(self._impl, name)
