@@ -65,7 +65,7 @@ def test_telemetry_publisher_flushes_payload(monkeypatch: pytest.MonkeyPatch) ->
     _ensure_agents(loop)
 
     loop.step()
-    loop.telemetry.close()
+    loop.close()
 
     assert sent, "expected payload to be flushed via capture transport"
     payload = json.loads(sent[-1].decode("utf-8"))
@@ -111,7 +111,7 @@ def test_telemetry_publisher_retries_on_failure(monkeypatch: pytest.MonkeyPatch)
     _ensure_agents(loop)
 
     loop.step()
-    loop.telemetry.close()
+    loop.close()
 
     assert not transports, "expected transport factory to be consumed"
     assert sent, "expected retry to succeed and emit payload"
@@ -156,7 +156,7 @@ def test_telemetry_worker_metrics_and_stop(monkeypatch: pytest.MonkeyPatch) -> N
 
     loop.telemetry.stop_worker(wait=True)
     loop.telemetry.stop_worker(wait=True)
-    loop.telemetry.close()
+    loop.close()
 
 
 def test_tcp_transport_wraps_socket_with_tls(monkeypatch: pytest.MonkeyPatch) -> None:

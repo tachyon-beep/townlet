@@ -22,6 +22,7 @@ from rich.text import Text
 try:  # pragma: no cover - fallback for older Rich versions
     from rich.tooltip import Tooltip
 except ImportError:  # pragma: no cover - fallback shim
+
     class Tooltip:  # type: ignore[too-many-ancestors]
         """Minimal shim when rich.tooltip.Tooltip is unavailable."""
 
@@ -32,7 +33,9 @@ except ImportError:  # pragma: no cover - fallback shim
         def __rich_console__(self, console: Console, options) -> Iterable[RenderableType]:
             yield from console.render(self.renderable, options)
 
-from townlet.console.handlers import ConsoleCommand
+
+from townlet.console.handlers import ConsoleCommand, create_console_router
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
 from townlet_ui.telemetry import (
     AgentSummary,
@@ -109,15 +112,9 @@ class PersonalityFilterSpec:
         parts: list[str] = []
         if self.profile_prefix:
             parts.append(f"profile={self.profile_prefix}")
-        if (
-            self.trait_key
-            and self.trait_operator
-            and self.trait_threshold is not None
-        ):
+        if self.trait_key and self.trait_operator and self.trait_threshold is not None:
             trait_label = PERSONALITY_TRAIT_LABELS.get(self.trait_key, self.trait_key)
-            parts.append(
-                f"{trait_label} {self.trait_operator} {self.trait_threshold:+.2f}"
-            )
+            parts.append(f"{trait_label} {self.trait_operator} {self.trait_threshold:+.2f}")
         return " & ".join(parts)
 
 
@@ -183,11 +180,7 @@ def _matches_personality_filter(
 ) -> bool:
     if spec.profile_prefix and not entry.profile.lower().startswith(spec.profile_prefix):
         return False
-    if (
-        spec.trait_key
-        and spec.trait_operator
-        and spec.trait_threshold is not None
-    ):
+    if spec.trait_key and spec.trait_operator and spec.trait_threshold is not None:
         trait_value = entry.traits.get(spec.trait_key, 0.0)
         if not _compare_trait_value(trait_value, spec.trait_operator, spec.trait_threshold):
             return False
@@ -260,14 +253,10 @@ def _build_personality_filter_commands(
         for command_suffix, operator, threshold, adjective in trait_thresholds:
             commands.append(
                 PaletteCommandMeta(
-                    name=(
-                        f"{FILTER_COMMAND_PREFIX}:trait:{trait_key}{command_suffix}{threshold}"
-                    ),
+                    name=(f"{FILTER_COMMAND_PREFIX}:trait:{trait_key}{command_suffix}{threshold}"),
                     mode="ui",
                     usage=f"trait:{trait_key}{operator}{threshold}",
-                    description=(
-                        f"Filter agents with {adjective.lower()} {trait_label}"
-                    ),
+                    description=(f"Filter agents with {adjective.lower()} {trait_label}"),
                 )
             )
 
@@ -368,11 +357,7 @@ def _score_palette_match(command: PaletteCommandMeta, query: str) -> float:
         return 1.0
     name_ratio = difflib.SequenceMatcher(None, query_norm, command.name.lower()).ratio()
     usage_ratio = difflib.SequenceMatcher(None, query_norm, command.usage.lower()).ratio()
-    description_ratio = (
-        difflib.SequenceMatcher(None, query_norm, command.description.lower()).ratio()
-        if command.description
-        else 0.0
-    )
+    description_ratio = difflib.SequenceMatcher(None, query_norm, command.description.lower()).ratio() if command.description else 0.0
     return max(name_ratio, usage_ratio, description_ratio * 0.85)
 
 
@@ -414,9 +399,7 @@ def _build_palette_overlay(
 
     commands = _extract_palette_commands(snapshot, include_filters=personality_enabled)
     results = _search_palette_commands(commands, palette)
-    highlight_index = (
-        palette.highlight_index if results else -1
-    )
+    highlight_index = palette.highlight_index if results else -1
     if highlight_index >= len(results):
         highlight_index = len(results) - 1
     if highlight_index < 0:
@@ -432,11 +415,7 @@ def _build_palette_overlay(
         f"[bold]Search:[/bold] {query_text}",
         f"[bold]Pending:[/bold] {palette.pending}",
         f"[bold]Filter:[/bold] {_format_palette_filter_label(palette.mode_filter)}",
-        (
-            f"[bold]Personality:[/bold] {palette.personality_filter or '—'}"
-            if personality_enabled
-            else "[bold]Personality:[/bold] disabled"
-        ),
+        (f"[bold]Personality:[/bold] {palette.personality_filter or '—'}" if personality_enabled else "[bold]Personality:[/bold] disabled"),
     )
 
     suggestion_table = Table.grid(padding=(0, 1), expand=True)
@@ -493,15 +472,11 @@ def _build_palette_overlay(
             name = str(entry.get("name", ""))
             if status == "ok":
                 result_payload = entry.get("result", {})
-                summary = (
-                    str(result_payload) if isinstance(result_payload, Mapping) else "ok"
-                )
+                summary = str(result_payload) if isinstance(result_payload, Mapping) else "ok"
             else:
                 error_payload = entry.get("error", {})
                 if isinstance(error_payload, Mapping):
-                    summary = str(error_payload.get("message")) or str(
-                        error_payload.get("code", "error")
-                    )
+                    summary = str(error_payload.get("message")) or str(error_payload.get("code", "error"))
                 else:
                     summary = str(error_payload)
             history_table.add_row(
@@ -563,17 +538,13 @@ def dispatch_palette_selection(
                 return None
             if directive == "profile" and len(action) == 3:
                 palette.personality_filter = f"profile:{action[2]}"
-                palette.status_message = (
-                    f"Personality filter set to profile:{action[2]}"
-                )
+                palette.status_message = f"Personality filter set to profile:{action[2]}"
                 palette.status_style = "cyan"
                 return None
             if directive == "trait" and len(action) == 3:
                 # usage already normalised (e.g., trait:extroversion>=0.5)
                 palette.personality_filter = selected.usage
-                palette.status_message = (
-                    f"Personality filter set to {selected.usage}"
-                )
+                palette.status_message = f"Personality filter set to {selected.usage}"
                 palette.status_style = "cyan"
                 return None
 
@@ -625,9 +596,7 @@ def render_snapshot(
         f"[bold]Refreshed:[/bold] {refreshed}",
     )
     transport = snapshot.transport
-    status_text = (
-        "[green]CONNECTED[/green]" if transport.connected else "[bold red]DISCONNECTED[/bold red]"
-    )
+    status_text = "[green]CONNECTED[/green]" if transport.connected else "[bold red]DISCONNECTED[/bold red]"
     header_table.add_row(
         f"[bold]Transport:[/bold] {status_text}",
         f"[bold]Dropped:[/bold] {transport.dropped_messages}",
@@ -645,9 +614,7 @@ def render_snapshot(
             f"[bold]Queue backlog:[/bold] {health.telemetry_queue}",
             f"[bold]Tick duration:[/bold] {tick_duration_text}",
         )
-        perturbation_status = (
-            f"pending {health.perturbations_pending} / active {health.perturbations_active}"
-        )
+        perturbation_status = f"pending {health.perturbations_pending} / active {health.perturbations_active}"
         header_table.add_row(
             f"[bold]Perturbations:[/bold] {perturbation_status}",
             f"[bold]Exit queue:[/bold] {health.employment_exit_queue}",
@@ -656,11 +623,7 @@ def render_snapshot(
         header_table.add_row(
             f"[bold]Queue backlog:[/bold] {transport.queue_length}",
             "[bold]Last flush:[/bold] "
-            + (
-                f"{transport.last_flush_duration_ms:.1f} ms"
-                if transport.last_flush_duration_ms is not None
-                else "—"
-            ),
+            + (f"{transport.last_flush_duration_ms:.1f} ms" if transport.last_flush_duration_ms is not None else "—"),
         )
     if transport.last_error:
         header_table.add_row(
@@ -785,13 +748,7 @@ def render_snapshot(
         str(conflict.rivalry_agents),
     )
     conflict_border = (
-        "magenta"
-        if (
-            conflict.queue_ghost_step_events
-            or conflict.queue_cooldown_events
-            or conflict.queue_rotation_events
-        )
-        else "blue"
+        "magenta" if (conflict.queue_ghost_step_events or conflict.queue_cooldown_events or conflict.queue_rotation_events) else "blue"
     )
     conflict_renderables: list[RenderableType] = [conflict_table]
 
@@ -851,9 +808,7 @@ def render_snapshot(
 
     visible_narrations = list(snapshot.narrations)
     if not show_personality_narration:
-        visible_narrations = [
-            entry for entry in visible_narrations if entry.category != "personality_event"
-        ]
+        visible_narrations = [entry for entry in visible_narrations if entry.category != "personality_event"]
     narration_panel = _build_narration_panel(visible_narrations)
     panels.append(narration_panel)
 
@@ -1102,26 +1057,12 @@ def _build_agent_cards_panel(
             multipliers = personality_entry.multipliers or {}
             behaviour_bias = multipliers.get("behaviour", {})
             if behaviour_bias:
-                bias_parts = ", ".join(
-                    f"{key.replace('_', ' ')}={value:+.2f}" for key, value in behaviour_bias.items()
-                )
+                bias_parts = ", ".join(f"{key.replace('_', ' ')}={value:+.2f}" for key, value in behaviour_bias.items())
                 card_table.add_row(Text(f"Bias {bias_parts}", style="dim"))
 
-        needs_history = (
-            history.needs.get(agent.agent_id, {})
-            if history and isinstance(history.needs, Mapping)
-            else {}
-        )
-        wallet_history = (
-            history.wallet.get(agent.agent_id, ())
-            if history and isinstance(history.wallet, Mapping)
-            else ()
-        )
-        rivalry_history = (
-            history.rivalry.get(agent.agent_id, {})
-            if history and isinstance(history.rivalry, Mapping)
-            else {}
-        )
+        needs_history = history.needs.get(agent.agent_id, {}) if history and isinstance(history.needs, Mapping) else {}
+        wallet_history = history.wallet.get(agent.agent_id, ()) if history and isinstance(history.wallet, Mapping) else ()
+        rivalry_history = history.rivalry.get(agent.agent_id, {}) if history and isinstance(history.rivalry, Mapping) else {}
 
         needs_table = Table.grid(expand=True)
         needs_table.add_column(ratio=3)
@@ -1184,9 +1125,7 @@ def _build_agent_cards_panel(
         social_line = _build_agent_social_line(agent.agent_id, snapshot.social_events)
 
         card_table.add_row(needs_table)
-        card_table.add_row(
-            _row_with_sparkline(wallet_line, _sparkline_text(wallet_history, style="green"))
-        )
+        card_table.add_row(_row_with_sparkline(wallet_line, _sparkline_text(wallet_history, style="green")))
         card_table.add_row(attendance_text)
         rivalry_series: Sequence[float] = ()
         if isinstance(rivalry_history, Mapping):
@@ -1195,9 +1134,7 @@ def _build_agent_cards_panel(
                 rivalry_series = rivalry_history.get(rival_target) or rivalry_history.get("*") or ()
             elif rivalry_history:
                 rivalry_series = next(iter(rivalry_history.values()))
-        card_table.add_row(
-            _row_with_sparkline(rival_line, _sparkline_text(rivalry_series, style="red"))
-        )
+        card_table.add_row(_row_with_sparkline(rival_line, _sparkline_text(rivalry_series, style="red")))
         card_table.add_row(friend_line)
         card_table.add_row(social_line)
         card_table.add_row(alerts_text)
@@ -1277,12 +1214,7 @@ def _sparkline_text(
     else:
         span = high - low
         normalized = [(value - low) / span for value in trimmed]
-    glyphs = "".join(
-        _SPARKLINE_CHARS[
-            min(int(value * (len(_SPARKLINE_CHARS) - 1)), len(_SPARKLINE_CHARS) - 1)
-        ]
-        for value in normalized
-    )
+    glyphs = "".join(_SPARKLINE_CHARS[min(int(value * (len(_SPARKLINE_CHARS) - 1)), len(_SPARKLINE_CHARS) - 1)] for value in normalized)
     return Text(glyphs, style=style)
 
 
@@ -1500,20 +1432,12 @@ def _build_social_churn_panel(
     owners_raw = churn_data.get("owners") if isinstance(churn_data, Mapping) else {}
     reasons_raw = churn_data.get("reasons") if isinstance(churn_data, Mapping) else {}
     owners = (
-        {
-            str(owner): int(count)
-            for owner, count in owners_raw.items()
-            if isinstance(count, (int, float))
-        }
+        {str(owner): int(count) for owner, count in owners_raw.items() if isinstance(count, (int, float))}
         if isinstance(owners_raw, Mapping)
         else {}
     )
     reasons = (
-        {
-            str(reason): int(count)
-            for reason, count in reasons_raw.items()
-            if isinstance(count, (int, float))
-        }
+        {str(reason): int(count) for reason, count in reasons_raw.items() if isinstance(count, (int, float))}
         if isinstance(reasons_raw, Mapping)
         else {}
     )
@@ -1533,11 +1457,7 @@ def _build_social_churn_panel(
         if total == 0:
             total = relationships.total_evictions
 
-    window_label = (
-        f"{int(window_start)}-{int(window_end)}"
-        if window_start is not None and window_end is not None
-        else "n/a"
-    )
+    window_label = f"{int(window_start)}-{int(window_end)}" if window_start is not None and window_end is not None else "n/a"
 
     table = Table(title="Churn Summary", expand=True)
     table.add_column("Window")
@@ -1586,11 +1506,7 @@ def _format_friends(friends: tuple[FriendSummary, ...]) -> str:
     parts = []
     for friend in friends:
         trust = f"{friend.trust:.2f}" if isinstance(friend.trust, float) else "n/a"
-        familiarity = (
-            f"{friend.familiarity:.2f}"
-            if isinstance(friend.familiarity, float)
-            else "n/a"
-        )
+        familiarity = f"{friend.familiarity:.2f}" if isinstance(friend.familiarity, float) else "n/a"
         parts.append(f"{friend.agent} ({trust}/{familiarity})")
     return ", ".join(parts)
 
@@ -1625,11 +1541,7 @@ def _summarise_social_event(entry: SocialEventEntry) -> str:
         speaker = str(payload.get("speaker", "?"))
         listener = str(payload.get("listener", "?"))
         quality = payload.get("quality")
-        quality_text = (
-            f" q {float(quality):.2f}"
-            if isinstance(quality, (int, float))
-            else ""
-        )
+        quality_text = f" q {float(quality):.2f}" if isinstance(quality, (int, float)) else ""
         return f"{speaker} → {listener}{quality_text}"
     if entry.type == "rivalry_avoidance":
         agent = str(payload.get("agent", "?"))
@@ -1689,7 +1601,6 @@ def _build_narration_panel(narrations: Sequence[NarrationEntry]) -> Panel:
 
 
 def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
-
     anneal = snapshot.anneal
     promotion = snapshot.promotion
 
@@ -1727,9 +1638,7 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
         if promotion.last_evaluated_tick is not None:
             promotion_grid.add_row("Last evaluated", str(promotion.last_evaluated_tick))
         if promotion.candidate_metadata:
-            promotion_grid.add_row(
-                "Candidate", _format_metadata_summary(promotion.candidate_metadata)
-            )
+            promotion_grid.add_row("Candidate", _format_metadata_summary(promotion.candidate_metadata))
         if promotion.history:
             history_panel = _build_promotion_history_panel(promotion.history, promotion_border)
         reason_text = _derive_promotion_reason(promotion, anneal)
@@ -1783,9 +1692,7 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
     composite = Panel.fit(
         drift_table,
         title="Drift",
-        border_style=(
-            "yellow" if (loss_flag or queue_flag or intensity_flag) else "green"
-        ),
+        border_style=("yellow" if (loss_flag or queue_flag or intensity_flag) else "green"),
     )
 
     container = Table.grid(expand=True)
@@ -1796,13 +1703,7 @@ def _build_anneal_panel(snapshot: TelemetrySnapshot) -> Panel:
     container.add_row(bc_table)
     container.add_row(composite)
 
-    border_style = (
-        "red"
-        if not bc_passed
-        else (
-            "yellow" if (loss_flag or queue_flag or intensity_flag) else "green"
-        )
-    )
+    border_style = "red" if not bc_passed else ("yellow" if (loss_flag or queue_flag or intensity_flag) else "green")
     if promotion_border == "red":
         border_style = "red"
     elif promotion_border == "yellow" and border_style == "green":
@@ -1854,18 +1755,12 @@ def _format_metadata_summary(metadata: Mapping[str, Any]) -> str:
         value = metadata.get(key)
         if value not in (None, "", []):
             parts.append(f"{key}={value}")
-    extras = [
-        f"{key}={value}"
-        for key, value in metadata.items()
-        if key not in ordered_keys and value not in (None, "", [])
-    ]
+    extras = [f"{key}={value}" for key, value in metadata.items() if key not in ordered_keys and value not in (None, "", [])]
     parts.extend(extras)
     return ", ".join(parts) if parts else "—"
 
 
-def _build_promotion_history_panel(
-    history: Iterable[Mapping[str, Any]], border_style: str
-) -> Panel:
+def _build_promotion_history_panel(history: Iterable[Mapping[str, Any]], border_style: str) -> Panel:
     table = Table(title="Promotion History", expand=True)
     table.add_column("Event")
     table.add_column("Tick", justify="right")
@@ -1928,12 +1823,7 @@ def _build_policy_inspector_panel(snapshot: TelemetrySnapshot) -> Panel:
             selected_prob = math.exp(entry.log_prob)
         except OverflowError:
             selected_prob = float("inf")
-        tops = (
-            ", ".join(
-                f"{action.action}:{action.probability:.2f}" for action in entry.top_actions[:3]
-            )
-            or "-"
-        )
+        tops = ", ".join(f"{action.action}:{action.probability:.2f}" for action in entry.top_actions[:3]) or "-"
         table.add_row(
             entry.agent_id,
             entry.selected_action or "-",
@@ -2077,15 +1967,14 @@ def run_dashboard(
     agent_autorotate: bool = True,
     personality_filter: str | None = None,
     show_personality_narration: bool = True,
+    telemetry_provider: str | None = None,
+    policy_provider: str | None = None,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
-    from townlet.console.handlers import create_console_router
     from townlet.world.grid import AgentSnapshot
 
     if not loop.world.agents:
-        profile_name, resolved_personality = loop.world.select_personality_profile(
-            "observer_demo"
-        )
+        profile_name, resolved_personality = loop.world.select_personality_profile("observer_demo")
         loop.world.agents["observer_demo"] = AgentSnapshot(
             agent_id="observer_demo",
             position=(0, 0),
@@ -2096,11 +1985,16 @@ def run_dashboard(
         )
         loop.world.assign_jobs_to_agents()
 
+    resolved_telemetry = telemetry_provider or telemetry_provider_name(loop)
+    resolved_policy = policy_provider or policy_provider_name(loop)
+
     router = create_console_router(
         loop.telemetry,
         loop.world,
         promotion=loop.promotion,
         policy=loop.policy,
+        policy_provider=resolved_policy,
+        telemetry_provider=resolved_telemetry,
         config=loop.config,
     )
     client = TelemetryClient()
@@ -2125,9 +2019,7 @@ def run_dashboard(
         personality_ui_enabled = False
 
     if approve:
-        executor.submit(
-            ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={})
-        )
+        executor.submit(ConsoleCommand(name="employment_exit", args=("approve", approve), kwargs={}))
     if defer:
         executor.submit(ConsoleCommand(name="employment_exit", args=("defer", defer), kwargs={}))
 
@@ -2187,11 +2079,7 @@ def _build_map_panel(
     agents = snapshot.agents
     if not agents:
         return None
-    agent_id = (
-        focus_agent
-        if focus_agent and any(a.agent_id == focus_agent for a in agents)
-        else agents[0].agent_id
-    )
+    agent_id = focus_agent if focus_agent and any(a.agent_id == focus_agent for a in agents) else agents[0].agent_id
     obs = obs_batch.get(agent_id)
     if not obs:
         return None

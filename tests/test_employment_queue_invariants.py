@@ -60,7 +60,7 @@ def test_employment_queue_snapshot_tracks_pending_agent() -> None:
     assert metrics["pending"] == ["alice"]
     assert metrics["pending_count"] == 1
 
-    loop.telemetry.close()
+    loop.close()
 
 
 def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
@@ -91,7 +91,7 @@ def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
     assert metrics["pending_count"] == 0
     assert any(event.get("event") == "employment_exit_deferred" for event in events)
 
-    loop.telemetry.close()
+    loop.close()
 
 
 def test_manual_exit_request_tracked_in_state() -> None:
@@ -101,4 +101,4 @@ def test_manual_exit_request_tracked_in_state() -> None:
     state = world.employment.export_state()
     assert "alice" in state["manual_exits"]
 
-    loop.telemetry.close()
+    loop.close()

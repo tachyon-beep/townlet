@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import types
 from pathlib import Path
 
 from townlet.config import load_config
@@ -38,7 +39,7 @@ def test_file_transport_stream_smoke(tmp_path: Path) -> None:
     for _ in range(3):
         loop.step()
 
-    loop.telemetry.close()
+    loop.close()
 
     stream_path = config.telemetry.transport.file_path
     assert stream_path.exists()
@@ -67,7 +68,7 @@ def test_file_transport_diff_stream(tmp_path: Path) -> None:
     for _ in range(3):
         loop.step()
 
-    loop.telemetry.close()
+    loop.close()
 
     stream_path = config.telemetry.transport.file_path
     lines = [json.loads(line) for line in stream_path.read_text().splitlines() if line.strip()]
@@ -93,22 +94,31 @@ def test_flush_worker_restarts_on_failure(monkeypatch, tmp_path: Path) -> None:
     _ensure_agents(loop)
     publisher = loop.telemetry
 
-    original = publisher._flush_transport_buffer
+    manager = publisher._worker_manager
+    original = manager._flush_pending
     state = {"calls": 0}
 
-    def failing(self, tick: int) -> None:  # type: ignore[override]
+    def failing(self):  # pragma: no cover - executed in worker thread
         state["calls"] += 1
         if state["calls"] == 1:
             raise RuntimeError("flush boom")
-        return original(self, tick)
+        return original()
 
-    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", failing)
+    monkeypatch.setattr(manager, "_flush_pending", types.MethodType(failing, manager))
 
     loop.step()
 
     for _ in range(60):
         status = dict(publisher._transport_status)
-        if status.get("worker_restart_count", 0) >= 1 and status.get("worker_alive"):
+        if status.get("worker_restart_count", 0) >= 1:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("flush worker did not increment restart count")
+
+    for _ in range(60):
+        thread = manager._thread
+        if thread is not None and thread.is_alive():
             break
         time.sleep(0.05)
     else:
@@ -116,12 +126,12 @@ def test_flush_worker_restarts_on_failure(monkeypatch, tmp_path: Path) -> None:
 
     status = publisher._transport_status
     assert status["worker_restart_count"] >= 1
-    assert status["worker_alive"] is True
+    thread = manager._thread
+    assert thread is not None and thread.is_alive()
     assert status["worker_error"] is None
     assert status["last_worker_error"].startswith("RuntimeError")
 
     # restore original behaviour and ensure clean shutdown
-    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", original)
     loop.step()
     publisher.close()
 
@@ -132,22 +142,22 @@ def test_flush_worker_halts_after_restart_limit(monkeypatch, tmp_path: Path) -> 
     config.telemetry.transport.file_path = tmp_path / "telemetry_limit.jsonl"
     config.telemetry.transport.buffer.max_batch_size = 1
     config.telemetry.transport.buffer.flush_interval_ticks = 1
+    config.telemetry.worker.restart_limit = 1
     loop = SimulationLoop(config)
     _ensure_agents(loop)
     publisher = loop.telemetry
-    publisher._worker_restart_limit = 1
+    manager = publisher._worker_manager
 
-    def always_fail(self, tick: int) -> None:  # type: ignore[override]
+    def always_fail(self):  # pragma: no cover - executed in worker thread
         raise RuntimeError("persistent failure")
 
-    original = publisher._flush_transport_buffer
-    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", always_fail)
+    monkeypatch.setattr(manager, "_flush_pending", types.MethodType(always_fail, manager))
 
     loop.step()
 
     for _ in range(60):
         status = dict(publisher._transport_status)
-        if status.get("worker_restart_count", 0) >= publisher._worker_restart_limit:
+        if status.get("worker_restart_count", 0) >= config.telemetry.worker.restart_limit:
             if not status.get("worker_alive"):
                 break
         time.sleep(0.05)
@@ -155,9 +165,7 @@ def test_flush_worker_halts_after_restart_limit(monkeypatch, tmp_path: Path) -> 
         raise AssertionError("flush worker did not stop after reaching restart limit")
 
     status = publisher._transport_status
-    assert status["worker_restart_count"] == publisher._worker_restart_limit
+    assert status["worker_restart_count"] == config.telemetry.worker.restart_limit
     assert status["worker_alive"] is False
     assert status["worker_error"] is not None
-
-    monkeypatch.setattr(type(publisher), "_flush_transport_buffer", original)
     publisher.close()

@@ -44,7 +44,21 @@ def test_promotion_drill(tmp_path: Path) -> None:
     if not config.exists():
         pytest.skip("example config not found")
     output = tmp_path / "drill"
-    result = subprocess.run([PYTHON, Path("scripts/promotion_drill.py"), "--config", config, "--output", output, "--checkpoint", tmp_path / "chk.pt"], capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        [
+            PYTHON,
+            Path("scripts/promotion_drill.py"),
+            "--config",
+            config,
+            "--output",
+            output,
+            "--checkpoint",
+            tmp_path / "chk.pt",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert result.returncode == 0
     summary_file = output / "promotion_drill_summary.json"
     data = json.loads(summary_file.read_text())

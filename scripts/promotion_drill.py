@@ -11,6 +11,7 @@ from typing import Any
 from townlet.config import load_config
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 
 
 def _ensure_candidate_ready(loop: SimulationLoop) -> None:
@@ -37,6 +38,8 @@ def run_drill(config_path: Path, output_dir: Path, checkpoint: Path) -> dict[str
         promotion=loop.promotion,
         scheduler=loop.perturbations,
         policy=loop.policy,
+        policy_provider=policy_provider_name(loop),
+        telemetry_provider=telemetry_provider_name(loop),
         mode="admin",
         config=config,
     )

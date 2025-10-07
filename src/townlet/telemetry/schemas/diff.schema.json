@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://townlet.ai/schemas/telemetry/diff.schema.json",
+  "type": "object",
+  "required": ["schema_version", "tick", "changes"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {"type": "string"},
+    "tick": {"type": "integer", "minimum": 0},
+    "payload_type": {"const": "diff"},
+    "changes": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "removed": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

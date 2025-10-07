@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pytest
 
 from townlet.console.command import ConsoleCommandError, ConsoleCommandResult
-from townlet.world.console_bridge import ConsoleBridge
+from townlet.world.console import ConsoleBridge
 
 
 @dataclass
@@ -55,9 +55,9 @@ def test_handler_exception_emits_internal_error(
         raise RuntimeError("boom")
 
     bridge.register_handler("fail", boom)
-    with caplog.at_level(logging.ERROR, logger="townlet.world.console_bridge"):
+    with caplog.at_level(logging.ERROR, logger="townlet.world.console.bridge"):
         bridge.apply([{"name": "fail"}])
-    records = [record for record in caplog.records if record.name == "townlet.world.console_bridge"]
+    records = [record for record in caplog.records if record.name == "townlet.world.console.bridge"]
     assert records and "failed" in records[0].message
     results = bridge.consume_results()
     assert results[0].error["code"] == "internal"

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from townlet.config import load_config
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.world.agents.lifecycle import LifecycleService
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
@@ -18,16 +21,13 @@ def _make_world(respawn_delay: int = 0) -> tuple[LifecycleManager, WorldState]:
 
 
 def _spawn_agent(world: WorldState, agent_id: str = "alice") -> AgentSnapshot:
-    snapshot = AgentSnapshot(
-        agent_id=agent_id,
-        position=(0, 0),
+    snapshot = world.lifecycle_service.spawn_agent(
+        agent_id,
+        (0, 0),
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=0.0,
     )
-    world.agents[agent_id] = snapshot
-    world._assign_job_if_missing(snapshot)
-    world._sync_agent_spawn(snapshot)
-    return snapshot
+    return world.agents[snapshot.agent_id]
 
 
 def test_respawn_after_delay() -> None:
@@ -80,10 +80,26 @@ def test_termination_reasons_captured() -> None:
     manager, world = _make_world(respawn_delay=0)
     alice = _spawn_agent(world)
     alice.needs["hunger"] = 0.01
-    terminated = manager.evaluate(world, tick=0)
+    manager.evaluate(world, tick=0)
     reasons = manager.termination_reasons()
     assert reasons.get("alice") == "faint"
     world.employment.enqueue_exit(world, alice.agent_id, tick=1)
-    terminated = manager.evaluate(world, tick=1)
+    manager.evaluate(world, tick=1)
     reasons = manager.termination_reasons()
     assert reasons.get(alice.agent_id) == "eviction"
+
+
+def test_world_spawn_agent_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, world = _make_world(respawn_delay=0)
+    calls: list[tuple] = []
+    original = LifecycleService.spawn_agent
+
+    def wrapped(self: LifecycleService, *args, **kwargs):
+        calls.append((args, kwargs))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(LifecycleService, "spawn_agent", wrapped)
+
+    world.spawn_agent("delegate", (2, 0))
+
+    assert calls

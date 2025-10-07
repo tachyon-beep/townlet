@@ -14,6 +14,11 @@ Thank you for your interest in shaping Townlet. This guide summarises how we wor
    pytest
    scripts/check_docstrings.py src/townlet --min-module 95 --min-callable 40
    ```
+   - If you modify configuration models under `src/townlet/config/`, regenerate the reference docs before committing:
+     ```bash
+     python scripts/gen_config_reference.py --out docs/guides/CONFIG_REFERENCE.md
+     ```
+     Include the regenerated `docs/guides/CONFIG_REFERENCE.md` in your PR to keep docs in sync.
 5. Open a pull request using the template. Summarise behaviour, risks, and validation evidence.
 
 ## Coding Standards

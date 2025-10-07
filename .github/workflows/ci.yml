@@ -25,10 +25,16 @@ jobs:
           ruff check src tests
           mypy src
 
+      - name: Import linter (config isolation)
+        run: lint-imports --config importlinter.ini
+
       - name: Docstring coverage
         run: |
           python scripts/check_docstrings.py src/townlet --min-module 90 --min-callable 25
           python -m interrogate -c pyproject.toml src/townlet
+      - name: Config docstring ratchet
+        run: |
+          python scripts/check_docstrings.py src/townlet/config --min-module 100 --min-callable 75 --summary-only
 
       - name: Unit tests
         run: pytest -k "not rollout_capture"
@@ -41,6 +47,8 @@ jobs:
 
       - name: Social telemetry & UI tests
         run: pytest tests/test_telemetry_narration.py tests/test_observer_ui_dashboard.py tests/test_telemetry_client.py
+      - name: Telemetry transport lifecycle
+        run: pytest tests/telemetry/test_transport_lifecycle.py tests/telemetry/test_prometheus_transport.py
 
       - name: Telemetry schema tests
         run: pytest tests/test_training_replay.py::test_training_harness_ppo_conflict_telemetry

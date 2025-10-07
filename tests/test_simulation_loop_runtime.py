@@ -14,7 +14,7 @@ def base_config() -> object:
 
 
 def _close_loop(loop: SimulationLoop) -> None:
-    loop.telemetry.close()
+    loop.close()
 
 
 def test_simulation_loop_always_uses_facade_runtime(base_config: object) -> None:
@@ -38,3 +38,13 @@ def test_simulation_loop_ignores_legacy_environment_flag(
         assert loop._runtime_variant == "facade"
     finally:
         _close_loop(loop)
+
+
+def test_simulation_loop_close_is_idempotent(base_config: object) -> None:
+    config = base_config.model_copy(deep=True)
+    loop = SimulationLoop(config)
+    try:
+        pass
+    finally:
+        loop.close()
+        loop.close()

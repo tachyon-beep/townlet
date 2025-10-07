@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://townlet.ai/schemas/telemetry/snapshot.schema.json",
+  "type": "object",
+  "required": ["schema_version", "tick"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {"type": "string"},
+    "tick": {"type": "integer", "minimum": 0},
+    "payload_type": {"type": "string", "const": "snapshot"},
+    "queue_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cooldown_events": {"type": "integer", "minimum": 0},
+        "ghost_step_events": {"type": "integer", "minimum": 0},
+        "rotation_events": {"type": "integer", "minimum": 0}
+      }
+    },
+    "embedding_metrics": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "relationships": {"type": "object"},
+    "relationship_snapshot": {"type": "object"},
+    "events": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "stability": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "metrics": {"type": "object"},
+        "alerts": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "inputs": {"type": "object"}
+      }
+    },
+    "reward_breakdown": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": "number"}
+      }
+    },
+    "annotations": {"type": "object"}
+  }
+}

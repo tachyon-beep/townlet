@@ -25,20 +25,29 @@
   ```
 - Commands executed via Python harness (simulating Typer CLI integration until CLI ships).
 - Run `source .venv/bin/activate && PYTHONPATH=src python scripts/console_dry_run.py` (script below) or follow manual steps.
+- If the `[ml]` or `[api]` extras are missing, the script logs stub-policy or stub-telemetry warnings; commands that require those capabilities will be skipped safely.
 - For a headless check before launching the dashboard, run `python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 50`. Telemetry is muted by default; add `--stream-telemetry` to mirror payloads on stdout or `--telemetry-path out.jsonl` to capture them for later inspection.
 
 ## Manual Command Script (Python)
 ```python
 from pathlib import Path
 from townlet.config import load_config
-from townlet.core.sim_loop import SimulationLoop
 from townlet.console.handlers import ConsoleCommand, create_console_router
+from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 
 config = load_config(Path("configs/examples/poc_hybrid.yaml"))
 config.employment.enforce_job_loop = True
 loop = SimulationLoop(config)
 world = loop.world
-router = create_console_router(loop.telemetry, world, policy=loop.policy, config=config)
+router = create_console_router(
+    loop.telemetry,
+    world,
+    policy=loop.policy,
+    policy_provider=policy_provider_name(loop),
+    telemetry_provider=telemetry_provider_name(loop),
+    config=config,
+)
 
 # Step 1: Prime agents and advance sim.
 for _ in range(20):

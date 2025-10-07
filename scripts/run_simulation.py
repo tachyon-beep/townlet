@@ -1,4 +1,5 @@
 """Run a headless Townlet simulation loop for debugging."""
+
 from __future__ import annotations
 
 import argparse
@@ -9,6 +10,12 @@ from pathlib import Path
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop, SimulationLoopError
+from townlet.core.utils import (
+    is_stub_policy,
+    is_stub_telemetry,
+    policy_provider_name,
+    telemetry_provider_name,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,9 +48,7 @@ def main() -> None:
 
     if not args.stream_telemetry:
         target_path = Path(os.devnull) if args.telemetry_path is None else args.telemetry_path
-        transport = config.telemetry.transport.model_copy(
-            update={"type": "file", "file_path": target_path}
-        )
+        transport = config.telemetry.transport.model_copy(update={"type": "file", "file_path": target_path})
         telemetry_cfg = config.telemetry.model_copy(update={"transport": transport})
         config = config.model_copy(update={"telemetry": telemetry_cfg})
         if target_path != Path(os.devnull):
@@ -51,6 +56,18 @@ def main() -> None:
             print(f"Telemetry stream written to {target_path}")
 
     loop = SimulationLoop(config=config)
+    policy_provider = policy_provider_name(loop)
+    telemetry_provider = telemetry_provider_name(loop)
+    if hasattr(loop, "policy") and is_stub_policy(getattr(loop, "policy"), policy_provider):
+        print(
+            f"Warning: stub policy backend active (provider={policy_provider}); scripted decisions only.",
+            file=sys.stderr,
+        )
+    if hasattr(loop, "telemetry") and is_stub_telemetry(getattr(loop, "telemetry"), telemetry_provider):
+        print(
+            f"Warning: stub telemetry sink active (provider={telemetry_provider}); streaming disabled.",
+            file=sys.stderr,
+        )
     start = time.perf_counter()
     failure_payload: tuple[int, str, dict[str, object]] | None = None
     exit_code = 0
@@ -69,7 +86,7 @@ def main() -> None:
         failure_payload = (exc.tick, error_summary, latest_health)
     finally:
         try:
-            loop.telemetry.close()
+            loop.close()
         except Exception:  # pragma: no cover - shutdown guard
             pass
     duration = time.perf_counter() - start
@@ -77,10 +94,7 @@ def main() -> None:
         ticks = loop.tick
         if ticks:
             elapsed = duration if duration > 0 else 1e-9
-            print(
-                f"Completed {ticks} ticks in {duration:.3f}s "
-                f"({ticks / elapsed:.1f} ticks/sec)"
-            )
+            print(f"Completed {ticks} ticks in {duration:.3f}s ({ticks / elapsed:.1f} ticks/sec)")
         else:
             print("Simulation completed without advancing ticks")
     else:

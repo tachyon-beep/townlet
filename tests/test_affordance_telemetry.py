@@ -29,7 +29,7 @@ def test_affordance_runtime_snapshot_contains_ids() -> None:
     assert entry["affordance_id"] == "rest_sleep"
     assert entry["duration_remaining"] >= 0
 
-    loop.telemetry.close()
+    loop.close()
 
 
 def test_apply_affordance_outcome_retains_metadata() -> None:

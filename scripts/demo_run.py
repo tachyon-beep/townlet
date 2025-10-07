@@ -7,6 +7,7 @@ from typing import Optional
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 from townlet.demo.runner import (
     available_storylines,
     build_storyline,
@@ -153,6 +154,8 @@ def main() -> None:
         palette_state=palette_state,
         personality_filter=args.personality_filter,
         show_personality_narration=not args.mute_personality_narration,
+        telemetry_provider=telemetry_provider_name(loop),
+        policy_provider=policy_provider_name(loop),
     )
 
 

@@ -12,17 +12,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from townlet.agents.models import (
-    Personality,
-    PersonalityProfile,
-    PersonalityProfiles,
-    personality_from_profile,
-)
-from townlet.agents.relationship_modifiers import (
-    RelationshipDelta,
-    RelationshipEvent,
-    apply_personality_modifiers,
-)
+from townlet.agents.models import Personality, PersonalityProfile, PersonalityProfiles
+from townlet.agents.relationship_modifiers import RelationshipEvent
 from townlet.config import AffordanceRuntimeConfig, EmploymentConfig, SimulationConfig
 from townlet.config.affordance_manifest import (
     AffordanceManifestError,
@@ -34,20 +25,33 @@ from townlet.console.command import (
 )
 from townlet.console.service import ConsoleService
 from townlet.observations.embedding import EmbeddingAllocator
-from townlet.telemetry.relationship_metrics import RelationshipChurnAccumulator
 from townlet.world.affordance_runtime import AffordanceCoordinator
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import (
+    AffordanceEnvironment,
     AffordanceOutcome,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
     RunningAffordanceState,
     apply_affordance_outcome,
 )
-from townlet.world.console_handlers import (
+from townlet.world.agents.employment import EmploymentService
+from townlet.world.agents.lifecycle import LifecycleService
+from townlet.world.agents.nightly_reset import NightlyResetService
+from townlet.world.agents.personality import (
+    default_personality,
+    normalize_profile_name,
+    resolve_personality_profile,
+)
+from townlet.world.agents.registry import AgentRegistry
+from townlet.world.agents.relationships_service import RelationshipService
+from townlet.world.agents.snapshot import AgentSnapshot
+from townlet.world.console import (
     WorldConsoleController,
     install_world_console_handlers,
 )
+from townlet.world.core.context import WorldContext
+from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
@@ -57,19 +61,14 @@ from townlet.world.observation import (
 from townlet.world.observation import (
     snapshot_precondition_context,
 )
+from townlet.world.perturbations import PerturbationService
 from townlet.world.preconditions import (
     CompiledPrecondition,
     PreconditionSyntaxError,
     compile_preconditions,
 )
-from townlet.world.queue_conflict import QueueConflictTracker
-from townlet.world.queue_manager import QueueManager
-from townlet.world.relationships import (
-    RelationshipLedger,
-    RelationshipParameters,
-    RelationshipTie,
-)
-from townlet.world.rivalry import RivalryLedger, RivalryParameters
+from townlet.world.queue import QueueConflictTracker, QueueManager
+from townlet.world.relationships import RelationshipTie
 
 logger = logging.getLogger(__name__)
 
@@ -99,89 +98,6 @@ class HookRegistry:
             return
         self._handlers.pop(name, None)
 
-
-_DEFAULT_PROFILE_NAME = "balanced"
-
-
-def _default_personality() -> Personality:
-    """Provide a neutral personality for agents lacking explicit traits."""
-
-    return personality_from_profile(_DEFAULT_PROFILE_NAME)[1]
-
-
-def _resolve_personality_profile(name: str | None) -> tuple[str, Personality]:
-    try:
-        return personality_from_profile(name)
-    except KeyError:
-        logger.warning(
-            "unknown_personality_profile name=%s fallback=%s",
-            name,
-            _DEFAULT_PROFILE_NAME,
-        )
-        return personality_from_profile(_DEFAULT_PROFILE_NAME)
-
-
-def _normalize_profile_name(name: str | None) -> str | None:
-    if name is None:
-        return None
-    trimmed = str(name).strip()
-    return trimmed.lower() if trimmed else None
-
-
-_BASE_NEEDS: tuple[str, ...] = ("hunger", "hygiene", "energy")
-
-
-@dataclass
-class AgentSnapshot:
-    """Minimal agent view used for scaffolding."""
-
-    agent_id: str
-    position: tuple[int, int]
-    needs: dict[str, float]
-    wallet: float = 0.0
-    home_position: tuple[int, int] | None = None
-    origin_agent_id: str | None = None
-    personality: Personality = field(default_factory=_default_personality)
-    personality_profile: str = _DEFAULT_PROFILE_NAME
-    inventory: dict[str, int] = field(default_factory=dict)
-    job_id: str | None = None
-    on_shift: bool = False
-    lateness_counter: int = 0
-    last_late_tick: int = -1
-    shift_state: str = "pre_shift"
-    late_ticks_today: int = 0
-    attendance_ratio: float = 0.0
-    absent_shifts_7d: int = 0
-    wages_withheld: float = 0.0
-    exit_pending: bool = False
-    last_action_id: str = ""
-    last_action_success: bool = False
-    last_action_duration: int = 0
-    episode_tick: int = 0
-
-    def __post_init__(self) -> None:
-        clamped: dict[str, float] = {}
-        for key, value in self.needs.items():
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError):
-                numeric = 0.0
-            clamped[key] = max(0.0, min(1.0, numeric))
-        for key in _BASE_NEEDS:
-            clamped.setdefault(key, 0.5)
-        self.needs = clamped
-        if self.home_position is not None:
-            x, y = int(self.home_position[0]), int(self.home_position[1])
-            self.home_position = (x, y)
-        if self.origin_agent_id is None:
-            self.origin_agent_id = self.agent_id
-        profile_name = (self.personality_profile or "").strip().lower()
-        if profile_name:
-            resolved_name, resolved = _resolve_personality_profile(profile_name)
-            self.personality_profile = resolved_name
-            current_personality = getattr(self, "personality", None)
-            if current_personality is None or current_personality == resolved:
-                self.personality = resolved
 
 
 @dataclass
@@ -333,8 +249,8 @@ class WorldState:
     """Holds mutable world state for the simulation tick."""
 
     config: SimulationConfig
-    agents: dict[str, AgentSnapshot] = field(default_factory=dict)
     tick: int = 0
+    _agents: AgentRegistry = field(init=False, repr=False)
     queue_manager: QueueManager = field(init=False)
     embedding_allocator: EmbeddingAllocator = field(init=False)
     _personality_reward_enabled: bool = field(init=False, default=False, repr=False)
@@ -352,10 +268,13 @@ class WorldState:
     _job_keys: list[str] = field(init=False, default_factory=list)
     employment: EmploymentCoordinator = field(init=False, repr=False)
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
+    _employment_service: EmploymentService = field(init=False, repr=False)
+    _lifecycle_service: LifecycleService = field(init=False, repr=False)
+    _nightly_reset_service: NightlyResetService = field(init=False, repr=False)
+    _economy_service: EconomyService = field(init=False, repr=False)
+    _perturbation_service: PerturbationService = field(init=False, repr=False)
 
-    _rivalry_ledgers: dict[str, RivalryLedger] = field(init=False, default_factory=dict)
-    _relationship_ledgers: dict[str, RelationshipLedger] = field(init=False, default_factory=dict)
-    _relationship_churn: RelationshipChurnAccumulator = field(init=False)
+    _relationships: RelationshipService = field(init=False, repr=False)
     _relationship_window_ticks: int = 600
     _recent_meal_participants: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
     _rng_seed: int | None = field(init=False, default=None)
@@ -401,6 +320,7 @@ class WorldState:
     def __post_init__(self) -> None:
         self._personality_reward_enabled = self.config.reward_personality_scaling_enabled()
         self._personality_profile_cache.clear()
+        self._agents = AgentRegistry()
         self.queue_manager = QueueManager(config=self.config)
         self._spatial_index = WorldSpatialIndex()
         self.embedding_allocator = EmbeddingAllocator(config=self.config)
@@ -414,12 +334,33 @@ class WorldState:
         self.employment = create_employment_coordinator(self.config, self._emit_event)
         self.employment.reset_exits_today()
         self._employment_runtime = EmploymentRuntime(self, self.employment, self._emit_event)
-        self._rivalry_ledgers = {}
-        self._relationship_ledgers = {}
+        self._employment_service = EmploymentService(
+            coordinator=self.employment,
+            runtime=self._employment_runtime,
+        )
+        self._economy_service = EconomyService(
+            config=self.config,
+            agents=self.agents,
+            objects=self.objects,
+            queue_manager=self.queue_manager,
+            sync_reservation=self._sync_reservation,
+            emit_event=self._emit_event,
+            tick_supplier=lambda: self.tick,
+        )
+        self._perturbation_service = PerturbationService(
+            economy_service=self._economy_service,
+            agents=self.agents,
+            objects=self.objects,
+            emit_event=self._emit_event,
+            request_ctx_reset=self.request_ctx_reset,
+            tick_supplier=lambda: self.tick,
+        )
         self._relationship_window_ticks = 600
-        self._relationship_churn = RelationshipChurnAccumulator(
-            window_ticks=self._relationship_window_ticks,
-            max_samples=8,
+        self._relationships = RelationshipService(
+            self.config,
+            tick_supplier=lambda: self.tick,
+            personality_resolver=self._personality_for,
+            churn_window=self._relationship_window_ticks,
         )
         self._recent_meal_participants = {}
         runtime_cfg = self.affordance_runtime_config
@@ -440,8 +381,6 @@ class WorldState:
             buffer_limit=_CONSOLE_RESULT_BUFFER_LIMIT,
         )
         self._console_controller = install_world_console_handlers(self, self._console)
-        from townlet.world.queue_conflict import QueueConflictTracker
-
         self._queue_conflicts = QueueConflictTracker(
             world=self,
             record_rivalry_conflict=self._apply_rivalry_conflict,
@@ -498,9 +437,10 @@ class WorldState:
                 "affordance_hooks_loaded modules=%s",
                 ",".join(accepted),
             )
-        context = AffordanceRuntimeContext(
-            world=self,
+        affordance_env = AffordanceEnvironment(
             queue_manager=self.queue_manager,
+            agents=self.agents,
+            relationships=self.relationships_service,
             objects=self.objects,
             affordances=self.affordances,
             running_affordances=self._running_affordances,
@@ -508,12 +448,15 @@ class WorldState:
             emit_event=self._emit_event,
             sync_reservation=self._sync_reservation,
             apply_affordance_effects=self._apply_affordance_effects,
-            dispatch_hooks=self._dispatch_affordance_hooks,
+            dispatch_hooks=lambda *args, **kwargs: True,
             record_queue_conflict=self._record_queue_conflict,
             apply_need_decay=self._apply_need_decay,
             build_precondition_context=self._build_precondition_context,
             snapshot_precondition_context=snapshot_precondition_context,
+            tick_supplier=lambda: self.tick,
+            world_ref=self,
         )
+        context = AffordanceRuntimeContext(environment=affordance_env)
         runtime_obj: DefaultAffordanceRuntime | AffordanceCoordinator
         if self.affordance_runtime_factory is not None:
             runtime_obj = self.affordance_runtime_factory(self, context)
@@ -529,40 +472,113 @@ class WorldState:
         else:
             self._affordance_runtime = AffordanceCoordinator(runtime_obj)
         self._affordance_service = AffordanceRuntimeService(
-            world=self,
+            environment=affordance_env,
             context=context,
             coordinator=self._affordance_runtime,
             hook_registry=self._hook_registry,
         )
-        self._economy_baseline: dict[str, float] = {
-            key: float(value) for key, value in self.config.economy.items()
-        }
-        self._price_spike_events: dict[str, dict[str, float]] = {}
-        self._utility_status: dict[str, bool] = {"power": True, "water": True}
-        self._utility_events: dict[str, set[str]] = {
-            "power": set(),
-            "water": set(),
-        }
-        self._object_utility_baselines: dict[str, dict[str, float]] = {}
+        affordance_env.dispatch_hooks = self._affordance_service.dispatch_hooks
+        self._lifecycle_service = LifecycleService(
+            agents=self.agents,
+            objects=self.objects,
+            queue_manager=self.queue_manager,
+            spatial_index=self._spatial_index,
+            employment_service=self._employment_service,
+            relationship_service=self._relationships,
+            affordance_service=self._affordance_service,
+            embedding_allocator=self.embedding_allocator,
+            queue_conflicts=self._queue_conflicts,
+            recent_meal_participants=self._recent_meal_participants,
+            job_keys=tuple(self._job_keys),
+            respawn_counters=self._respawn_counters,
+            emit_event=self._emit_event,
+            request_ctx_reset=self.request_ctx_reset,
+            sync_reservation=self._sync_reservation,
+            tick_supplier=lambda: self.tick,
+            update_basket_metrics=self._economy_service.update_basket_metrics,
+            choose_personality_profile=self._choose_personality_profile,
+            objects_by_position=self._objects_by_position,
+            active_reservations=self._active_reservations,
+        )
+        self._nightly_reset_service = NightlyResetService(
+            agents=self.agents,
+            queue_manager=self.queue_manager,
+            active_reservations=self._active_reservations,
+            employment_service=self._employment_service,
+            emit_event=self._emit_event,
+            sync_reservation=self._sync_reservation,
+            sync_reservation_for_agent=self._lifecycle_service.sync_reservation_for_agent,
+            is_tile_blocked=lambda position: position in self._objects_by_position,
+        )
         self.rebuild_spatial_index()
+        self.context = WorldContext(
+            agents=self.agents,
+            objects=self.objects,
+            affordances=self.affordances,
+            running_affordances=self._running_affordances,
+            queue_manager=self.queue_manager,
+            queue_conflicts=self._queue_conflicts,
+            affordance_service=self._affordance_service,
+            console=self._console,
+            employment=self.employment,
+            employment_runtime=self._employment_runtime,
+            employment_service=self._employment_service,
+            lifecycle_service=self._lifecycle_service,
+            nightly_reset_service=self._nightly_reset_service,
+            relationships=self._relationships,
+            config=self.config,
+            emit_event_callback=self._emit_event,
+            sync_reservation_callback=self._sync_reservation,
+        )
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
         return self._affordance_service.runtime()
 
     @property
+    def agents(self) -> AgentRegistry:
+        return self._agents
+
+    @property
     def runtime_instrumentation_level(self) -> str:
         return getattr(self, "_runtime_instrumentation_level", "off")
 
+    @property
+    def employment_service(self) -> EmploymentService:
+        return self._employment_service
+
+    @property
+    def lifecycle_service(self) -> LifecycleService:
+        return self._lifecycle_service
+
+    @property
+    def nightly_reset_service(self) -> NightlyResetService:
+        return self._nightly_reset_service
+
+    @property
+    def economy_service(self) -> EconomyService:
+        return self._economy_service
+
+    @property
+    def perturbation_service(self) -> PerturbationService:
+        return self._perturbation_service
+
+    @property
+    def _relationship_ledgers(self):
+        return self._relationships._relationship_ledgers
+
+    @property
+    def _rivalry_ledgers(self):
+        return self._relationships._rivalry_ledgers
+
+    @property
+    def relationships_service(self) -> RelationshipService:
+        """Expose the relationship service for integrations/tests."""
+
+        return self._relationships
+
     def generate_agent_id(self, base_id: str) -> str:
-        base = base_id or "agent"
-        counter = self._respawn_counters.get(base, 0)
-        while True:
-            counter += 1
-            candidate = f"{base}#{counter}"
-            if candidate not in self.agents:
-                self._respawn_counters[base] = counter
-                return candidate
+        return self._lifecycle_service.generate_agent_id(base_id)
 
     def apply_console(self, operations: Iterable[Any]) -> None:
         """Apply console operations before the tick sequence runs."""
@@ -661,6 +677,35 @@ class WorldState:
 
         return self._console.consume_results()
 
+    def spawn_agent(
+        self,
+        agent_id: str,
+        position: tuple[int, int],
+        *,
+        needs: Mapping[str, float] | None = None,
+        home_position: tuple[int, int] | None = None,
+        wallet: float | None = None,
+        personality_profile: str | None = None,
+    ) -> AgentSnapshot:
+        """Create a new agent at ``position`` and register supporting state."""
+
+        return self._lifecycle_service.spawn_agent(
+            agent_id,
+            position,
+            needs=needs,
+            home_position=home_position,
+            wallet=wallet,
+            personality_profile=personality_profile,
+        )
+
+    def teleport_agent(self, agent_id: str, position: tuple[int, int]) -> tuple[int, int]:
+        """Teleport ``agent_id`` to ``position`` if the tile is available."""
+        return self._lifecycle_service.teleport_agent(agent_id, position)
+
+    def set_price_target(self, key: str, value: float) -> float:
+        """Update the economy price target for ``key`` and refresh metrics."""
+        return self._economy_service.set_price_target(key, value)
+
     def _record_console_result(self, result: ConsoleCommandResult) -> None:
         self._console.record_result(result)
 
@@ -716,7 +761,10 @@ class WorldState:
         inventory: dict[str, int] = {}
         if agent is not None:
             needs = {key: float(value) for key, value in agent.needs.items()}
-            inventory = {key: int(value) for key, value in agent.inventory.items()}
+            inventory = {}
+            for key, value in agent.inventory.items():
+                if isinstance(value, (int, float)):
+                    inventory[key] = int(value)
             agent_context = {
                 "agent_id": agent.agent_id,
                 "position": list(agent.position),
@@ -771,161 +819,27 @@ class WorldState:
         }
         return context
 
-    def _assign_job_if_missing(self, snapshot: AgentSnapshot) -> None:
-        if snapshot.job_id is None and self._job_keys:
-            snapshot.job_id = self._job_keys[len(self.agents) % len(self._job_keys)]
-
     def remove_agent(self, agent_id: str, tick: int) -> dict[str, Any] | None:
-        snapshot = self.agents.pop(agent_id, None)
-        if snapshot is None:
-            return None
-        self._spatial_index.remove_agent(agent_id)
-        self.queue_manager.remove_agent(agent_id, tick)
-        self._affordance_service.remove_agent(agent_id)
-        for object_id, occupant in list(self._active_reservations.items()):
-            if occupant == agent_id:
-                self.queue_manager.release(object_id, agent_id, tick, success=False)
-                self._active_reservations.pop(object_id, None)
-                obj = self.objects.get(object_id)
-                if obj is not None:
-                    obj.occupied_by = None
-                    self._spatial_index.set_reservation(obj.position, False)
-        self.embedding_allocator.release(agent_id, tick)
-        self._employment_runtime.remove_agent(agent_id)
-        self._relationship_ledgers.pop(agent_id, None)
-        for ledger in self._relationship_ledgers.values():
-            ledger.remove_tie(agent_id, reason="removed")
-        self._rivalry_ledgers.pop(agent_id, None)
-        for ledger in self._rivalry_ledgers.values():
-            ledger.remove(agent_id, reason="removed")
-        for record in self._recent_meal_participants.values():
-            participants = record.get("agents")
-            if isinstance(participants, set):
-                participants.discard(agent_id)
-        self._queue_conflicts.remove_agent(agent_id)
-        blueprint = {
-            "agent_id": snapshot.agent_id,
-            "origin_agent_id": snapshot.origin_agent_id or snapshot.agent_id,
-            "personality": snapshot.personality,
-            "personality_profile": snapshot.personality_profile,
-            "job_id": snapshot.job_id,
-            "position": snapshot.position,
-            "home_position": snapshot.home_position,
-        }
-        self._emit_event(
-            "agent_removed",
-            {
-                "agent_id": snapshot.agent_id,
-                "tick": tick,
-            },
-        )
-        return blueprint
+        return self._lifecycle_service.remove_agent(agent_id, tick)
 
     def kill_agent(self, agent_id: str, *, reason: str | None = None) -> bool:
         """Remove an agent from the world and emit a kill notification."""
-
-        blueprint = self.remove_agent(agent_id, self.tick)
-        if blueprint is None:
-            return False
-        self._emit_event(
-            "agent_killed",
-            {
-                "agent_id": agent_id,
-                "reason": reason,
-                "tick": self.tick,
-            },
-        )
-        return True
+        return self._lifecycle_service.kill_agent(agent_id, reason=reason)
 
     def respawn_agent(self, blueprint: Mapping[str, Any]) -> None:
-        agent_id = str(blueprint.get("agent_id", ""))
-        if not agent_id or agent_id in self.agents:
-            return
-        origin_agent_id = str(
-            blueprint.get("origin_agent_id") or blueprint.get("agent_id") or agent_id
-        )
-        position = blueprint.get("position")
-        position_tuple: tuple[int, int]
-        if (
-            isinstance(position, (list, tuple))
-            and len(position) == 2
-            and all(isinstance(coord, (int, float)) for coord in position)
-        ):
-            x, y = int(position[0]), int(position[1])
-            candidate = (x, y)
-            position_tuple = candidate if self._is_position_walkable(candidate) else (0, 0)
-        else:
-            position_tuple = (0, 0)
+        self._lifecycle_service.respawn_agent(blueprint)
 
-        home_position = blueprint.get("home_position")
-        home_tuple: tuple[int, int] | None
-        if (
-            isinstance(home_position, (list, tuple))
-            and len(home_position) == 2
-            and all(isinstance(coord, (int, float)) for coord in home_position)
-        ):
-            home_tuple = (int(home_position[0]), int(home_position[1]))
-        elif isinstance(home_position, tuple) and len(home_position) == 2:
-            home_tuple = (int(home_position[0]), int(home_position[1]))
-        else:
-            home_tuple = None
-        profile_field = blueprint.get("personality_profile")
-        resolved_profile, resolved_personality = self._choose_personality_profile(
-            agent_id,
-            profile_field if isinstance(profile_field, str) else None,
-        )
-        personality_override = blueprint.get("personality")
-        if isinstance(personality_override, Personality):
-            resolved_personality = personality_override
-        snapshot = AgentSnapshot(
-            agent_id=agent_id,
-            position=position_tuple,
-            needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
-            wallet=0.0,
-            home_position=home_tuple,
-            origin_agent_id=origin_agent_id,
-            personality=resolved_personality,
-            personality_profile=resolved_profile,
-        )
-        job_id = blueprint.get("job_id")
-        if isinstance(job_id, str):
-            snapshot.job_id = job_id
-        self.agents[agent_id] = snapshot
-        self._spatial_index.insert_agent(agent_id, snapshot.position)
-        self._assign_job_if_missing(snapshot)
-        self._sync_agent_spawn(snapshot)
-        self._emit_event(
-            "agent_respawn",
-            {
-                "agent_id": agent_id,
-                "original_agent_id": origin_agent_id,
-                "tick": self.tick,
-            },
-        )
+    def _assign_job_if_missing(self, snapshot: AgentSnapshot) -> None:
+        self._lifecycle_service.assign_job_if_missing(snapshot)
 
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
-        if snapshot.home_position is None:
-            snapshot.home_position = snapshot.position
-        self._employment_runtime.reset_context(snapshot.agent_id)
-        self.embedding_allocator.allocate(snapshot.agent_id, self.tick)
-
-    def _release_queue_membership(self, agent_id: str) -> None:
-        self.queue_manager.remove_agent(agent_id, self.tick)
-        for object_id, occupant in list(self._active_reservations.items()):
-            if occupant == agent_id:
-                self._sync_reservation(object_id)
+        self._lifecycle_service.sync_agent_spawn(snapshot)
 
     def _sync_reservation_for_agent(self, agent_id: str) -> None:
-        for object_id, occupant in list(self._active_reservations.items()):
-            if occupant == agent_id:
-                self._sync_reservation(object_id)
+        self._lifecycle_service.sync_reservation_for_agent(agent_id)
 
     def _is_position_walkable(self, position: tuple[int, int]) -> bool:
-        if any(agent.position == position for agent in self.agents.values()):
-            return False
-        if position in self._objects_by_position:
-            return False
-        return True
+        return self._lifecycle_service.is_position_walkable(position)
 
     def register_object(
         self,
@@ -1212,15 +1126,10 @@ class WorldState:
     ) -> None:
         if agent_a == agent_b:
             return
-        ledger_a = self._get_rivalry_ledger(agent_a)
-        ledger_b = self._get_rivalry_ledger(agent_b)
-        ledger_a.apply_conflict(agent_b, intensity=intensity)
-        ledger_b.apply_conflict(agent_a, intensity=intensity)
-        self.update_relationship(
+        self._relationships.apply_rivalry_conflict(
             agent_a,
             agent_b,
-            rivalry=0.1 * intensity,
-            event="conflict",
+            intensity=intensity,
         )
         self._queue_conflicts.record_rivalry_event(
             tick=self.tick,
@@ -1232,28 +1141,22 @@ class WorldState:
 
     def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
-        snapshot: dict[str, dict[str, float]] = {}
-        for agent_id, ledger in self._rivalry_ledgers.items():
-            data = ledger.snapshot()
-            if data:
-                snapshot[agent_id] = data
-        return snapshot
+        return self._relationships.rivalry_snapshot()
 
     def relationships_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
-        snapshot: dict[str, dict[str, dict[str, float]]] = {}
-        for agent_id, ledger in self._relationship_ledgers.items():
-            data = ledger.snapshot()
-            if data:
-                snapshot[agent_id] = data
-        return snapshot
+        return self._relationships.relationships_snapshot()
 
     def relationship_tie(self, agent_id: str, other_id: str) -> RelationshipTie | None:
         """Return the current relationship tie between two agents, if any."""
+        return self._relationships.relationship_tie(agent_id, other_id)
 
-        ledger = self._relationship_ledgers.get(agent_id)
-        if ledger is None:
-            return None
-        return ledger.tie_for(other_id)
+    def get_rivalry_ledger(self, agent_id: str):
+        """Return the rivalry ledger for ``agent_id``."""
+
+        return self._relationships.get_rivalry_ledger(agent_id)
+
+    def _get_rivalry_ledger(self, agent_id: str):
+        return self.get_rivalry_ledger(agent_id)
 
     def consume_chat_events(self) -> list[dict[str, Any]]:
         """Return chat events staged for reward calculations and clear the buffer."""
@@ -1267,64 +1170,23 @@ class WorldState:
 
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            return 0.0
-        return ledger.score_for(other_id)
+        return self._relationships.rivalry_value(agent_id, other_id)
 
     def rivalry_should_avoid(self, agent_id: str, other_id: str) -> bool:
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            return False
-        return ledger.should_avoid(other_id)
+        return self._relationships.rivalry_should_avoid(agent_id, other_id)
 
     def rivalry_top(self, agent_id: str, limit: int) -> list[tuple[str, float]]:
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            return []
-        return ledger.top_rivals(limit)
+        return self._relationships.rivalry_top(agent_id, limit)
 
     def consume_rivalry_events(self) -> list[dict[str, Any]]:
         """Return rivalry events recorded since the last call."""
 
         return self._queue_conflicts.consume_rivalry_events()
 
-    def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
-        ledger = self._rivalry_ledgers.get(agent_id)
-        if ledger is None:
-            ledger = RivalryLedger(
-                owner_id=agent_id,
-                params=self._rivalry_parameters(),
-                eviction_hook=self._record_relationship_eviction,
-            )
-            self._rivalry_ledgers[agent_id] = ledger
-        else:
-            ledger.eviction_hook = self._record_relationship_eviction
-        return ledger
-
-    def _get_relationship_ledger(self, agent_id: str) -> RelationshipLedger:
-        ledger = self._relationship_ledgers.get(agent_id)
-        if ledger is None:
-            ledger = RelationshipLedger(
-                owner_id=agent_id,
-                params=self._relationship_parameters(),
-                eviction_hook=self._record_relationship_eviction,
-            )
-            self._relationship_ledgers[agent_id] = ledger
-        else:
-            ledger.set_eviction_hook(
-                owner_id=agent_id,
-                hook=self._record_relationship_eviction,
-            )
-        return ledger
-
-    def _relationship_parameters(self) -> RelationshipParameters:
-        return RelationshipParameters(max_edges=self.config.conflict.rivalry.max_edges)
-
     def _choose_personality_profile(
         self, agent_id: str, profile_name: str | None = None
     ) -> tuple[str, Personality]:
-        candidate = _normalize_profile_name(profile_name)
+        candidate = normalize_profile_name(profile_name)
         config = getattr(self, "config", None)
         if config is not None and hasattr(config, "resolve_personality_profile"):
             try:
@@ -1333,7 +1195,7 @@ class WorldState:
                 chosen = candidate
         else:
             chosen = candidate
-        return _resolve_personality_profile(chosen)
+        return resolve_personality_profile(chosen)
 
     def select_personality_profile(
         self, agent_id: str, profile_name: str | None = None
@@ -1345,7 +1207,7 @@ class WorldState:
     def _personality_for(self, agent_id: str) -> Personality:
         snapshot = self.agents.get(agent_id)
         if snapshot is None or snapshot.personality is None:
-            return _default_personality()
+            return default_personality()
         return snapshot.personality
 
     def _profile_for_snapshot(
@@ -1368,101 +1230,18 @@ class WorldState:
             self._personality_profile_cache[key] = profile
         return profile
 
-    def _apply_relationship_delta(
-        self,
-        owner_id: str,
-        other_id: str,
-        *,
-        delta: RelationshipDelta,
-        event: RelationshipEvent,
-    ) -> None:
-        ledger = self._get_relationship_ledger(owner_id)
-        adjusted = apply_personality_modifiers(
-            delta=delta,
-            personality=self._personality_for(owner_id),
-            event=event,
-            enabled=bool(self.config.features.relationship_modifiers),
-        )
-        ledger.apply_delta(
-            other_id,
-            trust=adjusted.trust,
-            familiarity=adjusted.familiarity,
-            rivalry=adjusted.rivalry,
-        )
-
-    def _rivalry_parameters(self) -> RivalryParameters:
-        cfg = self.config.conflict.rivalry
-        return RivalryParameters(
-            increment_per_conflict=cfg.increment_per_conflict,
-            decay_per_tick=cfg.decay_per_tick,
-            min_value=cfg.min_value,
-            max_value=cfg.max_value,
-            avoid_threshold=cfg.avoid_threshold,
-            eviction_threshold=cfg.eviction_threshold,
-            max_edges=cfg.max_edges,
-        )
-
-    def _decay_rivalry_ledgers(self) -> None:
-        if not self._rivalry_ledgers:
-            return
-        empty_agents: list[str] = []
-        for agent_id, ledger in self._rivalry_ledgers.items():
-            ledger.decay(ticks=1)
-            if not ledger.snapshot():
-                empty_agents.append(agent_id)
-        for agent_id in empty_agents:
-            self._rivalry_ledgers.pop(agent_id, None)
-        self._decay_relationship_ledgers()
-
-    def _decay_relationship_ledgers(self) -> None:
-        if not self._relationship_ledgers:
-            return
-        empty_agents: list[str] = []
-        for agent_id, ledger in self._relationship_ledgers.items():
-            ledger.decay()
-            if not ledger.snapshot():
-                empty_agents.append(agent_id)
-        for agent_id in empty_agents:
-            self._relationship_ledgers.pop(agent_id, None)
-
-    def _record_relationship_eviction(self, owner_id: str, other_id: str, reason: str) -> None:
-        self._relationship_churn.record_eviction(
-            tick=self.tick,
-            owner_id=owner_id,
-            evicted_id=other_id,
-            reason=reason,
-        )
-
     def relationship_metrics_snapshot(self) -> dict[str, object]:
-        return self._relationship_churn.latest_payload()
+        return self._relationships.relationship_metrics_snapshot()
 
     def load_relationship_metrics(self, payload: Mapping[str, object] | None) -> None:
-        if not payload:
-            self._relationship_churn = RelationshipChurnAccumulator(
-                window_ticks=self._relationship_window_ticks,
-                max_samples=8,
-            )
-            return
-        self._relationship_churn.ingest_payload(dict(payload))
+        self._relationships.load_relationship_metrics(payload)
 
     def load_relationship_snapshot(
         self,
         snapshot: dict[str, dict[str, dict[str, float]]],
     ) -> None:
         """Restore relationship ledgers from persisted snapshot data."""
-
-        self._relationship_ledgers.clear()
-        for owner_id, edges in snapshot.items():
-            ledger = RelationshipLedger(
-                owner_id=owner_id,
-                params=self._relationship_parameters(),
-            )
-            ledger.inject(edges)
-            ledger.set_eviction_hook(
-                owner_id=owner_id,
-                hook=self._record_relationship_eviction,
-            )
-            self._relationship_ledgers[owner_id] = ledger
+        self._relationships.load_relationship_snapshot(snapshot)
 
     def update_relationship(
         self,
@@ -1474,11 +1253,31 @@ class WorldState:
         rivalry: float = 0.0,
         event: RelationshipEvent = "generic",
     ) -> None:
-        if agent_a == agent_b:
-            return
-        delta = RelationshipDelta(trust=trust, familiarity=familiarity, rivalry=rivalry)
-        self._apply_relationship_delta(agent_a, agent_b, delta=delta, event=event)
-        self._apply_relationship_delta(agent_b, agent_a, delta=delta, event=event)
+        self._relationships.update_relationship(
+            agent_a,
+            agent_b,
+            trust=trust,
+            familiarity=familiarity,
+            rivalry=rivalry,
+            event=event,
+        )
+
+    def set_relationship(
+        self,
+        agent_a: str,
+        agent_b: str,
+        *,
+        trust: float,
+        familiarity: float,
+        rivalry: float,
+    ) -> None:
+        self._relationships.set_relationship(
+            agent_a,
+            agent_b,
+            trust=trust,
+            familiarity=familiarity,
+            rivalry=rivalry,
+        )
 
     def record_chat_success(self, speaker: str, listener: str, quality: float) -> None:
         clipped_quality = max(0.0, min(1.0, quality))
@@ -1665,84 +1464,20 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        self._decay_rivalry_ledgers()
+        self._relationships.decay()
         self._apply_job_state()
         self._update_basket_metrics()
 
     def apply_nightly_reset(self) -> list[str]:
-        """Return agents home, refresh needs, and reset employment flags."""
-
-        if not self.agents:
-            return []
-        reset_agents: list[str] = []
-        for snapshot in self.agents.values():
-            previous_position = snapshot.position
-            home = snapshot.home_position or snapshot.position
-            if home is None:
-                home = snapshot.position
-                snapshot.home_position = home
-
-            target = home
-            if target is not None and target != snapshot.position:
-                occupied = any(
-                    other.agent_id != snapshot.agent_id and other.position == target
-                    for other in self.agents.values()
-                )
-                blocked = target in self._objects_by_position
-                if not occupied and not blocked:
-                    self._release_queue_membership(snapshot.agent_id)
-                    snapshot.position = target
-                    self._sync_reservation_for_agent(snapshot.agent_id)
-
-            for need_name, value in snapshot.needs.items():
-                snapshot.needs[need_name] = max(0.5, min(1.0, float(value)))
-
-            snapshot.exit_pending = False
-            snapshot.on_shift = False
-            snapshot.shift_state = "pre_shift"
-            snapshot.late_ticks_today = 0
-            ctx = self._get_employment_context(snapshot.agent_id)
-            ctx.update(
-                {
-                    "state": "pre_shift",
-                    "late_penalty_applied": False,
-                    "absence_penalty_applied": False,
-                    "late_event_emitted": False,
-                    "absence_event_emitted": False,
-                    "departure_event_emitted": False,
-                    "late_help_event_emitted": False,
-                    "took_shift_event_emitted": False,
-                    "shift_started_tick": None,
-                    "shift_end_tick": None,
-                    "last_present_tick": None,
-                    "late_ticks": 0,
-                    "shift_outcome_recorded": False,
-                    "ever_on_time": False,
-                    "late_counter_recorded": False,
-                }
-            )
-
-            reset_agents.append(snapshot.agent_id)
-            self._emit_event(
-                "agent_nightly_reset",
-                {
-                    "agent_id": snapshot.agent_id,
-                    "moved": snapshot.position != previous_position,
-                    "home_position": list(snapshot.home_position)
-                    if snapshot.home_position
-                    else None,
-                },
-            )
-
-        return reset_agents
+        return self._nightly_reset_service.apply(self.tick)
 
     def assign_jobs_to_agents(self) -> None:
         """Assign jobs to agents lacking a valid role."""
 
-        self._employment_runtime.assign_jobs_to_agents()
+        self._employment_service.assign_jobs_to_agents()
 
     def _apply_job_state(self) -> None:
-        self._employment_runtime.apply_job_state()
+        self._employment_service.apply_job_state()
 
     def _apply_job_state_legacy(self) -> None:
         self.employment._apply_job_state_legacy(self)
@@ -1754,25 +1489,25 @@ class WorldState:
     # Employment helpers
     # ------------------------------------------------------------------
     def _employment_context_defaults(self) -> dict[str, Any]:
-        return self._employment_runtime.context_defaults()
+        return self._employment_service.context_defaults()
 
     def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        return self._employment_runtime.get_context(agent_id)
+        return self._employment_service.get_context(agent_id)
 
     def _employment_context_wages(self, agent_id: str) -> float:
-        return self._employment_runtime.context_wages(agent_id)
+        return self._employment_service.context_wages(agent_id)
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
-        return self._employment_runtime.context_punctuality(agent_id)
+        return self._employment_service.context_punctuality(agent_id)
 
     def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_runtime.idle_state(snapshot, ctx)
+        self._employment_service.idle_state(snapshot, ctx)
 
     def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_runtime.prepare_state(snapshot, ctx)
+        self._employment_service.prepare_state(snapshot, ctx)
 
     def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        self._employment_runtime.begin_shift(ctx, start, end)
+        self._employment_service.begin_shift(ctx, start, end)
 
     def _employment_determine_state(
         self,
@@ -1783,7 +1518,7 @@ class WorldState:
         at_required_location: bool,
         employment_cfg: EmploymentConfig,
     ) -> str:
-        return self._employment_runtime.determine_state(
+        return self._employment_service.determine_state(
             ctx=ctx,
             tick=tick,
             start=start,
@@ -1802,7 +1537,7 @@ class WorldState:
         lateness_penalty: float,
         employment_cfg: EmploymentConfig,
     ) -> None:
-        self._employment_runtime.apply_state_effects(
+        self._employment_service.apply_state_effects(
             snapshot=snapshot,
             ctx=ctx,
             state=state,
@@ -1820,7 +1555,7 @@ class WorldState:
         employment_cfg: EmploymentConfig,
         job_id: str | None,
     ) -> None:
-        self._employment_runtime.finalize_shift(
+        self._employment_service.finalize_shift(
             snapshot=snapshot,
             ctx=ctx,
             employment_cfg=employment_cfg,
@@ -1828,58 +1563,34 @@ class WorldState:
         )
 
     def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
-        return self._employment_runtime.coworkers_on_shift(snapshot)
+        return self._employment_service.coworkers_on_shift(snapshot)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
-        return self._employment_runtime.queue_snapshot()
+        return self._employment_service.queue_snapshot()
 
     def employment_request_manual_exit(self, agent_id: str, tick: int) -> bool:
-        return self._employment_runtime.request_manual_exit(agent_id, tick)
+        return self._employment_service.request_manual_exit(agent_id, tick)
 
     def employment_defer_exit(self, agent_id: str) -> bool:
-        return self._employment_runtime.defer_exit(agent_id)
+        return self._employment_service.defer_exit(agent_id)
 
     def employment_exits_today(self) -> int:
-        return self._employment_runtime.exits_today()
+        return self._employment_service.exits_today()
 
     def set_employment_exits_today(self, value: int) -> None:
-        self._employment_runtime.set_exits_today(value)
+        self._employment_service.set_exits_today(value)
 
     def reset_employment_exits_today(self) -> None:
-        self._employment_runtime.reset_exits_today()
+        self._employment_service.reset_exits_today()
 
     def increment_employment_exits_today(self) -> None:
-        self._employment_runtime.increment_exits_today()
+        self._employment_service.increment_exits_today()
 
     def _update_basket_metrics(self) -> None:
-        basket_cost = (
-            self.config.economy.get("meal_cost", 0.0)
-            + self.config.economy.get("cook_energy_cost", 0.0)
-            + self.config.economy.get("cook_hygiene_cost", 0.0)
-            + self.config.economy.get("ingredients_cost", 0.0)
-        )
-        for snapshot in self.agents.values():
-            snapshot.inventory["basket_cost"] = basket_cost
-        self._restock_economy()
+        self._economy_service.update_basket_metrics()
 
     def _restock_economy(self) -> None:
-        restock_amount = int(self.config.economy.get("stove_stock_replenish", 0))
-        if restock_amount <= 0:
-            return
-        if self.tick % 200 != 0:
-            return
-        for obj in self.objects.values():
-            if obj.object_type == "stove":
-                before = obj.stock.get("raw_ingredients", 0)
-                obj.stock["raw_ingredients"] = before + restock_amount
-                self._emit_event(
-                    "stock_replenish",
-                    {
-                        "object_id": obj.object_id,
-                        "type": "stove",
-                        "amount": restock_amount,
-                    },
-                )
+        self._economy_service.restock_economy()
 
     # ------------------------------------------------------------------
     # Perturbation helpers: price spikes, utilities, arranged meets
@@ -1891,38 +1602,20 @@ class WorldState:
         magnitude: float,
         targets: Iterable[str] | None = None,
     ) -> None:
-        resolved = tuple(self._resolve_price_targets(targets))
-        if not resolved:
-            return
-        self._price_spike_events[event_id] = {
-            "magnitude": max(float(magnitude), 0.0),
-            "targets": resolved,
-        }
-        self._recompute_price_spikes()
+        self._perturbation_service.apply_price_spike(
+            event_id,
+            magnitude=magnitude,
+            targets=targets,
+        )
 
     def clear_price_spike(self, event_id: str) -> None:
-        if event_id not in self._price_spike_events:
-            return
-        self._price_spike_events.pop(event_id, None)
-        self._recompute_price_spikes()
+        self._perturbation_service.clear_price_spike(event_id)
 
     def apply_utility_outage(self, event_id: str, utility: str) -> None:
-        util = utility.lower()
-        events = self._utility_events.setdefault(util, set())
-        if event_id in events:
-            return
-        events.add(event_id)
-        if len(events) == 1:
-            self._set_utility_state(util, online=False)
+        self._perturbation_service.apply_utility_outage(event_id, utility)
 
     def clear_utility_outage(self, event_id: str, utility: str) -> None:
-        util = utility.lower()
-        events = self._utility_events.setdefault(util, set())
-        if event_id not in events:
-            return
-        events.discard(event_id)
-        if not events:
-            self._set_utility_state(util, online=True)
+        self._perturbation_service.clear_utility_outage(event_id, utility)
 
     def apply_arranged_meet(
         self,
@@ -1930,115 +1623,25 @@ class WorldState:
         location: str | None,
         targets: Iterable[str] | None = None,
     ) -> None:
-        if not targets:
-            return
-        obj = None
-        if location:
-            obj = self.objects.get(location)
-            if obj is None:
-                for candidate in self.objects.values():
-                    if candidate.object_type == location:
-                        obj = candidate
-                        break
-        position = None
-        if obj is not None and obj.position is not None:
-            position = (int(obj.position[0]), int(obj.position[1]))
-        if position is None:
-            return
-        for agent_id in targets:
-            snapshot = self.agents.get(str(agent_id))
-            if snapshot is None:
-                continue
-            snapshot.position = position
-            self.request_ctx_reset(snapshot.agent_id)
-            self._emit_event(
-                "arranged_meet_relocated",
-                {
-                    "agent_id": snapshot.agent_id,
-                    "location": obj.object_id if obj is not None else location,
-                    "tick": self.tick,
-                },
-            )
+        self._perturbation_service.apply_arranged_meet(
+            location=location,
+            targets=targets,
+        )
 
     def utility_online(self, utility: str) -> bool:
-        return self._utility_status.get(utility.lower(), True)
-
-    def _resolve_price_targets(self, targets: Iterable[str] | None) -> list[str]:
-        resolved: list[str] = []
-        if not targets:
-            return list(self._economy_baseline.keys())
-        groups = {
-            "global": list(self.config.economy.keys()),
-            "market": [
-                "meal_cost",
-                "cook_energy_cost",
-                "cook_hygiene_cost",
-                "ingredients_cost",
-            ],
-        }
-        for target in targets:
-            key = str(target).lower()
-            if key in groups:
-                for entry in groups[key]:
-                    if entry in self.config.economy and entry not in resolved:
-                        resolved.append(entry)
-                continue
-            if key in self.config.economy and key not in resolved:
-                resolved.append(key)
-        return resolved
-
-    def _recompute_price_spikes(self) -> None:
-        for key, value in self._economy_baseline.items():
-            self.config.economy[key] = value
-        for event in self._price_spike_events.values():
-            magnitude = max(event.get("magnitude", 1.0), 0.0)
-            for key in event.get("targets", ()):  # type: ignore[arg-type]
-                if key in self.config.economy:
-                    self.config.economy[key] = self.config.economy[key] * magnitude
-        self._update_basket_metrics()
-
-    def _set_utility_state(self, utility: str, *, online: bool) -> None:
-        utility_key = utility.lower()
-        self._utility_status[utility_key] = online
-        affected_types = {
-            "power": {"stove"},
-            "water": {"shower", "sink"},
-        }.get(utility_key, set())
-        flag = f"{utility_key}_on"
-        for obj in self.objects.values():
-            if affected_types and obj.object_type not in affected_types:
-                continue
-            baseline_flags = self._object_utility_baselines.setdefault(obj.object_id, {})
-            if not online:
-                baseline_flags.setdefault(flag, float(obj.stock.get(flag, 1.0)))
-                obj.stock[flag] = 0.0
-                active_agent = self.queue_manager.active_agent(obj.object_id)
-                if active_agent is not None:
-                    self.queue_manager.release(
-                        obj.object_id, active_agent, self.tick, success=False
-                    )
-                    self._sync_reservation(obj.object_id)
-            else:
-                baseline = baseline_flags.get(flag, 1.0)
-                obj.stock[flag] = baseline
+        return self._economy_service.utility_online(utility)
 
     def economy_settings(self) -> dict[str, float]:
         """Return the current economy configuration values."""
 
-        return {str(key): float(value) for key, value in self.config.economy.items()}
+        return self._economy_service.economy_settings()
 
     def active_price_spikes(self) -> dict[str, dict[str, object]]:
         """Return a summary of currently active price spike events."""
 
-        snapshot: dict[str, dict[str, object]] = {}
-        for event_id, info in self._price_spike_events.items():
-            snapshot[event_id] = {
-                "magnitude": float(info.get("magnitude", 0.0)),
-                "targets": [str(target) for target in info.get("targets", ())],
-            }
-        return snapshot
+        return self._economy_service.active_price_spikes()
 
     def utility_snapshot(self) -> dict[str, bool]:
         """Return on/off status for tracked utilities."""
 
-        return {str(key): bool(value) for key, value in self._utility_status.items()}
+        return self._economy_service.utility_snapshot()

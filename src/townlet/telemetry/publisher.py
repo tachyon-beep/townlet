@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import copy
+import importlib.resources
 import json
 import logging
 import threading
-import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict
@@ -17,22 +17,41 @@ from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
+from townlet.telemetry.aggregation import (
+    StreamPayloadBuilder,
+    TelemetryAggregator,
+)
 from townlet.telemetry.events import (
     RELATIONSHIP_FRIENDSHIP_EVENT,
     RELATIONSHIP_RIVALRY_EVENT,
     RELATIONSHIP_SOCIAL_ALERT_EVENT,
 )
 from townlet.telemetry.narration import NarrationRateLimiter
+from townlet.telemetry.transform import (
+    EnsureFieldsTransform,
+    RedactFieldsTransform,
+    SchemaValidationTransform,
+    SnapshotEventNormalizer,
+    TelemetryTransformPipeline,
+    TransformPipelineConfig,
+    compile_json_schema,
+    copy_relationship_snapshot,
+    normalize_perturbations_payload,
+)
+from townlet.config.loader import TelemetryTransformEntry
 from townlet.telemetry.transport import (
     TelemetryTransportError,
     TransportBuffer,
     create_transport,
 )
+from townlet.telemetry.worker import TelemetryWorkerManager
+from townlet.world.core.runtime_adapter import ensure_world_adapter
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from townlet.world.grid import WorldState
+    from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
 
 class TelemetryPublisher:
@@ -119,8 +138,7 @@ class TelemetryPublisher:
             max_batch_size=int(transport_cfg.buffer.max_batch_size),
             max_buffer_bytes=int(transport_cfg.buffer.max_buffer_bytes),
         )
-        self._transport_flush_interval = max(1, int(transport_cfg.buffer.flush_interval_ticks))
-        self._last_flush_tick = 0
+        worker_cfg = self.config.telemetry.worker
         self._transport_status: dict[str, Any] = {
             "connected": False,
             "dropped_messages": 0,
@@ -129,6 +147,13 @@ class TelemetryPublisher:
             "last_success_tick": None,
             "queue_length": 0,
             "last_flush_duration_ms": None,
+            "last_flush_payload_bytes": 0,
+            "last_batch_count": 0,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "queue_length_peak": 0,
+            "consecutive_send_failures": 0,
+            "send_failures_total": 0,
             "tls_enabled": bool(getattr(transport_cfg, "enable_tls", False)),
             "verify_hostname": bool(getattr(transport_cfg, "verify_hostname", True)),
             "allow_plaintext": bool(getattr(transport_cfg, "allow_plaintext", False)),
@@ -137,6 +162,7 @@ class TelemetryPublisher:
             "worker_restart_count": 0,
             "last_worker_error": None,
             "auth_enabled": bool(config.console_auth.enabled),
+            "backpressure_strategy": str(getattr(worker_cfg, "backpressure", "drop_oldest")),
         }
         if transport_cfg.type == "tcp" and not self._transport_status["tls_enabled"]:
             endpoint = getattr(transport_cfg, "endpoint", None) or ""
@@ -146,37 +172,149 @@ class TelemetryPublisher:
             )
         self._transport_client = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
-        self._flush_poll_interval = max(0.01, poll_interval)
-        self._buffer_lock = threading.Lock()
-        self._worker_state_lock = threading.Lock()
-        self._worker_restart_lock = threading.Lock()
-        self._flush_event = threading.Event()
-        self._stop_event = threading.Event()
-        self._pending_restart = False
-        self._shutdown = False
-        self._worker_restart_limit = 3
-        self._latest_enqueue_tick = 0
-        self._diff_enabled = bool(getattr(config.telemetry, "diff_enabled", False))
-        self._last_stream_payload: dict[str, Any] | None = None
-        self._start_flush_thread()
-
-    def _start_flush_thread(self) -> None:
-        with self._worker_state_lock:
-            if self._shutdown:
-                return
-            self._transport_status["worker_alive"] = True
-            self._transport_status["worker_error"] = None
-        self._stop_event.clear()
-        self._flush_event.clear()
-        thread = threading.Thread(
-            target=self._flush_loop,
-            name="telemetry-flush",
-            daemon=True,
+        # Expose the flush poll interval for tests/diagnostics (legacy compatibility)
+        self._flush_poll_interval = poll_interval
+        self._worker_manager = TelemetryWorkerManager(
+            buffer=self._transport_buffer,
+            retry_policy=self._transport_retry,
+            status=self._transport_status,
+            send_callable=lambda payload: self._transport_client.send(payload),
+            reset_callable=self._reset_transport_client,
+            poll_interval_seconds=poll_interval,
+            flush_interval_ticks=int(transport_cfg.buffer.flush_interval_ticks),
+            backpressure_strategy=str(getattr(worker_cfg, "backpressure", "drop_oldest")),
+            block_timeout_seconds=float(getattr(worker_cfg, "block_timeout_seconds", 0.5)),
+            restart_limit=int(getattr(worker_cfg, "restart_limit", 3)),
         )
-        self._flush_thread = thread
-        thread.start()
-        with self._worker_restart_lock:
-            self._pending_restart = False
+        self._diff_enabled = bool(getattr(config.telemetry, "diff_enabled", False))
+        self._payload_builder = StreamPayloadBuilder(
+            schema_version=self.schema_version,
+            diff_enabled=self._diff_enabled,
+        )
+        self._aggregator = TelemetryAggregator(
+            self._payload_builder,
+            console_sink=self._store_console_results,
+            failure_sink=self._store_loop_failure,
+        )
+        configured_transforms = self._build_transforms_from_config()
+        self._transform_config = TransformPipelineConfig(transforms=tuple(configured_transforms))
+        self._transform_pipeline = self._transform_config.build_pipeline()
+        self._worker_manager.start()
+
+    def _build_transforms_from_config(self) -> list[object]:
+        """Instantiate telemetry transforms based on configuration."""
+
+        transforms_cfg = getattr(self.config.telemetry, "transforms", None)
+        if transforms_cfg is None or not transforms_cfg.pipeline:
+            return list(self._default_transforms())
+        instantiated: list[object] = []
+        for entry in transforms_cfg.pipeline:
+            instantiated.append(self._instantiate_transform(entry))
+        return instantiated
+
+    def _default_transforms(self) -> tuple[object, ...]:
+        builtin_schemas = self._load_builtin_schemas()
+        transforms: list[object] = [
+            SnapshotEventNormalizer(),
+            RedactFieldsTransform(fields=("policy_identity",), apply_to_kinds=("snapshot", "diff")),
+            EnsureFieldsTransform(
+                required_fields_by_kind={
+                    "snapshot": {"schema_version", "tick"},
+                    "diff": {"schema_version", "tick", "changes"},
+                },
+                default_required_fields=("tick",),
+            ),
+        ]
+        if builtin_schemas:
+            transforms.append(
+                SchemaValidationTransform(
+                    schema_by_kind=builtin_schemas,
+                    mode="drop",
+                )
+            )
+        return tuple(transforms)
+
+    def _load_builtin_schemas(self) -> dict[str, object]:
+        schema_map: dict[str, object] = {}
+        try:
+            package = importlib.resources.files("townlet.telemetry.schemas")
+        except (AttributeError, ModuleNotFoundError):  # pragma: no cover - best effort fallback
+            return schema_map
+        for kind, filename in (("snapshot", "snapshot"), ("diff", "diff")):
+            try:
+                with importlib.resources.as_file(package / f"{filename}.schema.json") as path:
+                    payload = json.loads(path.read_text())
+            except FileNotFoundError:  # pragma: no cover - optional asset
+                continue
+            except json.JSONDecodeError as exc:  # pragma: no cover - invalid asset
+                logger.error("Failed to parse builtin telemetry schema %s: %s", filename, exc)
+                continue
+            schema_map[kind] = compile_json_schema(payload)
+        return schema_map
+
+    def _instantiate_transform(self, entry: TelemetryTransformEntry) -> object:
+        transform_id = entry.id
+        options = entry.options or {}
+
+        if transform_id == "snapshot_normalizer":
+            return SnapshotEventNormalizer()
+
+        if transform_id == "redact_fields":
+            fields = options.get("fields")
+            if not fields:
+                raise ValueError("telemetry.transforms.redact_fields requires 'fields' option")
+            if not isinstance(fields, Iterable) or isinstance(fields, (str, bytes)):
+                raise TypeError("telemetry.transforms.redact_fields.fields must be a sequence of field names")
+            kinds = options.get("kinds")
+            apply_to_kinds: Iterable[str] | None
+            if kinds is None:
+                apply_to_kinds = ("snapshot", "diff")
+            else:
+                if not isinstance(kinds, Iterable) or isinstance(kinds, (str, bytes)):
+                    raise TypeError("telemetry.transforms.redact_fields.kinds must be a sequence of event kinds")
+                apply_to_kinds = [str(kind) for kind in kinds]
+            return RedactFieldsTransform(fields=[str(field) for field in fields], apply_to_kinds=apply_to_kinds)
+
+        if transform_id == "ensure_fields":
+            required_by_kind = options.get("required_fields_by_kind") or {}
+            if not isinstance(required_by_kind, Mapping):
+                raise TypeError("telemetry.transforms.ensure_fields.required_fields_by_kind must be a mapping")
+            processed_required = {
+                str(kind): {str(field) for field in fields}
+                for kind, fields in required_by_kind.items()
+            }
+            default_required = options.get("default_required_fields")
+            if default_required is not None:
+                if not isinstance(default_required, Iterable) or isinstance(default_required, (str, bytes)):
+                    raise TypeError("telemetry.transforms.ensure_fields.default_required_fields must be a sequence")
+                default_required_set = {str(field) for field in default_required}
+            else:
+                default_required_set = ("tick",)
+            return EnsureFieldsTransform(
+                required_fields_by_kind=processed_required,
+                default_required_fields=default_required_set,
+            )
+
+        if transform_id == "schema_validator":
+            schema_option = options.get("schemas")
+            if not isinstance(schema_option, Mapping) or not schema_option:
+                raise ValueError("telemetry.transforms.schema_validator requires a 'schemas' mapping")
+            compiled: dict[str, object] = {}
+            for kind, schema_path in schema_option.items():
+                path = Path(str(schema_path)).expanduser()
+                if not path.is_absolute():
+                    path = (Path.cwd() / path).resolve()
+                if not path.exists():
+                    raise FileNotFoundError(f"Telemetry schema file not found: {path}")
+                try:
+                    schema_payload = json.loads(path.read_text())
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Failed to parse telemetry schema at {path}: {exc}") from exc
+                compiled[str(kind)] = compile_json_schema(schema_payload)
+            mode = str(options.get("mode", "drop")).lower()
+            return SchemaValidationTransform(schema_by_kind=compiled, mode=mode)
+
+        raise ValueError(f"Unsupported telemetry transform id '{transform_id}'")
 
     def queue_console_command(self, command: object) -> None:
         """Authorise and enqueue an incoming console command payload."""
@@ -239,7 +377,7 @@ class TelemetryPublisher:
             "employment_metrics": dict(self._latest_employment_metrics or {}),
             "events": list(self._latest_events),
             "affordance_runtime": self.latest_affordance_runtime(),
-            "relationship_snapshot": self._copy_relationship_snapshot(
+            "relationship_snapshot": copy_relationship_snapshot(
                 self._latest_relationship_snapshot
             ),
             "relationship_updates": [dict(update) for update in self._latest_relationship_updates],
@@ -272,8 +410,7 @@ class TelemetryPublisher:
         if self._latest_snapshot_migrations:
             state["snapshot_migrations"] = list(self._latest_snapshot_migrations)
         state["transport_status"] = dict(self._transport_status)
-        with self._buffer_lock:
-            state["transport_buffer_pending"] = len(self._transport_buffer)
+        state["transport_buffer_pending"] = self._worker_manager.queue_length()
         if self._latest_health_status:
             state["health"] = dict(self._latest_health_status)
         state["queue_history"] = list(self._queue_fairness_history)
@@ -384,9 +521,9 @@ class TelemetryPublisher:
             }
         snapshot_payload = payload.get("relationship_snapshot") or {}
         if isinstance(snapshot_payload, dict):
-            snapshot_copy = self._copy_relationship_snapshot(snapshot_payload)
+            snapshot_copy = copy_relationship_snapshot(snapshot_payload)
             self._latest_relationship_snapshot = snapshot_copy
-            self._previous_relationship_snapshot = self._copy_relationship_snapshot(snapshot_copy)
+            self._previous_relationship_snapshot = copy_relationship_snapshot(snapshot_copy)
         updates_payload = payload.get("relationship_updates", [])
         if isinstance(updates_payload, list):
             self._latest_relationship_updates = [dict(update) for update in updates_payload]
@@ -438,7 +575,7 @@ class TelemetryPublisher:
 
         perturbations_payload = payload.get("perturbations")
         if isinstance(perturbations_payload, Mapping):
-            self._latest_perturbations = self._normalize_perturbations_payload(
+            self._latest_perturbations = normalize_perturbations_payload(
                 perturbations_payload
             )
         else:
@@ -484,8 +621,7 @@ class TelemetryPublisher:
         pending = payload.get("transport_buffer_pending")
         if isinstance(pending, int) and pending > 0:
             self._transport_status["dropped_messages"] += int(pending)
-        with self._buffer_lock:
-            self._transport_buffer.clear()
+        self._worker_manager.clear_buffer()
         health_payload = payload.get("health")
         if isinstance(health_payload, Mapping):
             self._latest_health_status = {
@@ -549,6 +685,8 @@ class TelemetryPublisher:
             metrics["promotion_state"] = dict(promotion_state_payload)
             self._latest_stability_metrics = metrics
 
+        self._payload_builder.reset()
+
     def export_console_buffer(self) -> list[object]:
         return list(self._console_buffer)
 
@@ -557,6 +695,9 @@ class TelemetryPublisher:
 
     def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         """Persist console results for audit logs and downstream subscribers."""
+        self._aggregator.record_console_results(results)
+
+    def _store_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         batch: list[dict[str, Any]] = []
         for result in results:
             payload = result.to_dict()
@@ -594,6 +735,12 @@ class TelemetryPublisher:
     def record_loop_failure(self, payload: Mapping[str, object]) -> None:
         """Persist loop failure telemetry and append a failure event."""
 
+        failure_events = list(self._aggregator.record_loop_failure(payload))
+        transformed_events = self._transform_pipeline.process(failure_events)
+        for event in transformed_events:
+            self._enqueue_stream_payload(event.payload, tick=int(event.tick))
+
+    def _store_loop_failure(self, payload: Mapping[str, object]) -> None:
         failure_data = dict(payload)
         failure_data.setdefault("status", "error")
         self._latest_health_status = failure_data
@@ -622,7 +769,7 @@ class TelemetryPublisher:
     def _build_transport_client(self):
         cfg = self._transport_config
         try:
-            return create_transport(
+            client = create_transport(
                 transport_type=str(cfg.type),
                 file_path=cfg.file_path,
                 endpoint=getattr(cfg, "endpoint", None),
@@ -634,7 +781,12 @@ class TelemetryPublisher:
                 cert_file=getattr(cfg, "cert_file", None),
                 key_file=getattr(cfg, "key_file", None),
                 allow_plaintext=bool(getattr(cfg, "allow_plaintext", False)),
+                websocket_url=getattr(cfg, "websocket_url", None),
             )
+            start = getattr(client, "start", None)
+            if callable(start):
+                start()
+            return client
         except TelemetryTransportError as exc:  # pragma: no cover - init failure
             message = f"Failed to initialise telemetry transport '{cfg.type}': {exc}"
             logger.error(message)
@@ -644,161 +796,10 @@ class TelemetryPublisher:
         client = getattr(self, "_transport_client", None)
         if client is not None:
             try:
-                client.close()
+                client.stop()
             except Exception:  # pragma: no cover - logging only
                 logger.debug("Closing telemetry transport failed", exc_info=True)
         self._transport_client = self._build_transport_client()
-
-    def _send_with_retry(self, payload: bytes, tick: int) -> bool:
-        attempts = 0
-        max_attempts = max(0, int(self._transport_retry.max_attempts))
-        while True:
-            try:
-                self._transport_client.send(payload)
-                self._transport_status["connected"] = True
-                self._transport_status["last_success_tick"] = int(tick)
-                return True
-            except Exception as exc:  # pragma: no cover - depends on transport failure
-                error_message = str(exc)
-                self._transport_status["connected"] = False
-                self._transport_status["last_error"] = error_message
-                self._transport_status["last_failure_tick"] = int(tick)
-                logger.warning(
-                    "Telemetry transport send failed (attempt %s/%s): %s",
-                    attempts + 1,
-                    max_attempts + 1,
-                    error_message,
-                )
-                if attempts >= max_attempts:
-                    return False
-                attempts += 1
-                try:
-                    self._reset_transport_client()
-                except RuntimeError as reconnect_exc:
-                    reconnect_msg = str(reconnect_exc)
-                    self._transport_status["last_error"] = reconnect_msg
-                    logger.error("Telemetry transport reconnect failed: %s", reconnect_msg)
-                    return False
-                backoff = float(self._transport_retry.backoff_seconds)
-                if backoff > 0:
-                    time.sleep(backoff)
-
-    def _flush_transport_buffer(self, tick: int) -> None:
-        flushed_any = False
-        flushed_count = 0
-        start = time.perf_counter()
-        while True:
-            with self._buffer_lock:
-                if not len(self._transport_buffer):
-                    break
-                payload = self._transport_buffer.popleft()
-                queue_length = len(self._transport_buffer)
-                self._transport_status["queue_length"] = queue_length
-            flushed_any = True
-            flushed_count += 1
-            if not self._send_with_retry(payload, tick):
-                self._transport_status["dropped_messages"] += 1
-                logger.error("Dropping telemetry payload after repeated send failures")
-                with self._buffer_lock:
-                    if len(self._transport_buffer):
-                        dropped = len(self._transport_buffer)
-                        self._transport_status["dropped_messages"] += dropped
-                        self._transport_buffer.clear()
-                        self._transport_status["queue_length"] = 0
-                return
-        if flushed_any:
-            self._last_flush_tick = int(tick)
-            duration_ms = (time.perf_counter() - start) * 1_000.0
-            self._transport_status["last_flush_duration_ms"] = duration_ms
-            with self._buffer_lock:
-                queue_length = len(self._transport_buffer)
-                self._transport_status["queue_length"] = queue_length
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "Telemetry flush sent %s payloads in %.1f ms (pending=%s)",
-                    flushed_count,
-                    duration_ms,
-                    queue_length,
-                )
-
-    def _flush_loop(self) -> None:
-        had_failure = False
-        with self._worker_state_lock:
-            self._transport_status["worker_error"] = None
-        try:
-            while not self._stop_event.is_set():
-                self._flush_event.wait(timeout=self._flush_poll_interval)
-                self._flush_event.clear()
-                if self._stop_event.is_set():
-                    break
-                with self._buffer_lock:
-                    tick = self._latest_enqueue_tick
-                    pending = len(self._transport_buffer)
-                    self._transport_status["queue_length"] = pending
-                if pending:
-                    self._flush_transport_buffer(tick)
-        except Exception as exc:  # pragma: no cover - unexpected failure path
-            had_failure = True
-            self._handle_flush_worker_failure(exc)
-        finally:
-            with self._buffer_lock:
-                tick = self._latest_enqueue_tick
-                pending = len(self._transport_buffer)
-                self._transport_status["queue_length"] = pending
-            if pending and not had_failure:
-                try:
-                    self._flush_transport_buffer(tick)
-                except Exception as exc:  # pragma: no cover - shutdown failure
-                    had_failure = True
-                    self._handle_flush_worker_failure(exc)
-            with self._worker_state_lock:
-                self._transport_status["worker_alive"] = False
-                if not had_failure:
-                    self._transport_status["worker_error"] = None
-            restart_requested = False
-            with self._worker_restart_lock:
-                restart_requested = self._pending_restart and not self._shutdown
-            if restart_requested:
-                self._start_flush_thread()
-
-    def _handle_flush_worker_failure(self, exc: Exception) -> None:
-        message = f"{exc.__class__.__name__}: {exc}"
-        with self._worker_state_lock:
-            self._transport_status["worker_error"] = message
-            self._transport_status["worker_alive"] = False
-            self._transport_status["last_failure_tick"] = int(self._latest_enqueue_tick)
-            self._transport_status["connected"] = False
-            self._transport_status["last_worker_error"] = message
-        self._transport_status["last_error"] = message
-        logger.critical("Telemetry flush worker failed: %s", message, exc_info=True)
-
-        restart_scheduled = False
-        restart_attempt: int | None = None
-        if not self._shutdown:
-            with self._worker_restart_lock:
-                if not self._shutdown and not self._pending_restart:
-                    current = int(self._transport_status.get("worker_restart_count", 0))
-                    if current < self._worker_restart_limit:
-                        self._transport_status["worker_restart_count"] = current + 1
-                        self._pending_restart = True
-                        restart_scheduled = True
-                        restart_attempt = current + 1
-                    else:
-                        logger.critical(
-                            "Telemetry flush worker restart limit reached (%s attempts)",
-                            self._worker_restart_limit,
-                        )
-        if restart_scheduled:
-            logger.warning(
-                "Telemetry flush worker restarting (attempt %s/%s)",
-                restart_attempt,
-                self._worker_restart_limit,
-            )
-            self._flush_event.set()
-        else:
-            self._stop_event.set()
-            self._flush_event.set()
-
 
     def _enqueue_stream_payload(self, payload: Mapping[str, Any], *, tick: int) -> None:
         encoded = json.dumps(
@@ -808,153 +809,29 @@ class TelemetryPublisher:
         ).encode("utf-8")
         if not encoded.endswith(b"\n"):
             encoded += b"\n"
-        with self._buffer_lock:
-            self._transport_buffer.append(encoded)
-            self._latest_enqueue_tick = max(self._latest_enqueue_tick, int(tick))
-            if self._transport_buffer.is_over_capacity():
-                dropped = self._transport_buffer.drop_until_within_capacity()
-                if dropped:
-                    self._transport_status["dropped_messages"] += dropped
-                    logger.warning(
-                        "Telemetry buffer exceeded %s bytes; dropped %s payloads",
-                        self._transport_buffer.max_buffer_bytes,
-                        dropped,
-                    )
-            queue_length = len(self._transport_buffer)
-            self._transport_status["queue_length"] = queue_length
-            threshold = max(1, int(self._transport_buffer.max_batch_size // 2))
-            if queue_length >= threshold and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "Telemetry queue depth %s (threshold=%s, tick=%s)",
-                    queue_length,
-                    threshold,
-                    tick,
-                )
-        self._flush_event.set()
-
-    def _build_stream_payload(self, tick: int) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "schema_version": self.schema_version,
-            "tick": int(tick),
-            "runtime_variant": self._runtime_variant,
-            "queue_metrics": dict(self._latest_queue_metrics or {}),
-            "embedding_metrics": dict(self._latest_embedding_metrics or {}),
-            "employment": dict(self._latest_employment_metrics or {}),
-            "conflict": self.latest_conflict_snapshot(),
-            "relationships": self._latest_relationship_metrics or {},
-            "relationship_snapshot": self._copy_relationship_snapshot(
-                self._latest_relationship_snapshot
-            ),
-            "relationship_updates": [dict(entry) for entry in self._latest_relationship_updates],
-            "relationship_overlay": {
-                owner: [dict(item) for item in entries]
-                for owner, entries in self._latest_relationship_overlay.items()
-            },
-            "events": list(self._latest_events),
-            "narrations": [dict(entry) for entry in self._latest_narrations],
-            "jobs": {
-                agent_id: dict(snapshot) for agent_id, snapshot in self._latest_job_snapshot.items()
-            },
-            "economy": {
-                object_id: dict(obj) for object_id, obj in self._latest_economy_snapshot.items()
-            },
-            "economy_settings": dict(self._latest_economy_settings),
-            "price_spikes": {
-                event_id: {
-                    "magnitude": float(data.get("magnitude", 0.0)),
-                    "targets": list(data.get("targets", ())),
-                }
-                for event_id, data in self._latest_price_spikes.items()
-            },
-            "utilities": {key: bool(value) for key, value in self._latest_utilities.items()},
-            "affordance_manifest": dict(self._latest_affordance_manifest),
-            "reward_breakdown": self.latest_reward_breakdown(),
-            "stability": {
-                "metrics": self.latest_stability_metrics(),
-                "alerts": self.latest_stability_alerts(),
-                "inputs": self.latest_stability_inputs(),
-            },
-            "promotion": self.latest_promotion_state(),
-            "perturbations": self.latest_perturbations(),
-            "policy_identity": self.latest_policy_identity() or {},
-            "policy_snapshot": {
-                agent: dict(data) for agent, data in self._latest_policy_snapshot.items()
-            },
-            "anneal_status": self.latest_anneal_status(),
-            "kpi_history": self.kpi_history(),
-        }
-        return payload
-
-    def _prepare_stream_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if not self._diff_enabled:
-            return payload
-        return self._build_diff_payload(payload)
-
-    def _build_diff_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        snapshot = copy.deepcopy(payload)
-        if self._last_stream_payload is None:
-            self._last_stream_payload = snapshot
-            initial = dict(snapshot)
-            initial["payload_type"] = "snapshot"
-            return initial
-
-        previous = self._last_stream_payload
-        changes: dict[str, Any] = {}
-        for key, value in snapshot.items():
-            if key not in previous or previous[key] != value:
-                changes[str(key)] = value
-        removed = [str(key) for key in previous.keys() if key not in snapshot]
-
-        self._last_stream_payload = snapshot
-
-        # Schema version and tick live at the top level; don't include them in changes
-        changes.pop("schema_version", None)
-        changes.pop("tick", None)
-        changes.pop("payload_type", None)
-
-        diff_payload: dict[str, Any] = {
-            "schema_version": self.schema_version,
-            "tick": snapshot.get("tick"),
-            "payload_type": "diff",
-            "changes": changes,
-        }
-        if removed:
-            diff_payload["removed"] = removed
-        return diff_payload
-
-    def close(self) -> None:
-        self.stop_worker(wait=True)
-        with self._buffer_lock:
-            pending = len(self._transport_buffer)
-            tick = self._latest_enqueue_tick or self._last_flush_tick
-        if pending:
-            self._flush_transport_buffer(tick)
-        try:
-            self._transport_client.close()
-        except Exception:  # pragma: no cover - shutdown cleanup
-            logger.debug("Closing telemetry transport failed", exc_info=True)
+        self._worker_manager.enqueue(encoded, tick=int(tick))
 
     def stop_worker(self, *, wait: bool = True, timeout: float = 2.0) -> None:
         """Stop the background flush worker without closing transports."""
 
-        self._shutdown = True
-        with self._worker_restart_lock:
-            self._pending_restart = False
-        if not self._stop_event.is_set():
-            self._stop_event.set()
-            self._flush_event.set()
-        thread = getattr(self, "_flush_thread", None)
-        if wait and thread is not None and thread.is_alive():
-            thread.join(timeout=timeout)
+        self._worker_manager.stop(wait=wait, timeout=timeout)
+
+    def close(self) -> None:
+        self._worker_manager.close()
+        try:
+            self._transport_client.stop()
+        except Exception:  # pragma: no cover - shutdown cleanup
+            logger.debug("Closing telemetry transport failed", exc_info=True)
 
     def _capture_affordance_runtime(
         self,
         *,
-        world: WorldState,
+        world: WorldState | WorldRuntimeAdapterProtocol,
         events: Iterable[Mapping[str, object]] | None,
         tick: int,
     ) -> None:
-        runtime_snapshot = world.running_affordances_snapshot()
+        adapter = ensure_world_adapter(world)
+        runtime_snapshot = adapter.running_affordances_snapshot()
         running_payload = {
             str(object_id): asdict(state)
             for object_id, state in runtime_snapshot.items()
@@ -981,7 +858,7 @@ class TelemetryPublisher:
             "tick": int(tick),
             "running": running_payload,
             "running_count": len(running_payload),
-            "active_reservations": dict(world.active_reservations),
+            "active_reservations": dict(adapter.active_reservations),
             "event_counts": event_counts,
         }
 
@@ -1009,11 +886,21 @@ class TelemetryPublisher:
         if runtime_variant is not None:
             self._runtime_variant = runtime_variant
         self._current_tick = tick
+        adapter = ensure_world_adapter(world)
+        raw_world = getattr(adapter, "_world", world)
         self._narration_limiter.begin_tick(tick)
         manual_narrations = self._consume_manual_narrations()
         self._latest_narrations = manual_narrations
         previous_queue_metrics = dict(self._latest_queue_metrics or {})
-        queue_metrics = world.queue_manager.metrics()
+        try:
+            queue_metrics = adapter.queue_manager.metrics()
+        except Exception:  # pragma: no cover - defensive guard for stubs
+            logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+            queue_metrics = {
+                "cooldown_events": 0,
+                "ghost_step_events": 0,
+                "rotation_events": 0,
+            }
         self._latest_queue_metrics = queue_metrics
         fairness_delta = {
             "cooldown_events": max(
@@ -1032,10 +919,7 @@ class TelemetryPublisher:
                 - int(previous_queue_metrics.get("rotation_events", 0)),
             ),
         }
-        rivalry_snapshot: dict[str, object] = {}
-        rivalry_getter = getattr(world, "rivalry_snapshot", None)
-        if callable(rivalry_getter):
-            rivalry_snapshot = dict(rivalry_getter())
+        rivalry_snapshot = dict(adapter.rivalry_snapshot())
         self._queue_fairness_history.append(
             {
                 "tick": int(tick),
@@ -1046,20 +930,20 @@ class TelemetryPublisher:
         if len(self._queue_fairness_history) > 120:
             self._queue_fairness_history.pop(0)
 
-        consume_rivalry_events = getattr(world, "consume_rivalry_events", None)
-        if callable(consume_rivalry_events):
-            new_events = consume_rivalry_events() or []
-            for event in new_events:
-                payload = {
-                    "tick": int(event.get("tick", tick)),
-                    "agent_a": str(event.get("agent_a", "")),
-                    "agent_b": str(event.get("agent_b", "")),
-                    "intensity": float(event.get("intensity", 0.0)),
-                    "reason": str(event.get("reason", "unknown")),
-                }
-                self._rivalry_event_history.append(payload)
-            if len(self._rivalry_event_history) > 120:
-                self._rivalry_event_history = self._rivalry_event_history[-120:]
+        new_events = adapter.consume_rivalry_events()
+        for event in new_events:
+            if not isinstance(event, Mapping):
+                continue
+            payload = {
+                "tick": int(event.get("tick", tick)),
+                "agent_a": str(event.get("agent_a", "")),
+                "agent_b": str(event.get("agent_b", "")),
+                "intensity": float(event.get("intensity", 0.0)),
+                "reason": str(event.get("reason", "unknown")),
+            }
+            self._rivalry_event_history.append(payload)
+        if len(self._rivalry_event_history) > 120:
+            self._rivalry_event_history = self._rivalry_event_history[-120:]
 
         self._latest_conflict_snapshot = {
             "queues": dict(queue_metrics),
@@ -1067,25 +951,34 @@ class TelemetryPublisher:
             "rivalry": rivalry_snapshot,
             "rivalry_events": list(self._rivalry_event_history[-20:]),
         }
-        relationship_metrics_getter = getattr(world, "relationship_metrics_snapshot", None)
-        if callable(relationship_metrics_getter):
-            metrics_snapshot = relationship_metrics_getter()
-            if metrics_snapshot is not None:
-                self._latest_relationship_metrics = dict(metrics_snapshot)
-        relationship_snapshot = self._capture_relationship_snapshot(world)
+        metrics_snapshot = adapter.relationship_metrics_snapshot()
+        if metrics_snapshot:
+            self._latest_relationship_metrics = dict(metrics_snapshot)
+        else:
+            logger.debug(
+                "Telemetry relationship metrics unavailable; retaining previous snapshot",
+            )
+        relationship_snapshot = self._capture_relationship_snapshot(adapter)
         self._latest_relationship_updates = self._compute_relationship_updates(
             self._previous_relationship_snapshot,
             relationship_snapshot,
         )
         self._latest_relationship_snapshot = relationship_snapshot
-        self._previous_relationship_snapshot = self._copy_relationship_snapshot(
+        self._previous_relationship_snapshot = copy_relationship_snapshot(
             relationship_snapshot
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
         self._latest_relationship_summary = self._build_relationship_summary(
-            relationship_snapshot, world
+            relationship_snapshot, adapter
         )
-        raw_embedding_metrics = world.embedding_allocator.metrics()
+        try:
+            raw_embedding_metrics = adapter.embedding_allocator.metrics()
+        except Exception:  # pragma: no cover - defensive guard for stub adapters
+            logger.debug(
+                "Telemetry embedding metrics unavailable; defaulting to empty metrics",
+                exc_info=True,
+            )
+            raw_embedding_metrics = {}
         processed_embedding_metrics: dict[str, object] = {}
         for key, value in raw_embedding_metrics.items():
             if isinstance(value, (int, float)):
@@ -1110,7 +1003,7 @@ class TelemetryPublisher:
         except Exception:  # pragma: no cover - defensive
             personality_enabled = False
         if personality_enabled or self.config.personality_profiles_enabled():
-            self._latest_personality_snapshot = self._build_personality_snapshot(world)
+            self._latest_personality_snapshot = self._build_personality_snapshot(adapter)
         else:
             self._latest_personality_snapshot = {}
         self._capture_affordance_runtime(
@@ -1163,30 +1056,33 @@ class TelemetryPublisher:
                     for need, value in snapshot.needs.items()
                 },
             }
-            for agent_id, snapshot in world.agents.items()
+            for agent_id, snapshot in adapter.agent_snapshots_view().items()
         }
         self._latest_economy_snapshot = {
             object_id: {
                 "type": obj.object_type,
                 "stock": dict(obj.stock),
             }
-            for object_id, obj in world.objects.items()
+            for object_id, obj in raw_world.objects.items()
         }
-        if hasattr(world, "economy_settings"):
-            self._latest_economy_settings = world.economy_settings()
+        if hasattr(raw_world, "economy_settings"):
+            self._latest_economy_settings = raw_world.economy_settings()
         else:
             self._latest_economy_settings = {
                 str(key): float(value) for key, value in self.config.economy.items()
             }
-        if hasattr(world, "active_price_spikes"):
-            self._latest_price_spikes = world.active_price_spikes()
+        if hasattr(raw_world, "active_price_spikes"):
+            self._latest_price_spikes = raw_world.active_price_spikes()
         else:
             self._latest_price_spikes = {}
-        if hasattr(world, "utility_snapshot"):
-            self._latest_utilities = world.utility_snapshot()
+        if hasattr(raw_world, "utility_snapshot"):
+            self._latest_utilities = raw_world.utility_snapshot()
         else:
             self._latest_utilities = {"power": True, "water": True}
-        self._latest_employment_metrics = world.employment_queue_snapshot()
+        if hasattr(raw_world, "employment_queue_snapshot"):
+            self._latest_employment_metrics = raw_world.employment_queue_snapshot()
+        else:
+            self._latest_employment_metrics = {}
         if reward_breakdown is not None:
             self._latest_reward_breakdown = {
                 agent: dict(components) for agent, components in reward_breakdown.items()
@@ -1200,7 +1096,7 @@ class TelemetryPublisher:
         else:
             self._latest_affordance_manifest = {}
         if kpi_history:
-            self._update_kpi_history(world)
+            self._update_kpi_history(adapter)
             self._kpi_history.setdefault("queue_rotation_events", []).append(
                 fairness_delta["rotation_events"]
             )
@@ -1221,14 +1117,62 @@ class TelemetryPublisher:
             }
 
         if isinstance(perturbations, Mapping):
-            self._latest_perturbations = self._normalize_perturbations_payload(perturbations)
+            self._latest_perturbations = normalize_perturbations_payload(perturbations)
 
         if policy_identity is not None:
             self.update_policy_identity(policy_identity)
 
-        stream_payload = self._build_stream_payload(tick)
-        stream_payload = self._prepare_stream_payload(stream_payload)
-        self._enqueue_stream_payload(stream_payload, tick=int(tick))
+        latest_reward_breakdown = self.latest_reward_breakdown()
+        latest_stability_metrics = self.latest_stability_metrics()
+        latest_stability_alerts = self.latest_stability_alerts()
+        latest_stability_inputs = self.latest_stability_inputs()
+        latest_promotion_state = self.latest_promotion_state()
+        latest_policy_identity = self.latest_policy_identity()
+        latest_anneal_status = self.latest_anneal_status()
+        latest_kpi_history = self.kpi_history()
+        latest_perturbations = self.latest_perturbations()
+
+        aggregated_events = list(
+            self._aggregator.collect_tick(
+                tick=tick,
+                world=world,
+                observations=observations,
+                rewards=rewards,
+                events=self._latest_events,
+                policy_snapshot=self._latest_policy_snapshot,
+                kpi_history=kpi_history,
+                reward_breakdown=latest_reward_breakdown,
+                stability_inputs=latest_stability_inputs,
+                perturbations=latest_perturbations,
+                policy_identity=latest_policy_identity or {},
+                possessed_agents=possessed_agents or (),
+                social_events=self._latest_events,
+                runtime_variant=self._runtime_variant,
+                queue_metrics=self._latest_queue_metrics or {},
+                embedding_metrics=self._latest_embedding_metrics or {},
+                employment_metrics=self._latest_employment_metrics or {},
+                conflict_snapshot=self.latest_conflict_snapshot(),
+                relationship_metrics=self._latest_relationship_metrics or {},
+                relationship_snapshot=self._latest_relationship_snapshot,
+                relationship_updates=self._latest_relationship_updates,
+                relationship_overlay=self._latest_relationship_overlay,
+                narrations=self._latest_narrations,
+                job_snapshot=self._latest_job_snapshot,
+                economy_snapshot=self._latest_economy_snapshot,
+                economy_settings=self._latest_economy_settings,
+                price_spikes=self._latest_price_spikes,
+                utilities=self._latest_utilities,
+                affordance_manifest=self._latest_affordance_manifest,
+                stability_metrics=latest_stability_metrics,
+                stability_alerts=latest_stability_alerts,
+                promotion=latest_promotion_state,
+                anneal_status=latest_anneal_status,
+                kpi_history_payload=latest_kpi_history,
+            )
+        )
+        transformed_events = self._transform_pipeline.process(aggregated_events)
+        for event in transformed_events:
+            self._enqueue_stream_payload(event.payload, tick=int(event.tick))
 
     def latest_queue_metrics(self) -> dict[str, int] | None:
         """Expose the most recent queue-related telemetry counters."""
@@ -1407,43 +1351,6 @@ class TelemetryPublisher:
     def latest_snapshot_migrations(self) -> list[str]:
         return list(self._latest_snapshot_migrations)
 
-    def _normalize_perturbations_payload(self, payload: Mapping[str, object]) -> dict[str, object]:
-        active = payload.get("active", {})
-        pending = payload.get("pending", [])
-        cooldowns = payload.get("cooldowns", {})
-        active_map: dict[str, dict[str, object]] = {}
-        if isinstance(active, Mapping):
-            active_map = {
-                str(event_id): dict(entry)
-                for event_id, entry in active.items()
-                if isinstance(entry, Mapping)
-            }
-        pending_list: list[dict[str, object]] = []
-        if isinstance(pending, list):
-            pending_list = [dict(entry) for entry in pending if isinstance(entry, Mapping)]
-        spec_cd: dict[str, int] = {}
-        agent_cd: dict[str, int] = {}
-        if isinstance(cooldowns, Mapping):
-            spec_payload = cooldowns.get("spec", {})
-            if isinstance(spec_payload, Mapping):
-                spec_cd = {
-                    str(name): int(expiry)
-                    for name, expiry in spec_payload.items()
-                    if isinstance(expiry, int)
-                }
-            agent_payload = cooldowns.get("agents", {})
-            if isinstance(agent_payload, Mapping):
-                agent_cd = {
-                    str(agent): int(expiry)
-                    for agent, expiry in agent_payload.items()
-                    if isinstance(expiry, int)
-                }
-        return {
-            "active": active_map,
-            "pending": pending_list,
-            "cooldowns": {"spec": spec_cd, "agents": agent_cd},
-        }
-
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
         return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
 
@@ -1463,7 +1370,7 @@ class TelemetryPublisher:
         return payload
 
     def latest_relationship_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
-        return self._copy_relationship_snapshot(self._latest_relationship_snapshot)
+        return copy_relationship_snapshot(self._latest_relationship_snapshot)
 
     def latest_relationship_updates(self) -> list[dict[str, object]]:
         return [dict(update) for update in self._latest_relationship_updates]
@@ -1593,12 +1500,10 @@ class TelemetryPublisher:
 
     def _capture_relationship_snapshot(
         self,
-        world: WorldState,
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> dict[str, dict[str, dict[str, float]]]:
-        snapshot_getter = getattr(world, "relationships_snapshot", None)
-        if not callable(snapshot_getter):
-            return {}
-        raw = snapshot_getter() or {}
+        adapter = ensure_world_adapter(world)
+        raw = adapter.relationships_snapshot() or {}
         if not isinstance(raw, dict):
             return {}
         normalised: dict[str, dict[str, dict[str, float]]] = {}
@@ -1738,8 +1643,9 @@ class TelemetryPublisher:
     def _build_relationship_summary(
         self,
         snapshot: Mapping[str, Mapping[str, Mapping[str, float]]],
-        world: WorldState,
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> dict[str, object]:
+        adapter = ensure_world_adapter(world)
         summary: dict[str, object] = {}
         max_entries = 3
         for owner, ties in snapshot.items():
@@ -1760,7 +1666,7 @@ class TelemetryPublisher:
             ]
             rivals: list[dict[str, object]] = []
             try:
-                top_rivals = world.rivalry_top(owner, max_entries)
+                top_rivals = adapter.rivalry_top(owner, max_entries)
             except Exception:  # pragma: no cover - defensive
                 top_rivals = []
             for other, value in top_rivals:
@@ -1774,9 +1680,13 @@ class TelemetryPublisher:
 
     def _build_personality_snapshot(
         self,
-        world: WorldState,
+        world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> dict[str, object]:
-        snapshot = world.snapshot()
+        adapter = ensure_world_adapter(world)
+        snapshot = {
+            agent_id: copy.deepcopy(agent)
+            for agent_id, agent in adapter.agent_snapshots_view().items()
+        }
         payload: dict[str, object] = {}
         for agent_id, agent in snapshot.items():
             profile_name = str(getattr(agent, "personality_profile", "") or "balanced")
@@ -2238,28 +2148,16 @@ class TelemetryPublisher:
                 }
             )
 
-    @staticmethod
-    def _copy_relationship_snapshot(
-        snapshot: dict[str, dict[str, dict[str, float]]],
-    ) -> dict[str, dict[str, dict[str, float]]]:
-        return {
-            owner: {
-                other: {
-                    "trust": float(values.get("trust", 0.0)),
-                    "familiarity": float(values.get("familiarity", 0.0)),
-                    "rivalry": float(values.get("rivalry", 0.0)),
-                }
-                for other, values in ties.items()
-            }
-            for owner, ties in snapshot.items()
-        }
-
-    def _update_kpi_history(self, world: WorldState) -> None:
+    def _update_kpi_history(
+        self,
+        world: WorldState | WorldRuntimeAdapterProtocol,
+    ) -> None:
+        adapter = ensure_world_adapter(world)
         queue_sum = float(
             self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0)
         )
         lateness_avg = 0.0
-        agents = list(world.agents.values())
+        agents = list(adapter.agent_snapshots_view().values())
         if agents:
             lateness_avg = sum(agent.lateness_counter for agent in agents) / len(agents)
         social_metric = float(

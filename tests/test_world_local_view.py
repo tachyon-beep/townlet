@@ -5,7 +5,8 @@ from pathlib import Path
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot
-from townlet.world.observation import agent_context, local_view
+from townlet.world.observations.context import agent_context
+from townlet.world.observations.views import local_view
 
 
 def make_loop() -> SimulationLoop:

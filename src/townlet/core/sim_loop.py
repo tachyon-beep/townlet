@@ -18,9 +18,18 @@ from importlib import import_module
 from pathlib import Path
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
+from townlet.core.factory_registry import (
+    resolve_policy,
+    resolve_telemetry,
+    resolve_world,
+)
+from townlet.core.interfaces import (
+    PolicyBackendProtocol,
+    TelemetrySinkProtocol,
+    WorldRuntimeProtocol,
+)
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.observations.builder import ObservationBuilder
-from townlet.policy.runner import PolicyRuntime
 from townlet.rewards.engine import RewardEngine
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots import (
@@ -31,11 +40,10 @@ from townlet.snapshots import (
 )
 from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
-from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
+from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.grid import WorldState
-from townlet.world.runtime import WorldRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +91,12 @@ class SimulationLoop:
             DefaultAffordanceRuntime,
         ]
         | None = None,
+        world_provider: str | None = None,
+        world_options: Mapping[str, object] | None = None,
+        policy_provider: str | None = None,
+        policy_options: Mapping[str, object] | None = None,
+        telemetry_provider: str | None = None,
+        telemetry_options: Mapping[str, object] | None = None,
     ) -> None:
         self.config = config
         self.config.register_snapshot_migrations()
@@ -90,25 +104,51 @@ class SimulationLoop:
         if affordance_runtime_factory is not None:
             self._affordance_runtime_factory = affordance_runtime_factory
         else:
-            self._affordance_runtime_factory = self._load_affordance_runtime_factory(
-                self._runtime_config
-            )
-        self.runtime: WorldRuntime | None = None
+            self._affordance_runtime_factory = self._load_affordance_runtime_factory(self._runtime_config)
+        self.runtime: WorldRuntimeProtocol | None = None
+        self._world_provider = (world_provider or "default").strip()
+        self._world_provider_locked = world_provider is not None
+        self._world_options = dict(world_options or {})
+        self._world_options_locked = world_options is not None
+        self._policy_provider = (policy_provider or "scripted").strip()
+        self._policy_provider_locked = policy_provider is not None
+        self._policy_options = dict(policy_options or {})
+        self._policy_options_locked = policy_options is not None
+        self._telemetry_provider = (telemetry_provider or "stdout").strip()
+        self._telemetry_provider_locked = telemetry_provider is not None
+        self._telemetry_options = dict(telemetry_options or {})
+        self._telemetry_options_locked = telemetry_options is not None
         self._runtime_variant: str = "facade"
+        self._resolved_providers: dict[str, str] = {}
         self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
         self._health = SimulationLoopHealth()
+        self._world_adapter: WorldRuntimeAdapter | None = None
+        self._apply_runtime_overrides_from_config()
         self._build_components()
 
     def __setattr__(self, name: str, value: object) -> None:  # pragma: no cover - delegation glue
         super().__setattr__(name, value)
         if name == "world":
             runtime = getattr(self, "runtime", None)
-            if isinstance(runtime, WorldRuntime) and isinstance(value, WorldState):
-                runtime.bind_world(value)
+            if isinstance(value, WorldState):
+                super().__setattr__("_world_adapter", WorldRuntimeAdapter(value))
+                if isinstance(runtime, WorldRuntimeProtocol):
+                    runtime.bind_world(value)
+                    bind_adapter = getattr(runtime, "bind_world_adapter", None)
+                    if callable(bind_adapter):  # pragma: no cover - delegation glue
+                        bind_adapter(self._world_adapter)
 
     def _build_components(self) -> None:
         """Instantiate runtime dependencies based on the simulation config."""
 
+        previous_telemetry = getattr(self, "telemetry", None)
+        if previous_telemetry is not None:
+            close = getattr(previous_telemetry, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # pragma: no cover - best effort
+                    logger.debug("Failed to close previous telemetry sink", exc_info=True)
         self._rng_world = random.Random(self._derive_seed("world"))
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
@@ -124,27 +164,40 @@ class SimulationLoop:
             rng=self._rng_events,
         )
         self.observations = ObservationBuilder(config=self.config)
-        self.policy = PolicyRuntime(config=self.config)
+        policy_kwargs = {"config": self.config, **self._policy_options}
+        policy_instance: PolicyBackendProtocol = resolve_policy(self._policy_provider, **policy_kwargs)
+        self.policy = policy_instance
+        self._resolved_providers["policy"] = self._policy_provider
         self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
         if self.config.training.anneal_enable_policy_blend:
             self.policy.enable_anneal_blend(True)
         self.rewards = RewardEngine(config=self.config)
-        self.telemetry = TelemetryPublisher(config=self.config)
+        telemetry_kwargs = {"config": self.config, **self._telemetry_options}
+        telemetry_instance: TelemetrySinkProtocol = resolve_telemetry(self._telemetry_provider, **telemetry_kwargs)
+        self.telemetry = telemetry_instance
+        self._resolved_providers["telemetry"] = self._telemetry_provider
         self.stability = StabilityMonitor(config=self.config)
         log_path = Path("logs/promotion_history.jsonl")
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
         self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
-        self.runtime = WorldRuntime(
-            world=self.world,
-            lifecycle=self.lifecycle,
-            perturbations=self.perturbations,
-            ticks_per_day=self._ticks_per_day,
-        )
+        world_kwargs = {
+            "world": self.world,
+            "lifecycle": self.lifecycle,
+            "perturbations": self.perturbations,
+            "ticks_per_day": self._ticks_per_day,
+            **self._world_options,
+        }
+        runtime_instance: WorldRuntimeProtocol = resolve_world(self._world_provider, **world_kwargs)
+        self.runtime = runtime_instance
+        self._resolved_providers["world"] = self._world_provider
+        if self._world_adapter is not None:
+            bind_adapter = getattr(runtime_instance, "bind_world_adapter", None)
+            if callable(bind_adapter):
+                bind_adapter(self._world_adapter)
         self._runtime_variant = "facade"
         self.telemetry.set_runtime_variant(self._runtime_variant)
         self._health = SimulationLoopHealth(last_tick=self.tick)
-
 
     @property
     def health(self) -> SimulationLoopHealth:
@@ -152,9 +205,29 @@ class SimulationLoop:
 
         return SimulationLoopHealth(**asdict(self._health))
 
-    def register_failure_handler(
-        self, handler: Callable[[SimulationLoop, int, BaseException], None]
-    ) -> None:
+    @property
+    def provider_info(self) -> dict[str, str]:
+        """Expose the currently resolved providers for world, policy, and telemetry."""
+
+        return dict(self._resolved_providers)
+
+    @property
+    def world_context(self) -> WorldContext:
+        """Return a façade over the active world services."""
+
+        return self.world.context
+
+    @property
+    def world_adapter(self) -> WorldRuntimeAdapter:
+        """Return the read-only adapter for the active world instance."""
+
+        adapter = self._world_adapter
+        if adapter is None:
+            adapter = WorldRuntimeAdapter(self.world)
+            super().__setattr__("_world_adapter", adapter)
+        return adapter
+
+    def register_failure_handler(self, handler: Callable[[SimulationLoop, int, BaseException], None]) -> None:
         """Register a callback that runs whenever the loop records a failure."""
 
         self._failure_handlers.append(handler)
@@ -296,15 +369,12 @@ class SimulationLoop:
             rewards = self.rewards.compute(self.world, terminated, termination_reasons)
             reward_breakdown = self.rewards.latest_reward_breakdown()
             self.policy.post_step(rewards, terminated)
-            observations = self.observations.build_batch(self.world, terminated)
+            observations = self.observations.build_batch(self.world_adapter, terminated)
             self.policy.flush_transitions(observations)
             policy_snapshot = self.policy.latest_policy_snapshot()
             possessed_agents = self.policy.possessed_agents()
             option_switch_counts = self.policy.consume_option_switch_counts()
-            hunger_levels = {
-                agent_id: float(snapshot.needs.get("hunger", 1.0))
-                for agent_id, snapshot in self.world.agents.items()
-            }
+            hunger_levels = {agent_id: float(snapshot.needs.get("hunger", 1.0)) for agent_id, snapshot in self.world.agents.items()}
             stability_inputs = {
                 "hunger_levels": hunger_levels,
                 "option_switch_counts": option_switch_counts,
@@ -359,10 +429,13 @@ class SimulationLoop:
                 "failure_count": self._health.failure_count,
                 "telemetry_queue": transport_status.get("queue_length", 0),
                 "telemetry_dropped": transport_status.get("dropped_messages", 0),
+                "telemetry_flush_ms": transport_status.get("last_flush_duration_ms"),
                 "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
                 "telemetry_worker_error": transport_status.get("worker_error"),
                 "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
                 "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
+                "telemetry_payloads_total": transport_status.get("payloads_flushed_total", 0),
+                "telemetry_bytes_total": transport_status.get("bytes_flushed_total", 0),
                 "perturbations_pending": self.perturbations.pending_count(),
                 "perturbations_active": self.perturbations.active_count(),
                 "employment_exit_queue": self.world.employment.exit_queue_length(),
@@ -372,12 +445,16 @@ class SimulationLoop:
                 logger.info(
                     (
                         "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
+                        "flush_ms=%s payloads_total=%s bytes_total=%s "
                         "perturbations_pending=%s perturbations_active=%s exit_queue=%s"
                     ),
                     self.tick,
                     duration_ms,
                     health_payload["telemetry_queue"],
                     health_payload["telemetry_dropped"],
+                    health_payload["telemetry_flush_ms"],
+                    health_payload["telemetry_payloads_total"],
+                    health_payload["telemetry_bytes_total"],
                     health_payload["perturbations_pending"],
                     health_payload["perturbations_active"],
                     health_payload["employment_exit_queue"],
@@ -389,7 +466,6 @@ class SimulationLoop:
             self.tick = max(0, self.tick - 1)
             self._handle_step_failure(next_tick, duration_ms, exc)
             raise SimulationLoopError(next_tick, "Simulation step failed", cause=exc) from exc
-
 
     def _record_step_success(self, duration_ms: float) -> None:
         """Update health metadata after a successful tick."""
@@ -405,20 +481,14 @@ class SimulationLoop:
         self._health.last_tick = max(self._health.last_tick, tick)
         self._health.last_duration_ms = duration_ms
         self._health.last_error = error_message
-        self._health.last_traceback = "".join(
-            traceback.format_exception(exc.__class__, exc, exc.__traceback__)
-        )
+        self._health.last_traceback = "".join(traceback.format_exception(exc.__class__, exc, exc.__traceback__))
         self._health.failure_count += 1
         self._health.last_failure_ts = time.time()
         snapshot_path: str | None = None
         if getattr(self.config.snapshot, "capture_on_failure", False):
             try:
                 timestamp = time.strftime("%Y%m%dT%H%M%S")
-                failure_root = (
-                    self.config.snapshot_root()
-                    / "failures"
-                    / f"tick_{tick:09d}_{timestamp}"
-                )
+                failure_root = self.config.snapshot_root() / "failures" / f"tick_{tick:09d}_{timestamp}"
                 snapshot_path = str(self.save_snapshot(root=failure_root))
             except Exception:  # pragma: no cover - snapshot capture best effort
                 logger.exception("Failed to capture failure snapshot")
@@ -455,20 +525,88 @@ class SimulationLoop:
 
         return _factory
 
+    def _apply_runtime_overrides_from_config(self) -> None:
+        runtime_section = getattr(self.config, "runtime", None)
+        if runtime_section is None:
+            return
+        if hasattr(runtime_section, "model_dump"):
+            data = runtime_section.model_dump()
+        elif isinstance(runtime_section, Mapping):
+            data = runtime_section
+        else:
+            return
+
+        def _extract(
+            key: str,
+            current_provider: str,
+            provider_locked: bool,
+            current_options: dict[str, object],
+            options_locked: bool,
+        ) -> tuple[str, dict[str, object]]:
+            raw = data.get(key)
+            if not isinstance(raw, Mapping):
+                return current_provider, current_options
+            provider = current_provider
+            if not provider_locked:
+                provider = str(raw.get("provider", current_provider)).strip() or current_provider
+            options = dict(current_options)
+            if not options_locked:
+                raw_options = raw.get("options")
+                if isinstance(raw_options, Mapping):
+                    options.update({str(k): v for k, v in raw_options.items()})
+            return provider, options
+
+        self._world_provider, self._world_options = _extract(
+            "world",
+            self._world_provider,
+            self._world_provider_locked,
+            self._world_options,
+            self._world_options_locked,
+        )
+        self._policy_provider, self._policy_options = _extract(
+            "policy",
+            self._policy_provider,
+            self._policy_provider_locked,
+            self._policy_options,
+            self._policy_options_locked,
+        )
+        self._telemetry_provider, self._telemetry_options = _extract(
+            "telemetry",
+            self._telemetry_provider,
+            self._telemetry_provider_locked,
+            self._telemetry_options,
+            self._telemetry_options_locked,
+        )
+
     @staticmethod
     def _import_symbol(path: str):
         module_name, separator, attribute = path.partition(":")
         if separator != ":" or not module_name or not attribute:
-            raise ValueError(
-                f"Invalid runtime factory path '{path}'. Use 'module:callable' format."
-            )
+            raise ValueError(f"Invalid runtime factory path '{path}'. Use 'module:callable' format.")
         module = import_module(module_name)
         try:
             return getattr(module, attribute)
         except AttributeError as exc:  # pragma: no cover - defensive
-            raise AttributeError(
-                f"Runtime factory '{attribute}' not found in module '{module_name}'"
-            ) from exc
+            raise AttributeError(f"Runtime factory '{attribute}' not found in module '{module_name}'") from exc
+
+    def close(self) -> None:
+        """Release resources held by the loop (telemetry, runtime, policy)."""
+
+        telemetry = getattr(self, "telemetry", None)
+        if telemetry is not None:
+            close = getattr(telemetry, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # pragma: no cover - defensive cleanup
+                    logger.debug("Telemetry close raised during loop shutdown", exc_info=True)
+
+    def __enter__(self) -> "SimulationLoop":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.close()
+        return False
 
     def _derive_seed(self, stream: str) -> int:
         digest = hashlib.sha256(f"{self.config.config_id}:{stream}".encode())

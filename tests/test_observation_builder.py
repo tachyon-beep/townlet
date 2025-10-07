@@ -41,8 +41,7 @@ def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
 def test_observation_builder_hybrid_map_and_features() -> None:
     loop = make_world(enforce_job_loop=True)
     builder: ObservationBuilder = loop.observations
-    world = loop.world
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
 
     obs = observations["alice"]
     map_tensor = obs["map"]
@@ -102,9 +101,7 @@ def test_observation_ctx_reset_releases_slot() -> None:
     loop = make_world()
     builder: ObservationBuilder = loop.observations
     world = loop.world
-
-    terminated = {"alice": True}
-    observations = builder.build_batch(world, terminated=terminated)
+    observations = builder.build_batch(loop.world_adapter, terminated={"alice": True})
     obs = observations["alice"]
     feature_names = obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
@@ -114,10 +111,9 @@ def test_observation_ctx_reset_releases_slot() -> None:
 
 def test_observation_rivalry_features_reflect_conflict() -> None:
     loop = make_world()
-    world = loop.world
-    world.register_rivalry_conflict("alice", "bob")
+    loop.world.register_rivalry_conflict("alice", "bob")
     builder: ObservationBuilder = loop.observations
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
     obs = observations["alice"]
     feature_names = obs["metadata"]["feature_names"]
     assert obs["features"][feature_names.index("rivalry_max")] > 0.0
@@ -128,12 +124,11 @@ def test_observation_queue_and_reservation_flags() -> None:
     loop = make_world()
     builder: ObservationBuilder = loop.observations
     world = loop.world
-
     world.queue_manager.request_access("stove_test", "alice", world.tick)
     world.refresh_reservations()
     world.queue_manager.requeue_to_tail("stove_test", "bob", tick=world.tick)
 
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
 
     alice_obs = observations["alice"]
     feature_names = alice_obs["metadata"]["feature_names"]
@@ -162,7 +157,7 @@ def test_observation_respawn_resets_features() -> None:
     respawn_id = next(agent_id for agent_id in world.agents if agent_id.startswith("alice"))
     assert respawn_id != "alice"
 
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
     obs = observations[respawn_id]
     feature_names = obs["metadata"]["feature_names"]
     hunger_idx = feature_names.index("need_hunger")
@@ -185,21 +180,21 @@ def test_ctx_reset_flag_on_teleport_and_possession() -> None:
     )
     world.console_controller.teleport_agent(envelope)
 
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
     alice_obs = observations["alice"]
     feature_names = alice_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
     assert alice_obs["features"][idx] == 1.0
 
     loop.policy.acquire_possession("bob")
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
     bob_obs = observations["bob"]
     feature_names = bob_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
     assert bob_obs["features"][idx] == 1.0
 
     loop.policy.release_possession("bob")
-    observations = builder.build_batch(world, terminated={})
+    observations = builder.build_batch(loop.world_adapter, terminated={})
     bob_obs = observations["bob"]
     feature_names = bob_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")

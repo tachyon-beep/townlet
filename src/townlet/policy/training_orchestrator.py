@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import statistics
 import time
@@ -12,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from townlet.config import PPOConfig, SimulationConfig
+from townlet.core.utils import is_stub_policy, policy_provider_name
 from townlet.policy.bc import BCTrainer, BCTrajectoryDataset, load_bc_samples
 from townlet.policy.bc import BCTrainingConfig as BCTrainingParams
 from townlet.policy.models import (
@@ -19,14 +21,6 @@ from townlet.policy.models import (
     ConflictAwarePolicyNetwork,
     TorchNotAvailableError,
     torch_available,
-)
-from townlet.policy.ppo.utils import (
-    AdvantageReturns,
-    clipped_value_loss,
-    compute_gae,
-    normalize_advantages,
-    policy_surrogate,
-    value_baseline_from_old_preds,
 )
 from townlet.policy.replay import (
     ReplayBatch,
@@ -38,10 +32,12 @@ from townlet.policy.replay import (
 )
 from townlet.policy.replay_buffer import InMemoryReplayDataset
 from townlet.policy.rollout import RolloutBuffer
-
-DEFAULT_REPLAY_MANIFEST = Path('docs/samples/replay_manifest.json')
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.stability.promotion import PromotionManager
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_REPLAY_MANIFEST = Path("docs/samples/replay_manifest.json")
 
 PPO_TELEMETRY_VERSION = 1.2
 ANNEAL_BC_MIN_DEFAULT = 0.9
@@ -72,6 +68,21 @@ class PolicyTrainingOrchestrator:
         self._promotion_pass_streak = 0
         self._last_anneal_status: str | None = None
 
+    @staticmethod
+    def _ppo_ops():
+        """Import PPO ops lazily to avoid Torch dependency at import time.
+
+        Returns a module-like object with the expected functions when PyTorch
+        is available; otherwise raises TorchNotAvailableError when called.
+        """
+        if not torch_available():  # pragma: no cover - exercised in ML-enabled envs
+            raise TorchNotAvailableError(
+                "PyTorch is required for PPO operations. Install the 'ml' extra."
+            )
+        from townlet.policy.backends.pytorch import ppo_utils as _ops  # type: ignore
+
+        return _ops
+
     @property
     def transitions(self) -> dict[str, dict[str, object]]:
         """Return the mutable transition buffer keyed by agent id."""
@@ -93,9 +104,7 @@ class PolicyTrainingOrchestrator:
         if mode == "anneal":
             self.run_anneal()
             return
-        raise NotImplementedError(
-            f"Training mode '{mode}' is not supported via run(); use scripts/run_training.py with --mode."
-        )
+        raise NotImplementedError(f"Training mode '{mode}' is not supported via run(); use scripts/run_training.py with --mode.")
 
     def current_anneal_ratio(self) -> float | None:
         return self._anneal_ratio
@@ -122,10 +131,7 @@ class PolicyTrainingOrchestrator:
         config = ReplayDatasetConfig(entries=entries, batch_size=len(entries))
         return self.run_replay_dataset(config)
 
-
-    def run_replay_dataset(
-        self, dataset_config: ReplayDatasetConfig | ReplayDataset
-    ) -> dict[str, float]:
+    def run_replay_dataset(self, dataset_config: ReplayDatasetConfig | ReplayDataset) -> dict[str, float]:
         if isinstance(dataset_config, ReplayDatasetConfig):
             dataset: ReplayDataset | Iterable[ReplayBatch] = ReplayDataset(dataset_config)
         else:
@@ -171,11 +177,16 @@ class PolicyTrainingOrchestrator:
         elif auto_seed_agents and not loop.world.agents:
             seed_default_agents(loop)
         if not has_agents(loop):
-            raise ValueError(
-                "No agents available for rollout capture. Provide a scenario or use auto seeding."
-            )
+            raise ValueError("No agents available for rollout capture. Provide a scenario or use auto seeding.")
 
         buffer = RolloutBuffer()
+        provider = policy_provider_name(loop)
+        if is_stub_policy(loop.policy, provider):
+            logger.warning(
+                "capture_rollout_stub_policy provider=%s message='Stub policy backend active; no trajectories captured.'",
+                provider,
+            )
+            return buffer
         for _ in range(ticks):
             loop.step()
             frames = loop.policy.collect_trajectory(clear=True)
@@ -275,9 +286,7 @@ class PolicyTrainingOrchestrator:
             key=lambda stage: stage.cycle,
         )
         if not schedule:
-            raise ValueError(
-                "anneal_schedule is empty; configure training.anneal_schedule in config"
-            )
+            raise ValueError("anneal_schedule is empty; configure training.anneal_schedule in config")
 
         if dataset_config is None and in_memory_dataset is None:
             replay_manifest = self.config.training.replay_manifest
@@ -341,12 +350,8 @@ class PolicyTrainingOrchestrator:
                 finally:
                     self._anneal_context = None
                 baselines["loss_total"] = float(summary.get("loss_total", 0.0))
-                baselines["queue_conflict_events"] = float(
-                    summary.get("queue_conflict_events", 0.0)
-                )
-                baselines["queue_conflict_intensity"] = float(
-                    summary.get("queue_conflict_intensity_sum", 0.0)
-                )
+                baselines["queue_conflict_events"] = float(summary.get("queue_conflict_events", 0.0))
+                baselines["queue_conflict_intensity"] = float(summary.get("queue_conflict_intensity_sum", 0.0))
                 summary_result = {
                     "cycle": float(stage.cycle),
                     "mode": "ppo",
@@ -370,19 +375,16 @@ class PolicyTrainingOrchestrator:
         log_frequency: int = 1,
         max_log_entries: int | None = None,
         in_memory_dataset: InMemoryReplayDataset | None = None,
+        device_str: str | None = None,
     ) -> dict[str, float]:
         if not torch_available():
-            raise TorchNotAvailableError(
-                "PyTorch is required for PPO training. Install torch to proceed."
-            )
+            raise TorchNotAvailableError("PyTorch is required for PPO training. Install torch to proceed.")
 
         if in_memory_dataset is not None:
             dataset: InMemoryReplayDataset | ReplayDataset = in_memory_dataset
         else:
             if dataset_config is None:
-                raise ValueError(
-                    "dataset_config is required when in_memory_dataset is not provided"
-                )
+                raise ValueError("dataset_config is required when in_memory_dataset is not provided")
             dataset = ReplayDataset(dataset_config)
         if len(dataset) == 0:
             raise ValueError("Replay dataset yielded no batches")
@@ -412,7 +414,45 @@ class PolicyTrainingOrchestrator:
             self.config.ppo = PPOConfig()
         ppo_cfg = self.config.ppo
 
-        device = torch.device("cpu")
+        # Prefer CUDA if available for faster training; fallback to CPU. Allow
+        # explicit override via device_str (e.g., 'cuda:1', 'cpu').
+        if device_str:
+            device = torch.device(device_str)
+        else:
+            if torch.cuda.is_available():
+                # Pick the CUDA device with the most free memory to avoid clashing
+                # with other workloads (e.g., LLMs) on multi-GPU systems.
+                try:
+                    best_idx = 0
+                    best_free = -1
+                    for i in range(torch.cuda.device_count()):
+                        free_bytes, _total = torch.cuda.mem_get_info(i)  # type: ignore[attr-defined]
+                        if free_bytes > best_free:
+                            best_free = int(free_bytes)
+                            best_idx = i
+                    device = torch.device(f"cuda:{best_idx}")
+                except Exception:
+                    device = torch.device("cuda")
+            else:
+                device = torch.device("cpu")
+        dev_name = None
+        try:  # best-effort device logging
+            if device.type == "cuda":
+                idx = device.index if device.index is not None else torch.cuda.current_device()
+                dev_name = torch.cuda.get_device_name(idx)
+        except Exception:  # pragma: no cover - logging only
+            pass
+        logger.info("PPO device selected: %s%s", device, f" ({dev_name})" if dev_name else "")
+        print(f"PPO device selected: {device}{f' ({dev_name})' if dev_name else ''}")
+        try:
+            if device.type == "cuda":
+                torch.cuda.set_device(device)
+                torch.backends.cudnn.benchmark = True  # speed up fixed-shape convs
+                # Emit a quick memory snapshot to prove CUDA context is live
+                mem = torch.cuda.memory_allocated(device)
+                print(f"CUDA memory allocated (bytes): {int(mem)}")
+        except Exception:  # pragma: no cover - best-effort
+            pass
         policy = self.build_policy_network(feature_dim, map_shape, action_dim)
         policy.train()
         policy.to(device)
@@ -423,16 +463,12 @@ class PolicyTrainingOrchestrator:
 
         dataset_label = getattr(dataset, "label", None)
         dataset_label_str = str(
-            dataset_label
-            or (getattr(dataset_config, "label", None) if dataset_config is not None else None)
-            or "training_dataset"
+            dataset_label or (getattr(dataset_config, "label", None) if dataset_config is not None else None) or "training_dataset"
         )
 
         def _ensure_finite(name: str, tensor: torch.Tensor, batch_index: int) -> None:
             if torch.isnan(tensor).any() or torch.isinf(tensor).any():
-                raise ValueError(
-                    f"PPO {name} contained NaN/inf (dataset={dataset_label_str}, batch={batch_index})"
-                )
+                raise ValueError(f"PPO {name} contained NaN/inf (dataset={dataset_label_str}, batch={batch_index})")
 
         def _update_advantage_health(
             flat_advantages: torch.Tensor,
@@ -442,9 +478,7 @@ class PolicyTrainingOrchestrator:
         ) -> None:
             batch_std = float(flat_advantages.std(unbiased=False).item())
             if math.isnan(batch_std) or math.isinf(batch_std):
-                raise ValueError(
-                    f"PPO advantages produced invalid std (dataset={dataset_label_str}, batch={batch_index})"
-                )
+                raise ValueError(f"PPO advantages produced invalid std (dataset={dataset_label_str}, batch={batch_index})")
             stats["min_adv_std"] = min(stats["min_adv_std"], batch_std)
             if batch_std < 1e-8:
                 stats["adv_zero_std_batches"] += 1
@@ -518,15 +552,16 @@ class PolicyTrainingOrchestrator:
                     if key.startswith("conflict."):
                         conflict_acc[key] = conflict_acc.get(key, 0.0) + value
 
-                maps = torch.from_numpy(batch.maps).float().to(device)
-                features = torch.from_numpy(batch.features).float().to(device)
-                actions = torch.from_numpy(batch.actions).long().to(device)
-                old_log_probs = torch.from_numpy(batch.old_log_probs).float().to(device)
-                rewards = torch.from_numpy(batch.rewards).float().to(device)
-                dones = torch.from_numpy(batch.dones.astype(np.float32)).float().to(device)
-                value_preds_old = torch.from_numpy(batch.value_preds).float().to(device)
+                maps = torch.from_numpy(batch.maps).float().to(device, non_blocking=True)
+                features = torch.from_numpy(batch.features).float().to(device, non_blocking=True)
+                actions = torch.from_numpy(batch.actions).long().to(device, non_blocking=True)
+                old_log_probs = torch.from_numpy(batch.old_log_probs).float().to(device, non_blocking=True)
+                rewards = torch.from_numpy(batch.rewards).float().to(device, non_blocking=True)
+                dones = torch.from_numpy(batch.dones.astype(np.float32)).float().to(device, non_blocking=True)
+                value_preds_old = torch.from_numpy(batch.value_preds).float().to(device, non_blocking=True)
 
-                gae: AdvantageReturns = compute_gae(
+                ops = self._ppo_ops()
+                gae = ops.compute_gae(
                     rewards=rewards,
                     value_preds=value_preds_old,
                     dones=dones,
@@ -536,22 +571,22 @@ class PolicyTrainingOrchestrator:
                 advantages = gae.advantages
                 returns = gae.returns
                 if ppo_cfg.advantage_normalization:
-                    advantages = normalize_advantages(advantages.view(-1)).view_as(advantages)
-
-                baseline = value_baseline_from_old_preds(value_preds_old, timesteps)
-
+                    advantages = ops.normalize_advantages(advantages.view(-1)).view_as(advantages)
+                # Derive baseline per-batch using that batch's timestep length.
+                # In rollout/mixed modes, batches may differ in timesteps when
+                # batch_size == 1, so using a fixed value from the first batch
+                # can be incorrect and cause shape errors.
                 flat_advantages = advantages.reshape(-1)
                 flat_returns = returns.reshape(-1)
                 _ensure_finite("advantages", flat_advantages, batch_index)
                 _ensure_finite("returns", flat_returns, batch_index)
-                _update_advantage_health(
-                    flat_advantages, batch_index=batch_index, stats=health_tracking
-                )
+                _update_advantage_health(flat_advantages, batch_index=batch_index, stats=health_tracking)
 
                 reward_buffer.extend(batch.rewards.astype(float).reshape(-1).tolist())
                 advantage_buffer.extend(advantages.cpu().numpy().astype(float).reshape(-1).tolist())
 
                 batch_size, timestep_length = rewards.shape
+                baseline = ops.value_baseline_from_old_preds(value_preds_old, timestep_length)
                 flat_maps = maps.reshape(batch_size * timestep_length, *maps.shape[2:])
                 flat_features = features.reshape(batch_size * timestep_length, features.shape[2])
                 flat_actions = actions.reshape(-1)
@@ -566,7 +601,12 @@ class PolicyTrainingOrchestrator:
                 )
                 if mini_batch_size <= 0:
                     mini_batch_size = 1
-                perm = torch.randperm(total_transitions, generator=generator)
+                # Ensure the permutation tensor and RNG live on the same device
+                perm = torch.randperm(
+                    total_transitions,
+                    device=flat_actions.device,
+                    generator=generator,
+                )
 
                 for start in range(0, total_transitions, mini_batch_size):
                     idx = perm[start : start + mini_batch_size]
@@ -583,24 +623,20 @@ class PolicyTrainingOrchestrator:
                     new_log_probs = dist.log_prob(mb_actions)
                     entropy = dist.entropy().mean()
 
-                    policy_loss, clip_frac = policy_surrogate(
+                    policy_loss, clip_frac = ops.policy_surrogate(
                         new_log_probs=new_log_probs,
                         old_log_probs=mb_old_log_probs,
                         advantages=mb_advantages,
                         clip_param=ppo_cfg.clip_param,
                     )
-                    value_loss = clipped_value_loss(
+                    value_loss = ops.clipped_value_loss(
                         new_values=values,
                         returns=mb_returns,
                         old_values=mb_old_values,
                         value_clip=ppo_cfg.value_clip,
                     )
 
-                    total_loss = (
-                        policy_loss
-                        + ppo_cfg.value_loss_coef * value_loss
-                        - ppo_cfg.entropy_coef * entropy
-                    )
+                    total_loss = policy_loss + ppo_cfg.value_loss_coef * value_loss - ppo_cfg.entropy_coef * entropy
 
                     optimizer.zero_grad()
                     total_loss.backward()
@@ -639,9 +675,7 @@ class PolicyTrainingOrchestrator:
                     kl_max = max(kl_max, abs(kl_value))
                     if clip_value > 0.0:
                         health_tracking["clip_triggered_minibatches"] += 1.0
-                    health_tracking["max_clip_fraction"] = max(
-                        health_tracking["max_clip_fraction"], clip_value
-                    )
+                    health_tracking["max_clip_fraction"] = max(health_tracking["max_clip_fraction"], clip_value)
                     mini_batch_updates += 1
                     transitions_processed += int(idx.shape[0])
 
@@ -652,9 +686,7 @@ class PolicyTrainingOrchestrator:
 
             if entropy_values:
                 epoch_entropy_mean = statistics.fmean(entropy_values)
-                epoch_entropy_std = (
-                    statistics.pstdev(entropy_values) if len(entropy_values) > 1 else 0.0
-                )
+                epoch_entropy_std = statistics.pstdev(entropy_values) if len(entropy_values) > 1 else 0.0
             else:
                 epoch_entropy_mean = 0.0
                 epoch_entropy_std = 0.0
@@ -697,19 +729,14 @@ class PolicyTrainingOrchestrator:
                 {
                     "adv_zero_std_batches": float(health_tracking["adv_zero_std_batches"]),
                     "adv_min_std": float(min_adv_std),
-                    "clip_triggered_minibatches": float(
-                        health_tracking["clip_triggered_minibatches"]
-                    ),
+                    "clip_triggered_minibatches": float(health_tracking["clip_triggered_minibatches"]),
                     "clip_fraction_max": float(health_tracking["max_clip_fraction"]),
                 }
             )
 
             if health_tracking["adv_zero_std_batches"]:
                 batch_count = int(health_tracking["adv_zero_std_batches"])
-                print(
-                    f"[WARN] Advantage std near zero in {batch_count} batch(es) "
-                    f"(dataset={dataset_label_str}, epoch={epoch + 1})"
-                )
+                print(f"[WARN] Advantage std near zero in {batch_count} batch(es) (dataset={dataset_label_str}, epoch={epoch + 1})")
 
             if PPO_TELEMETRY_VERSION >= 1.1:
                 epoch_summary.update(
@@ -725,9 +752,7 @@ class PolicyTrainingOrchestrator:
                         "rollout_ticks": float(rollout_ticks),
                         "log_stream_offset": float(log_stream_offset + 1),
                         "queue_conflict_events": float(getattr(dataset, "queue_conflict_count", 0)),
-                        "queue_conflict_intensity_sum": float(
-                            getattr(dataset, "queue_conflict_intensity_sum", 0.0)
-                        ),
+                        "queue_conflict_intensity_sum": float(getattr(dataset, "queue_conflict_intensity_sum", 0.0)),
                         "shared_meal_events": float(getattr(dataset, "shared_meal_count", 0)),
                         "late_help_events": float(getattr(dataset, "late_help_count", 0)),
                         "shift_takeover_events": float(getattr(dataset, "shift_takeover_count", 0)),
@@ -745,90 +770,52 @@ class PolicyTrainingOrchestrator:
                 loss_baseline = anneal_context.get("loss_baseline")
                 queue_baseline = anneal_context.get("queue_events_baseline")
                 intensity_baseline = anneal_context.get("queue_intensity_baseline")
-                loss_tolerance = float(
-                    anneal_context.get("loss_tolerance", ANNEAL_LOSS_TOLERANCE_DEFAULT)
-                )
-                queue_tolerance = float(
-                    anneal_context.get("queue_tolerance", ANNEAL_QUEUE_TOLERANCE_DEFAULT)
-                )
+                loss_tolerance = float(anneal_context.get("loss_tolerance", ANNEAL_LOSS_TOLERANCE_DEFAULT))
+                queue_tolerance = float(anneal_context.get("queue_tolerance", ANNEAL_QUEUE_TOLERANCE_DEFAULT))
                 loss_total_value = averaged_metrics["total_loss"]
                 queue_events_value = float(epoch_summary.get("queue_conflict_events", 0.0))
-                queue_intensity_value = float(
-                    epoch_summary.get("queue_conflict_intensity_sum", 0.0)
-                )
+                queue_intensity_value = float(epoch_summary.get("queue_conflict_intensity_sum", 0.0))
 
                 loss_flag = False
                 if isinstance(loss_baseline, (int, float)) and loss_baseline:
-                    loss_flag = (
-                        abs(loss_total_value - float(loss_baseline)) / abs(float(loss_baseline))
-                    ) > loss_tolerance
+                    loss_flag = (abs(loss_total_value - float(loss_baseline)) / abs(float(loss_baseline))) > loss_tolerance
 
                 queue_flag = False
                 if isinstance(queue_baseline, (int, float)) and queue_baseline:
-                    queue_flag = queue_events_value < (1.0 - queue_tolerance) * float(
-                        queue_baseline
-                    )
+                    queue_flag = queue_events_value < (1.0 - queue_tolerance) * float(queue_baseline)
 
                 intensity_flag = False
                 if isinstance(intensity_baseline, (int, float)) and intensity_baseline:
-                    intensity_flag = queue_intensity_value < (
-                        (1.0 - queue_tolerance) * float(intensity_baseline)
-                    )
+                    intensity_flag = queue_intensity_value < ((1.0 - queue_tolerance) * float(intensity_baseline))
 
                 epoch_summary.update(
                     {
                         "anneal_cycle": float(anneal_context.get("cycle", -1.0)),
                         "anneal_stage": str(anneal_context.get("stage", "")),
                         "anneal_dataset": str(anneal_context.get("dataset_label", "")),
-                        "anneal_bc_accuracy": (
-                            float(bc_accuracy_value)
-                            if isinstance(bc_accuracy_value, (int, float))
-                            else None
-                        ),
+                        "anneal_bc_accuracy": (float(bc_accuracy_value) if isinstance(bc_accuracy_value, (int, float)) else None),
                         "anneal_bc_threshold": (
                             float(bc_threshold_value)
                             if isinstance(bc_threshold_value, (int, float))
                             else float(self.config.training.anneal_accuracy_threshold)
                         ),
                         "anneal_bc_passed": bool(anneal_context.get("bc_passed", True)),
-                        "anneal_loss_baseline": (
-                            float(loss_baseline)
-                            if isinstance(loss_baseline, (int, float))
-                            else None
-                        ),
-                        "anneal_queue_baseline": (
-                            float(queue_baseline)
-                            if isinstance(queue_baseline, (int, float))
-                            else None
-                        ),
-                        "anneal_intensity_baseline": (
-                            float(intensity_baseline)
-                            if isinstance(intensity_baseline, (int, float))
-                            else None
-                        ),
+                        "anneal_loss_baseline": (float(loss_baseline) if isinstance(loss_baseline, (int, float)) else None),
+                        "anneal_queue_baseline": (float(queue_baseline) if isinstance(queue_baseline, (int, float)) else None),
+                        "anneal_intensity_baseline": (float(intensity_baseline) if isinstance(intensity_baseline, (int, float)) else None),
                         "anneal_loss_flag": bool(loss_flag),
                         "anneal_queue_flag": bool(queue_flag),
                         "anneal_intensity_flag": bool(intensity_flag),
                     }
                 )
             if baseline_metrics:
-                epoch_summary["baseline_sample_count"] = float(
-                    baseline_metrics.get("sample_count", 0.0)
-                )
-                epoch_summary["baseline_reward_mean"] = float(
-                    baseline_metrics.get("reward_mean", 0.0)
-                )
-                epoch_summary["baseline_reward_sum"] = float(
-                    baseline_metrics.get("reward_sum", 0.0)
-                )
+                epoch_summary["baseline_sample_count"] = float(baseline_metrics.get("sample_count", 0.0))
+                epoch_summary["baseline_reward_mean"] = float(baseline_metrics.get("reward_mean", 0.0))
+                epoch_summary["baseline_reward_sum"] = float(baseline_metrics.get("reward_sum", 0.0))
                 if "reward_sum_mean" in baseline_metrics:
-                    epoch_summary["baseline_reward_sum_mean"] = float(
-                        baseline_metrics.get("reward_sum_mean", 0.0)
-                    )
+                    epoch_summary["baseline_reward_sum_mean"] = float(baseline_metrics.get("reward_sum_mean", 0.0))
                 if "log_prob_mean" in baseline_metrics:
-                    epoch_summary["baseline_log_prob_mean"] = float(
-                        baseline_metrics.get("log_prob_mean", 0.0)
-                    )
+                    epoch_summary["baseline_log_prob_mean"] = float(baseline_metrics.get("log_prob_mean", 0.0))
             if conflict_acc:
                 for key, value in conflict_acc.items():
                     epoch_summary[f"{key}_avg"] = value / len(batches)
@@ -861,9 +848,7 @@ class PolicyTrainingOrchestrator:
             if mode == "bc" and not stage.get("passed", True):
                 return "FAIL"
             if mode == "ppo" and (
-                bool(stage.get("anneal_loss_flag"))
-                or bool(stage.get("anneal_queue_flag"))
-                or bool(stage.get("anneal_intensity_flag"))
+                bool(stage.get("anneal_loss_flag")) or bool(stage.get("anneal_queue_flag")) or bool(stage.get("anneal_intensity_flag"))
             ):
                 status = "HOLD"
         return status
@@ -948,7 +933,6 @@ class PolicyTrainingOrchestrator:
             summary[f"conflict.{key}"] = value
         return summary
 
-
     def _resolve_replay_manifest(self, manifest: Path | str | None) -> Path:
         candidates: list[Path] = []
         for value in (manifest, getattr(self.config.training, "replay_manifest", None)):
@@ -973,9 +957,7 @@ class PolicyTrainingOrchestrator:
             "Replay manifest not provided and default manifest could not be located",
         )
 
-    def build_replay_dataset(
-        self, config: ReplayDatasetConfig | Path | str | None = None
-    ) -> ReplayDataset:
+    def build_replay_dataset(self, config: ReplayDatasetConfig | Path | str | None = None) -> ReplayDataset:
         if isinstance(config, ReplayDatasetConfig):
             dataset_config = config
         else:
@@ -991,9 +973,7 @@ class PolicyTrainingOrchestrator:
         hidden_dim: int | None = None,
     ) -> ConflictAwarePolicyNetwork:
         if not torch_available():
-            raise TorchNotAvailableError(
-                "PyTorch is required to build the policy network. Install torch or disable PPO."
-            )
+            raise TorchNotAvailableError("PyTorch is required to build the policy network. Install torch or disable PPO.")
         cfg = ConflictAwarePolicyConfig(
             feature_dim=feature_dim,
             map_shape=map_shape,

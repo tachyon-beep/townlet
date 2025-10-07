@@ -41,3 +41,6 @@ tmp/
 .duskmantle/
 **/node_modules/**
 townlet_web/test-results/
+
+.ruff_cache/
+.tox/

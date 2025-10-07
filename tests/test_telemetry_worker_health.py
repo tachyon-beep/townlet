@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping
 from pathlib import Path
+import types
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
@@ -33,17 +35,22 @@ def test_flush_worker_failure_sets_status(monkeypatch, caplog) -> None:
     publisher = TelemetryPublisher(config)
     caplog.set_level(logging.CRITICAL, "townlet.telemetry.publisher")
     try:
-        original_flush = publisher._flush_transport_buffer
+        manager = publisher._worker_manager
+        original_flush = manager._flush_pending
+        state = {"calls": 0}
 
-        def fail_once(tick: int) -> None:  # pragma: no cover - executed in worker thread
-            monkeypatch.setattr(publisher, "_flush_transport_buffer", original_flush)
-            raise RuntimeError("flush worker crash")
+        def failing(self):  # pragma: no cover - executed in worker thread
+            state["calls"] += 1
+            if state["calls"] == 1:
+                raise RuntimeError("flush worker crash")
+            return original_flush()
 
-        monkeypatch.setattr(publisher, "_flush_transport_buffer", fail_once)
-        with publisher._buffer_lock:
-            publisher._transport_buffer.append(b"payload")
-            publisher._latest_enqueue_tick = 1
-        publisher._flush_event.set()
+        monkeypatch.setattr(
+            manager,
+            "_flush_pending",
+            types.MethodType(failing, manager),
+        )
+        manager.enqueue(b"payload", tick=1)
 
         for _ in range(60):
             status = publisher.latest_transport_status()
@@ -53,8 +60,18 @@ def test_flush_worker_failure_sets_status(monkeypatch, caplog) -> None:
         else:
             raise AssertionError("flush worker did not report restart")
 
+        for _ in range(60):
+            thread = manager._thread
+            if thread is not None and thread.is_alive():
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("flush worker thread did not restart")
+
         status = publisher.latest_transport_status()
-        assert status["worker_alive"] is True
+        assert status["worker_restart_count"] >= 1
+        thread = manager._thread
+        assert thread is not None and thread.is_alive()
         assert status["worker_error"] is None
         assert status["last_worker_error"].startswith("RuntimeError")
         assert status["worker_restart_count"] == 1
@@ -63,7 +80,6 @@ def test_flush_worker_failure_sets_status(monkeypatch, caplog) -> None:
             for record in caplog.records
         )
     finally:
-        monkeypatch.setattr(publisher, "_flush_transport_buffer", original_flush)
         publisher.stop_worker(wait=True)
         publisher.close()
 
@@ -87,7 +103,7 @@ def test_health_metrics_include_worker_status(tmp_path: Path) -> None:
         assert metrics["telemetry_worker_restart_count"] == 0
         assert metrics["telemetry_console_auth_enabled"] is False
     finally:
-        loop.telemetry.close()
+        loop.close()
 
 def test_health_metrics_reflect_auth_enabled(tmp_path: Path) -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
@@ -104,4 +120,25 @@ def test_health_metrics_reflect_auth_enabled(tmp_path: Path) -> None:
         metrics = loop.telemetry.latest_health_status()
         assert metrics["telemetry_console_auth_enabled"] is True
     finally:
-        loop.telemetry.close()
+        loop.close()
+
+
+def test_record_loop_failure_emits_pipeline_events(monkeypatch) -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.telemetry.transport.type = "stdout"
+    publisher = TelemetryPublisher(config)
+    emitted: list[tuple[dict[str, object], int]] = []
+
+    def capture(payload: Mapping[str, object], *, tick: int) -> None:
+        emitted.append((dict(payload), int(tick)))
+
+    monkeypatch.setattr(publisher, "_enqueue_stream_payload", capture)
+    try:
+        publisher.record_loop_failure({"tick": 7, "error": "boom"})
+        assert emitted, "loop failure did not emit telemetry payload"
+        payload, tick = emitted[0]
+        assert tick == 7
+        assert payload["error"] == "boom"
+        assert "tick" in payload
+    finally:
+        publisher.close()

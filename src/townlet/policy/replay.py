@@ -415,97 +415,78 @@ class ReplayDataset:
         self._rng = np.random.default_rng(config.seed) if config.shuffle else None
         self._streaming = config.streaming
         self._cached_samples: list[ReplaySample] | None = None
+        self._buckets: list[list[int]] | None = None  # indices grouped by shape signature
         self.metrics_map = config.metrics_map or {}
         if self._streaming:
-            first_sample = load_replay_sample(*self._entries[0])
-            self._map_shape = first_sample.map.shape
-            self._feature_dim = first_sample.features.shape[0]
-            self._array_shapes = {
-                field: getattr(first_sample, field).shape
-                for field in TRAINING_ARRAY_FIELDS
-            }
-            self._timesteps = first_sample.metadata.get("timesteps")
-            self._value_steps = first_sample.metadata.get("value_pred_steps")
-            self._ensure_sample_metrics(first_sample, self._entries[0])
+            # In streaming mode, we don’t cache samples globally. We still want
+            # to batch by homogeneous shapes, so build signature buckets by
+            # peeking each entry once.
+            signatures: dict[tuple, list[int]] = {}
+            for idx, (sample_path, meta_path) in enumerate(self._entries):
+                s = load_replay_sample(sample_path, meta_path)
+                sig = (
+                    tuple(s.map.shape),
+                    tuple(s.features.shape),
+                    tuple(getattr(s, f).shape for f in TRAINING_ARRAY_FIELDS),
+                )
+                signatures.setdefault(sig, []).append(idx)
+                self._ensure_sample_metrics(s, (sample_path, meta_path))
+            # Deterministic order by signature
+            self._buckets = [signatures[key] for key in sorted(signatures.keys())]
         else:
             self._cached_samples = [
                 load_replay_sample(sample, meta) for sample, meta in self._entries
             ]
-            self._ensure_homogeneous(self._cached_samples)
             for sample, entry in zip(self._cached_samples, self._entries):
                 self._ensure_sample_metrics(sample, entry)
-            self._map_shape = self._cached_samples[0].map.shape
-            self._feature_dim = self._cached_samples[0].features.shape[0]
-            self._array_shapes = {
-                field: getattr(self._cached_samples[0], field).shape
-                for field in TRAINING_ARRAY_FIELDS
-            }
-            self._timesteps = self._cached_samples[0].metadata.get("timesteps")
-            self._value_steps = self._cached_samples[0].metadata.get("value_pred_steps")
+            # Build buckets based on cached sample shapes
+            signatures: dict[tuple, list[int]] = {}
+            for idx, s in enumerate(self._cached_samples):
+                sig = (
+                    tuple(s.map.shape),
+                    tuple(s.features.shape),
+                    tuple(getattr(s, f).shape for f in TRAINING_ARRAY_FIELDS),
+                )
+                signatures.setdefault(sig, []).append(idx)
+            self._buckets = [signatures[key] for key in sorted(signatures.keys())]
         self.baseline_metrics = self._aggregate_metrics()
 
     def _ensure_homogeneous(self, samples: Sequence[ReplaySample]) -> None:
-        base_map = samples[0].map.shape
-        base_feat = samples[0].features.shape[0]
-        base_arrays = {
-            field: getattr(samples[0], field).shape for field in TRAINING_ARRAY_FIELDS
-        }
-        for sample in samples[1:]:
-            if sample.map.shape != base_map or sample.features.shape[0] != base_feat:
-                raise ValueError("Replay samples have mismatched shapes; cannot batch")
-            for field_name, shape in base_arrays.items():
-                if getattr(sample, field_name).shape != shape:
-                    raise ValueError(
-                        f"Replay samples have mismatched {field_name} shapes; cannot batch"
-                    )
+        # Retained for backward-compatibility, but unused after bucketing.
+        # Bucketing guarantees homogeneity per batch.
+        return
 
     def __len__(self) -> int:
-        total = len(self._entries)
-        full_batches, remainder = divmod(total, self.config.batch_size)
-        if remainder and not self.config.drop_last:
-            full_batches += 1
-        return full_batches
+        if not self._buckets:
+            return 0
+        batch_size = self.config.batch_size
+        total = 0
+        for bucket in self._buckets:
+            count = len(bucket)
+            full, rem = divmod(count, batch_size)
+            if rem and not self.config.drop_last:
+                full += 1
+            total += full
+        return total
 
     def __iter__(self) -> Iterator[ReplayBatch]:
-        indices = list(range(len(self._entries)))
-        if self._rng is not None:
-            self._rng.shuffle(indices)
-        for start in range(0, len(indices), self.config.batch_size):
-            batch_indices = indices[start : start + self.config.batch_size]
-            if len(batch_indices) < self.config.batch_size and self.config.drop_last:
-                continue
-            samples = [self._fetch_sample(index) for index in batch_indices]
-            yield build_batch(samples)
+        if not self._buckets:
+            return
+        for bucket in self._buckets:
+            indices = list(bucket)
+            if self._rng is not None:
+                self._rng.shuffle(indices)
+            for start in range(0, len(indices), self.config.batch_size):
+                batch_indices = indices[start : start + self.config.batch_size]
+                if len(batch_indices) < self.config.batch_size and self.config.drop_last:
+                    continue
+                samples = [self._fetch_sample(index) for index in batch_indices]
+                yield build_batch(samples)
 
     def _fetch_sample(self, index: int) -> ReplaySample:
         if self._cached_samples is not None:
             return self._cached_samples[index]
         sample = load_replay_sample(*self._entries[index])
-        if (
-            sample.map.shape != self._map_shape
-            or sample.features.shape[0] != self._feature_dim
-        ):
-            raise ValueError("Replay samples have mismatched shapes; cannot batch")
-        for field_name, shape in self._array_shapes.items():
-            if getattr(sample, field_name).shape != shape:
-                raise ValueError(
-                    f"Replay samples have mismatched {field_name} shapes; cannot batch"
-                )
-        if self._timesteps is not None:
-            sample_steps = sample.metadata.get("timesteps")
-            if sample_steps is not None and sample_steps != self._timesteps:
-                raise ValueError(
-                    "Replay samples have mismatched timestep length; cannot batch"
-                )
-        if self._value_steps is not None:
-            sample_value_steps = sample.metadata.get("value_pred_steps")
-            if (
-                sample_value_steps is not None
-                and sample_value_steps != self._value_steps
-            ):
-                raise ValueError(
-                    "Replay samples have mismatched value baseline length; cannot batch"
-                )
         self._ensure_sample_metrics(sample, self._entries[index])
         return sample
 
