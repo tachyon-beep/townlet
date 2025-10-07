@@ -415,6 +415,7 @@ class PolicyTrainingOrchestrator:
 
         # Prefer CUDA if available for faster training; fallback to CPU.
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        logger.info("PPO device selected: %s", device)
         policy = self.build_policy_network(feature_dim, map_shape, action_dim)
         policy.train()
         policy.to(device)
@@ -534,9 +535,10 @@ class PolicyTrainingOrchestrator:
                 returns = gae.returns
                 if ppo_cfg.advantage_normalization:
                     advantages = ops.normalize_advantages(advantages.view(-1)).view_as(advantages)
-
-                baseline = ops.value_baseline_from_old_preds(value_preds_old, timesteps)
-
+                # Derive baseline per-batch using that batch's timestep length.
+                # In rollout/mixed modes, batches may differ in timesteps when
+                # batch_size == 1, so using a fixed value from the first batch
+                # can be incorrect and cause shape errors.
                 flat_advantages = advantages.reshape(-1)
                 flat_returns = returns.reshape(-1)
                 _ensure_finite("advantages", flat_advantages, batch_index)
@@ -547,6 +549,7 @@ class PolicyTrainingOrchestrator:
                 advantage_buffer.extend(advantages.cpu().numpy().astype(float).reshape(-1).tolist())
 
                 batch_size, timestep_length = rewards.shape
+                baseline = ops.value_baseline_from_old_preds(value_preds_old, timestep_length)
                 flat_maps = maps.reshape(batch_size * timestep_length, *maps.shape[2:])
                 flat_features = features.reshape(batch_size * timestep_length, features.shape[2])
                 flat_actions = actions.reshape(-1)

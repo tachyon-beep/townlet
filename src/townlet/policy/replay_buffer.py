@@ -26,7 +26,12 @@ class InMemoryReplayDataset:
         if not self.samples:
             raise ValueError("In-memory dataset requires samples")
         self.batch_size = config.batch_size
-        self._validate_shapes()
+        # Only enforce global shape homogeneity when we intend to stack
+        # multiple samples in the same batch. For batch_size == 1 we allow
+        # variable-length trajectories (different timestep counts) and rely
+        # on per-sample batching.
+        if self.batch_size > 1:
+            self._validate_shapes()
         self.rollout_ticks = int(config.rollout_ticks)
         self.label = config.label
         self.queue_conflict_count = 0
