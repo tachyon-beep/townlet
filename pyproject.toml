@@ -28,6 +28,7 @@ optional-dependencies.dev = [
   "httpx>=0.28",
   "pytest-cov>=4.1",
   "interrogate>=1.7",
+  "import-linter>=2.0",
 ]
 optional-dependencies.ml = [
   "torch>=2.2",

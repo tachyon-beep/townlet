@@ -25,6 +25,9 @@ jobs:
           ruff check src tests
           mypy src
 
+      - name: Import linter (config isolation)
+        run: lint-imports --config importlinter.ini
+
       - name: Docstring coverage
         run: |
           python scripts/check_docstrings.py src/townlet --min-module 90 --min-callable 25
