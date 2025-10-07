@@ -2,61 +2,100 @@
 
 from __future__ import annotations
 
-from .loader import (
-    AffordanceConfig,
-    AffordanceRuntimeConfig,
-    AnnealStage,
-    ArrangedMeetEventConfig,
-    BCTrainingSettings,
+from .conflict import ConflictConfig, QueueFairnessConfig, RivalryConfig
+from .console_auth import ConsoleAuthConfig, ConsoleAuthTokenConfig, ConsoleMode
+from .core import FloatRange, IntRange
+from .flags import (
     BehaviorFlags,
-    BlackoutEventConfig,
-    ConflictConfig,
-    ConsoleAuthConfig,
-    ConsoleAuthTokenConfig,
-    ConsoleMode,
+    ConsoleFlags,
     CuriosityToggle,
-    EmbeddingAllocatorConfig,
-    EmploymentConfig,
-    FloatRange,
-    IntRange,
     LifecycleToggle,
-    NarrationThrottleConfig,
     ObservationFeatureFlags,
-    ObservationsConfig,
     ObservationVariant,
-    OptionThrashCanaryConfig,
-    OutageEventConfig,
+    PolicyRuntimeConfig,
+    SocialRewardStage,
+    StageFlags,
+    SystemFlags,
+    TrainingFlags,
+)
+from .loader import (
+    AnnealStage,
+    BCTrainingSettings,
+    # Console auth moved (re-exported below)
+    # CuriosityToggle moved (re-exported below)
+    EmbeddingAllocatorConfig,
+    # LifecycleToggle moved (re-exported below)
+    # ObservationFeatureFlags moved (re-exported below)
+    ObservationsConfig,
+    # ObservationVariant moved (re-exported below)
+    # OptionThrashCanaryConfig moved (re-exported below)
     PersonalityAssignmentConfig,
-    PersonalityNarrationConfig,
+    # NOTE: PPOConfig moved to townlet.config.policy; re-exported below
+    # PromotionGateConfig moved (re-exported below)
+    # RewardVarianceCanaryConfig moved (re-exported below)
+    # NOTE: Runtime providers moved to townlet.config.runtime; re-exported below
+    SimulationConfig,
+    # Snapshots moved (re-exported below)
+    SocialRewardScheduleEntry,
+    # SocialRewardStage moved (re-exported below)
+    # StarvationCanaryConfig moved (re-exported below)
+    # telemetry moved (re-exported below)
+    TrainingConfig,
+    TrainingSource,
+    load_config,
+)
+
+# Re-exports from decomposed modules
+from .policy import PPOConfig
+from .rewards import (
+    CuriosityConfig,
+    NeedsWeights,
+    OptionThrashCanaryConfig,
+    PromotionGateConfig,
+    RewardClips,
+    RewardsConfig,
+    RewardVarianceCanaryConfig,
+    ShapingConfig,
+    SocialRewardWeights,
+    StabilityConfig,
+    StarvationCanaryConfig,
+)
+from .runtime import RuntimeProviderConfig, RuntimeProviders
+from .scheduler import (
+    ArrangedMeetEventConfig,
+    BlackoutEventConfig,
+    OutageEventConfig,
     PerturbationEventConfig,
     PerturbationKind,
     PerturbationSchedulerConfig,
-    PPOConfig,
     PriceSpikeEventConfig,
-    PromotionGateConfig,
-    QueueFairnessConfig,
-    RelationshipNarrationConfig,
-    RewardVarianceCanaryConfig,
-    RivalryConfig,
-    RuntimeProviderConfig,
-    RuntimeProviders,
-    SimulationConfig,
+)
+from .snapshots import (
     SnapshotAutosaveConfig,
     SnapshotConfig,
     SnapshotGuardrailsConfig,
     SnapshotIdentityConfig,
     SnapshotMigrationsConfig,
     SnapshotStorageConfig,
-    SocialRewardScheduleEntry,
-    SocialRewardStage,
-    StarvationCanaryConfig,
+)
+from .telemetry import (
+    NarrationThrottleConfig,
+    PersonalityNarrationConfig,
+    RelationshipNarrationConfig,
     TelemetryBufferConfig,
     TelemetryConfig,
     TelemetryRetryPolicy,
+    TelemetryTransformEntry,
+    TelemetryTransformsConfig,
     TelemetryTransportConfig,
-    TrainingConfig,
-    TrainingSource,
-    load_config,
+    TelemetryWorkerConfig,
+)
+from .world_config import (
+    AffordanceConfig,
+    AffordanceRuntimeConfig,
+    BehaviorConfig,
+    EmploymentConfig,
+    LifecycleConfig,
 )
 
 __all__ = [
@@ -65,19 +104,24 @@ __all__ = [
     "AnnealStage",
     "ArrangedMeetEventConfig",
     "BCTrainingSettings",
+    "BehaviorConfig",
     "BehaviorFlags",
     "BlackoutEventConfig",
     "ConflictConfig",
     "ConsoleAuthConfig",
     "ConsoleAuthTokenConfig",
+    "ConsoleFlags",
     "ConsoleMode",
+    "CuriosityConfig",
     "CuriosityToggle",
     "EmbeddingAllocatorConfig",
     "EmploymentConfig",
     "FloatRange",
     "IntRange",
+    "LifecycleConfig",
     "LifecycleToggle",
     "NarrationThrottleConfig",
+    "NeedsWeights",
     "ObservationFeatureFlags",
     "ObservationVariant",
     "ObservationsConfig",
@@ -89,14 +133,18 @@ __all__ = [
     "PerturbationEventConfig",
     "PerturbationKind",
     "PerturbationSchedulerConfig",
+    "PolicyRuntimeConfig",
     "PriceSpikeEventConfig",
     "PromotionGateConfig",
     "QueueFairnessConfig",
     "RelationshipNarrationConfig",
+    "RewardClips",
     "RewardVarianceCanaryConfig",
+    "RewardsConfig",
     "RivalryConfig",
     "RuntimeProviderConfig",
     "RuntimeProviders",
+    "ShapingConfig",
     "SimulationConfig",
     "SnapshotAutosaveConfig",
     "SnapshotConfig",
@@ -106,12 +154,20 @@ __all__ = [
     "SnapshotStorageConfig",
     "SocialRewardScheduleEntry",
     "SocialRewardStage",
+    "SocialRewardWeights",
+    "StabilityConfig",
+    "StageFlags",
     "StarvationCanaryConfig",
+    "SystemFlags",
     "TelemetryBufferConfig",
     "TelemetryConfig",
     "TelemetryRetryPolicy",
+    "TelemetryTransformEntry",
+    "TelemetryTransformsConfig",
     "TelemetryTransportConfig",
+    "TelemetryWorkerConfig",
     "TrainingConfig",
+    "TrainingFlags",
     "TrainingSource",
     "load_config",
 ]

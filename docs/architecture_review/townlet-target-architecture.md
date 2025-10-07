@@ -73,6 +73,18 @@ See also:
 - Telemetry Pipeline Guide: `docs/guides/telemetry_pipeline.md` (layering, config, metrics)
 - Phase 7 Benchmark Runbook: `docs/architecture_review/wp-d_phase7_runbook.md`
 
+### 3.4 Configuration Models
+- The config package is decomposed by domain to remain acyclic and easy to navigate:
+  - `townlet.config.runtime` (provider descriptors), `townlet.config.policy` (PPO),
+    `townlet.config.telemetry` (transports, buffers, transforms, workers),
+    `townlet.config.world_config` (affordances, lifecycle, employment, behaviour),
+    `townlet.config.scheduler` (perturbations), `townlet.config.rewards` (reward surfaces),
+    `townlet.config.observations`, `townlet.config.console_auth`, `townlet.config.flags`.
+- `townlet.config.loader` is orchestration-only: YAML I/O, composition, and cross-cutting validation.
+- Public API is preserved by re-exports in `townlet.config.__init__`.
+- Reference docs are generated from these modules via `scripts/gen_config_reference.py` into
+  `docs/guides/CONFIG_REFERENCE.md` to avoid drift.
+
 ## 4. Optional Dependency Adapters
 - Introduce dedicated extras in `pyproject.toml` (e.g., `[ml]`, `[api]`, `[ui]`).
 - Factories check dependency availability and configuration before instantiating optional components.

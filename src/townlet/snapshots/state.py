@@ -334,7 +334,9 @@ def snapshot_from_world(
             if hasattr(telemetry, "export_state"):
                 telemetry_payload = telemetry.export_state()
             if hasattr(telemetry, "export_console_buffer"):
-                console_buffer = telemetry.export_console_buffer()
+                # Defensive: ensure a list even if a faulty provider returns None.
+                exported = telemetry.export_console_buffer()
+                console_buffer = list(exported or [])
 
     perturbations_payload = {}
     if perturbations is not None:

@@ -172,7 +172,8 @@ class TelemetryBridge:
             "precondition_failures": self._call_or_default("latest_precondition_failures", []),
         }
         provider = self._provider_name
-        if is_stub_telemetry(self._publisher, provider):
+        # Defensive: treat as stub if either provider says 'stub' or instance is StubTelemetrySink.
+        if provider == "stub" or is_stub_telemetry(self._publisher):
             payload["telemetry_warning"] = {
                 "provider": provider,
                 "message": "Telemetry running in stub mode; real-time streaming disabled.",
