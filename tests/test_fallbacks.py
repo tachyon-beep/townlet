@@ -6,7 +6,13 @@ from typing import Any
 import pytest
 
 from townlet.config import RuntimeProviderConfig, RuntimeProviders, load_config
-from townlet.core import SimulationLoop
+from townlet.core import (
+    SimulationLoop,
+    is_stub_policy,
+    is_stub_telemetry,
+    policy_provider_name,
+    telemetry_provider_name,
+)
 from townlet.core import factory_registry as registry
 from townlet.policy.fallback import StubPolicyBackend
 from townlet.telemetry.fallback import StubTelemetrySink
@@ -27,6 +33,9 @@ def test_policy_stub_resolution(sample_config: Any, monkeypatch: pytest.MonkeyPa
     loop = SimulationLoop(config)
     try:
         assert isinstance(loop.policy, StubPolicyBackend)
+        provider = policy_provider_name(loop)
+        assert provider == "pytorch"
+        assert is_stub_policy(loop.policy, provider)
     finally:
         if hasattr(loop.telemetry, "close"):
             loop.close()
@@ -42,6 +51,9 @@ def test_telemetry_stub_resolution(sample_config: Any, monkeypatch: pytest.Monke
     loop = SimulationLoop(config)
     try:
         assert isinstance(loop.telemetry, StubTelemetrySink)
+        provider = telemetry_provider_name(loop)
+        assert provider == "http"
+        assert is_stub_telemetry(loop.telemetry, provider)
     finally:
         if hasattr(loop.telemetry, "close"):
             loop.close()

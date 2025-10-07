@@ -40,12 +40,16 @@ def telemetry_provider_name(loop: _ProviderCarrier) -> str:
 
 
 def is_stub_policy(policy: PolicyBackendProtocol, provider: str | None = None) -> bool:
-    if provider is not None and provider != "stub":
+    if isinstance(policy, StubPolicyBackend):
+        return True
+    if provider is None:
         return False
-    return isinstance(policy, StubPolicyBackend)
+    return provider == "stub"
 
 
 def is_stub_telemetry(telemetry: TelemetrySinkProtocol, provider: str | None = None) -> bool:
-    if provider is not None and provider != "stub":
+    if isinstance(telemetry, StubTelemetrySink):
+        return True
+    if provider is None:
         return False
-    return isinstance(telemetry, StubTelemetrySink)
+    return provider == "stub"
