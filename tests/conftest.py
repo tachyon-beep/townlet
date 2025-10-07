@@ -17,6 +17,10 @@ for path in (SRC, ROOT):
         sys.path.insert(0, path_str)
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "slow: marks tests as slow")
+
+
 @pytest.fixture
 def stub_affordance_runtime_factory():
     def _factory(world, context):
