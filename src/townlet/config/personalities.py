@@ -35,8 +35,6 @@ class PersonalityAssignmentConfig(BaseModel):
 
         cleaned_overrides: dict[str, str] = {}
         for agent_id, profile in self.overrides.items():
-            if profile is None:
-                continue
             profile_key = str(profile).lower()
             cleaned_overrides[str(agent_id)] = profile_key
 

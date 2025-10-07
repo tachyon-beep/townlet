@@ -181,7 +181,14 @@ class TrainingConfig(BaseModel):
     replay_manifest: Path | None = None
     social_reward_stage_override: SocialRewardStage | None = None
     social_reward_schedule: list[SocialRewardScheduleEntry] = Field(default_factory=list)
-    bc: BCTrainingSettings = BCTrainingSettings()
+    bc: BCTrainingSettings = Field(default_factory=lambda: BCTrainingSettings(
+        manifest=None,
+        learning_rate=1e-3,
+        batch_size=64,
+        epochs=10,
+        weight_decay=0.0,
+        device="cpu",
+    ))
     anneal_schedule: list[AnnealStage] = Field(default_factory=list)
     anneal_accuracy_threshold: float = Field(0.9, ge=0.0, le=1.0)
     anneal_enable_policy_blend: bool = False
@@ -231,24 +238,59 @@ class SimulationConfig(BaseModel):
     )
     shaping: ShapingConfig | None = None
     curiosity: CuriosityConfig | None = None
-    queue_fairness: QueueFairnessConfig = QueueFairnessConfig()
+    queue_fairness: QueueFairnessConfig = Field(default_factory=lambda: QueueFairnessConfig(
+        cooldown_ticks=60,
+        ghost_step_after=3,
+        age_priority_weight=0.1,
+    ))
     conflict: ConflictConfig = ConflictConfig()
     ppo: PPOConfig | None = None
-    training: TrainingConfig = TrainingConfig()
-    embedding_allocator: EmbeddingAllocatorConfig = EmbeddingAllocatorConfig()
-    observations_config: ObservationsConfig = ObservationsConfig()
-    affordances: AffordanceConfig = AffordanceConfig()
-    stability: StabilityConfig = StabilityConfig()
-    behavior: BehaviorConfig = BehaviorConfig()
-    policy_runtime: PolicyRuntimeConfig = PolicyRuntimeConfig()
-    employment: EmploymentConfig = EmploymentConfig()
-    personalities: PersonalityAssignmentConfig = PersonalityAssignmentConfig()
-    telemetry: TelemetryConfig = TelemetryConfig()
-    console_auth: ConsoleAuthConfig = ConsoleAuthConfig()
-    snapshot: SnapshotConfig = SnapshotConfig()
-    perturbations: PerturbationSchedulerConfig = PerturbationSchedulerConfig()
-    lifecycle: LifecycleConfig = LifecycleConfig()
-    runtime: RuntimeProviders = RuntimeProviders()
+    training: TrainingConfig = Field(default_factory=lambda: TrainingConfig(
+        source="replay",
+        rollout_ticks=100,
+        rollout_auto_seed_agents=False,
+        replay_manifest=None,
+        social_reward_stage_override=None,
+        social_reward_schedule=[],
+        bc=BCTrainingSettings(
+            manifest=None,
+            learning_rate=1e-3,
+            batch_size=64,
+            epochs=10,
+            weight_decay=0.0,
+            device="cpu",
+        ),
+        anneal_schedule=[],
+        anneal_accuracy_threshold=0.9,
+        anneal_enable_policy_blend=False,
+    ))
+    embedding_allocator: EmbeddingAllocatorConfig = Field(default_factory=lambda: EmbeddingAllocatorConfig(
+        cooldown_ticks=2000,
+        reuse_warning_threshold=0.05,
+        log_forced_reuse=True,
+        max_slots=64,
+    ))
+    observations_config: ObservationsConfig = Field(default_factory=lambda: ObservationsConfig())
+    affordances: AffordanceConfig = Field(default_factory=lambda: AffordanceConfig(affordances_file="configs/affordances/core.yaml"))
+    stability: StabilityConfig = Field(default_factory=lambda: StabilityConfig(
+        affordance_fail_threshold=5,
+        lateness_threshold=3,
+    ))
+    behavior: BehaviorConfig = Field(default_factory=lambda: BehaviorConfig(
+        hunger_threshold=0.4,
+        hygiene_threshold=0.4,
+        energy_threshold=0.4,
+        job_arrival_buffer=20,
+    ))
+    policy_runtime: PolicyRuntimeConfig = Field(default_factory=lambda: PolicyRuntimeConfig(option_commit_ticks=15))
+    employment: EmploymentConfig = EmploymentConfig()  # type: ignore[call-arg]
+    personalities: PersonalityAssignmentConfig = Field(default_factory=lambda: PersonalityAssignmentConfig())
+    telemetry: TelemetryConfig = Field(default_factory=lambda: TelemetryConfig())
+    console_auth: ConsoleAuthConfig = Field(default_factory=lambda: ConsoleAuthConfig())
+    snapshot: SnapshotConfig = Field(default_factory=lambda: SnapshotConfig())
+    perturbations: PerturbationSchedulerConfig = PerturbationSchedulerConfig()  # type: ignore[call-arg]
+    lifecycle: LifecycleConfig = Field(default_factory=lambda: LifecycleConfig(respawn_delay_ticks=0))
+    runtime: RuntimeProviders = Field(default_factory=lambda: RuntimeProviders())
 
     model_config = ConfigDict(extra="allow")
 

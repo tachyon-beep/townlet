@@ -39,7 +39,20 @@ class RivalryConfig(BaseModel):
 
 
 class ConflictConfig(BaseModel):
-    rivalry: RivalryConfig = RivalryConfig()
+    rivalry: RivalryConfig = Field(
+        default_factory=lambda: RivalryConfig(
+            increment_per_conflict=0.15,
+            decay_per_tick=0.005,
+            min_value=0.0,
+            max_value=1.0,
+            avoid_threshold=0.7,
+            eviction_threshold=0.05,
+            max_edges=6,
+            ghost_step_boost=1.5,
+            handover_boost=0.4,
+            queue_length_boost=0.25,
+        )
+    )
 
 
 __all__ = [
@@ -47,4 +60,3 @@ __all__ = [
     "QueueFairnessConfig",
     "RivalryConfig",
 ]
-

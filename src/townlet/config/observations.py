@@ -48,9 +48,29 @@ class SocialSnippetConfig(BaseModel):
 class ObservationsConfig(BaseModel):
     """Bundle observation variants consumed by ObservationBuilder."""
 
-    hybrid: HybridObservationConfig = HybridObservationConfig()
-    compact: CompactObservationConfig = CompactObservationConfig()
-    social_snippet: SocialSnippetConfig = SocialSnippetConfig()
+    hybrid: HybridObservationConfig = Field(
+        default_factory=lambda: HybridObservationConfig(
+            local_window=11,
+            include_targets=False,
+            time_ticks_per_day=1440,
+        )
+    )
+    compact: CompactObservationConfig = Field(
+        default_factory=lambda: CompactObservationConfig(
+            map_window=7,
+            include_targets=False,
+            object_channels=[],
+            normalize_counts=True,
+        )
+    )
+    social_snippet: SocialSnippetConfig = Field(
+        default_factory=lambda: SocialSnippetConfig(
+            top_friends=2,
+            top_rivals=2,
+            embed_dim=8,
+            include_aggregates=True,
+        )
+    )
 
 
 __all__ = [
@@ -59,4 +79,3 @@ __all__ = [
     "ObservationsConfig",
     "SocialSnippetConfig",
 ]
-

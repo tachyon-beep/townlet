@@ -35,7 +35,7 @@ class BasePerturbationEventConfig(BaseModel):
                 copy = dict(values)
                 copy["duration"] = copy.get("duration_min")
                 return copy
-        return values  # type: ignore[return-value]
+        return values
 
 
 class PriceSpikeEventConfig(BasePerturbationEventConfig):
@@ -50,7 +50,7 @@ class PriceSpikeEventConfig(BasePerturbationEventConfig):
                 copy = dict(values)
                 copy["magnitude"] = copy.get("magnitude_range")
                 return copy
-        return values  # type: ignore[return-value]
+        return values
 
 
 class BlackoutEventConfig(BasePerturbationEventConfig):
@@ -104,4 +104,3 @@ __all__ = [
     "PerturbationSchedulerConfig",
     "PriceSpikeEventConfig",
 ]
-

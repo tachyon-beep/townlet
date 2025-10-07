@@ -163,19 +163,16 @@ class TelemetryTransportConfig(BaseModel):
                     raise ValueError("telemetry.transport.key_file must not be blank")
                 if self.ca_file is not None and str(self.ca_file).strip() == "":
                     raise ValueError("telemetry.transport.ca_file must not be blank")
-                return self
-
-            if not self.allow_plaintext:
-                raise ValueError("telemetry.transport.tcp requires enable_tls=true or allow_plaintext=true")
-            if not self.dev_allow_plaintext:
-                raise ValueError("telemetry.transport.allow_plaintext requires dev_allow_plaintext=true for tcp transport")
-            host, *_ = endpoint.split(":", 1)
-            host = host.strip()
-            if host not in {"localhost", "127.0.0.1", "::1"}:
-                raise ValueError("telemetry.transport.allow_plaintext is only permitted for localhost endpoints")
-            if ("enable_tls" in fields_set and self.enable_tls) and self.allow_plaintext:
-                raise ValueError("telemetry.transport cannot enable TLS and allow_plaintext simultaneously")
-            self.enable_tls = False
+            else:
+                if not self.allow_plaintext:
+                    raise ValueError("telemetry.transport.tcp requires enable_tls=true or allow_plaintext=true")
+                if not self.dev_allow_plaintext:
+                    raise ValueError("telemetry.transport.allow_plaintext requires dev_allow_plaintext=true for tcp transport")
+                host, *_ = endpoint.split(":", 1)
+                host = host.strip()
+                if host not in {"localhost", "127.0.0.1", "::1"}:
+                    raise ValueError("telemetry.transport.allow_plaintext is only permitted for localhost endpoints")
+                self.enable_tls = False
             return self
 
         if transport_type == "websocket":
@@ -278,13 +275,38 @@ class TelemetryTransformsConfig(BaseModel):
 class TelemetryConfig(BaseModel):
     """Top-level telemetry configuration surfaces."""
 
-    narration: NarrationThrottleConfig = NarrationThrottleConfig()
-    transport: TelemetryTransportConfig = TelemetryTransportConfig()
-    relationship_narration: RelationshipNarrationConfig = RelationshipNarrationConfig()
-    personality_narration: PersonalityNarrationConfig = PersonalityNarrationConfig()
+    narration: NarrationThrottleConfig = Field(
+        default_factory=lambda: NarrationThrottleConfig(
+            global_cooldown_ticks=30,
+            category_cooldown_ticks={},
+            dedupe_window_ticks=20,
+            global_window_ticks=600,
+            global_window_limit=10,
+            priority_categories=[],
+        )
+    )
+    transport: TelemetryTransportConfig = Field(default_factory=lambda: TelemetryTransportConfig())
+    relationship_narration: RelationshipNarrationConfig = Field(
+        default_factory=lambda: RelationshipNarrationConfig(
+            friendship_trust_threshold=0.6,
+            friendship_delta_threshold=0.25,
+            friendship_priority_threshold=0.85,
+            rivalry_avoid_threshold=0.7,
+            rivalry_escalation_threshold=0.9,
+        )
+    )
+    personality_narration: PersonalityNarrationConfig = Field(
+        default_factory=lambda: PersonalityNarrationConfig(
+            enabled=True,
+            chat_extroversion_threshold=0.5,
+            chat_priority_threshold=0.75,
+            chat_quality_threshold=0.3,
+            conflict_tolerance_threshold=0.95,
+        )
+    )
     diff_enabled: bool = True
-    transforms: TelemetryTransformsConfig = TelemetryTransformsConfig()
-    worker: TelemetryWorkerConfig = TelemetryWorkerConfig()
+    transforms: TelemetryTransformsConfig = Field(default_factory=lambda: TelemetryTransformsConfig())
+    worker: TelemetryWorkerConfig = Field(default_factory=lambda: TelemetryWorkerConfig())
 
 
 __all__ = [

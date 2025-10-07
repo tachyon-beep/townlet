@@ -26,10 +26,9 @@ from .loader import (
     EmbeddingAllocatorConfig,
     # LifecycleToggle moved (re-exported below)
     # ObservationFeatureFlags moved (re-exported below)
-    ObservationsConfig,
     # ObservationVariant moved (re-exported below)
     # OptionThrashCanaryConfig moved (re-exported below)
-    PersonalityAssignmentConfig,
+    # PersonalityAssignmentConfig moved to townlet.config.personalities; re-exported below
     # NOTE: PPOConfig moved to townlet.config.policy; re-exported below
     # PromotionGateConfig moved (re-exported below)
     # RewardVarianceCanaryConfig moved (re-exported below)
@@ -97,6 +96,8 @@ from .world_config import (
     EmploymentConfig,
     LifecycleConfig,
 )
+from .observations import ObservationsConfig
+from .personalities import PersonalityAssignmentConfig
 
 __all__ = [
     "AffordanceConfig",

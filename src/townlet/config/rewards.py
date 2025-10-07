@@ -46,8 +46,21 @@ class RewardsConfig(BaseModel):
     survival_tick: float = Field(0.002, ge=0.0, le=0.01)
     faint_penalty: float = Field(-1.0, ge=-5.0, le=0.0)
     eviction_penalty: float = Field(-2.0, ge=-5.0, le=0.0)
-    social: SocialRewardWeights = SocialRewardWeights()
-    clip: RewardClips = RewardClips()
+    social: SocialRewardWeights = Field(
+        default_factory=lambda: SocialRewardWeights(
+            C1_chat_base=0.01,
+            C1_coeff_trust=0.3,
+            C1_coeff_fam=0.2,
+            C2_avoid_conflict=0.005,
+        )
+    )
+    clip: RewardClips = Field(
+        default_factory=lambda: RewardClips(
+            clip_per_tick=0.2,
+            clip_per_episode=50,
+            no_positive_within_death_ticks=10,
+        )
+    )
 
     @model_validator(mode="after")
     def _sanity_check_punctuality(self) -> RewardsConfig:
@@ -124,10 +137,35 @@ class StabilityConfig(BaseModel):
 
     affordance_fail_threshold: int = Field(5, ge=0, le=100)
     lateness_threshold: int = Field(3, ge=0, le=100)
-    starvation: StarvationCanaryConfig = StarvationCanaryConfig()
-    reward_variance: RewardVarianceCanaryConfig = RewardVarianceCanaryConfig()
-    option_thrash: OptionThrashCanaryConfig = OptionThrashCanaryConfig()
-    promotion: PromotionGateConfig = PromotionGateConfig()
+    starvation: StarvationCanaryConfig = Field(
+        default_factory=lambda: StarvationCanaryConfig(
+            window_ticks=1000,
+            max_incidents=0,
+            hunger_threshold=0.05,
+            min_duration_ticks=30,
+        )
+    )
+    reward_variance: RewardVarianceCanaryConfig = Field(
+        default_factory=lambda: RewardVarianceCanaryConfig(
+            window_ticks=1000,
+            max_variance=0.25,
+            min_samples=20,
+        )
+    )
+    option_thrash: OptionThrashCanaryConfig = Field(
+        default_factory=lambda: OptionThrashCanaryConfig(
+            window_ticks=600,
+            max_switch_rate=0.25,
+            min_samples=10,
+        )
+    )
+    promotion: PromotionGateConfig = Field(
+        default_factory=lambda: PromotionGateConfig(
+            required_passes=2,
+            window_ticks=1000,
+            allowed_alerts=(),
+        )
+    )
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -153,4 +191,3 @@ __all__ = [
     "StabilityConfig",
     "StarvationCanaryConfig",
 ]
-

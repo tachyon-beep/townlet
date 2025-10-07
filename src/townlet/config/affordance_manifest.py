@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections.abc import Iterable, Mapping
+from typing import Any, cast
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -141,7 +142,7 @@ def _parse_object_entry(
                 f"Entry {index} ({object_id}) in {path} has non-string stock key"
             )
         try:
-            int_value = int(value)
+            int_value = int(cast(Any, value))
         except (TypeError, ValueError):
             raise AffordanceManifestError(
                 f"Entry {index} ({object_id}) in {path} has non-integer stock for '{key}'"
@@ -174,7 +175,7 @@ def _parse_affordance_entry(
             f"Entry {index} ({affordance_id}) in {path} is missing 'duration'"
         )
     try:
-        duration = int(duration_raw)
+        duration = int(cast(Any, duration_raw))
     except (TypeError, ValueError):
         raise AffordanceManifestError(
             f"Entry {index} ({affordance_id}) in {path} has non-integer duration"
@@ -252,8 +253,8 @@ def _parse_position(
         return None
     if isinstance(value, (list, tuple)) and len(value) == 2:
         try:
-            x = int(value[0])
-            y = int(value[1])
+            x = int(cast(Any, value[0]))
+            y = int(cast(Any, value[1]))
             return (x, y)
         except (TypeError, ValueError):
             raise AffordanceManifestError(
