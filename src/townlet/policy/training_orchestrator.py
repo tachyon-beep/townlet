@@ -413,7 +413,8 @@ class PolicyTrainingOrchestrator:
             self.config.ppo = PPOConfig()
         ppo_cfg = self.config.ppo
 
-        device = torch.device("cpu")
+        # Prefer CUDA if available for faster training; fallback to CPU.
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         policy = self.build_policy_network(feature_dim, map_shape, action_dim)
         policy.train()
         policy.to(device)
