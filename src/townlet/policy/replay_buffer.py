@@ -5,7 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
-from townlet.policy.replay import ReplayBatch, ReplaySample, build_batch
+from townlet.policy.replay import (
+    ReplayBatch,
+    ReplaySample,
+    TRAINING_ARRAY_FIELDS,
+    build_batch,
+)
 
 
 @dataclass
@@ -30,8 +35,10 @@ class InMemoryReplayDataset:
         # multiple samples in the same batch. For batch_size == 1 we allow
         # variable-length trajectories (different timestep counts) and rely
         # on per-sample batching.
-        if self.batch_size > 1:
-            self._validate_shapes()
+        # Build homogeneity buckets to allow mixed-length trajectories to be
+        # batched safely. If all samples share shapes, we keep a single bucket
+        # and fast-path iteration.
+        self._buckets = self._build_buckets(self.samples)
         self.rollout_ticks = int(config.rollout_ticks)
         self.label = config.label
         self.queue_conflict_count = 0
@@ -43,25 +50,36 @@ class InMemoryReplayDataset:
         self.chat_failure_count = 0
         self.chat_quality_mean = 0.0
 
-    def _validate_shapes(self) -> None:
-        base = self.samples[0]
-        for sample in self.samples[1:]:
-            if (
-                sample.map.shape != base.map.shape
-                or sample.features.shape != base.features.shape
-            ):
-                raise ValueError("In-memory samples have mismatched shapes")
+    def _signature(self, sample: ReplaySample) -> tuple:
+        return (
+            tuple(sample.map.shape),
+            tuple(sample.features.shape),
+            tuple(getattr(sample, field).shape for field in TRAINING_ARRAY_FIELDS),
+        )
+
+    def _build_buckets(self, samples: list[ReplaySample]) -> list[list[ReplaySample]]:
+        buckets: dict[tuple, list[ReplaySample]] = {}
+        for s in samples:
+            buckets.setdefault(self._signature(s), []).append(s)
+        # Keep deterministic ordering by signature
+        return [buckets[key] for key in sorted(buckets.keys())]
 
     def __iter__(self) -> Iterator[ReplayBatch]:
-        for start in range(0, len(self.samples), self.batch_size):
-            chunk = self.samples[start : start + self.batch_size]
-            if len(chunk) < self.batch_size and self.config.drop_last:
+        for bucket in self._buckets:
+            if not bucket:
                 continue
-            yield build_batch(chunk)
+            for start in range(0, len(bucket), self.batch_size):
+                chunk = bucket[start : start + self.batch_size]
+                if len(chunk) < self.batch_size and self.config.drop_last:
+                    continue
+                yield build_batch(chunk)
 
     def __len__(self) -> int:
-        total = len(self.samples)
-        batches, remainder = divmod(total, self.batch_size)
-        if remainder and not self.config.drop_last:
-            batches += 1
-        return batches
+        total_batches = 0
+        for bucket in self._buckets:
+            total = len(bucket)
+            batches, remainder = divmod(total, self.batch_size)
+            if remainder and not self.config.drop_last:
+                batches += 1
+            total_batches += batches
+        return total_batches

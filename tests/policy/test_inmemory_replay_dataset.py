@@ -50,21 +50,13 @@ def test_inmemory_dataset_allows_variable_timesteps_with_batch_size_one():
     assert batches[1].actions.shape[1] == 12
 
 
-def test_inmemory_dataset_raises_for_mismatched_timesteps_when_batching():
+def test_inmemory_dataset_groups_mismatched_timesteps_when_batching():
     s1 = _make_sample(8)
     s2 = _make_sample(12)
     cfg = InMemoryReplayDatasetConfig(entries=[s1, s2], batch_size=2)
-    try:
-        _ = InMemoryReplayDataset(cfg)
-    except ValueError as exc:
-        assert "mismatched shapes" in str(exc)
-    else:
-        # Iteration should fail if constructor did not pre-validate
-        ds = InMemoryReplayDataset(cfg)
-        raised = False
-        try:
-            list(ds)
-        except ValueError:
-            raised = True
-        assert raised
-
+    ds = InMemoryReplayDataset(cfg)
+    batches = list(ds)
+    # Two buckets of size 1 → two batches of size 1
+    assert len(batches) == 2
+    assert batches[0].actions.shape[0] == 1
+    assert batches[1].actions.shape[0] == 1
