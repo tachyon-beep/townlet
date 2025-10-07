@@ -21,6 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--telemetry-provider", type=str, default=None, help="Override telemetry provider (default from config)")
     parser.add_argument("--notes", type=str, default=None, help="Optional notes to embed in the result")
     parser.add_argument("--outfile", type=Path, default=None, help="Optional output path for JSON result")
+    parser.add_argument(
+        "--override",
+        action="append",
+        default=None,
+        help="Override config via dotted path (e.g., telemetry.transport.type=file). Can be repeated.",
+    )
     # Sweep options (optional)
     parser.add_argument("--sweep", action="store_true", help="Run a parameter sweep and write a CSV report")
     parser.add_argument("--sweep-batch", type=str, default=None, help="Comma-separated max_batch_size values (e.g., 16,32,64)")
@@ -115,11 +121,26 @@ def main() -> None:
     if args.sweep:
         _sweep(args)
         return
+    # Build overrides mapping if provided
+    overrides = None
+    if args.override:
+        overrides = {}
+        for item in args.override:
+            if not item or "=" not in item:
+                continue
+            key, value = item.split("=", 1)
+            k = key.strip()
+            v: object = value.strip()
+            if k.endswith("file_path"):
+                from pathlib import Path as _P
+                v = _P(str(v))
+            overrides[k] = v
     result = run_benchmark(
         config_path=args.config,
         ticks=args.ticks,
         telemetry_provider=args.telemetry_provider,
         notes=args.notes,
+        overrides=overrides,
     )
     out = write_benchmark_result(result, args.outfile)
     print(out)
