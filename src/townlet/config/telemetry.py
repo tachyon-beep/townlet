@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Local literals to keep this module self-contained
-TelemetryTransportType = Literal["stdout", "file", "tcp", "websocket"]
+TelemetryTransportType = Literal["stdout", "file", "tcp", "websocket", "prometheus"]
 TelemetryBackpressureStrategy = Literal["drop_oldest", "block", "fan_out"]
 
 
@@ -196,6 +196,18 @@ class TelemetryTransportConfig(BaseModel):
             self.dev_allow_plaintext = False
             return self
 
+        if transport_type == "prometheus":
+            if self.endpoint is not None:
+                raise ValueError("telemetry.transport.endpoint must be omitted for prometheus transport")
+            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
+                raise ValueError("telemetry.transport prometheus does not support TLS options")
+            if self.file_path is None:
+                raise ValueError("telemetry.transport.file_path is required for prometheus transport")
+            self.enable_tls = False
+            self.allow_plaintext = False
+            self.dev_allow_plaintext = False
+            return self
+
         raise ValueError(f"Unsupported telemetry transport type: {transport_type}")
 
 
@@ -289,4 +301,3 @@ __all__ = [
     "TelemetryTransportType",
     "TelemetryWorkerConfig",
 ]
-

@@ -210,6 +210,48 @@ class WebsocketTransport(BaseTransport):
         raise TelemetryTransportError("WebsocketTransport is not implemented yet")
 
 
+class PrometheusTextfileTransport(BaseTransport):
+    """Writes basic telemetry counters to a Prometheus textfile.
+
+    Intended for environments using node_exporter's textfile collector.
+    The transport updates aggregate counters on each send() and writes a
+    small metrics file atomically so scrapers can read consistent values.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = Path(path).expanduser()
+        self._started = False
+        self._messages_total = 0
+        self._bytes_total = 0
+
+    def start(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._started = True
+        self._write_metrics()
+
+    def stop(self) -> None:
+        if self._started:
+            self._write_metrics()
+        self._started = False
+
+    def send(self, payload: bytes) -> None:
+        if not self._started:
+            raise TelemetryTransportError("PrometheusTextfileTransport used before start()")
+        size = len(payload)
+        self._messages_total += 1
+        self._bytes_total += size
+        self._write_metrics()
+
+    def _write_metrics(self) -> None:
+        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+        content = (
+            f"townlet_telemetry_messages_total {self._messages_total}\n"
+            f"townlet_telemetry_bytes_total {self._bytes_total}\n"
+        )
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(self._path)
+
+
 class TransportBuffer:
     """Accumulates payloads prior to flushing to the transport."""
 
@@ -310,6 +352,14 @@ def create_transport(
                 "telemetry.transport.websocket_url required for websocket transport"
             )
         t = WebsocketTransport(websocket_url)
+        t.start()
+        return t
+    if transport_type == "prometheus":
+        if file_path is None:
+            raise TelemetryTransportError(
+                "telemetry.transport.file_path is required for prometheus transport"
+            )
+        t = PrometheusTextfileTransport(file_path)
         t.start()
         return t
     raise TelemetryTransportError(

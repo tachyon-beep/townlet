@@ -6,7 +6,7 @@ This guide describes the refactored telemetry pipeline (WP‑D), including layer
 
 - Aggregation: builds structured payloads from world/runtime artefacts.
 - Transform: applies normalization, redaction, and schema validation.
-- Transport: buffers and flushes events (stdout, file, tcp; websocket stubbed).
+ - Transport: buffers and flushes events (stdout, file, tcp; websocket stubbed; prometheus textfile available).
 - Worker: background flush manager with backpressure and retries.
 
 Interfaces are defined in `src/townlet/core/interfaces.py` (TelemetrySinkProtocol). The default sink is `TelemetryPublisher` (`src/townlet/telemetry/publisher.py`). A stub sink (`src/townlet/telemetry/fallback.py`) provides no‑op behavior when transports are unavailable.
@@ -18,7 +18,7 @@ Example excerpt:
 ```yaml
 telemetry:
   transport:
-    type: stdout   # stdout | file | tcp | websocket (stub)
+    type: stdout   # stdout | file | tcp | websocket (stub) | prometheus (textfile)
     file_path: logs/telemetry.jsonl  # for file transport
     endpoint: localhost:9090         # for tcp transport
     enable_tls: true                 # tcp only
@@ -71,3 +71,15 @@ Use the provided scripts to record and compare benchmarks (see docs/architecture
 
 `StubTelemetrySink` implements the protocol with safe defaults; no streaming occurs. Scripts and consoles surface a warning banner when stub mode is active.
 
+## Prometheus Textfile Transport
+
+Set `telemetry.transport.type: prometheus` and provide `telemetry.transport.file_path` to write counters suitable for node_exporter's textfile collector:
+
+```
+telemetry:
+  transport:
+    type: prometheus
+    file_path: /var/lib/node_exporter/textfile_collector/townlet_telemetry.prom
+```
+
+The transport writes `townlet_telemetry_messages_total` and `townlet_telemetry_bytes_total` atomically on each batch.
