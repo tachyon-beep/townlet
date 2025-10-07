@@ -375,6 +375,7 @@ class PolicyTrainingOrchestrator:
         log_frequency: int = 1,
         max_log_entries: int | None = None,
         in_memory_dataset: InMemoryReplayDataset | None = None,
+        device_str: str | None = None,
     ) -> dict[str, float]:
         if not torch_available():
             raise TorchNotAvailableError("PyTorch is required for PPO training. Install torch to proceed.")
@@ -413,9 +414,45 @@ class PolicyTrainingOrchestrator:
             self.config.ppo = PPOConfig()
         ppo_cfg = self.config.ppo
 
-        # Prefer CUDA if available for faster training; fallback to CPU.
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        logger.info("PPO device selected: %s", device)
+        # Prefer CUDA if available for faster training; fallback to CPU. Allow
+        # explicit override via device_str (e.g., 'cuda:1', 'cpu').
+        if device_str:
+            device = torch.device(device_str)
+        else:
+            if torch.cuda.is_available():
+                # Pick the CUDA device with the most free memory to avoid clashing
+                # with other workloads (e.g., LLMs) on multi-GPU systems.
+                try:
+                    best_idx = 0
+                    best_free = -1
+                    for i in range(torch.cuda.device_count()):
+                        free_bytes, _total = torch.cuda.mem_get_info(i)  # type: ignore[attr-defined]
+                        if free_bytes > best_free:
+                            best_free = int(free_bytes)
+                            best_idx = i
+                    device = torch.device(f"cuda:{best_idx}")
+                except Exception:
+                    device = torch.device("cuda")
+            else:
+                device = torch.device("cpu")
+        dev_name = None
+        try:  # best-effort device logging
+            if device.type == "cuda":
+                idx = device.index if device.index is not None else torch.cuda.current_device()
+                dev_name = torch.cuda.get_device_name(idx)
+        except Exception:  # pragma: no cover - logging only
+            pass
+        logger.info("PPO device selected: %s%s", device, f" ({dev_name})" if dev_name else "")
+        print(f"PPO device selected: {device}{f' ({dev_name})' if dev_name else ''}")
+        try:
+            if device.type == "cuda":
+                torch.cuda.set_device(device)
+                torch.backends.cudnn.benchmark = True  # speed up fixed-shape convs
+                # Emit a quick memory snapshot to prove CUDA context is live
+                mem = torch.cuda.memory_allocated(device)
+                print(f"CUDA memory allocated (bytes): {int(mem)}")
+        except Exception:  # pragma: no cover - best-effort
+            pass
         policy = self.build_policy_network(feature_dim, map_shape, action_dim)
         policy.train()
         policy.to(device)
@@ -515,13 +552,13 @@ class PolicyTrainingOrchestrator:
                     if key.startswith("conflict."):
                         conflict_acc[key] = conflict_acc.get(key, 0.0) + value
 
-                maps = torch.from_numpy(batch.maps).float().to(device)
-                features = torch.from_numpy(batch.features).float().to(device)
-                actions = torch.from_numpy(batch.actions).long().to(device)
-                old_log_probs = torch.from_numpy(batch.old_log_probs).float().to(device)
-                rewards = torch.from_numpy(batch.rewards).float().to(device)
-                dones = torch.from_numpy(batch.dones.astype(np.float32)).float().to(device)
-                value_preds_old = torch.from_numpy(batch.value_preds).float().to(device)
+                maps = torch.from_numpy(batch.maps).float().to(device, non_blocking=True)
+                features = torch.from_numpy(batch.features).float().to(device, non_blocking=True)
+                actions = torch.from_numpy(batch.actions).long().to(device, non_blocking=True)
+                old_log_probs = torch.from_numpy(batch.old_log_probs).float().to(device, non_blocking=True)
+                rewards = torch.from_numpy(batch.rewards).float().to(device, non_blocking=True)
+                dones = torch.from_numpy(batch.dones.astype(np.float32)).float().to(device, non_blocking=True)
+                value_preds_old = torch.from_numpy(batch.value_preds).float().to(device, non_blocking=True)
 
                 ops = self._ppo_ops()
                 gae = ops.compute_gae(
@@ -564,7 +601,12 @@ class PolicyTrainingOrchestrator:
                 )
                 if mini_batch_size <= 0:
                     mini_batch_size = 1
-                perm = torch.randperm(total_transitions, generator=generator)
+                # Ensure the permutation tensor and RNG live on the same device
+                perm = torch.randperm(
+                    total_transitions,
+                    device=flat_actions.device,
+                    generator=generator,
+                )
 
                 for start in range(0, total_transitions, mini_batch_size):
                     idx = perm[start : start + mini_batch_size]

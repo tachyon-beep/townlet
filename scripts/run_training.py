@@ -139,6 +139,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Rotate the PPO log after this many entries (creates suffixes like <log>.1).",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Torch device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', or 'cpu').",
+    )
     ppo_group = parser.add_argument_group("PPO overrides")
     ppo_group.add_argument(
         "--ppo-learning-rate",
@@ -409,6 +415,18 @@ def main() -> None:
             drop_last=args.replay_drop_last,
             streaming=args.replay_streaming,
         )
+    elif mode in {"replay", "mixed"}:
+        # Fallback to default bundled manifest if nothing was provided
+        default_manifest = Path("docs/samples/replay_manifest.json")
+        if default_manifest.exists():
+            dataset_config = ReplayDatasetConfig.from_manifest(
+                default_manifest,
+                batch_size=args.replay_batch_size,
+                shuffle=args.replay_shuffle,
+                seed=args.replay_seed,
+                drop_last=args.replay_drop_last,
+                streaming=args.replay_streaming,
+            )
 
     if train_ppo:
         if not torch_available():
@@ -426,6 +444,7 @@ def main() -> None:
                 log_path=args.ppo_log,
                 log_frequency=args.ppo_log_frequency,
                 max_log_entries=args.ppo_log_max_entries,
+                device_str=args.device,
             )
         elif mode == "rollout":
             if buffer_dataset is None:
@@ -437,6 +456,7 @@ def main() -> None:
                 log_frequency=args.ppo_log_frequency,
                 max_log_entries=args.ppo_log_max_entries,
                 in_memory_dataset=buffer_dataset,
+                device_str=args.device,
             )
         elif mode == "mixed":
             if dataset_config is None:
@@ -452,6 +472,7 @@ def main() -> None:
                 log_path=args.ppo_log,
                 log_frequency=args.ppo_log_frequency,
                 max_log_entries=args.ppo_log_max_entries,
+                device_str=args.device,
             )
             harness.run_ppo(
                 None,
@@ -460,6 +481,7 @@ def main() -> None:
                 log_frequency=args.ppo_log_frequency,
                 max_log_entries=args.ppo_log_max_entries,
                 in_memory_dataset=buffer_dataset,
+                device_str=args.device,
             )
     elif args.replay_manifest is not None:
         dataset_config = ReplayDatasetConfig.from_manifest(
