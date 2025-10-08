@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from townlet.factories.policy_factory import create_policy
@@ -90,11 +91,12 @@ class SimulationLoop:
 
 
 def _normalise_snapshot(snapshot: Mapping[str, Any] | Any, *, tick: int) -> Mapping[str, Any]:
-    if isinstance(snapshot, Mapping):
-        data = dict(snapshot)
-        data.setdefault("tick", tick)
-        return data
-    return {"data": snapshot, "tick": tick}
+    data = _to_primitives(snapshot)
+    if isinstance(data, Mapping):
+        normalised = dict(data)
+        normalised.setdefault("tick", tick)
+        return normalised
+    return {"data": data, "tick": tick}
 
 
 def _extract_tick(snapshot: Mapping[str, Any] | Any, *, fallback: int) -> int:
@@ -114,6 +116,16 @@ def _extract_tick(snapshot: Mapping[str, Any] | Any, *, fallback: int) -> int:
             return int(fallback)
         raise ValueError(f"Fallback tick value {fallback} is not an integer.")
     raise TypeError(f"Fallback tick value {fallback} is not an int or float.")
+
+
+def _to_primitives(value: Any) -> Any:
+    if is_dataclass(value):
+        value = asdict(value)
+    if isinstance(value, Mapping):
+        return {key: _to_primitives(inner) for key, inner in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_primitives(item) for item in value]
+    return value
 
 
 __all__ = ["SimulationLoop", "SimulationLoopError"]
