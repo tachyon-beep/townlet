@@ -71,3 +71,43 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
 - Pytest default command includes coverage flags; new tests should fit within existing structure (`tests/...`).
 - No additional config needed for DTO work—Pydantic is available out of the box.
 - Pre-existing overrides ignore mypy missing imports for selected world modules; new ports/factories should not require similar overrides if typed cleanly.
+
+### Step 1 Progress (Ports Created)
+- Added `src/townlet/ports/` package with protocols for world, policy, and telemetry per ADR-001.
+- Protocols intentionally minimal: world handles reset/tick/agents/observe/apply_actions/snapshot; policy exposes episode hooks + decide; telemetry exposes lifecycle + generic emit calls.
+- Adapters will shoulder any additional behaviour (console, anneal, hashes, etc.).
+
+### Adapter & Orchestration Design (aligned with guidance)
+- Console commands/results are handled by a new orchestration-level `ConsoleRouter` that translates commands into world actions/queries and emits results via `TelemetrySink.emit_event("console.result", ...)`.
+- Stability/health metrics flow through a `HealthMonitor` service that consumes world snapshots/events each tick and emits metrics via telemetry—no more telemetry getters.
+- The world adapter owns `ObservationBuilder`; `WorldRuntime.observe()` remains the single observation entrypoint. `world.snapshot()` will include tick-scoped domain events consumed by monitors.
+- Telemetry adapters remain pure sinks (`start/stop/emit_event/emit_metric`); any legacy `latest_*` access moves to monitors or policy-side state.
+- Tick pipeline: console.run_pending() → world.observe()/policy.decide() → world.apply_actions()/tick() → snapshot (with events) → health_monitor.on_tick(...) → telemetry emits.
+
+### Step 2 Progress (Adapters scaffolding)
+- Created `src/townlet/adapters/` package with initial adapters:
+  - `DefaultWorldAdapter` wraps legacy `WorldRuntime`, hosts `ObservationBuilder`, emits per-tick events via snapshot.
+  - `ScriptedPolicyAdapter` bridges the current scripted policy backend to the minimal port (temporary world-provider dependency; will align with new observation flow during loop refactor).
+  - `StdoutTelemetryAdapter` wraps `TelemetryPublisher` as a sink; currently stores emitted events/metrics in publisher state pending new pipeline wiring.
+- Added orchestration stubs (`ConsoleRouter`, `HealthMonitor`) to prepare for event-first loop.
+- Further work: integrate adapters with factories, flesh out event/metric handling, and remove legacy telemetry getter usage during composition refactor.
+
+### Step 3 Progress (Factories)
+- Added `townlet.factories` package with shared registry utilities and domain-specific factory helpers (`create_world`, `create_policy`, `create_telemetry`).
+- Registered default providers mapping to new adapters; stubs remain available (`policy:stub`, `telemetry:stub`).
+- Current implementation still expects legacy runtime instances (world/policy/telemetry); Step 4 will remove the old resolving path and fully adopt the new factories.
+- Configuration errors now produce helpful listings of known providers.
+- Adapters tweaked after review:
+  - `DefaultWorldAdapter.snapshot()` clears cached events post-exposure to avoid double counting.
+  - `ScriptedPolicyAdapter` still exposes `attach_world()` for transition (docstring updated to reflect temporary use); upcoming loop refactor will remove the world dependency entirely.
+  - `StdoutTelemetryAdapter` temporarily appends events/metrics to publisher buffers; a dedicated sink will replace this once the new telemetry pipeline lands.
+
+### External “Fix Pack” Review (2024-XX-XX)
+- Reviewed the architect’s drop-in patch suggestions. Intent aligns (true sink telemetry, observation-driven policy, factories constructing dependencies), but concrete diffs don’t apply cleanly:
+  - Telemetry patch referenced non-existent publisher APIs and bypassed the worker/aggregator pipeline.
+  - Policy adapter patch stubbed scripted behaviour with `noop`, breaking current gameplay paths.
+  - Factory patches required modules/constructors not present in the project, defaulting to dummies.
+- Decision: retain the strategy while implementing code tailored to Townlet’s runtime in Steps 4+.
+
+### Step 4 Status
+- Full composition-loop refactor (SimulationLoop using the new factories/ports, ConsoleRouter + HealthMonitor integration, removal of telemetry getters) is **deferred** until WP2 lands the world/telemetry modularisation. Current code continues to exercise legacy paths; revisit this section after WP2 implementation.

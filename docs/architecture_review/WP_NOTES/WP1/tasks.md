@@ -46,3 +46,24 @@
 - [ ] Update `README.md` findings section as decisions solidify.
 
 Maintain this checklist during WP1 implementation.
+
+## 7. Build Adapters & Services
+- [ ] Implement adapters (`world_default`, `policy_scripted`, `telemetry_stdout`) wrapping legacy implementations.
+- [ ] Embed `ObservationBuilder` inside world adapter; ensure snapshot emits per-tick events.
+- [ ] Implement `ConsoleRouter` in `orchestration/console.py`.
+- [ ] Implement `HealthMonitor` in `orchestration/health.py`.
+- [ ] Document event schema + adapter responsibilities in README.
+
+## 8. Refactor Composition & Tests
+- [ ] Update `SimulationLoop` to use factories, routers, monitors (no telemetry getters).
+- [ ] Update helper utilities (`policy_provider_name`, etc.) for new factories.
+- [ ] Implement dummy providers & register keys.
+- [ ] Add/adjust tests (ports surface, factories, console router, health monitor, observation profile, loop smoke, telemetry getter guard).
+- [ ] Draft console/monitor ADR + update tasking/docs.
+
+## 9. Composition Refactor
+- [ ] Replace legacy factory_registry usage with `townlet.factories` helpers in `SimulationLoop` and related modules.
+- [ ] Instantiate `ConsoleRouter` and `HealthMonitor`; integrate into tick pipeline.
+- [ ] Remove telemetry getter reliance (`latest_*`) from loop (use snapshot/events + monitors instead).
+- [ ] Ensure provider info/helpers (`policy_provider_name`, etc.) remain coherent.
+- [ ] Update imports/cleanup unused legacy glue.
