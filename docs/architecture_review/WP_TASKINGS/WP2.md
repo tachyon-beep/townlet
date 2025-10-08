@@ -5,6 +5,7 @@
 > **Read first (in repo):**
 >
 > * `docs/architecture_review`
+> * `docs/architecture_review/ADR/ADR-002 - World Modularisation.md`
 > * The current world module(s), e.g. `world/grid.py` and anything it imports
 > * The `townlet/ports/world.py` (or equivalent) from **WP1** defining `WorldRuntime`
 > * The simulation loop/entrypoint that calls into the world
@@ -17,7 +18,7 @@
 
 1. **New Package Layout**
 
-   * Create `townlet/world/` with submodules (adjust names to actual responsibilities you discover):
+   * Create `townlet/world/` with submodules. Treat this outline as a reference template: keep the façade, state, actions, observations, systems, events, and RNG slices; rename or omit supporting modules once you understand the real responsibilities.
 
      ```
      townlet/world/
@@ -50,6 +51,7 @@
      * `observe(agent_ids: Iterable[AgentId] | None) -> ObsMap`
      * `apply_actions(actions: ActionMap) -> None`
      * `snapshot() -> Mapping[str, Any]`
+   * `WorldRuntime` is a `typing.Protocol`; inheritance is optional if `WorldContext` is structurally compatible.
    * Internals (systems, spatial grid, etc.) **must not** be imported by the simulation loop.
 
 3. **Domain Separation**
@@ -76,11 +78,12 @@
    * If WP1 created an adapter for the old world class, replace it with `WorldContext` as the concrete implementation returned by `WorldFactory`.
    * Update the world factory registration, e.g.:
 
-     ```python
-     @register("world", "default")
-     def build_default_world(cfg) -> WorldRuntime:
-         return WorldContext.from_config(cfg)
-     ```
+   ```python
+   @register("world", "default")
+   def build_default_world(cfg) -> WorldRuntime:
+       return WorldContext.from_config(cfg)
+   ```
+   * Update existing configs, fixtures, and integration tests that referenced the legacy world module so they resolve the new factory + module paths.
 
 6. **Tests**
 
@@ -100,9 +103,9 @@
 
 7. **Docs**
 
-   * Add `docs/adr/0002-world-modularisation.md`:
+   * Add or update `docs/architecture_review/ADR/ADR-002 - World Modularisation.md`:
 
-     * Module map diagram.
+     * ASCII module map diagram showing primary modules and relationships.
      * Tick pipeline: validate actions → systems step → state updates → events emitted → snapshot.
      * Event list (brief) and intended consumers.
      * Determinism & seeding policy.
@@ -159,12 +162,12 @@
 9. **Delete/Migrate Old Code**
 
    * Gradually empty the old world module; leave a thin shim (optional) or remove it if unused.
-   * Update imports and factory registration to point to `WorldContext`.
+   * Update imports, configs, and tests to point to the new `townlet/world` package and `WorldContext` factory registration.
 
 10. **Polish & Document**
 
-* Tighten types, docstrings, ruff/mypy.
-* Write the ADR and a module map diagram (ASCII acceptable).
+   * Tighten types, docstrings, ruff/mypy.
+   * Ensure `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` includes the ASCII module map diagram, pipeline narrative, and migration notes.
 
 ---
 
@@ -190,7 +193,8 @@ from townlet.ports.world import WorldRuntime
 from .state import WorldState
 from . import actions, observe, events, systems, rng
 
-class WorldContext(WorldRuntime):
+class WorldContext:
+    """Implements WorldRuntime via structural typing."""
     def __init__(self, state: WorldState) -> None:
         self.state = state
         self._rng = rng.make()
@@ -281,7 +285,7 @@ class WorldContext(WorldRuntime):
 * No imports from telemetry/policy inside `townlet/world/*`.
 * `pytest -q` passes; determinism tests pass with fixed seed.
 * `ruff` and `mypy` clean for new/changed files.
-* ADR and diagram exist and match the code.
+* `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` (with ASCII module map) matches the implemented package.
 
 ---
 

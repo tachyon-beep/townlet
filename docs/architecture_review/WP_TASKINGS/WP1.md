@@ -5,7 +5,7 @@
 > **Read first (in repo):**
 >
 > * `docs/architecture_review`
-> * `docs/adr/0001-ports-and-factory-registry.md` (or `0001-ports-and-factories.md`) — the ADR that defines the intended surface
+> * `docs/architecture_review/ADR/ADR-001 - Port and Factory Registry.md` — the ADR that defines the intended surface
 > * The simulation entrypoint/loop
 > * Current world/policy/telemetry code paths
 
@@ -117,7 +117,10 @@
      * `DummyWorld(WorldRuntime)`
      * `DummyPolicy(PolicyBackend)`
      * `DummyTelemetry(TelemetrySink)`
-   * Register them with keys (`"dummy"`/`"stub"`), and allow selection via config for smoke tests.
+   * Register them with keys (`"dummy"`/`"stub"`), and allow selection via config for smoke tests. The canonical key set for WP1 is:
+     * World providers: `"default"`, `"dummy"`
+     * Policy providers: `"scripted"` (default), `"dummy"`
+     * Telemetry providers: `"stdout"` (default), `"stub"`, `"dummy"`
 
 6. **Tests**
 
@@ -128,7 +131,7 @@
 
 7. **Docs & Hygiene**
 
-   * Ensure `docs/adr/0001-ports-and-factory-registry.md` matches these **minimal** method tables. If your ADR filename differs, update it in place rather than adding a new ADR.
+* Ensure `docs/architecture_review/ADR/ADR-001 - Port and Factory Registry.md` matches these **minimal** method tables. If your ADR filename differs, update it in place rather than adding a new ADR.
    * Add concise docstrings to all public port and factory functions.
    * New/changed files pass `ruff` and `mypy` (project settings). Keep functions short and cohesive.
 
