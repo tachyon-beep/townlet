@@ -14,7 +14,6 @@ from townlet.policy.scripted import (
 )
 from townlet.ports.policy import PolicyBackend
 from townlet.ports.world import WorldRuntime
-from townlet.world.grid import WorldState
 
 
 class ScriptedPolicyAdapter(PolicyBackend):
@@ -46,14 +45,12 @@ class ScriptedPolicyAdapter(PolicyBackend):
         self._backend.post_step({}, {})
         self._active_agents = []
 
-    def _require_world_state(self) -> WorldState:
+    def _require_world_state(self) -> Any:
         if self._world is None:
             raise RuntimeError("ScriptedPolicyAdapter requires bind_world() before decide()")
         raw_world = getattr(self._world, "raw_world", None)
         if raw_world is None:
             raise RuntimeError("Bound world runtime does not expose raw_world")
-        if not isinstance(raw_world, WorldState):
-            raise RuntimeError("raw_world attribute must be a WorldState")
         return raw_world
 
 

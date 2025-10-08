@@ -108,3 +108,24 @@ def test_policy_factory_passes_options() -> None:
         assert captured == {"foo": "bar", "count": 3}
     finally:
         REGISTRY["policy"].pop("options-probe", None)
+
+
+def test_policy_factory_binds_world_when_available() -> None:
+    bound_worlds: list[DummyWorld] = []
+
+    class _BindingPolicy(DummyPolicy):
+        def bind_world(self, world: DummyWorld) -> None:
+            bound_worlds.append(world)
+
+    @register("policy", "binding-probe")
+    def _build_binding_policy(*, cfg: object, **options: object) -> _BindingPolicy:
+        return _BindingPolicy()
+
+    try:
+        cfg = {"runtime": {"policy": {"provider": "binding-probe"}}}
+        world = DummyWorld()
+        policy = create_policy(cfg, world=world)
+        assert isinstance(policy, _BindingPolicy)
+        assert bound_worlds == [world]
+    finally:
+        REGISTRY["policy"].pop("binding-probe", None)

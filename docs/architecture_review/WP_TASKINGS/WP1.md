@@ -81,7 +81,7 @@
    * Add:
 
      * `townlet/factories/world_factory.py` → `create_world(cfg) -> WorldRuntime`
-     * `townlet/factories/policy_factory.py` → `create_policy(cfg) -> PolicyBackend`
+    * `townlet/factories/policy_factory.py` → `create_policy(cfg, world=None) -> PolicyBackend`
      * `townlet/factories/telemetry_factory.py` → `create_telemetry(cfg) -> TelemetrySink`
    * Register built‑ins:
 
@@ -96,7 +96,7 @@
 
      ```python
      world = create_world(cfg)
-     policy = create_policy(cfg)
+     policy = create_policy(cfg, world=world)
      telemetry = create_telemetry(cfg)
      telemetry.start()
      # Loop sketch:

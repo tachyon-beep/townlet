@@ -21,7 +21,7 @@ Do not include console UI, training internals, or transport-specific helpers in 
 Create adapters in `townlet.adapters.*` that wrap current implementations to satisfy the ports. Provide registry-backed factories in `townlet.factories.*`:
 
 - `create_world(cfg) -> WorldRuntime`
-- `create_policy(cfg) -> PolicyBackend`
+- `create_policy(cfg, world=None) -> PolicyBackend`
 - `create_telemetry(cfg) -> TelemetrySink`
 
 Use string keys for providers. Unknown keys raise `ConfigurationError`.

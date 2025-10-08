@@ -24,10 +24,7 @@ class SimulationLoop:
     def __init__(self, config: Any) -> None:
         self.config = config
         self.world: WorldRuntime = create_world(config)
-        self.policy: PolicyBackend = create_policy(config)
-        binder = getattr(self.policy, "bind_world", None)
-        if callable(binder):
-            binder(self.world)
+        self.policy: PolicyBackend = create_policy(config, world=self.world)
         self.telemetry: TelemetrySink = create_telemetry(config)
         self.tick = 0
         self._episode_started = False
