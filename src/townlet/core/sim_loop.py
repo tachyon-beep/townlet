@@ -107,7 +107,13 @@ def _extract_tick(snapshot: Mapping[str, Any] | Any, *, fallback: int) -> int:
             meta_value = meta.get("tick")
             if isinstance(meta_value, int):
                 return meta_value
-    return int(fallback)
+    if isinstance(fallback, int):
+        return fallback
+    if isinstance(fallback, float):
+        if fallback.is_integer():
+            return int(fallback)
+        raise ValueError(f"Fallback tick value {fallback} is not an integer.")
+    raise TypeError(f"Fallback tick value {fallback} is not an int or float.")
 
 
 __all__ = ["SimulationLoop", "SimulationLoopError"]
