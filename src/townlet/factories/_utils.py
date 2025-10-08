@@ -28,8 +28,6 @@ def extract_provider(cfg: Any, kind: str, default: str) -> tuple[str, Mapping[st
             else:
                 options = getattr(domain_cfg, "options", {})
     provider = (provider or default).strip()
-    if not provider:
-        provider = default
     if not isinstance(options, Mapping):
         raise ConfigurationError(f"{kind} options must be a mapping, got {type(options)!r}")
     return provider, options
