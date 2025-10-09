@@ -16,14 +16,19 @@ This note captures the exact state of WP2 before memory compaction so upcoming w
 - **Step 4 (state/agents foundations):**
   - `AgentRegistry` upgraded with created/updated tick tracking, metadata, and read-only views (`tests/world/test_agents_registry.py`).
   - New `WorldState` container manages RNG seeding/state, ctx-reset queue, event buffering, and serialisable snapshots (`tests/world/test_world_state.py`).
+- **Step 5 (action pipeline scaffolding):**
+  - Action schema/validation implemented (`Action`, `ActionValidationError`) with coercion for supported kinds and detailed error reporting (`tests/world/test_actions.py`).
+  - Interim apply pipeline updates agent snapshots/records for implemented kinds (`move`, `noop`), emits structured events (including invalid/pending markers), and leaves hooks for future system integration.
+- **Step 6 (systems orchestration):**
+  - `WorldContext.tick` now sequences console → actions → modular systems → nightly reset → lifecycle evaluation and returns `RuntimeStepResult`.
+  - Event flow is unified via `EventDispatcher`; legacy `WorldState` exposes `emit_event`, `event_dispatcher`, and `agent_records_view` to satisfy the modular pipeline while keeping telemetry compatibility.
+  - System modules (`queues`, `affordances`, `employment`, `relationships`, `economy`, `perturbations`) execute inside the context using the shared `SystemContext`; unit suites under `tests/world/test_systems_*.py` plus `tests/test_world_context.py` are green.
 - Docs updated (`analysis.md`, `tasks.md`, `README.md`, `status.md`) to reflect the above.
 
 ## Remaining (per implementation plan)
-1. **Step 5 – Action pipeline:** define action schemas and mutation logic, plus tests.
-2. **Step 6 – Systems & tick orchestration:** break out employment/economy/etc. into `systems/*`, flesh out `rng.py`, implement `WorldContext` methods.
-3. **Step 7 – Adapter & factory integration:** update `DefaultWorldAdapter`/`world_factory` to return the new `WorldContext`.
-4. **Step 8 – Composition root:** once world context is live, revive WP1 Step 4 (SimulationLoop refactor, console router, health monitor, removal of telemetry getters).
-5. **Step 9–11:** cleanup legacy modules, comprehensive test/docs update, final QA.
+1. **Step 7 – Adapter & factory integration:** update `DefaultWorldAdapter`/`world_factory` so the simulation loop resolves the modular `WorldContext` provider by default.
+2. **Step 8 – Composition root:** revive WP1 Step 4 (SimulationLoop refactor, console router, health monitor, removal of telemetry getters) once the new context is the default world provider.
+3. **Step 9–11:** cleanup legacy modules, comprehensive test/docs update, final QA.
 
 ## Key decisions to remember
 - Observation builder remains external for now; `WorldContext.observe()` will call into it until WP3.
@@ -36,5 +41,6 @@ This note captures the exact state of WP2 before memory compaction so upcoming w
 - Pending tasks tracked in `tasks.md` (State/agents extraction is next).
 
 ## Next steps immediately after compaction
-1. Progress Step 5 by designing the action schema and validator utilities.
-2. Ensure existing tests continue to pass (`pytest tests/world/test_events.py tests/world/test_spatial.py tests/world/test_observe_helpers.py tests/world/test_agents_registry.py tests/world/test_world_state.py`, plus focused suites as functionality moves).
+1. Start Step 7 by wiring the factory/provider layer to build `WorldContext` directly (drop the compatibility adapter hand-off in `WorldRuntime`).
+2. Prepare the composition-root refactor plan (console router + health monitor) now that tick orchestration parity is in place.
+3. Maintain the new test coverage (`pytest tests/world -q` + `pytest tests/test_world_context.py -q`) as integration proceeds.

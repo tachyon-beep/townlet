@@ -29,11 +29,9 @@ from townlet.world.affordance_runtime import AffordanceCoordinator
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import (
     AffordanceEnvironment,
-    AffordanceOutcome,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
     RunningAffordanceState,
-    apply_affordance_outcome,
 )
 from townlet.world.agents.employment import EmploymentService
 from townlet.world.agents.lifecycle import LifecycleService
@@ -43,13 +41,14 @@ from townlet.world.agents.personality import (
     normalize_profile_name,
     resolve_personality_profile,
 )
-from townlet.world.agents.registry import AgentRegistry
+from townlet.world.agents.registry import AgentRecord, AgentRegistry
 from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.console import (
     WorldConsoleController,
     install_world_console_handlers,
 )
+from townlet.world.events import Event, EventDispatcher
 from townlet.world.core.context import WorldContext
 from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
@@ -70,6 +69,12 @@ from townlet.world.preconditions import (
 from townlet.world.queue import QueueConflictTracker, QueueManager
 from townlet.world.relationships import RelationshipTie
 from townlet.world.spatial import WorldSpatialIndex
+from townlet.world.systems import affordances as affordance_system
+from townlet.world.systems import economy as economy_system
+from townlet.world.systems import employment as employment_system
+from townlet.world.systems import perturbations as perturbation_system
+from townlet.world.systems import queues as queue_system
+from townlet.world.systems import relationships as relationship_system
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +193,7 @@ class WorldState:
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
     _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
+    _event_dispatcher: EventDispatcher = field(init=False, repr=False)
 
     @classmethod
     def from_config(
@@ -223,6 +229,7 @@ class WorldState:
         self.affordances = {}
         self._running_affordances = {}
         self._pending_events = {}
+        self._event_dispatcher = EventDispatcher()
         self.store_stock = {}
         self._job_keys = list(self.config.jobs.keys())
         self.employment = create_employment_coordinator(self.config, self._emit_event)
@@ -406,10 +413,7 @@ class WorldState:
         )
         self.rebuild_spatial_index()
         self.context = WorldContext(
-            agents=self.agents,
-            objects=self.objects,
-            affordances=self.affordances,
-            running_affordances=self._running_affordances,
+            state=self,
             queue_manager=self.queue_manager,
             queue_conflicts=self._queue_conflicts,
             affordance_service=self._affordance_service,
@@ -420,6 +424,8 @@ class WorldState:
             lifecycle_service=self._lifecycle_service,
             nightly_reset_service=self._nightly_reset_service,
             relationships=self._relationships,
+            economy_service=self._economy_service,
+            perturbation_service=self._perturbation_service,
             config=self.config,
             emit_event_callback=self._emit_event,
             sync_reservation_callback=self._sync_reservation,
@@ -489,6 +495,10 @@ class WorldState:
         if self._rng is None:
             self._rng = random.Random()
         return self._rng
+
+    @property
+    def rng_seed(self) -> int | None:
+        return getattr(self, "_rng_seed", None)
 
     def rebuild_spatial_index(self) -> None:
         self._spatial_index.rebuild(self.agents, self.objects, self._active_reservations)
@@ -837,8 +847,15 @@ class WorldState:
             outcome_metadata: dict[str, object] = {}
 
             if kind == "request" and object_id:
-                granted = self.queue_manager.request_access(object_id, agent_id, current_tick)
-                self._sync_reservation(object_id)
+                granted = queue_system.request_access(
+                    manager=self.queue_manager,
+                    objects=self.objects,
+                    active_reservations=self._active_reservations,
+                    spatial_index=self._spatial_index,
+                    object_id=object_id,
+                    agent_id=agent_id,
+                    tick=current_tick,
+                )
                 if not granted and action.get("blocked"):
                     self._handle_blocked(object_id, current_tick)
                 action_success = bool(granted)
@@ -871,10 +888,11 @@ class WorldState:
                 affordance_id = action.get("affordance")
                 if affordance_id:
                     affordance_id_str = str(affordance_id)
-                    action_success, start_metadata = runtime.start(
-                        agent_id,
-                        object_id,
-                        affordance_id_str,
+                    action_success, start_metadata = affordance_system.start(
+                        runtime,
+                        agent_id=agent_id,
+                        object_id=object_id,
+                        affordance_id=affordance_id_str,
                         tick=current_tick,
                     )
                     outcome_affordance_id = affordance_id_str
@@ -884,9 +902,10 @@ class WorldState:
                 success = bool(action.get("success", True))
                 affordance_hint = action.get("affordance")
                 reason_value = action.get("reason")
-                outcome_affordance_id, release_metadata = runtime.release(
-                    agent_id,
-                    object_id,
+                outcome_affordance_id, release_metadata = affordance_system.release(
+                    runtime,
+                    agent_id=agent_id,
+                    object_id=object_id,
                     success=success,
                     reason=str(reason_value) if reason_value is not None else None,
                     requested_affordance_id=str(affordance_hint)
@@ -898,12 +917,12 @@ class WorldState:
                 if release_metadata:
                     outcome_metadata.update(release_metadata)
             elif kind == "blocked" and object_id:
-                runtime.handle_blocked(object_id, current_tick)
+                affordance_system.handle_blocked(runtime, object_id, current_tick)
                 action_success = False
 
             if kind:
-                outcome = AffordanceOutcome(
-                    agent_id=agent_id,
+                affordance_system.apply_outcome(
+                    snapshot,
                     kind=str(kind),
                     success=action_success,
                     duration=action_duration,
@@ -912,11 +931,10 @@ class WorldState:
                     tick=current_tick,
                     metadata=dict(outcome_metadata) if outcome_metadata else {},
                 )
-                apply_affordance_outcome(snapshot, outcome)
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
-        self._affordance_service.resolve(tick=current_tick)
+        affordance_system.resolve(self._affordance_service, current_tick)
 
     def running_affordances_snapshot(self) -> dict[str, RunningAffordanceState]:
         """Return a serializable view of running affordances (for tests/telemetry)."""
@@ -951,13 +969,22 @@ class WorldState:
     def refresh_reservations(self) -> None:
         """Synchronise reservation state from the queue manager."""
 
-        for object_id in self.objects:
-            self._sync_reservation(object_id)
+        queue_system.refresh_reservations(
+            manager=self.queue_manager,
+            objects=self.objects,
+            active_reservations=self._active_reservations,
+            spatial_index=self._spatial_index,
+        )
 
     def agent_snapshots_view(self) -> Mapping[str, AgentSnapshot]:
         """Expose current agent snapshots without allowing dict mutation."""
 
         return MappingProxyType(self.agents)
+
+    def agent_records_view(self) -> Mapping[str, AgentRecord]:
+        """Expose bookkeeping metadata for agent snapshots."""
+
+        return self.agents.records_map()
 
     def objects_by_position_view(self) -> Mapping[tuple[int, int], tuple[str, ...]]:
         """Return immutable positions mapped to tuples of object IDs."""
@@ -970,7 +997,14 @@ class WorldState:
 
     def drain_events(self) -> list[dict[str, Any]]:
         """Return all pending events accumulated up to the current tick."""
-        events: list[dict[str, Any]] = []
+        events: list[dict[str, Any]] = [
+            {
+                "event": dispatched.type,
+                "tick": dispatched.tick if dispatched.tick is not None else self.tick,
+                **dict(dispatched.payload),
+            }
+            for dispatched in self._event_dispatcher.drain()
+        ]
         for _, batch in sorted(self._pending_events.items()):
             events.extend(batch)
         self._pending_events.clear()
@@ -1020,7 +1054,8 @@ class WorldState:
     ) -> None:
         if agent_a == agent_b:
             return
-        self._relationships.apply_rivalry_conflict(
+        relationship_system.apply_rivalry_conflict(
+            self._relationships,
             agent_a,
             agent_b,
             intensity=intensity,
@@ -1035,19 +1070,19 @@ class WorldState:
 
     def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
-        return self._relationships.rivalry_snapshot()
+        return relationship_system.rivalry_snapshot(self._relationships)
 
     def relationships_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
-        return self._relationships.relationships_snapshot()
+        return relationship_system.relationships_snapshot(self._relationships)
 
     def relationship_tie(self, agent_id: str, other_id: str) -> RelationshipTie | None:
         """Return the current relationship tie between two agents, if any."""
-        return self._relationships.relationship_tie(agent_id, other_id)
+        return relationship_system.relationship_tie(self._relationships, agent_id, other_id)
 
     def get_rivalry_ledger(self, agent_id: str):
         """Return the rivalry ledger for ``agent_id``."""
 
-        return self._relationships.get_rivalry_ledger(agent_id)
+        return relationship_system.get_rivalry_ledger(self._relationships, agent_id)
 
     def _get_rivalry_ledger(self, agent_id: str):
         return self.get_rivalry_ledger(agent_id)
@@ -1064,13 +1099,13 @@ class WorldState:
 
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
-        return self._relationships.rivalry_value(agent_id, other_id)
+        return relationship_system.rivalry_value(self._relationships, agent_id, other_id)
 
     def rivalry_should_avoid(self, agent_id: str, other_id: str) -> bool:
-        return self._relationships.rivalry_should_avoid(agent_id, other_id)
+        return relationship_system.rivalry_should_avoid(self._relationships, agent_id, other_id)
 
     def rivalry_top(self, agent_id: str, limit: int) -> list[tuple[str, float]]:
-        return self._relationships.rivalry_top(agent_id, limit)
+        return relationship_system.rivalry_top(self._relationships, agent_id, limit)
 
     def consume_rivalry_events(self) -> list[dict[str, Any]]:
         """Return rivalry events recorded since the last call."""
@@ -1125,17 +1160,17 @@ class WorldState:
         return profile
 
     def relationship_metrics_snapshot(self) -> dict[str, object]:
-        return self._relationships.relationship_metrics_snapshot()
+        return relationship_system.relationship_metrics_snapshot(self._relationships)
 
     def load_relationship_metrics(self, payload: Mapping[str, object] | None) -> None:
-        self._relationships.load_relationship_metrics(payload)
+        relationship_system.load_relationship_metrics(self._relationships, payload)
 
     def load_relationship_snapshot(
         self,
         snapshot: dict[str, dict[str, dict[str, float]]],
     ) -> None:
         """Restore relationship ledgers from persisted snapshot data."""
-        self._relationships.load_relationship_snapshot(snapshot)
+        relationship_system.load_relationship_snapshot(self._relationships, snapshot)
 
     def update_relationship(
         self,
@@ -1147,7 +1182,8 @@ class WorldState:
         rivalry: float = 0.0,
         event: RelationshipEvent = "generic",
     ) -> None:
-        self._relationships.update_relationship(
+        relationship_system.update_relationship(
+            self._relationships,
             agent_a,
             agent_b,
             trust=trust,
@@ -1165,7 +1201,8 @@ class WorldState:
         familiarity: float,
         rivalry: float,
     ) -> None:
-        self._relationships.set_relationship(
+        relationship_system.set_relationship(
+            self._relationships,
             agent_a,
             agent_b,
             trust=trust,
@@ -1175,7 +1212,8 @@ class WorldState:
 
     def record_chat_success(self, speaker: str, listener: str, quality: float) -> None:
         clipped_quality = max(0.0, min(1.0, quality))
-        self.update_relationship(
+        relationship_system.update_relationship(
+            self._relationships,
             speaker,
             listener,
             trust=0.05 * clipped_quality,
@@ -1201,7 +1239,8 @@ class WorldState:
         )
 
     def record_chat_failure(self, speaker: str, listener: str) -> None:
-        self.update_relationship(
+        relationship_system.update_relationship(
+            self._relationships,
             speaker,
             listener,
             trust=0.0,
@@ -1246,21 +1285,16 @@ class WorldState:
     # Internal helpers
     # ------------------------------------------------------------------
     def _sync_reservation(self, object_id: str) -> None:
-        active = self.queue_manager.active_agent(object_id)
-        obj = self.objects.get(object_id)
-        if active is None:
-            self._active_reservations.pop(object_id, None)
-            if obj is not None:
-                obj.occupied_by = None
-                self._spatial_index.set_reservation(obj.position, False)
-        else:
-            self._active_reservations[object_id] = active
-            if obj is not None:
-                obj.occupied_by = active
-                self._spatial_index.set_reservation(obj.position, True)
+        queue_system.sync_reservation(
+            manager=self.queue_manager,
+            objects=self.objects,
+            active_reservations=self._active_reservations,
+            spatial_index=self._spatial_index,
+            object_id=object_id,
+        )
 
     def _handle_blocked(self, object_id: str, tick: int) -> None:
-        self._affordance_service.handle_blocked(object_id, tick)
+        affordance_system.handle_blocked(self._affordance_service, object_id, tick)
 
     def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
         success, _ = self._affordance_service.start(
@@ -1282,9 +1316,21 @@ class WorldState:
             elif key == "money":
                 snapshot.wallet += delta
 
-    def _emit_event(self, event: str, payload: dict[str, Any]) -> None:
+    def emit_event(self, event: str, payload: Mapping[str, Any]) -> Event:
+        """Emit an event into both legacy and modular pipelines."""
+
+        event_obj = self._event_dispatcher.emit(type=event, payload=payload, tick=self.tick)
         events = self._pending_events.setdefault(self.tick, [])
-        events.append({"event": event, "tick": self.tick, **payload})
+        events.append({"event": event, "tick": self.tick, **dict(payload)})
+        return event_obj
+
+    def _emit_event(self, event: str, payload: dict[str, Any]) -> None:
+        self.emit_event(event, payload)
+
+    def event_dispatcher(self) -> EventDispatcher:
+        """Return the dispatcher used by modular world systems."""
+
+        return self._event_dispatcher
 
     def _load_affordance_definitions(self) -> None:
         manifest_path = Path(self.config.affordances.affordances_file).expanduser()
@@ -1358,20 +1404,20 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        self._relationships.decay()
+        relationship_system.decay(self._relationships)
         self._apply_job_state()
         self._update_basket_metrics()
 
     def apply_nightly_reset(self) -> list[str]:
-        return self._nightly_reset_service.apply(self.tick)
+        return employment_system.nightly_reset(self._nightly_reset_service, self.tick)
 
     def assign_jobs_to_agents(self) -> None:
         """Assign jobs to agents lacking a valid role."""
 
-        self._employment_service.assign_jobs_to_agents()
+        employment_system.assign_jobs(self._employment_service)
 
     def _apply_job_state(self) -> None:
-        self._employment_service.apply_job_state()
+        employment_system.apply_job_state(self._employment_service)
 
     def _apply_job_state_legacy(self) -> None:
         self.employment._apply_job_state_legacy(self)
@@ -1383,25 +1429,25 @@ class WorldState:
     # Employment helpers
     # ------------------------------------------------------------------
     def _employment_context_defaults(self) -> dict[str, Any]:
-        return self._employment_service.context_defaults()
+        return employment_system.context_defaults(self._employment_service)
 
     def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        return self._employment_service.get_context(agent_id)
+        return employment_system.get_context(self._employment_service, agent_id)
 
     def _employment_context_wages(self, agent_id: str) -> float:
-        return self._employment_service.context_wages(agent_id)
+        return employment_system.context_wages(self._employment_service, agent_id)
 
     def _employment_context_punctuality(self, agent_id: str) -> float:
-        return self._employment_service.context_punctuality(agent_id)
+        return employment_system.context_punctuality(self._employment_service, agent_id)
 
     def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_service.idle_state(snapshot, ctx)
+        employment_system.idle_state(self._employment_service, snapshot, ctx)
 
     def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_service.prepare_state(snapshot, ctx)
+        employment_system.prepare_state(self._employment_service, snapshot, ctx)
 
     def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        self._employment_service.begin_shift(ctx, start, end)
+        employment_system.begin_shift(self._employment_service, ctx, start, end)
 
     def _employment_determine_state(
         self,
@@ -1412,7 +1458,8 @@ class WorldState:
         at_required_location: bool,
         employment_cfg: EmploymentConfig,
     ) -> str:
-        return self._employment_service.determine_state(
+        return employment_system.determine_state(
+            self._employment_service,
             ctx=ctx,
             tick=tick,
             start=start,
@@ -1431,7 +1478,8 @@ class WorldState:
         lateness_penalty: float,
         employment_cfg: EmploymentConfig,
     ) -> None:
-        self._employment_service.apply_state_effects(
+        employment_system.apply_state_effects(
+            self._employment_service,
             snapshot=snapshot,
             ctx=ctx,
             state=state,
@@ -1449,7 +1497,8 @@ class WorldState:
         employment_cfg: EmploymentConfig,
         job_id: str | None,
     ) -> None:
-        self._employment_service.finalize_shift(
+        employment_system.finalize_shift(
+            self._employment_service,
             snapshot=snapshot,
             ctx=ctx,
             employment_cfg=employment_cfg,
@@ -1457,34 +1506,34 @@ class WorldState:
         )
 
     def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
-        return self._employment_service.coworkers_on_shift(snapshot)
+        return employment_system.coworkers_on_shift(self._employment_service, snapshot)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
-        return self._employment_service.queue_snapshot()
+        return dict(employment_system.queue_snapshot(self._employment_service))
 
     def employment_request_manual_exit(self, agent_id: str, tick: int) -> bool:
-        return self._employment_service.request_manual_exit(agent_id, tick)
+        return employment_system.request_manual_exit(self._employment_service, agent_id, tick)
 
     def employment_defer_exit(self, agent_id: str) -> bool:
-        return self._employment_service.defer_exit(agent_id)
+        return employment_system.defer_exit(self._employment_service, agent_id)
 
     def employment_exits_today(self) -> int:
-        return self._employment_service.exits_today()
+        return employment_system.exits_today(self._employment_service)
 
     def set_employment_exits_today(self, value: int) -> None:
-        self._employment_service.set_exits_today(value)
+        employment_system.set_exits_today(self._employment_service, value)
 
     def reset_employment_exits_today(self) -> None:
-        self._employment_service.reset_exits_today()
+        employment_system.reset_exits_today(self._employment_service)
 
     def increment_employment_exits_today(self) -> None:
-        self._employment_service.increment_exits_today()
+        employment_system.increment_exits_today(self._employment_service)
 
     def _update_basket_metrics(self) -> None:
-        self._economy_service.update_basket_metrics()
+        economy_system.update_basket_metrics(self._economy_service)
 
     def _restock_economy(self) -> None:
-        self._economy_service.restock_economy()
+        economy_system.restock(self._economy_service)
 
     # ------------------------------------------------------------------
     # Perturbation helpers: price spikes, utilities, arranged meets
@@ -1496,20 +1545,21 @@ class WorldState:
         magnitude: float,
         targets: Iterable[str] | None = None,
     ) -> None:
-        self._perturbation_service.apply_price_spike(
+        perturbation_system.apply_price_spike(
+            self._perturbation_service,
             event_id,
             magnitude=magnitude,
             targets=targets,
         )
 
     def clear_price_spike(self, event_id: str) -> None:
-        self._perturbation_service.clear_price_spike(event_id)
+        perturbation_system.clear_price_spike(self._perturbation_service, event_id)
 
     def apply_utility_outage(self, event_id: str, utility: str) -> None:
-        self._perturbation_service.apply_utility_outage(event_id, utility)
+        perturbation_system.apply_utility_outage(self._perturbation_service, event_id, utility)
 
     def clear_utility_outage(self, event_id: str, utility: str) -> None:
-        self._perturbation_service.clear_utility_outage(event_id, utility)
+        perturbation_system.clear_utility_outage(self._perturbation_service, event_id, utility)
 
     def apply_arranged_meet(
         self,
@@ -1517,25 +1567,26 @@ class WorldState:
         location: str | None,
         targets: Iterable[str] | None = None,
     ) -> None:
-        self._perturbation_service.apply_arranged_meet(
+        perturbation_system.apply_arranged_meet(
+            self._perturbation_service,
             location=location,
             targets=targets,
         )
 
     def utility_online(self, utility: str) -> bool:
-        return self._economy_service.utility_online(utility)
+        return economy_system.utility_online(self._economy_service, utility)
 
     def economy_settings(self) -> dict[str, float]:
         """Return the current economy configuration values."""
 
-        return self._economy_service.economy_settings()
+        return economy_system.economy_settings(self._economy_service)
 
     def active_price_spikes(self) -> dict[str, dict[str, object]]:
         """Return a summary of currently active price spike events."""
 
-        return self._economy_service.active_price_spikes()
+        return economy_system.active_price_spikes(self._economy_service)
 
     def utility_snapshot(self) -> dict[str, bool]:
         """Return on/off status for tracked utilities."""
 
-        return self._economy_service.utility_snapshot()
+        return economy_system.utility_snapshot(self._economy_service)

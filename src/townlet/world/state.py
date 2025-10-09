@@ -116,6 +116,11 @@ class WorldState:
     # ------------------------------------------------------------------
     # Event emission
     # ------------------------------------------------------------------
+    def event_dispatcher(self) -> EventDispatcher:
+        """Return the event dispatcher used by the state."""
+
+        return self._events
+
     def emit_event(
         self,
         event_type: str,

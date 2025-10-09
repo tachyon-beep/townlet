@@ -76,3 +76,32 @@ def test_world_context_nightly_reset_proxy(
 
     assert captured == [123]
     assert result == ["ok"]
+
+
+def test_world_context_tick_executes_actions(simulation_loop: SimulationLoop) -> None:
+    loop = simulation_loop
+    world = loop.world
+    context = world.context
+
+    world.lifecycle_service.spawn_agent(
+        "alice",
+        (0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+        wallet=0.0,
+        home_position=(0, 0),
+    )
+
+    context.apply_actions({"alice": {"kind": "move", "position": (1, 1)}})
+
+    result = context.tick(
+        tick=1,
+        console_operations=[],
+        prepared_actions={},
+        lifecycle=loop.lifecycle,
+        perturbations=loop.perturbations,
+        ticks_per_day=loop._ticks_per_day,
+    )
+
+    assert world.agents["alice"].position == (1, 1)
+    assert result.actions["alice"]["kind"] == "move"
+    assert isinstance(result.console_results, list)

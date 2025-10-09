@@ -63,8 +63,8 @@ class WorldRuntime:
         self._perturbations = perturbations
         self._ticks_per_day = max(0, int(ticks_per_day))
         self._queued_console: list[ConsoleCommandEnvelope] = []
-        self._pending_actions: dict[str, object] = {}
         self._world_adapter: WorldRuntimeAdapterProtocol | None = None
+        self._pending_actions: dict[str, object] = {}
 
     @property
     def world(self) -> WorldState:
@@ -94,13 +94,13 @@ class WorldRuntime:
         self._queued_console.extend(list(operations))
 
     def apply_actions(self, actions: ActionMapping) -> None:
-        """Stage policy actions for the next tick.
+        """Stage policy actions for the next tick."""
 
-        Actions staged here are consumed unless :meth:`tick` is provided with a
-        dedicated ``policy_actions`` mapping or an ``action_provider`` callable.
-        """
-
-        self._pending_actions = dict(actions)
+        context = getattr(self._world, "context", None)
+        if context is not None:
+            context.apply_actions(actions)  # type: ignore[attr-defined]
+        else:
+            self._pending_actions = dict(actions)
 
     def snapshot(self) -> dict[str, object]:  # pragma: no cover - thin pass-through
         """Expose the underlying world snapshot for diagnostics/tests."""
@@ -149,26 +149,43 @@ class WorldRuntime:
         elif action_provider is not None:
             prepared_actions = dict(action_provider(world, tick))
         else:
-            prepared_actions = dict(self._pending_actions)
-        self._pending_actions.clear()
+            prepared_actions = {}
 
-        world.tick = tick
-        lifecycle.process_respawns(world, tick=tick)
-        world.apply_console(queued_ops)
-        console_results = list(world.consume_console_results())
-        perturbations.tick(world, current_tick=tick)
-        world.apply_actions(prepared_actions)
-        world.resolve_affordances(current_tick=tick)
-        if self._ticks_per_day and tick % self._ticks_per_day == 0:
-            world.apply_nightly_reset()
-        terminated = dict(lifecycle.evaluate(world, tick=tick))
-        termination_reasons = dict(lifecycle.termination_reasons())
-        events = list(world.drain_events())
+        context = getattr(world, "context", None)
+        if context is None:
+            if not prepared_actions:
+                prepared_actions = dict(self._pending_actions)
+            self._pending_actions.clear()
 
-        return RuntimeStepResult(
-            console_results=console_results,
-            events=events,
-            actions=dict(prepared_actions),
-            terminated=terminated,
-            termination_reasons=termination_reasons,
+            world.tick = tick
+            lifecycle.process_respawns(world, tick=tick)
+            world.apply_console(queued_ops)
+            console_results = list(world.consume_console_results())
+            perturbations.tick(world, current_tick=tick)
+            world.apply_actions(prepared_actions)
+            world.resolve_affordances(current_tick=tick)
+            if self._ticks_per_day and tick % self._ticks_per_day == 0:
+                world.apply_nightly_reset()
+            terminated = dict(lifecycle.evaluate(world, tick=tick))
+            termination_reasons = dict(lifecycle.termination_reasons())
+            events = list(world.drain_events())
+
+            return RuntimeStepResult(
+                console_results=console_results,
+                events=events,
+                actions=dict(prepared_actions),
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+            )
+
+        result = context.tick(
+            tick=tick,
+            console_operations=queued_ops,
+            prepared_actions=prepared_actions,
+            lifecycle=lifecycle,
+            perturbations=perturbations,
+            ticks_per_day=self._ticks_per_day,
         )
+        if isinstance(result, RuntimeStepResult):
+            return result
+        return RuntimeStepResult(**result)

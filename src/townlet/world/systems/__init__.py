@@ -1,19 +1,25 @@
-"""World systems registry (skeleton)."""
+"""World systems registry and sequencing helpers."""
 
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from typing import Iterable, Tuple
 
-from ..state import WorldState
+from .base import SystemContext, SystemStep
 
-
-SystemStep = Callable[[WorldState], None]
-
-
-def default_systems() -> Iterable[SystemStep]:
-    """Return the ordered list of system steps (placeholder)."""
-
-    return ()
+from . import queues, affordances, employment, relationships, economy, perturbations
 
 
-__all__ = ["SystemStep", "default_systems"]
+def default_systems() -> Tuple[SystemStep, ...]:
+    """Return the ordered list of system steps (placeholders for now)."""
+
+    return (
+        queues.step,
+        affordances.step,
+        employment.step,
+        relationships.step,
+        economy.step,
+        perturbations.step,
+    )
+
+
+__all__ = ["SystemContext", "SystemStep", "default_systems"]

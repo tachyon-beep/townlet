@@ -12,6 +12,8 @@ This workspace tracks analysis, plans, and progress for Work Package 2 (modulari
 - WP1 scaffold (ports/adapters/factories) complete; composition refactor deferred to WP2.
 - Planning (Steps 0–1) complete; package skeleton established (Step 2).
 - Step 3 complete: stateless helpers extracted (spatial index, observation views) and the domain event dispatcher implemented with unit coverage.
-- Step 4 underway: new agent registry/world state implemented with unit tests; next up is wiring actions and systems onto the state.
+- Step 4 complete: the enriched agent registry/world state ship with RNG seeding, ctx-reset signalling, event buffering, and agent metadata views backed by unit tests.
+- Step 5 complete: the action schema/validation pipeline is in place (`move`/`noop` implemented for now) and emits structured events that feed the modular context + dispatcher.
+- Step 6 complete: the modular systems execute inside `WorldContext.tick` (queues, affordances, employment, relationships, economy, perturbations), RNG streams are managed centrally, and the legacy world state now exposes the port-friendly surface (`agent_records_view`, `emit_event`, `event_dispatcher`, `rng_seed`) so new tests and the legacy runtime agree.
 
 Use this folder to capture findings, risks, test coverage, and design decisions as WP2 progresses.
