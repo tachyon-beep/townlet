@@ -48,11 +48,25 @@ _Last updated: 2025-10-09_
 | Employment, economy, relationships systems | `systems/` submodules | Each implements `step(state, ctx)` |
 | Queue conflict tracking | `systems/queues.py` (or integrated with actions) | Must emit queue metrics events |
 | RNG management | `rng.py` | Provides seeded generators per subsystem |
-| Event emission | `events.py` | Defines event dataclasses & dispatcher |
+| Event emission | `events.py` | Defines event dataclasses & dispatcher; listeners can tap into buffered stream |
 | Console integration | (removed from world; handled by orchestration) | World emits events/requests only |
 | Snapshot/load logic | `state.py`, potential `snapshot.py` helper | Preserve existing persistence semantics |
 | Observation assembly | `observe.py` (wrapping legacy builder initially) | Bridges to `ObservationBuilder` until refactor |
 | World façade | `context.py` | Implements `WorldRuntime` port |
+
+## Step 3 audit notes
+- Reviewed remaining helpers in `world/grid.py`; most rely on mutable services (employment, queues, lifecycle) and are deferred to Steps 4–6 alongside the wider refactor.
+- Formalised the event schema (`events.py`) so later steps can route telemetry/console signals without revisiting stateless plumbing.
+
+## Step 4 design outline
+- `agents.py` will offer a `MutableMapping`-compatible `AgentRegistry` that stores rich `AgentRecord` entries (snapshot + created/updated ticks + metadata) while exposing familiar helpers (`add`, `discard`, `values_map`). Callbacks on mutate events will let the world state keep spatial indices/RNG caches in sync.
+- `state.py` will host the new `WorldState` dataclass anchored on `SimulationConfig`, seeded RNG state, the `AgentRegistry`, and lightweight context flags (ctx-reset queue, metadata). Convenience methods (`register_agent`, `remove_agent`, `agent_snapshots_view`, `snapshot`) provide the compatibility layer required by the runtime adapter and observation builder until the full `WorldContext` arrives.
+- Reset semantics: `WorldState.reset(seed)` re-initialises RNG state, clears agents/objects/metadata, and repopulates deterministic seeds while leaving config untouched. RNG exposure remains via `rng`/`rng_state` helpers so existing deterministic tests can be ported.
+- Unit coverage: one suite will target the registry (callbacks, overwrite semantics, immutable views) and another the state container (reset behaviour, ctx-reset queue, snapshot isolation).
+
+## Step 4 progress notes
+- `townlet.world.agents.registry.AgentRegistry` now records created/updated ticks plus metadata in `AgentRecord`, exposes read-only views, and retains callback hooks for spatial indexes. Tests: `tests/world/test_agents_registry.py`.
+- `townlet.world.state.WorldState` manages RNG seeding/state, ctx-reset queues, event buffering, and serialisable snapshots while delegating agent storage to the new registry. Tests: `tests/world/test_world_state.py`.
 
 ## Next Steps
 - Complete mapping of responsibilities to new modules (update once analysis finishes).

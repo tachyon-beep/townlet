@@ -1,29 +1,114 @@
-"""Spatial utilities (skeleton)."""
+"""Spatial indexing utilities extracted from the legacy world implementation."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Tuple
+from typing import Mapping, TYPE_CHECKING
+
+from townlet.world.agents.snapshot import AgentSnapshot
+
+if TYPE_CHECKING:  # pragma: no cover - import for type hints only
+    from .grid import InteractiveObject
 
 
-@dataclass
-class SpatialIndex:
-    """Placeholder spatial index storing agent/object locations."""
+class WorldSpatialIndex:
+    """Maintains spatial lookups to accelerate world queries."""
 
-    agents_by_position: dict[Tuple[int, int], list[str]] = field(default_factory=dict)
+    def __init__(self) -> None:
+        self._agents_by_position: dict[tuple[int, int], list[str]] = {}
+        self._positions_by_agent: dict[str, tuple[int, int]] = {}
+        self._reservation_tiles: set[tuple[int, int]] = set()
 
-    def neighbours(self, position: Tuple[int, int], radius: int = 1) -> Iterable[Tuple[int, int]]:
-        raise NotImplementedError("SpatialIndex.neighbours pending WP2 implementation")
+    # Agent bookkeeping -------------------------------------------------
+    def rebuild(
+        self,
+        agents: Mapping[str, AgentSnapshot],
+        objects: Mapping[str, "InteractiveObject"],
+        active_reservations: Mapping[str, str],
+    ) -> None:
+        """Recalculate cached lookups from authoritative world state."""
+
+        self._agents_by_position.clear()
+        self._positions_by_agent.clear()
+        for agent_id, snapshot in agents.items():
+            position = tuple(snapshot.position)
+            self._positions_by_agent[agent_id] = position
+            bucket = self._agents_by_position.setdefault(position, [])
+            bucket.append(agent_id)
+        for bucket in self._agents_by_position.values():
+            bucket.sort()
+        self._reservation_tiles.clear()
+        for object_id, occupant in active_reservations.items():
+            if not occupant:
+                continue
+            obj = objects.get(object_id)
+            if obj is None or obj.position is None:
+                continue
+            self._reservation_tiles.add(obj.position)
+
+    def insert_agent(self, agent_id: str, position: tuple[int, int]) -> None:
+        """Register a new agent at ``position`` without rebuilding indices."""
+
+        self._positions_by_agent[agent_id] = position
+        bucket = self._agents_by_position.setdefault(position, [])
+        if agent_id not in bucket:
+            bucket.append(agent_id)
+
+    def move_agent(self, agent_id: str, position: tuple[int, int]) -> None:
+        """Update cached lookups when an agent moves to ``position``."""
+
+        previous = self._positions_by_agent.get(agent_id)
+        if previous is not None:
+            bucket = self._agents_by_position.get(previous)
+            if bucket is not None:
+                try:
+                    bucket.remove(agent_id)
+                except ValueError:
+                    pass
+                if not bucket:
+                    self._agents_by_position.pop(previous, None)
+        self.insert_agent(agent_id, position)
+
+    def remove_agent(self, agent_id: str) -> None:
+        """Remove agent entries from cached indices."""
+
+        previous = self._positions_by_agent.pop(agent_id, None)
+        if previous is None:
+            return
+        bucket = self._agents_by_position.get(previous)
+        if bucket is None:
+            return
+        try:
+            bucket.remove(agent_id)
+        except ValueError:
+            return
+        if not bucket:
+            self._agents_by_position.pop(previous, None)
+
+    def position_of(self, agent_id: str) -> tuple[int, int] | None:
+        """Return the cached grid position for ``agent_id`` if known."""
+
+        return self._positions_by_agent.get(agent_id)
+
+    def agents_at(self, position: tuple[int, int]) -> tuple[str, ...]:
+        """Return agent identifiers occupying ``position``."""
+
+        return tuple(self._agents_by_position.get(position, ()))
+
+    # Reservation bookkeeping -------------------------------------------
+    def set_reservation(self, position: tuple[int, int] | None, active: bool) -> None:
+        """Toggle reservation state for the tile at ``position``."""
+
+        if position is None:
+            return
+        if active:
+            self._reservation_tiles.add(position)
+        else:
+            self._reservation_tiles.discard(position)
+
+    def reservation_tiles(self) -> frozenset[tuple[int, int]]:
+        """Return a frozen copy of tiles reserved by active affordances."""
+
+        return frozenset(self._reservation_tiles)
 
 
-def rebuild_index(
-    index: SpatialIndex,
-    agents: Mapping[str, Tuple[int, int]],
-    objects: Mapping[str, Tuple[int, int]],
-) -> SpatialIndex:
-    """Placeholder rebuild helper to be implemented during WP2."""
-
-    raise NotImplementedError("rebuild_index pending WP2 implementation")
-
-
-__all__ = ["SpatialIndex", "rebuild_index"]
+__all__ = ["WorldSpatialIndex"]

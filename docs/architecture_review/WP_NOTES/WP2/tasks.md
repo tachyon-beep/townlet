@@ -12,16 +12,19 @@
 - [ ] Determine how `WorldRuntime` protocol methods will be implemented in the new `WorldContext` while keeping simulation loop functional.
 
 ## 3. Planning & Resourcing
-- [ ] Produce implementation plan (see `implementation_plan.md`).
-- [ ] List required fixtures/tests (unit modules, integration, golden snapshots).
+- [x] Produce implementation plan (see `implementation_plan.md`).
+- [x] List required fixtures/tests (unit modules, integration, golden snapshots).
 - [ ] Identify migration steps for factories/loop to adopt `WorldContext`.
 
 ## 4. Execution Tracking (fill once coding begins)
 - [x] Skeleton package creation.
-- [ ] State/agents extraction.
+- [x] State/agents extraction.
 - [ ] Action pipeline.
 - [ ] Systems/events integration.
 - [ ] RNG determinism.
+- [x] Extracted spatial index & observation helpers (Step 3).
+- [x] Event dispatcher helpers implemented with unit coverage (Step 3).
+- [x] World state container (RNG, ctx-reset, event buffer) with unit coverage.
 - [ ] Legacy cleanup + factory updates.
 - [ ] Tests & docs.
 

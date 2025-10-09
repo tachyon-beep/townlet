@@ -10,6 +10,8 @@ This workspace tracks analysis, plans, and progress for Work Package 2 (modulari
 
 ## Current Status
 - WP1 scaffold (ports/adapters/factories) complete; composition refactor deferred to WP2.
-- Planning phase underway (see `tasks.md`, `implementation_plan.md`).
+- Planning (Steps 0–1) complete; package skeleton established (Step 2).
+- Step 3 complete: stateless helpers extracted (spatial index, observation views) and the domain event dispatcher implemented with unit coverage.
+- Step 4 underway: new agent registry/world state implemented with unit tests; next up is wiring actions and systems onto the state.
 
 Use this folder to capture findings, risks, test coverage, and design decisions as WP2 progresses.
