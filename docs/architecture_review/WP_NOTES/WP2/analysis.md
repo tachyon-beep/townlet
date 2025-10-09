@@ -4,36 +4,55 @@ _Last updated: 2025-10-09_
 
 ## Legacy World Responsibilities (initial pass)
 - `world/grid.py`
-  - Owns mutable world state (agents, objects, queues, utilities, RNG) and a large set of helper types (`InteractiveObject`, `HookRegistry`, etc.).
-  - Handles console integration (`ConsoleService`, history buffers, command handlers).
-  - Directly drives affordance runtime, employment services, relationships, economy, perturbations, queue tracking, nightly resets.
-  - Exposes snapshot/restore helpers, relationship metrics, rivalry events, policy snapshot metadata, and telemetry-friendly structures.
+  - Owns mutable world state (agent registry, interactive objects, queues, utilities, employment/economy snapshots, RNG state) plus helper types (`HookRegistry`, `InteractiveObject`, etc.).
+  - Embeds console support (`ConsoleService`, history buffers, handler installation).
+  - Drives affordance runtime, relationships, employment coordination, queue conflict tracking, nightly resets, and direct mutation of agent snapshots.
+  - Exposes snapshot/restore helpers, relationship metrics/overlays, rivalry events, policy snapshots, and telemetry-friendly structures (e.g., `latest_*`).
 - `world/runtime.py`
-  - Acts as a façade for the simulation loop: queues console ops, applies policy actions, advances tick, emits `RuntimeStepResult` (console results, events, terminated flags).
-  - Still depends on `WorldState` from `grid.py` and therefore inherits all the cross-cutting concerns.
+  - Façade consumed by `SimulationLoop`: buffers console commands, stages policy actions, advances perturbations, evaluates lifecycle termination, and returns `RuntimeStepResult` (console results, events, termination flags, action payloads).
+  - Relies directly on `WorldState` from `grid.py`; inherits console/telemetry coupling.
 - `world/observations/*` & `townlet/observations/builder.py`
-  - Builder assembles observation tensors by reaching into world adapters; heavy coupling with grid internals and embedding allocator.
+  - Observation builder constructs per-agent tensors by drilling into world adapter (agent snapshots, embedding allocator, spatial cache). Responsible for feature engineering, metadata, social snippets.
 - Telemetry/policy touchpoints
-  - Telemetry publisher consumes direct world APIs (`relationship_snapshot`, `queue_manager`, etc.) and calls into world to fetch metrics/events.
-  - Policy runtime relies on world adapter for agent snapshots and embedding allocator.
+  - `TelemetryPublisher` calls directly into world adapters (`relationship_snapshot`, `queue_manager.metrics()`, `consume_rivalry_events`, etc.) and maintains many `latest_*` caches.
+  - `PolicyRuntime` depends on world adapter for agent snapshots, embedding allocator, rivalry info, and context reset callbacks.
+  - `SimulationLoop` stitches everything together by calling world runtime, observation builder, rewards engine, telemetry publisher, and stability monitor.
 
 ## Key Couplings to Address
-- Console: needs to move out of world modules; world should emit events/requests that ConsoleRouter interprets.
-- Telemetry: current world exposes many `latest_*` style helpers indirectly (via telemetry publisher). Future design should emit domain events + metrics for orchestration to consume.
-- Observations: builder currently lives outside world; decide whether WP2 keeps builder external (and wires `WorldContext.observe()` to call it) or gradually inlines compact features.
-- RNG/determinism: world/grid currently owns RNG streams per subsystem; need a centralised `rng.py` to manage seeds and reproducibility paths.
+- Console: embedded in `grid.py`/`WorldRuntime`; should move to orchestration (`ConsoleRouter`). World ought to emit domain events rather than manipulating console buffers directly.
+- Telemetry: reliance on `latest_*` getters must be replaced by event/metric emission so the monitoring layer (`HealthMonitor`) can derive insights without pulling from world.
+- Observations: current builder is tightly coupled with world internals. For WP2 we likely wrap the builder within `WorldContext.observe()` to avoid breaking policy/telemetry, then refactor internals incrementally.
+- RNG/determinism: RNG streams are scattered across world/services; need a central `rng.py` to seed and provide reproducible generators consumed by systems/actions.
+- Systems ordering: tick flow currently lives in `WorldRuntime.tick()` interleaving console, perturbations, affordances, lifecycle, events. New modular design must make this explicit and testable.
 
 ## Dependencies & Risks
 - **SimulationLoop:** still uses legacy `WorldRuntime` and expects console buffering and observation builder outputs. WP2 must deliver a `WorldContext` that satisfies `WorldRuntime` port while preserving behaviour until WP3 DTO adoption.
 - **Observation Builder:** moving it wholesale may be too large; consider wrapping existing builder inside `WorldContext.observe()` initially, then refactor into modular `observe.py`.
 - **Telemetry Publisher:** expects rich snapshots (`relationship_snapshot`, `latest_queue_metrics`, etc.). Need to ensure events/snapshot data remain available or provide compatibility layer until WP3.
 - **Testing:** golden snapshots and loop smoke tests rely on current shapes. Any structural changes must update fixtures accordingly.
+- **ADR alignment:** ADR-002 expects a world package with context façade, modular systems, events, and central RNG. Current analysis confirms feasibility; ensure final design documents deviations (e.g., temporary reuse of `ObservationBuilder`).
 
 ## Open Questions
-1. What minimal observation representation is required for policy/telemetry today? Can we reuse the existing builder to avoid regressions until WP3 introduces DTOs?
-2. Which subsystems should be considered “systems” in the new pipeline (employment, economy, perturbations, affordances, stability) and in what order should they run each tick?
-3. How will we migrate console handlers? Do we provide a small shim that publishes events for ConsoleRouter until WP3 refactors CLI tooling?
-4. How do we transition telemetry metrics that currently read world state via adapters (`queue_manager.metrics()`, etc.)? Do we compute them inside `HealthMonitor`, or expose them via snapshot/events?
+1. Observations: we will retain the existing `ObservationBuilder` for the initial cut by wrapping it inside `WorldContext.observe()`; longer term WP3 will replace this with DTO-driven pipelines. Need to confirm this interim approach keeps telemetry/policy paths stable.
+2. Systems ordering: define and document the per-tick order (e.g., console → actions → affordances → employment → relationships → economy → perturbations → nightly reset) and ensure events reflect that sequence.
+3. Console migration: in WP2 world should expose event hooks (e.g., `ConsoleEvent`); need a plan for bridging existing console commands until `ConsoleRouter` takes over completely.
+4. Telemetry metrics: decide which metrics move to `HealthMonitor` vs remain in snapshot (e.g., queue lengths, rivalry events). Ensure the snapshot structure continues to satisfy telemetry publisher until WP3 replaces it.
+5. Persistence/Snapshots: evaluate how snapshot/load flows (currently in `grid.py`) translate to the new `WorldState`/context modules.
+
+## Preliminary Module Mapping
+| Legacy Responsibility | Target Module(s) | Notes |
+| --- | --- | --- |
+| Agent registry & metadata | `agents.py`, `state.py` | `WorldState` owns agent store; `agents.py` exposes management helpers |
+| Spatial index / occupancy | `spatial.py` | Provides neighbourhood queries for observations/actions |
+| Actions / affordance execution | `actions.py`, `systems/affordances.py` | Validate payloads, update state, emit events |
+| Employment, economy, relationships systems | `systems/` submodules | Each implements `step(state, ctx)` |
+| Queue conflict tracking | `systems/queues.py` (or integrated with actions) | Must emit queue metrics events |
+| RNG management | `rng.py` | Provides seeded generators per subsystem |
+| Event emission | `events.py` | Defines event dataclasses & dispatcher |
+| Console integration | (removed from world; handled by orchestration) | World emits events/requests only |
+| Snapshot/load logic | `state.py`, potential `snapshot.py` helper | Preserve existing persistence semantics |
+| Observation assembly | `observe.py` (wrapping legacy builder initially) | Bridges to `ObservationBuilder` until refactor |
+| World façade | `context.py` | Implements `WorldRuntime` port |
 
 ## Next Steps
 - Complete mapping of responsibilities to new modules (update once analysis finishes).

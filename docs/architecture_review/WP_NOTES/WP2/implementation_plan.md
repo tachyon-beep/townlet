@@ -10,7 +10,7 @@ This plan breaks down Work Package 2 into concrete steps. Update it as tasks com
 1.1. Catalogue responsibilities in `townlet/world/grid.py`, `world/runtime.py`, `world/observations/*`, console hooks, telemetry hooks, RNG, persistence.
 1.2. Document interactions with external systems (simulation loop, observation builder, telemetry publisher, policy runtime).
 1.3. Confirm ADR-002 expectations (module boundaries, event model, RNG policy) and reconcile with current behaviour.
-1.4. Decide a migration strategy for observations: retain existing ObservationBuilder temporarily and bridge into `observe.py`, or reimplement the minimal required view.
+1.4. Decide a migration strategy for observations (Decision: wrap existing `ObservationBuilder` inside `WorldContext.observe()` for initial cut; refactor internals once DTOs land in WP3).
 1.5. Produce a target module map (state, spatial, agents, actions, systems, events, rng) and map each current responsibility to a destination.
 
 ## 2. Package Skeleton & Types
