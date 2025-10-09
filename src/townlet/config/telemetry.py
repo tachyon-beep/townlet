@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Local literals to keep this module self-contained
-TelemetryTransportType = Literal["stdout", "file", "tcp", "websocket", "prometheus"]
+TelemetryTransportType = Literal["stdout", "file", "tcp", "http", "websocket", "prometheus"]
 TelemetryBackpressureStrategy = Literal["drop_oldest", "block", "fan_out"]
 
 
@@ -173,6 +173,24 @@ class TelemetryTransportConfig(BaseModel):
                 if host not in {"localhost", "127.0.0.1", "::1"}:
                     raise ValueError("telemetry.transport.allow_plaintext is only permitted for localhost endpoints")
                 self.enable_tls = False
+            return self
+
+        if transport_type == "http":
+            url = (self.endpoint or "").strip()
+            if not url:
+                raise ValueError("telemetry.transport.endpoint is required when type is 'http'")
+            if not (url.startswith("http://") or url.startswith("https://")):
+                raise ValueError("telemetry.transport.endpoint must be an http(s) URL when type is 'http'")
+            if self.file_path is not None:
+                raise ValueError("telemetry.transport.file_path must be omitted for http transport")
+            if any(value is not None for value in (self.ca_file, self.cert_file, self.key_file)):
+                raise ValueError("telemetry.transport http does not support TLS certificate options; configure TLS via the URL")
+            if self.allow_plaintext or self.dev_allow_plaintext:
+                raise ValueError("telemetry.transport http does not use allow_plaintext flags")
+            self.endpoint = url
+            self.enable_tls = False
+            self.allow_plaintext = False
+            self.dev_allow_plaintext = False
             return self
 
         if transport_type == "websocket":

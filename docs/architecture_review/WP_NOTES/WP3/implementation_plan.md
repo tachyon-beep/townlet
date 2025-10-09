@@ -24,7 +24,7 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 - [x] Introduced `TelemetryEventDispatcher` with bounded queue/rivalry caches (`telemetry/event_dispatcher.py`) and registered it within `TelemetryPublisher`.
 - [x] `StdoutTelemetryAdapter` now relays events through the dispatcher (legacy writers removed).
 - [x] Stub telemetry accepts events/metrics and logs them for diagnostics.
-- [ ] HTTP/streaming transports – define JSON payload shapes and update clients accordingly (if/when those transports are re-enabled).
+- [~] HTTP/streaming transports – HTTP transport now posts dispatcher events; streaming/WebSocket support remains to be implemented when required.
 
 ### 1.3 Legacy API sunset
 - [x] Provide compatibility wrappers that convert legacy writer calls into events (used only during migration).
@@ -75,8 +75,8 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 ## 4. Testing & Validation
 
 ### 4.1 Unit & integration tests
-- [ ] Guard test ensuring `latest_*` identifiers (`telemetry.latest_`) are absent from source tree.
-- [ ] Event-driven smoke test exercising `SimulationLoop` with stdout telemetry.
+- [x] Guard test ensuring legacy writer identifiers remain absent (`tests/test_telemetry_surface_guard.py`).
+- [x] Event-driven smoke test exercising `SimulationLoop` with stdout telemetry (`tests/test_telemetry_surface_guard.py`).
 - [ ] Telemetry sink unit tests verifying retention bounds, subscriber hooks, and transform pipeline.
 
 ### 4.2 Regression / parity checks
@@ -98,8 +98,8 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 - [ ] Confirm WP2 Step 7 tasks marked complete once observation DTOs land.
 
 ## 4. Testing & Validation
-4.1 Add guard tests to confirm writer/getter APIs are unused (`tests/test_telemetry_getters_removed.py`).
-4.2 Provide event-driven integration smoke tests (loop + stdout adapter).
+4.1 Guard tests confirm writer/getter APIs remain unused (`tests/test_telemetry_surface_guard.py`).
+4.2 Event-driven integration smoke tests (loop + stdout adapter) continue to run (`tests/test_telemetry_surface_guard.py`).
 4.3 Run full suite (`pytest`, `ruff`, `mypy`) and targeted e2e scripts.
 
 ## 5. Rollout & Documentation

@@ -8,7 +8,7 @@ Use this as reorientation material if the working memory is compacted. It summar
 - **Dispatcher**: `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks. Registered inside `TelemetryPublisher` (see `_handle_event`).
 - **Transports**:
   - `StdoutTelemetryAdapter` and `StubTelemetrySink` emit events through the dispatcher; publisher shims have been removed.
-  - HTTP/streaming transports are currently inactive; when re-enabled they must consume dispatcher events and avoid direct writer usage.
+  - HTTP transport now posts dispatcher events; streaming/WebSocket transports remain inactive until downstream consumers need them.
 - **Loop Emission**: `SimulationLoop` now emits events exclusively for console results, stability metrics, loop health/failure, and loop tick; it no longer calls `record_*` directly.
 - **Next steps**: Add guard tests preventing reintroduction of writer APIs and update dormant transports (HTTP/streaming) to consume dispatcher events.
 

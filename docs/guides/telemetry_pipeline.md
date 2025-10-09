@@ -18,7 +18,7 @@ Example excerpt:
 ```yaml
 telemetry:
   transport:
-    type: stdout   # stdout | file | tcp | websocket (stub) | prometheus (textfile)
+    type: stdout   # stdout | file | tcp | http | websocket (stub) | prometheus (textfile)
     file_path: logs/telemetry.jsonl  # for file transport
     endpoint: localhost:9090         # for tcp transport
     enable_tls: true                 # tcp only
@@ -28,10 +28,11 @@ telemetry:
       max_batch_size: 32
       max_buffer_bytes: 256000
       flush_interval_ticks: 1
-  worker:
-    backpressure: drop_oldest  # drop_oldest | block | fan_out
-    block_timeout_seconds: 0.5
-    restart_limit: 3
+    worker:
+      backpressure: drop_oldest  # drop_oldest | block | fan_out
+      block_timeout_seconds: 0.5
+      restart_limit: 3
+  # Example: to POST events to an external collector, set type=http and provide endpoint=http(s) URL.
   transforms:
     pipeline:
       - snapshot_normalizer

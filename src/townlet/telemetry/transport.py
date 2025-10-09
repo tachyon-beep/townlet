@@ -9,6 +9,8 @@ import sys
 from collections import deque
 from contextlib import AbstractContextManager
 from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +192,42 @@ class TcpTransport(BaseTransport):
                 self._socket = None
 
 
+class HttpTransport(BaseTransport):
+    """POST telemetry payloads to an HTTP(S) endpoint."""
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        connect_timeout: float,
+        send_timeout: float,
+    ) -> None:
+        self._url = url
+        # urllib uses a single timeout parameter; reuse the larger bound for safety.
+        timeout = max(connect_timeout, send_timeout)
+        self._timeout = timeout if timeout > 0 else None
+        self._opener = urllib_request.build_opener()
+
+    def send(self, payload: bytes) -> None:
+        request = urllib_request.Request(
+            self._url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "townlet-telemetry/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with self._opener.open(request, timeout=self._timeout) as response:
+                # Drain the body to allow connection reuse where supported.
+                response.read()
+        except urllib_error.HTTPError as exc:  # pragma: no cover - network failure path
+            raise TelemetryTransportError(f"HTTP error {exc.code}: {exc.reason}") from exc
+        except urllib_error.URLError as exc:  # pragma: no cover - network failure path
+            raise TelemetryTransportError(str(exc)) from exc
+
+
 class WebsocketTransport(BaseTransport):
     """Stub implementation for future WebSocket streaming."""
 
@@ -343,6 +381,18 @@ def create_transport(
             cert_file=cert_file,
             key_file=key_file,
             allow_plaintext=allow_plaintext,
+        )
+        t.start()
+        return t
+    if transport_type == "http":
+        if endpoint is None:
+            raise TelemetryTransportError(
+                "telemetry.transport.endpoint is required when using http transport"
+            )
+        t = HttpTransport(
+            endpoint,
+            connect_timeout=connect_timeout,
+            send_timeout=send_timeout,
         )
         t.start()
         return t

@@ -3,9 +3,10 @@
 ## 1. Telemetry Event Pipeline
 - [x] Finalise event schemas (`loop.tick`, `loop.health`, `loop.failure`, `console.result`, `policy.metadata`, `stability.metrics`, `rivalry.events`) and document payload contracts (`event_schema.md`).
 - [x] Implement event dispatcher & minimal cache in telemetry core; ensure retention bounds (queue history, rivalry history, possessed agents).
-- [ ] Update transports:
+- [~] Update transports:
 - [x] Stdout adapter emits events via the dispatcher (legacy writers removed).
-  - [ ] HTTP/streaming transport emits new JSON payloads.
+  - [x] HTTP transport posts dispatcher events for JSON payloads.
+  - [ ] Streaming transport emits new JSON payloads.
   - [x] Stub sink logs events without writer methods.
 - [x] Provide compatibility wrappers, then remove writer/getter APIs once WP1 call sites are migrated.
 
@@ -21,8 +22,8 @@
 - [ ] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity.
 
 ## 4. Testing & Parity
-- [ ] Add guard tests preventing reintroduction of telemetry getters/writers.
-- [ ] Add event-driven loop smoke tests covering stdout adapter and stub sink.
+- [x] Add guard tests preventing reintroduction of telemetry getters/writers.
+- [x] Add event-driven loop smoke tests covering stdout adapter and stub sink.
 - [ ] Run parity comparison (queue fairness, rivalry counts, promotion triggers) between legacy writer path and new events.
 - [ ] CI: ensure `pytest`, `ruff`, `mypy` pass with the new telemetry architecture.
 

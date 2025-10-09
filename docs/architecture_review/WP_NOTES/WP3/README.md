@@ -37,6 +37,7 @@ WP1 / WP2 progress trackers should cross-link to the matching WP3 tasks (see `ta
 - Event schema drafted (`event_schema.md`) covering `loop.tick`, `loop.health`, `loop.failure`, `console.result`, and policy/stability payloads.
 - `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks; stdout and stub adapters now route events through the dispatcher.
 - Simulation loop emits `loop.tick/health/failure`, `console.result`, and `stability.metrics` events exclusively; legacy writer shims have been removed from the publisher.
+- HTTP transport now relays dispatcher events via JSON POST requests; streaming/WebSocket transport remains a placeholder until required by downstream consumers.
 
 ## Execution Priorities
 

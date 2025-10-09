@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+import http.server
+import threading
 
 import pytest
 
@@ -279,6 +281,53 @@ def test_create_transport_plaintext_warning(
     transport.send(b"hello")
     transport.close()
     assert calls.get("closed") is True
+
+
+def test_http_transport_posts_payload(tmp_path: Path) -> None:
+    received: list[bytes] = []
+
+    class CaptureHandler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # type: ignore[override]
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length)
+            received.append(body)
+            self.send_response(204)
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:  # pragma: no cover - silence logs
+            return
+
+    server = http.server.HTTPServer(("localhost", 0), CaptureHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    url = f"http://{server.server_address[0]}:{server.server_address[1]}/telemetry"
+
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    config.telemetry.transport.type = "http"
+    config.telemetry.transport.endpoint = url
+    config.telemetry.transport.connect_timeout_seconds = 1.0
+    config.telemetry.transport.send_timeout_seconds = 1.0
+    config.telemetry.transport.buffer.max_batch_size = 1
+    config.telemetry.transport.buffer.flush_interval_ticks = 1
+    config.telemetry.transport.worker_poll_seconds = 0.05
+
+    loop = SimulationLoop(config)
+    _ensure_agents(loop)
+
+    try:
+        loop.step()
+        deadline = time.time() + 2.0
+        while not received and time.time() < deadline:
+            time.sleep(0.05)
+        loop.telemetry.stop_worker(wait=True)
+        assert received, "expected HTTP transport to receive telemetry payload"
+        payload = received[-1].decode("utf-8")
+        assert '"tick"' in payload
+    finally:
+        loop.close()
+        server.shutdown()
+        thread.join(timeout=2.0)
 
 
 def test_create_transport_plaintext_disallowed() -> None:
