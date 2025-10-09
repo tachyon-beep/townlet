@@ -21,6 +21,7 @@ from townlet.telemetry.aggregation import (
     StreamPayloadBuilder,
     TelemetryAggregator,
 )
+from townlet.telemetry.event_dispatcher import TelemetryEventDispatcher
 from townlet.telemetry.events import (
     RELATIONSHIP_FRIENDSHIP_EVENT,
     RELATIONSHIP_RIVALRY_EVENT,
@@ -131,6 +132,8 @@ class TelemetryPublisher:
         self._pending_manual_narrations: list[dict[str, object]] = []
         self._manual_narration_lock = threading.Lock()
         self._runtime_variant: str | None = None
+        self._event_dispatcher = TelemetryEventDispatcher()
+        self._event_dispatcher.register_subscriber(self._handle_event)
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -1497,6 +1500,36 @@ class TelemetryPublisher:
 
     def schema(self) -> str:
         return self.schema_version
+
+    @property
+    def event_dispatcher(self) -> TelemetryEventDispatcher:
+        """Expose the event dispatcher used for streaming telemetry."""
+
+        return self._event_dispatcher
+
+    def _handle_event(self, name: str, payload: Mapping[str, Any]) -> None:
+        """Internal subscriber that bridges events back into publisher behaviour."""
+
+        if name == "loop.tick":
+            self.publish_tick(**payload)
+            return
+        if name == "loop.health":
+            self.record_health_metrics(payload)
+            return
+        if name == "loop.failure":
+            self.record_loop_failure(payload)
+            return
+        if name == "console.result":
+            result = payload.get("result")
+            if isinstance(result, Mapping):
+                self._latest_events.append({"type": "console.result", "payload": dict(payload)})
+                if len(self._latest_events) > 128:
+                    self._latest_events = self._latest_events[-128:]
+            return
+        # Default: append to event cache for observers.
+        self._latest_events.append({"type": name, "payload": dict(payload)})
+        if len(self._latest_events) > 128:
+            self._latest_events = self._latest_events[-128:]
 
     def _capture_relationship_snapshot(
         self,

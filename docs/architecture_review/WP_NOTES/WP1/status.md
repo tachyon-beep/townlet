@@ -10,6 +10,7 @@
 - Next steps focus on the simulation loop refactor (Step 8): introduce the factory helpers, wire in `ConsoleRouter`/`HealthMonitor`, and migrate telemetry usage from getter-style pulls to event/metric emissions.
 - Work proceeds incrementally per the detailed plan (Phase 1: factory swap, Phase 2: console/monitor integration, Phase 3: telemetry getter removal, Phase 4: cleanup/docs).
 - Console routing and health monitoring now initialise inside `SimulationLoop`: console commands are mirrored into the new router (still forwarded to the legacy runtime for execution) and `HealthMonitor` emits baseline queue/event metrics via the telemetry port.
+- Telemetry events (`loop.tick`, `loop.health`, `loop.failure`) now flow through the WP3 dispatcher via the stdout adapter; legacy `record_*` calls remain only as shims and will be removed once WP3 Section 3 completes.
 
 **Legacy caller inventory (2025-10-09 snapshot)**
 - Policy:
@@ -21,7 +22,7 @@
   - `src/townlet/core/sim_loop.py:359-380` — console buffer is still drained from telemetry to preserve legacy behaviour, but the router now emits console events; complete the migration by dropping the getter usage and feeding commands directly into the router entrypoint.
   - `src/townlet/core/sim_loop.py:484` — loop now emits `loop.tick` events via the telemetry port; underlying adapters translate to `publish_tick`, but the composition root no longer calls the legacy API directly.
   - `src/townlet/core/sim_loop.py:502` — queue/embedding/job/employment metrics and rivalry history are derived from the world adapter; remaining telemetry getters have been removed from the loop.
-  - `src/townlet/core/sim_loop.py:526` and `src/townlet/core/sim_loop.py:589` — health/failure payloads pull from locally tracked status snapshots; replace the remaining calls to `record_*` once the sink provides streaming equivalents.
+  - `src/townlet/core/sim_loop.py:526` and `src/townlet/core/sim_loop.py:589` — health/failure payloads pull from locally tracked status snapshots; Stdout adapter now forwards `loop.health` / `loop.failure` events into the legacy publisher until the sink exposes streaming equivalents.
 - World (loop still holds legacy runtime/world references):
   - `src/townlet/core/sim_loop.py:366` and `src/townlet/core/sim_loop.py:371` — uses `runtime.queue_console` and passes an `action_provider`; after the port swap the loop should enqueue console commands through `ConsoleRouter` and call `world_port.tick()` once actions are applied.
   - `src/townlet/core/sim_loop.py:381-383` and `src/townlet/core/sim_loop.py:392` — mutates agents directly off `WorldState`; migrate to `WorldContext` helpers (or dedicated services) so loop code no longer pokes at internal registries.

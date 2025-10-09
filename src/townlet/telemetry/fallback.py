@@ -47,13 +47,7 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         _ = list(results)
 
     def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
-        if name == "loop.tick" and isinstance(payload, Mapping):
-            try:
-                self.publish_tick(**payload)
-            except TypeError:
-                logger.debug("telemetry_stub_loop_tick_invalid payload=%s", payload)
-        else:
-            logger.debug("telemetry_stub_event name=%s payload=%s", name, dict(payload or {}))
+        logger.debug("telemetry_stub_event name=%s payload=%s", name, dict(payload or {}))
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         logger.debug("telemetry_stub_metric name=%s value=%s tags=%s", name, value, tags)

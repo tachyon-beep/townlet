@@ -2,11 +2,11 @@
 
 ## 1. Telemetry Event Pipeline
 - [x] Finalise event schemas (`loop.tick`, `loop.health`, `loop.failure`, `console.result`, `policy.metadata`, `stability.metrics`, `rivalry.events`) and document payload contracts (`event_schema.md`).
-- [ ] Implement event dispatcher & minimal cache in telemetry core; ensure retention bounds (queue history, rivalry history, possessed agents).
+- [x] Implement event dispatcher & minimal cache in telemetry core; ensure retention bounds (queue history, rivalry history, possessed agents).
 - [ ] Update transports:
-  - [ ] Stdout adapter shims events into `TelemetryPublisher`.
+- [x] Stdout adapter shims events into `TelemetryPublisher` via dispatcher (legacy writers still invoked internally until WP3 removes them).
   - [ ] HTTP/streaming transport emits new JSON payloads.
-  - [ ] Stub sink logs events without writer methods.
+  - [x] Stub sink logs events without writer methods.
 - [ ] Provide compatibility wrappers, then remove writer/getter APIs once WP1 call sites are migrated.
 
 ## 2. Policy DTO & Controller Update

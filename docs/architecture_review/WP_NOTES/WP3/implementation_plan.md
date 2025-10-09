@@ -21,14 +21,16 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
   - Exposes subscription hooks for observers (replacing the current `register_event_subscriber` pattern).
 
 ### 1.2 Adapter updates
-- [ ] `StdoutTelemetryAdapter` – translate new events into the legacy publisher interface (temporary shim) and log non-loop events for debugging.
-- [ ] HTTP/streaming transports – define JSON payload shapes and update clients accordingly.
-- [ ] Stub telemetry – accept all events/metrics and retain lightweight caches for testing purposes.
+- [x] Introduced `TelemetryEventDispatcher` with bounded queue/rivalry caches (`telemetry/event_dispatcher.py`) and registered it within `TelemetryPublisher`.
+- [x] `StdoutTelemetryAdapter` now relays events through the dispatcher (legacy writer methods remain only via internal shims).
+- [x] Stub telemetry accepts events/metrics and logs them for diagnostics.
+- [ ] HTTP/streaming transports – define JSON payload shapes and update clients accordingly (if/when those transports are re-enabled).
 
 ### 1.3 Legacy API sunset
 - [ ] Provide compatibility wrappers that convert legacy writer calls into events (used only during migration).
 - [ ] Remove `publish_tick`, `record_console_results`, `record_health_metrics`, `record_loop_failure`, and all `latest_*` getters once WP1/WP2 call sites are migrated.
 - [ ] Update `TelemetrySinkProtocol` to mark removed methods as deprecated (retained temporarily for type-checkers until call sites are cleaned).
+  - Plan: once HTTP/other transports are event-backed and WP1 loop stops invoking `telemetry.record_*`, delete the internal `_handle_event` shims and strip unused caches from `TelemetryPublisher`.
 
 ### 1.4 WP1 / WP2 Link
 - WP1 Step 8 requires the event dispatcher before its checklist can be closed.

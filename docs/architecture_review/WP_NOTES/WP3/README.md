@@ -32,6 +32,11 @@ Purpose: capture the design intent, decisions, and progress for Work Package 3. 
 -
 WP1 / WP2 progress trackers should cross-link to the matching WP3 tasks (see `tasks.md`).
 
+## Current Progress
+
+- Event schema drafted (`event_schema.md`) covering `loop.tick`, `loop.health`, `loop.failure`, `console.result`, and policy/stability payloads.
+- `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks; integration with transports/publisher is underway.
+
 ## Open Questions
 
 - Telemetry schema versioning once events replace writer methods—do we bump major or treat as additive?

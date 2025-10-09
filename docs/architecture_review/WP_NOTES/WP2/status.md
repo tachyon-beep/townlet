@@ -8,6 +8,7 @@
 - Step 6 complete: world context now orchestrates queue, affordance, employment, relationship, economy, and perturbation systems using the modular pipeline; RNG streams are sourced from `RngStreamManager`, and the legacy `WorldState` exposes the port-friendly views (`agent_records_view`, `event_dispatcher`, `emit_event`) required by the new action pipeline. `WorldRuntime.tick` recognises the new facade, and parity tests cover queue reservation helpers plus the systems modules.
 - WP1 Step 4 (loop refactor) is progressing in tandem: the loop now resolves providers via the new factories and the orchestration services (`ConsoleRouter`, `HealthMonitor`) are wired in, though policy/telemetry/world callers still depend on legacy fallbacks.
 - Step 7 (adapter & factory integration) is underway—adapters expose transitional handles so we can finish migrating consumers off the legacy APIs before swapping in the modular world context end-to-end. The policy path now routes through a controller façade; telemetry/world callers remain on the migration list.
+- WP3 event dispatcher integration means the loop already emits `loop.tick/health/failure` events; WP2 world adapters must expose the DTO structures (observations, queue snapshots, rivalry metrics) expected by those payloads once the final migration lands.
 
 Update as tasks progress.
 

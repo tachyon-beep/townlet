@@ -122,7 +122,8 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
 - Adapters tweaked after review:
   - `DefaultWorldAdapter.snapshot()` clears cached events post-exposure to avoid double counting.
   - `ScriptedPolicyAdapter` still exposes `attach_world()` for transition (docstring updated to reflect temporary use); upcoming loop refactor will remove the world dependency entirely.
-  - `StdoutTelemetryAdapter` temporarily appends events/metrics to publisher buffers; a dedicated sink will replace this once the new telemetry pipeline lands.
+- `StdoutTelemetryAdapter` now forwards `loop.*` events through `TelemetryPublisher`'s event dispatcher (temporary shim); remaining legacy writer calls will disappear once WP3 completes the sink refactor.
+- `StubTelemetrySink` emits logging-only events via the same dispatcher, ensuring tests rely solely on `emit_event` / `emit_metric` behaviour.
 
 ### External “Fix Pack” Review (2024-XX-XX)
 - Reviewed the architect’s drop-in patch suggestions. Intent aligns (true sink telemetry, observation-driven policy, factories constructing dependencies), but concrete diffs don’t apply cleanly:
