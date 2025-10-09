@@ -110,15 +110,14 @@ Use this plan to track implementation progress. Update checkboxes or add subsect
 1. `ConsoleRouter` and `HealthMonitor` are now instantiated by the loop and fed every tick. Console commands drain from telemetry into the router (still mirrored into `runtime.queue_console` for parity) and health metrics are emitted via the telemetry port.
 2. Outstanding work:
    - Eliminate reliance on `runtime.queue_console` by executing commands solely through the router and world port.
-   - Remove direct calls to `record_console_results` / `record_health_metrics` once downstream consumers depend on router events + monitor metrics.
+   - Telemetry events now cover console outputs and health metrics; no direct writer calls remain.
 3. Tests:
    - `tests/test_console_router.py` added to cover basic enqueue/dispatch paths.
    - TODO: add targeted health monitor unit tests and loop smoke once telemetry getters are retired.
 
 **Phase 3 – Shift telemetry consumption to events/metrics**
-1. Telemetry getters have been removed from `SimulationLoop.step`; queue/employment/job metrics and rivalry events come directly from the world adapter, and the loop emits a `loop.tick` event via the telemetry port (stdout adapter translates this back into `publish_tick` for legacy consumers).
+1. Telemetry getters have been removed from `SimulationLoop.step`; queue/employment/job metrics and rivalry events come directly from the world adapter, and the loop emits `loop.tick`/`loop.health`/`loop.failure` events via the telemetry port.
 2. Follow-ups:
-   - Replace `record_console_results` / `record_health_metrics` / `record_loop_failure` with event-driven emissions once the telemetry sink exposes streaming equivalents (targeted for the telemetry rework in WP3).
    - Add a guard test `tests/test_telemetry_getters_removed.py` to ensure getter usage does not regress.
 3. Stability monitor now operates on locally computed metrics; keep parity checks in place until the new sink lands.
 

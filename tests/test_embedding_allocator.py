@@ -84,7 +84,24 @@ def test_telemetry_exposes_allocator_metrics() -> None:
     world = WorldState.from_config(config)
     world.tick = 0
     telemetry = TelemetryPublisher(config)
-    telemetry.publish_tick(tick=0, world=world, observations={}, rewards={}, events=[])
+    telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": 0,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+    )
 
     queue_metrics = telemetry.latest_queue_metrics()
     embedding_metrics = telemetry.latest_embedding_metrics()
@@ -119,8 +136,23 @@ def test_telemetry_records_events() -> None:
             "affordance_id": "use_shower",
         }
     ]
-    telemetry.publish_tick(
-        tick=0, world=world, observations={}, rewards={}, events=events
+    telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": 0,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     latest = list(telemetry.latest_events())
     assert latest and latest[0]["event"] == "affordance_start"

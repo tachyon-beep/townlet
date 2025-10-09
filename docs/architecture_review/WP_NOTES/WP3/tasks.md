@@ -4,10 +4,10 @@
 - [x] Finalise event schemas (`loop.tick`, `loop.health`, `loop.failure`, `console.result`, `policy.metadata`, `stability.metrics`, `rivalry.events`) and document payload contracts (`event_schema.md`).
 - [x] Implement event dispatcher & minimal cache in telemetry core; ensure retention bounds (queue history, rivalry history, possessed agents).
 - [ ] Update transports:
-- [x] Stdout adapter shims events into `TelemetryPublisher` via dispatcher (legacy writers still invoked internally until WP3 removes them).
+- [x] Stdout adapter emits events via the dispatcher (legacy writers removed).
   - [ ] HTTP/streaming transport emits new JSON payloads.
   - [x] Stub sink logs events without writer methods.
-- [ ] Provide compatibility wrappers, then remove writer/getter APIs once WP1 call sites are migrated.
+- [x] Provide compatibility wrappers, then remove writer/getter APIs once WP1 call sites are migrated.
 
 ## 2. Policy DTO & Controller Update
 - [ ] Define observation DTOs exported from `WorldContext` (ordered per-agent payloads).
@@ -17,7 +17,7 @@
 
 ## 3. Simulation Loop Cleanup
 - [ ] Replace `runtime.queue_console` usage with router-driven action application; ensure no direct `WorldState` mutation.
-- [ ] Emit telemetry via events only (`loop.tick`, `loop.health`, `loop.failure`); remove `record_console_results`, `record_health_metrics`, `record_loop_failure` calls.
+- [x] Emit telemetry via events only (`loop.tick`, `loop.health`, `loop.failure`); remove `record_console_results`, `record_health_metrics`, `record_loop_failure` calls.
 - [ ] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity.
 
 ## 4. Testing & Parity

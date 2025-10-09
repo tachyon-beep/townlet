@@ -4,13 +4,13 @@ Purpose: capture the design intent, decisions, and progress for Work Package 3. 
 
 ## Context
 
-- WP1 introduced minimal ports/factories and now emits loop state via `ConsoleRouter`, `HealthMonitor`, and `loop.tick` events. The loop still invokes legacy telemetry writers (`record_console_results`, `record_health_metrics`, `record_loop_failure`) because the sink does not yet expose event-based equivalents.
+- WP1 introduced minimal ports/factories and now emits loop state via `ConsoleRouter`, `HealthMonitor`, and telemetry events. Telemetry writer methods have been removed; remaining work is to route console commands without touching `runtime.queue_console`.
 - WP2 modularised the world context and systems. Adapters expose transitional handles, but the loop still feeds the scripted backend raw `WorldState` objects. Observation-first policy decisions and DTO streaming depend on WP3.
 - WP3 therefore owns the remaining substrate changes required to retire legacy getters, writers, and world references.
 
 ## Goals
 
-1. Replace telemetry writer methods (`publish_tick`, `record_console_results`, `record_health_metrics`, `record_loop_failure`) with event/metric streaming APIs so composition code never mutates publisher internals.
+1. Maintain an event/metric streaming telemetry sink (`emit_event`/`emit_metric`) so composition code never mutates publisher internals.
 2. Provide canonical DTOs for policy/telemetry consumers driven by the modular world context (observation-first policy decisions, queue/relationship metrics, rivalry feeds).
 3. Finalise the simulation loop migration: world actions via port APIs only, telemetry purely event-driven, policy surface independent of `WorldState`.
 
@@ -35,7 +35,14 @@ WP1 / WP2 progress trackers should cross-link to the matching WP3 tasks (see `ta
 ## Current Progress
 
 - Event schema drafted (`event_schema.md`) covering `loop.tick`, `loop.health`, `loop.failure`, `console.result`, and policy/stability payloads.
-- `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks; integration with transports/publisher is underway.
+- `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks; stdout and stub adapters now route events through the dispatcher.
+- Simulation loop emits `loop.tick/health/failure`, `console.result`, and `stability.metrics` events exclusively; legacy writer shims have been removed from the publisher.
+
+## Execution Priorities
+
+1. **Telemetry cleanup** – update any remaining transports (e.g., HTTP) to consume dispatcher events and add guard tests to prevent regression.
+2. **Policy DTO rollout** – provide observation DTOs and policy metadata events so WP1/WP2 can drop `WorldState` access.
+3. **Loop finalisation** – remove `runtime.queue_console`, ensure all telemetry/policy interactions flow through ports, and close out WP1 Step 8 / WP2 Step 7 with parity tests and docs.
 
 ## Open Questions
 

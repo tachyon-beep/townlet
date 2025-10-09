@@ -22,8 +22,23 @@ def test_event_stream_receives_published_events() -> None:
         }
     ]
 
-    publisher.publish_tick(
-        tick=0, world=world, observations={}, rewards={}, events=events
+    publisher.emit_event(
+        "loop.tick",
+        {
+            "tick": 0,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     latest = stream.latest()
     assert latest and latest[0]["event"] == "affordance_start"
@@ -36,5 +51,22 @@ def test_event_stream_handles_empty_batch() -> None:
     stream.connect(publisher)
 
     world = WorldState.from_config(config)
-    publisher.publish_tick(tick=0, world=world, observations={}, rewards={}, events=[])
+    publisher.emit_event(
+        "loop.tick",
+        {
+            "tick": 0,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+    )
     assert stream.latest() == []

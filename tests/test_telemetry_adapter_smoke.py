@@ -22,11 +22,23 @@ def test_telemetry_publish_uses_adapter(short_loop: SimulationLoop) -> None:
     telemetry = loop.telemetry
     adapter = loop.world_adapter
 
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=adapter,
-        observations={},
-        rewards={},
+    telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": loop.tick,
+            "world": adapter,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
 
     assert telemetry._latest_queue_metrics is not None  # type: ignore[attr-defined]

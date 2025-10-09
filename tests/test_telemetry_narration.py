@@ -74,36 +74,69 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
         "queue_length": 2,
         "intensity": 1.5,
     }
-    publisher.publish_tick(
-        tick=0,
-        world=world,
-        observations={},
-        rewards={},
-        events=[event],
+    publisher.emit_event(
+        "loop.tick",
+        {
+            "tick": 0,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [event],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     narrations = publisher.latest_narrations()
     assert len(narrations) == 1
     assert narrations[0]["category"] == "queue_conflict"
 
     # Within cooldown window, narration should be suppressed.
-    publisher.publish_tick(
-        tick=2,
-        world=world,
-        observations={},
-        rewards={},
-        events=[event],
+    publisher.emit_event(
+        "loop.tick",
+        {
+            "tick": 2,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [event],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     assert publisher.latest_narrations() == []
 
     # Priority reason bypasses cooldown.
     priority_event = dict(event)
     priority_event["reason"] = "ghost_step"
-    publisher.publish_tick(
-        tick=3,
-        world=world,
-        observations={},
-        rewards={},
-        events=[priority_event],
+    publisher.emit_event(
+        "loop.tick",
+        {
+            "tick": 3,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [priority_event],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     narrations = publisher.latest_narrations()
     assert len(narrations) == 1

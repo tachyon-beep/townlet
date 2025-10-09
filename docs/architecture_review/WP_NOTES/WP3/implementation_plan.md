@@ -15,22 +15,23 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
   - `loop.health` (duration, queue depth, transport status, promotion snapshot, stability metrics summary).
   - `loop.failure` (tick, error, snapshot path, transport status).
   - `console.result`, `policy.metadata`, `stability.metrics`, `rivalry.events`.
-- [ ] Implement an event dispatcher inside the telemetry package that:
+- [x] Implement an event dispatcher inside the telemetry package that:
   - Persists minimal caches for downstream APIs (queue history, rivalry history, possessed agents) with bounded retention.
   - Applies transform pipelines (schema validation, fan-out) before handing payloads to transports.
   - Exposes subscription hooks for observers (replacing the current `register_event_subscriber` pattern).
 
 ### 1.2 Adapter updates
 - [x] Introduced `TelemetryEventDispatcher` with bounded queue/rivalry caches (`telemetry/event_dispatcher.py`) and registered it within `TelemetryPublisher`.
-- [x] `StdoutTelemetryAdapter` now relays events through the dispatcher (legacy writer methods remain only via internal shims).
+- [x] `StdoutTelemetryAdapter` now relays events through the dispatcher (legacy writers removed).
 - [x] Stub telemetry accepts events/metrics and logs them for diagnostics.
 - [ ] HTTP/streaming transports – define JSON payload shapes and update clients accordingly (if/when those transports are re-enabled).
 
 ### 1.3 Legacy API sunset
-- [ ] Provide compatibility wrappers that convert legacy writer calls into events (used only during migration).
-- [ ] Remove `publish_tick`, `record_console_results`, `record_health_metrics`, `record_loop_failure`, and all `latest_*` getters once WP1/WP2 call sites are migrated.
-- [ ] Update `TelemetrySinkProtocol` to mark removed methods as deprecated (retained temporarily for type-checkers until call sites are cleaned).
-  - Plan: once HTTP/other transports are event-backed and WP1 loop stops invoking `telemetry.record_*`, delete the internal `_handle_event` shims and strip unused caches from `TelemetryPublisher`.
+- [x] Provide compatibility wrappers that convert legacy writer calls into events (used only during migration).
+- [x] Remove `publish_tick`, `record_console_results`, `record_health_metrics`, and `record_loop_failure` once WP1/WP2 call sites are migrated.
+- [ ] Retire remaining `latest_*` compatibility getters after downstream consumers switch to event-driven caches.
+- [x] Update `TelemetrySinkProtocol` to reflect the event-only surface.
+  - Plan: once HTTP/other transports are event-backed, prune unused caches from `TelemetryPublisher`.
 
 ### 1.4 WP1 / WP2 Link
 - WP1 Step 8 requires the event dispatcher before its checklist can be closed.
@@ -63,7 +64,7 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 - [ ] Remove direct mutation of `WorldState` (`world.agents` iteration should happen through views/DTOs).
 
 ### 3.2 Telemetry cleanup
-- [ ] Swap remaining `telemetry.record_*` invocations for event emissions (`loop.health`, `loop.failure`).
+- [x] Swap remaining `telemetry.record_*` invocations for event emissions (`loop.health`, `loop.failure`).
 - [ ] Remove the fallback transport status cache once the sink provides a live feed.
 
 ### 3.3 Closure steps

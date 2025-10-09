@@ -102,12 +102,23 @@ def test_affordance_manifest_checksum_exposed_in_telemetry(tmp_path: Path) -> No
     config = _configure_with_manifest(manifest)
     world = WorldState.from_config(config)
     publisher = TelemetryPublisher(config)
-    publisher.publish_tick(
-        tick=1,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
+    publisher.emit_event(
+        "loop.tick",
+        {
+            "tick": 1,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     meta = publisher.latest_affordance_manifest()
     assert meta["path"] == str(manifest)

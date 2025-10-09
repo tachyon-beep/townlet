@@ -52,19 +52,23 @@ def _make_loop() -> SimulationLoop:
     )
     world.assign_jobs_to_agents()  
     world.update_relationship("alice", "bob", trust=0.3, familiarity=0.2)
-    loop.telemetry.publish_tick(
-        tick=world.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
+    loop.telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": world.tick,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     world.apply_console([])
     world.consume_console_results()

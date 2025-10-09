@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
 from townlet.world.runtime import ActionMapping, ActionProvider, RuntimeStepResult
 
 if TYPE_CHECKING:  # pragma: no cover
-    from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
+    from townlet.console.command import ConsoleCommandEnvelope
     from townlet.world.grid import WorldState
 
 ObservationBatch: TypeAlias = Mapping[str, object]
@@ -112,9 +112,6 @@ class TelemetrySinkProtocol(Protocol):
     def drain_console_buffer(self) -> Iterable[object]:
         """Return buffered console commands collected since the last tick."""
 
-    def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
-        """Persist console outputs generated during tick execution."""
-
     def queue_console_command(self, command: object) -> None: ...
     def export_console_buffer(self) -> list[object]: ...
     def latest_console_results(self) -> Iterable[Mapping[str, object]]: ...
@@ -132,25 +129,8 @@ class TelemetrySinkProtocol(Protocol):
     ) -> Mapping[str, object] | None: ...
     def register_event_subscriber(self, subscriber: Callable[[list[dict[str, object]]], None]) -> None: ...
 
-    def publish_tick(
-        self,
-        *,
-        tick: int,
-        world: WorldState,
-        observations: ObservationBatch,
-        rewards: RewardMapping,
-        events: Iterable[Mapping[str, object]] | None = None,
-        policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
-        kpi_history: bool = False,
-        reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
-        stability_inputs: Mapping[str, object] | None = None,
-        perturbations: Mapping[str, object] | None = None,
-        policy_identity: Mapping[str, object] | None = None,
-        possessed_agents: Iterable[str] | None = None,
-        social_events: Iterable[Mapping[str, object]] | None = None,
-        runtime_variant: str | None = None,
-    ) -> None:
-        """Publish telemetry for the given tick."""
+    def emit_event(self, name: str, payload: Mapping[str, object] | None = None) -> None:
+        """Dispatch a telemetry event payload."""
 
     def latest_queue_metrics(self) -> Mapping[str, int] | None:
         """Return the most recent queue metrics payload."""
@@ -191,22 +171,13 @@ class TelemetrySinkProtocol(Protocol):
     def latest_rivalry_events(self) -> Iterable[Mapping[str, object]]:
         """Return recent rivalry events captured by telemetry."""
 
-    def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
-        """Persist the latest stability metrics for downstream consumers."""
-
     def latest_stability_metrics(self) -> Mapping[str, object]: ...
     def latest_stability_alerts(self) -> Iterable[str]: ...
 
     def latest_transport_status(self) -> Mapping[str, object]:
         """Expose transport worker status information for health checks."""
 
-    def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
-        """Record per-tick health information for monitoring."""
-
     def latest_health_status(self) -> Mapping[str, object]: ...
-
-    def record_loop_failure(self, payload: Mapping[str, object]) -> None:
-        """Emit telemetry describing a simulation loop failure."""
 
     def import_state(self, payload: Mapping[str, object]) -> None:
         """Restore telemetry state from a snapshot payload."""
@@ -216,6 +187,3 @@ class TelemetrySinkProtocol(Protocol):
 
     def update_relationship_metrics(self, metrics: Mapping[str, object]) -> None:
         """Replace the cached relationship metrics with a snapshot payload."""
-
-    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
-        """Record the list of snapshot migrations applied during restore."""

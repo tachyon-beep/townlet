@@ -80,13 +80,23 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
     assert fail_event["context"]["power_on"] is False
     assert fail_event["context"]["occupied"] is False
 
-    loop.telemetry.publish_tick(
-        tick=world.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot=None,
+    loop.telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": world.tick,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     failures = loop.telemetry.latest_precondition_failures()
     assert len(failures) == 1

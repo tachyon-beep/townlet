@@ -371,7 +371,10 @@ class SimulationLoop:
             self.promotion.reset()
         stability_metrics = self.stability.latest_metrics()
         stability_metrics["promotion_state"] = self.promotion.snapshot()
-        self.telemetry.record_stability_metrics(stability_metrics)
+        if self._telemetry_port is not None:
+            self._telemetry_port.emit_event("stability.metrics", stability_metrics)
+        else:  # pragma: no cover - defensive
+            self.telemetry.emit_event("stability.metrics", stability_metrics)
         self.tick = state.tick
         rng_streams = dict(state.rng_streams)
         if state.rng_state and "world" not in rng_streams:
@@ -444,7 +447,12 @@ class SimulationLoop:
             if self._console_router is not None:
                 self._console_router.run_pending(tick=self.tick)
 
-            self.telemetry.record_console_results(console_results)
+            if self._telemetry_port is not None:
+                for result in console_results:
+                    self._telemetry_port.emit_event("console.result", result.to_dict())
+            else:  # pragma: no cover - defensive
+                for result in console_results:
+                    self.telemetry.emit_event("console.result", result.to_dict())
             episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
             for snapshot in self.world.agents.values():
                 snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
@@ -535,7 +543,10 @@ class SimulationLoop:
             stability_metrics = self.stability.latest_metrics()
             self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
             stability_metrics["promotion_state"] = self.promotion.snapshot()
-            self.telemetry.record_stability_metrics(stability_metrics)
+            if self._telemetry_port is not None:
+                self._telemetry_port.emit_event("stability.metrics", stability_metrics)
+            else:  # pragma: no cover - defensive
+                self.telemetry.emit_event("stability.metrics", stability_metrics)
             self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
             transport_status = self._build_transport_status(queue_length=len(console_results))
@@ -557,7 +568,10 @@ class SimulationLoop:
                 "perturbations_active": self.perturbations.active_count(),
                 "employment_exit_queue": self.world.employment.exit_queue_length(),
             }
-            self.telemetry.record_health_metrics(health_payload)
+            if self._telemetry_port is not None:
+                self._telemetry_port.emit_event("loop.health", health_payload)
+            else:  # pragma: no cover - defensive
+                self.telemetry.emit_event("loop.health", health_payload)
             if logger.isEnabledFor(logging.INFO):
                 logger.info(
                     (
@@ -623,7 +637,10 @@ class SimulationLoop:
         }
         if snapshot_path:
             payload["snapshot_path"] = snapshot_path
-        self.telemetry.record_loop_failure(payload)
+        if self._telemetry_port is not None:
+            self._telemetry_port.emit_event("loop.failure", payload)
+        else:  # pragma: no cover - defensive
+            self.telemetry.emit_event("loop.failure", payload)
         for handler in list(self._failure_handlers):
             try:
                 handler(self, tick, exc)
@@ -709,6 +726,16 @@ class SimulationLoop:
 
     def _build_transport_status(self, *, queue_length: int) -> dict[str, object]:
         status = dict(self._last_transport_status)
+        telemetry_status: Mapping[str, object] | None = None
+        publisher = getattr(self, "telemetry", None)
+        getter = getattr(publisher, "latest_transport_status", None)
+        if callable(getter):
+            try:
+                telemetry_status = dict(getter())
+            except Exception:  # pragma: no cover - telemetry may be stubbed
+                telemetry_status = None
+        if telemetry_status:
+            status.update(telemetry_status)
         status.update(
             {
                 "provider": status.get("provider", "port"),

@@ -134,48 +134,13 @@ class _StubTelemetry(TelemetrySinkProtocol):  # type: ignore[misc]
     def update_policy_identity(self, identity: Mapping[str, object] | None) -> None:
         _ = identity
 
+    def emit_event(self, name: str, payload: Mapping[str, object] | None = None) -> None:
+        _ = (name, payload)
+
     def drain_console_buffer(self) -> Iterable[object]:
         buffer = list(self.console)
         self.console.clear()
         return buffer
-
-    def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
-        _ = list(results)
-
-    def publish_tick(
-        self,
-        *,
-        tick: int,
-        world: Any,
-        observations: Mapping[str, object],
-        rewards: Mapping[str, float],
-        events: Iterable[Mapping[str, object]] | None = None,
-        policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
-        kpi_history: bool = False,
-        reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
-        stability_inputs: Mapping[str, object] | None = None,
-        perturbations: Mapping[str, object] | None = None,
-        policy_identity: Mapping[str, object] | None = None,
-        possessed_agents: Iterable[str] | None = None,
-        social_events: Iterable[Mapping[str, object]] | None = None,
-        runtime_variant: str | None = None,
-    ) -> None:
-        _ = (
-            tick,
-            world,
-            observations,
-            rewards,
-            events,
-            policy_snapshot,
-            kpi_history,
-            reward_breakdown,
-            stability_inputs,
-            perturbations,
-            policy_identity,
-            possessed_agents,
-            social_events,
-            runtime_variant,
-        )
 
     def latest_queue_metrics(self) -> Mapping[str, int] | None:
         return {}
@@ -195,17 +160,8 @@ class _StubTelemetry(TelemetrySinkProtocol):  # type: ignore[misc]
     def latest_rivalry_events(self) -> Iterable[Mapping[str, object]]:
         return []
 
-    def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
-        _ = metrics
-
     def latest_transport_status(self) -> Mapping[str, object]:
         return {}
-
-    def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
-        _ = metrics
-
-    def record_loop_failure(self, payload: Mapping[str, object]) -> None:
-        _ = payload
 
     def import_state(self, payload: Mapping[str, object]) -> None:
         _ = payload
@@ -216,8 +172,6 @@ class _StubTelemetry(TelemetrySinkProtocol):  # type: ignore[misc]
     def update_relationship_metrics(self, metrics: Mapping[str, object]) -> None:
         _ = metrics
 
-    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
-        _ = list(applied)
 
     def close(self) -> None:
         return None

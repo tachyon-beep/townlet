@@ -38,12 +38,23 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
     world.tick = 1
     world.resolve_affordances(current_tick=world.tick)
     events = list(world.drain_events())
-    loop.telemetry.publish_tick(
-        tick=world.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
+    loop.telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": world.tick,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
 
     conflict_snapshot = loop.telemetry.latest_conflict_snapshot()
@@ -105,12 +116,23 @@ def test_conflict_export_import_preserves_history() -> None:
             }
         )
         world.resolve_affordances(current_tick=world.tick)
-        loop.telemetry.publish_tick(
-            tick=world.tick,
-            world=world,
-            observations={},
-            rewards={},
-            events=list(world.drain_events()),
+        loop.telemetry.emit_event(
+            "loop.tick",
+            {
+                "tick": world.tick,
+                "world": world,
+                "observations": {},
+                "rewards": {},
+                "events": list(world.drain_events()),
+                "policy_snapshot": {},
+                "kpi_history": False,
+                "reward_breakdown": {},
+                "stability_inputs": {},
+                "perturbations": {},
+                "policy_identity": {},
+                "possessed_agents": [],
+                "social_events": [],
+            },
         )
     exported = loop.telemetry.export_state()
     from townlet.telemetry.publisher import TelemetryPublisher

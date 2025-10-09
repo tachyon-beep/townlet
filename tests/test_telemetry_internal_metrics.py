@@ -18,7 +18,7 @@ def test_worker_flush_counters_increment() -> None:
     try:
         # Trigger a few small payloads via loop failure events
         for i in range(3):
-            pub.record_loop_failure({"tick": i + 1, "error": "simulated"})
+            pub.emit_event("loop.failure", {"tick": i + 1, "error": "simulated"})
         _sleep_brief()
     finally:
         pub.stop_worker(wait=True)
@@ -36,10 +36,9 @@ def test_backpressure_drop_increments_dropped_messages() -> None:
     config.telemetry.transport.buffer.max_buffer_bytes = 8
     pub = TelemetryPublisher(config)
     try:
-        pub.record_loop_failure({"tick": 1, "error": "overflow"})
+        pub.emit_event("loop.failure", {"tick": 1, "error": "overflow"})
         _sleep_brief()
     finally:
         pub.stop_worker(wait=True)
     status = pub.latest_transport_status()
     assert status.get("dropped_messages", 0) >= 1
-

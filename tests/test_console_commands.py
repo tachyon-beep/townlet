@@ -192,11 +192,23 @@ def test_announce_story_command_enqueues_narration() -> None:
     assert any(entry.get("message") == "Welcome!" for entry in narrations)
 
     loop.world.tick = 1
-    loop.telemetry.publish_tick(
-        tick=1,
-        world=loop.world,
-        observations={},
-        rewards={},
+    loop.telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": 1,
+            "world": loop.world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
     narrations_next = loop.telemetry.latest_narrations()
     assert any(entry.get("message") == "Welcome!" for entry in narrations_next)

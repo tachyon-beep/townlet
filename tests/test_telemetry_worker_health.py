@@ -134,7 +134,7 @@ def test_record_loop_failure_emits_pipeline_events(monkeypatch) -> None:
 
     monkeypatch.setattr(publisher, "_enqueue_stream_payload", capture)
     try:
-        publisher.record_loop_failure({"tick": 7, "error": "boom"})
+        publisher.emit_event("loop.failure", {"tick": 7, "error": "boom"})
         assert emitted, "loop failure did not emit telemetry payload"
         payload, tick = emitted[0]
         assert tick == 7

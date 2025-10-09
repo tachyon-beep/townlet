@@ -338,7 +338,7 @@ class TelemetryPublisher:
                 message=exc.message,
                 details={"reason": "auth_failed"},
             )
-            self.record_console_results([result])
+            self.emit_event("console.result", result.to_dict())
             logger.warning(
                 "Rejected console command due to authentication failure: name=%s issuer=%s",
                 identity.get("name"),
@@ -696,8 +696,9 @@ class TelemetryPublisher:
     def import_console_buffer(self, buffer: Iterable[object]) -> None:
         self._console_buffer = list(buffer)
 
-    def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
+    def _ingest_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         """Persist console results for audit logs and downstream subscribers."""
+
         self._aggregator.record_console_results(results)
 
     def _store_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
@@ -720,7 +721,7 @@ class TelemetryPublisher:
     def console_history(self) -> list[dict[str, Any]]:
         return list(self._console_results_history)
 
-    def record_possessed_agents(self, agents: Iterable[str]) -> None:
+    def _ingest_possessed_agents(self, agents: Iterable[str]) -> None:
         self._latest_possessed_agents = sorted({str(agent) for agent in agents})
 
     def latest_possessed_agents(self) -> list[str]:
@@ -735,7 +736,7 @@ class TelemetryPublisher:
         return dict(self._transport_status)
 
 
-    def record_loop_failure(self, payload: Mapping[str, object]) -> None:
+    def _ingest_loop_failure(self, payload: Mapping[str, object]) -> None:
         """Persist loop failure telemetry and append a failure event."""
 
         failure_events = list(self._aggregator.record_loop_failure(payload))
@@ -761,8 +762,9 @@ class TelemetryPublisher:
             failure_data.get("error"),
         )
 
-    def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
+    def _ingest_health_metrics(self, metrics: Mapping[str, object]) -> None:
         """Update health telemetry derived from the simulation loop."""
+
         self._latest_health_status = dict(metrics)
 
     def latest_health_status(self) -> dict[str, object]:
@@ -865,7 +867,7 @@ class TelemetryPublisher:
             "event_counts": event_counts,
         }
 
-    def publish_tick(
+    def _ingest_loop_tick(
         self,
         *,
         tick: int,
@@ -1037,7 +1039,7 @@ class TelemetryPublisher:
         else:
             self._latest_policy_snapshot = {}
         if possessed_agents is not None:
-            self.record_possessed_agents(possessed_agents)
+            self._ingest_possessed_agents(possessed_agents)
         self._latest_job_snapshot = {
             agent_id: {
                 "job_id": snapshot.job_id,
@@ -1288,7 +1290,7 @@ class TelemetryPublisher:
             }
         return result
 
-    def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
+    def _ingest_stability_metrics(self, metrics: Mapping[str, object]) -> None:
         self._latest_stability_metrics = dict(metrics)
 
     def latest_stability_metrics(self) -> dict[str, object]:
@@ -1348,7 +1350,7 @@ class TelemetryPublisher:
             return None
         return dict(self._latest_policy_identity)
 
-    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
+    def _ingest_snapshot_migrations(self, applied: Iterable[str]) -> None:
         self._latest_snapshot_migrations = [str(item) for item in applied]
 
     def latest_snapshot_migrations(self) -> list[str]:
@@ -1507,24 +1509,53 @@ class TelemetryPublisher:
 
         return self._event_dispatcher
 
+    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+        """Forward an event through the internal dispatcher."""
+
+        return self._event_dispatcher.emit_event(name, payload)
+
     def _handle_event(self, name: str, payload: Mapping[str, Any]) -> None:
         """Internal subscriber that bridges events back into publisher behaviour."""
 
         if name == "loop.tick":
-            self.publish_tick(**payload)
+            self._ingest_loop_tick(**payload)
             return
         if name == "loop.health":
-            self.record_health_metrics(payload)
+            self._ingest_health_metrics(payload)
             return
         if name == "loop.failure":
-            self.record_loop_failure(payload)
+            self._ingest_loop_failure(payload)
+            return
+        if name == "policy.possession":
+            agents = payload.get("agents", payload.get("possessed_agents", ()))
+            if isinstance(agents, Iterable):
+                self._ingest_possessed_agents(agents)
             return
         if name == "console.result":
-            result = payload.get("result")
-            if isinstance(result, Mapping):
-                self._latest_events.append({"type": "console.result", "payload": dict(payload)})
-                if len(self._latest_events) > 128:
-                    self._latest_events = self._latest_events[-128:]
+            result_payload = dict(payload)
+            result_kwargs = {
+                "name": str(result_payload.get("name", "")),
+                "status": str(result_payload.get("status", "ok")),
+                "result": dict(result_payload.get("result", {})) if isinstance(result_payload.get("result"), Mapping) else None,
+                "error": dict(result_payload.get("error", {})) if isinstance(result_payload.get("error"), Mapping) else None,
+                "cmd_id": result_payload.get("cmd_id"),
+                "issuer": result_payload.get("issuer"),
+                "tick": result_payload.get("tick"),
+                "latency_ms": result_payload.get("latency_ms"),
+            }
+            console_result = ConsoleCommandResult(**result_kwargs)
+            self._ingest_console_results([console_result])
+            self._latest_events.append({"type": "console.result", "payload": result_payload})
+            if len(self._latest_events) > 128:
+                self._latest_events = self._latest_events[-128:]
+            return
+        if name == "stability.metrics":
+            self._ingest_stability_metrics(payload)
+            return
+        if name == "telemetry.snapshot.migrations":
+            applied = payload.get("applied")
+            if isinstance(applied, Iterable):
+                self._ingest_snapshot_migrations(applied)
             return
         # Default: append to event cache for observers.
         self._latest_events.append({"type": name, "payload": dict(payload)})

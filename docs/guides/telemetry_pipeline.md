@@ -42,8 +42,9 @@ telemetry:
 
 ## Protocol Surface (common read‑only accessors)
 
-- `publish_tick(...)` – main emission entrypoint.
-- `drain_console_buffer()` / `record_console_results(results)` – console ingress/egress.
+- `emit_event("loop.tick", payload)` – main emission entrypoint (tick lifecycle).
+- `emit_event("loop.health", payload)` / `emit_event("loop.failure", payload)` – health & failure reporting.
+- `emit_event("console.result", payload)` – console ingress/egress (results include metadata + payload).
 - Read‑only getters used by dashboards and scripts:
   - state snapshots (`latest_*`): economy, utilities, relationships, employment, conflicts, social events, narrations, policy snapshot/identity, affordances, reward breakdown, stability, health.
   - transport: `latest_transport_status()` (queue length, dropped, flushms, peaks, restarts, failures, totals, flags).

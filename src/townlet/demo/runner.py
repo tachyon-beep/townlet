@@ -266,20 +266,23 @@ def seed_demo_state(
                         extra={"tick": world.tick, "mode": mode},
                     )
 
-            if history_window and history_window > 0 and seeded and hasattr(telemetry_source, "publish_tick"):
-                telemetry_source.publish_tick(
-                    tick=world.tick,
-                    world=world,
-                    observations={},
-                    rewards={},
-                    events=[],
-                    policy_snapshot={},
-                    kpi_history=False,
-                    reward_breakdown={},
-                    stability_inputs={},
-                    perturbations={},
-                    policy_identity={},
-                    possessed_agents=[],
+            if history_window and history_window > 0 and seeded and hasattr(telemetry_source, "emit_event"):
+                telemetry_source.emit_event(
+                    "loop.tick",
+                    {
+                        "tick": world.tick,
+                        "world": world,
+                        "observations": {},
+                        "rewards": {},
+                        "events": [],
+                        "policy_snapshot": {},
+                        "kpi_history": False,
+                        "reward_breakdown": {},
+                        "stability_inputs": {},
+                        "perturbations": {},
+                        "policy_identity": {},
+                        "possessed_agents": [],
+                    },
                 )
 
 

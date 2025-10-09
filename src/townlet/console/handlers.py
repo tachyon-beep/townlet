@@ -349,7 +349,9 @@ def create_console_router(
         metrics = publisher.latest_stability_metrics()
         base = dict(metrics) if isinstance(metrics, dict) else {}
         base["promotion_state"] = promotion.snapshot()
-        publisher.record_stability_metrics(base)
+        emit = getattr(publisher, "emit_event", None)
+        if callable(emit):
+            emit("stability.metrics", base)
 
     def _apply_release_metadata(metadata: object) -> None:
         if policy is None and config is None:

@@ -9,6 +9,7 @@
 - WP1 Step 4 (loop refactor) is progressing in tandem: the loop now resolves providers via the new factories and the orchestration services (`ConsoleRouter`, `HealthMonitor`) are wired in, though policy/telemetry/world callers still depend on legacy fallbacks.
 - Step 7 (adapter & factory integration) is underway—adapters expose transitional handles so we can finish migrating consumers off the legacy APIs before swapping in the modular world context end-to-end. The policy path now routes through a controller façade; telemetry/world callers remain on the migration list.
 - WP3 event dispatcher integration means the loop already emits `loop.tick/health/failure` events; WP2 world adapters must expose the DTO structures (observations, queue snapshots, rivalry metrics) expected by those payloads once the final migration lands.
+- Remaining work prior to sign-off: supply observation DTOs via the modular world adapters, remove the legacy runtime handles, and coordinate with WP3 so telemetry/policy consumers read only the new DTO/event pipeline.
 
 Update as tasks progress.
 

@@ -183,19 +183,23 @@ def test_narration_panel_shows_styled_categories() -> None:
         wallet=1.0,
     )
 
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
+    telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": loop.tick,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
 
     world.apply_console([])
@@ -220,19 +224,23 @@ def test_narration_panel_shows_styled_categories() -> None:
     world.resolve_affordances(world.tick)
     events.extend(world.drain_events())
 
-    telemetry.publish_tick(
-        tick=loop.tick + 1,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
+    telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": loop.tick + 1,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
     )
 
     snapshot = TelemetryClient().from_console(router)
@@ -288,28 +296,31 @@ def test_social_panel_renders_with_summary_and_events() -> None:
     world.update_relationship("alice", "bob", trust=0.6, familiarity=0.4)
     world.update_relationship("bob", "alice", trust=0.45, familiarity=0.3, rivalry=0.05)
 
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-        social_events=[
-            {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
-            {
-                "type": "rivalry_avoidance",
-                "agent": "bob",
-                "object": "stove_1",
-                "reason": "queue_rival",
-            },
-        ],
+    telemetry.emit_event(
+        "loop.tick",
+        {
+            "tick": loop.tick,
+            "world": world,
+            "observations": {},
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [
+                {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
+                {
+                    "type": "rivalry_avoidance",
+                    "agent": "bob",
+                    "object": "stove_1",
+                    "reason": "queue_rival",
+                },
+            ],
+        },
     )
 
     snapshot = TelemetryClient().from_console(router)

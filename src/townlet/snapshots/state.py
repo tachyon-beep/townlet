@@ -512,13 +512,18 @@ def apply_snapshot_to_telemetry(
     if snapshot.relationship_metrics and hasattr(telemetry, "update_relationship_metrics"):
         telemetry.update_relationship_metrics(dict(snapshot.relationship_metrics))
     stability_metrics = snapshot.stability.get("latest_metrics")
-    if isinstance(stability_metrics, Mapping) and hasattr(telemetry, "record_stability_metrics"):
-        telemetry.record_stability_metrics(dict(stability_metrics))
+    if isinstance(stability_metrics, Mapping):
+        emit = getattr(telemetry, "emit_event", None)
+        if callable(emit):
+            emit("stability.metrics", dict(stability_metrics))
     if snapshot.identity and hasattr(telemetry, "update_policy_identity"):
         telemetry.update_policy_identity(snapshot.identity)
     migrations_applied = snapshot.migrations.get("applied") if isinstance(snapshot.migrations, Mapping) else None
-    if migrations_applied and hasattr(telemetry, "record_snapshot_migrations"):
-        telemetry.record_snapshot_migrations([str(item) for item in migrations_applied])
+    if migrations_applied:
+        applied_list = [str(item) for item in migrations_applied]
+        emit = getattr(telemetry, "emit_event", None)
+        if callable(emit):
+            emit("telemetry.snapshot.migrations", {"applied": applied_list})
 
 
 class SnapshotManager:

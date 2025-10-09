@@ -55,7 +55,7 @@ Maintain this checklist during WP1 implementation.
 ## 8. Step 8 — Composition Root Integration
 - [x] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers.
 - [~] Introduce `ConsoleRouter` and `HealthMonitor` orchestration services; emit telemetry exclusively via events/metrics. *(Router/monitor instantiated each tick; legacy `runtime.queue_console` and telemetry health writers still active pending migration.)*
-- [~] Remove telemetry `latest_*` pulls from the loop and helper utilities. *(Loop now computes queue/employment metrics directly and emits `loop.tick` events through the telemetry port; failure/health recording still calls legacy writers until the new sink lands.)*
+- [~] Remove telemetry `latest_*` pulls from the loop and helper utilities. *(Loop now computes queue/employment metrics directly and emits `loop.tick/health/failure` alongside `console.result`/`stability.metrics` events through the telemetry port; legacy writers persist only inside the telemetry publisher shim until WP3 removes them.)*
 
 ## 9. Step 8 Testing & Docs
 - [ ] Add/refresh test suites (`tests/test_ports_surface.py`, `tests/test_factories.py`, loop smoke tests, console router, health monitor, telemetry getter guard).
