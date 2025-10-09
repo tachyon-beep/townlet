@@ -11,10 +11,15 @@
 - [x] Provide compatibility wrappers, then remove writer/getter APIs once WP1 call sites are migrated.
 
 ## 2. Policy DTO & Controller Update
-- [ ] Define observation DTOs exported from `WorldContext` (ordered per-agent payloads).
-- [ ] Update policy adapters (`ScriptedPolicyAdapter`, ML adapters) to consume observation DTO batches.
-- [ ] Extend `PolicyController` to emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events; drop loop getters.
-- [ ] Migrate training/orchestrator code paths using the new DTOs; update docs/examples.
+- [ ] Observation inventory & schema prototype
+  - Map every `WorldState` consumer (policy runtime, training orchestrator, loop, CLI) with file:line references and required fields.
+  - Capture representative tick dumps from a baseline simulation/training run for analysis.
+  - Produce a draft DTO envelope (per-agent + global) and document outstanding gaps / risks prior to adapter changes.
+- [ ] Implement DTO dataclasses/converters plus validation harness comparing legacy observations vs DTO payloads.
+- [ ] Update `PolicyController` + scripted adapter to consume DTOs and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events (temporary legacy bridge for ML paths).
+- [ ] Migrate ML adapters & training orchestrator to DTO flow; update replay/export tooling and run behavioural parity checks.
+- [ ] Cleanup loop/console interactions (drop `runtime.queue_console`, remove direct `WorldState` mutation, rely on DTO/event caches).
+- [ ] Document DTO schema, add guard tests, and refresh WP1/WP2 status once DTO rollout completes.
 
 ## 3. Simulation Loop Cleanup
 - [ ] Replace `runtime.queue_console` usage with router-driven action application; ensure no direct `WorldState` mutation.

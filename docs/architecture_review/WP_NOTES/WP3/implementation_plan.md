@@ -40,16 +40,32 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 ## 2. Policy Observation & Metadata Streaming
 
 ### 2.1 Observation DTOs
-- [ ] Define canonical observation structures (per-agent dict) and export them from `WorldContext` / observation builder.
-- [ ] Update policy ports & adapters to accept observation batches instead of a `WorldState` reference (scripted backend may still peek at `WorldRuntimeAdapter` through a transitional hook).
-- [ ] Provide helper functions for deterministic ordering and validation (re-usable by trainers).
+- [ ] **Observation inventory & schema prototype**
+  - **Collect callers:** trace every `WorldState` access under `policy/`, `core/sim_loop.py`, training orchestrator, CLI tools; record attribute/method usage with file:line references.
+  - **Capture sample data:** run a short simulation/training smoke (baseline config) and persist representative tick payloads (observations, rewards, queue metrics, rivalry events) for analysis.
+  - **Gap analysis:** compare required fields with what `WorldContext`/observation builder currently expose; flag missing elements (agent ordering, RNG seeds, historical metrics).
+  - **Schema draft:** propose DTO structure (per-agent + global envelope) and document field definitions, types, and provenance; circulate for review with policy/training owners.
+  - **Parity notes:** highlight metrics that cannot yet be satisfied, plus risk mitigations/owners before moving to adapter work.
+
+- [ ] **DTO dataclasses & validation helpers**
+  - Implement immutable DTO structures and converters inside `WorldContext` / observation builder.
+  - Add validation utilities (e.g., schema checks) and parity harness comparing legacy observations to DTO payloads.
+
+- [ ] **Scripted adapter integration**
+  - Update `PolicyController`/scripted adapter to consume DTO batches and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events.
+  - Maintain a transitional adapter that still offers legacy access for ML paths until Step 2.2 completes.
+
+- [ ] **ML/training integration**
+  - Migrate ML adapters & training orchestrator to DTO inputs, update replay/export tooling, and run parity evaluation (short training run) to confirm behavioural equivalence.
+
+- [ ] **Loop/console cleanup**
+  - Remove residual `WorldState` mutations, replace `runtime.queue_console` usage with router-driven DTO actions, and ensure console handlers read from DTO caches/events.
+
+- [ ] **Documentation & guardrails**
+  - Document the DTO schema with examples, add guard tests preventing regression to `WorldState` access, and update WP1/WP2/WP3 docs once the DTO flow is live.
 
 ### 2.2 Metadata events
-- [ ] Extend `PolicyController` to emit:
-  - `policy.metadata` (hash, anneal ratio, provider name, tick).
-  - `policy.possession` (list of possessed agents and change events).
-  - `policy.anneal.update` (ratio changes, enabling WP1 to drop `set_anneal_ratio` direct calls).
-- [ ] Update loop to consume these events and remove direct metadata queries.
+- [ ] Extend `PolicyController` in tandem with DTO rollout so metadata/possession/anneal events are emitted alongside observation batches; remove legacy getter usage once adapters consume the events.
 
 ### 2.3 Training integration
 - [ ] Audit training harness for dependencies on legacy getters; provide adapters or migrations.

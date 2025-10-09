@@ -7,6 +7,8 @@
 - Legacy writer shims removed from `TelemetryPublisher`; the loop emits `loop.tick`/`loop.health`/`loop.failure`/`stability.metrics`/`console.result` events exclusively. HTTP/streaming transports must consume dispatcher events before reactivation.
 - HTTP transport now posts dispatcher events via simple JSON POSTs; streaming/WebSocket transport remains a TODO once external consumers require it.
 - Telemetry guard tests cover the event-only surface and dispatcher smoke path, preventing regressions while DTO work proceeds.
+- DTO Step 1 complete: `dto_observation_inventory.md` documents an attribute→consumer map, and `dto_example_tick.json` provides a baseline envelope for schema validation (with planned `dto_schema_version` + Pydantic checks).
+- Next immediate work item: complete the observation inventory/schema prototype—catalogue all `WorldState` consumers, capture representative tick dumps, and draft the DTO envelope before adapter migration begins.
 - WP1 telemetry blockers cleared; remaining dependency is routing console commands without `runtime.queue_console`. WP2 still requires observation-first DTOs.
 - WP2 adapters still expose `legacy_runtime` handles so policy consumers can pull `WorldState`; observation-first DTOs from WP3 will remove that dependency.
 
