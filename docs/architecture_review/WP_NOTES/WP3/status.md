@@ -1,0 +1,18 @@
+# WP3 Status
+
+**Current state (2025-10-09)**
+- Scoping complete: WP3 owns the telemetry sink rework, policy observation flow, and the final simulation loop cleanup.
+- Event schema drafted (`event_schema.md`) covering `loop.tick`, `loop.health`, `loop.failure`, `console.result`, and policy/stability payloads.
+- WP1 currently emits `loop.tick` events but still calls `record_console_results`, `record_health_metrics`, and `record_loop_failure`; WP3 must replace these with event-driven equivalents.
+- WP2 adapters still expose `legacy_runtime` handles so policy consumers can pull `WorldState`; observation-first DTOs from WP3 will remove that dependency.
+
+**Dependencies**
+- Unblocks WP1 Step 8 (removal of legacy telemetry writers and `runtime.queue_console` usage).
+- Unblocks WP2 Step 7 (policy/world adapters still exposing legacy handles until observation-first DTOs are available).
+
+**Upcoming Milestones**
+1. Telemetry event API & sink refactor.
+2. Policy observation/controller update (port-driven decisions, metadata streaming).
+3. Loop finalisation & documentation sweep (complete WP1/WP2 blockers).
+
+Update this file as WP3 tasks progress.
