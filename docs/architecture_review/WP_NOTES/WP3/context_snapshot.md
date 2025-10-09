@@ -10,7 +10,7 @@ Use this as reorientation material if the working memory is compacted. It summar
   - `StdoutTelemetryAdapter` and `StubTelemetrySink` emit events through the dispatcher; publisher shims have been removed.
   - HTTP transport now posts dispatcher events; streaming/WebSocket transports remain inactive until downstream consumers need them.
 - **Loop Emission**: `SimulationLoop` now emits events exclusively for console results, stability metrics, loop health/failure, and loop tick; it no longer calls `record_*` directly.
-- **Next steps**: Add guard tests preventing reintroduction of writer APIs and update dormant transports (HTTP/streaming) to consume dispatcher events.
+- **Next steps**: Expand transport coverage to streaming/WebSocket once required and keep parity checks running while the DTO rollout proceeds.
 
 ## Policy DTOs (WP3 Section 2)
 

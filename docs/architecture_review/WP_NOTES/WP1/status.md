@@ -10,7 +10,7 @@
 - Next steps focus on the simulation loop refactor (Step 8): introduce the factory helpers, wire in `ConsoleRouter`/`HealthMonitor`, and migrate telemetry usage from getter-style pulls to event/metric emissions.
 - Work proceeds incrementally per the detailed plan (Phase 1: factory swap, Phase 2: console/monitor integration, Phase 3: telemetry getter removal, Phase 4: cleanup/docs).
 - Console routing and health monitoring now initialise inside `SimulationLoop`: console commands are mirrored into the new router (still forwarded to the legacy runtime for execution) and `HealthMonitor` emits baseline queue/event metrics via the telemetry port.
-- Telemetry events (`loop.tick`, `loop.health`, `loop.failure`) now flow through the WP3 dispatcher via the port adapters; guard tests ensure legacy writer APIs stay retired while HTTP transport support lands.
+- Telemetry events (`loop.tick`, `loop.health`, `loop.failure`) now flow through the WP3 dispatcher via the port adapters. A guard suite (`tests/test_telemetry_surface_guard.py`) keeps the event-only surface locked while HTTP transport support lands.
 
 **Legacy caller inventory (2025-10-09 snapshot)**
 - Policy:
