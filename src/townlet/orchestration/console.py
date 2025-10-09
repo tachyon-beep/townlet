@@ -5,11 +5,15 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Callable, Mapping
 
+from townlet.console.command import (
+    ConsoleCommandEnvelope,
+    ConsoleCommandError,
+    ConsoleCommandResult,
+)
 from townlet.ports.telemetry import TelemetrySink
 from townlet.ports.world import WorldRuntime
 
-
-ConsoleHandler = Callable[[str], Mapping[str, Any]]
+ConsoleHandler = Callable[[ConsoleCommandEnvelope], Mapping[str, Any]]
 
 
 class ConsoleRouter:
@@ -18,7 +22,7 @@ class ConsoleRouter:
     def __init__(self, world: WorldRuntime, telemetry: TelemetrySink) -> None:
         self._world = world
         self._telemetry = telemetry
-        self._queue: deque[str] = deque()
+        self._queue: deque[ConsoleCommandEnvelope] = deque()
         self._handlers: dict[str, ConsoleHandler] = {
             "snapshot": self._handle_snapshot,
             "help": self._handle_help,
@@ -27,29 +31,37 @@ class ConsoleRouter:
     def register(self, command: str, handler: ConsoleHandler) -> None:
         self._handlers[command.strip().lower()] = handler
 
-    def enqueue(self, command: str) -> None:
-        self._queue.append(command)
+    def enqueue(self, command: object) -> None:
+        envelope = self._coerce_envelope(command)
+        self._queue.append(envelope)
 
-    def run_pending(self) -> None:
+    def run_pending(self, *, tick: int | None = None) -> None:
         while self._queue:
-            raw = self._queue.popleft()
-            result = self._dispatch(raw)
-            self._telemetry.emit_event(
-                "console.result",
-                {
-                    "command": raw,
-                    "result": result,
+            envelope = self._queue.popleft()
+            result = self._execute(envelope, tick=tick)
+            event_payload = {
+                "command": envelope.raw
+                if envelope.raw is not None
+                else {
+                    "name": envelope.name,
+                    "args": list(envelope.args),
+                    "kwargs": dict(envelope.kwargs),
+                    "cmd_id": envelope.cmd_id,
+                    "issuer": envelope.issuer,
+                    "mode": envelope.mode,
                 },
-            )
+                "result": result.to_dict(),
+            }
+            self._telemetry.emit_event("console.result", event_payload)
 
     # ------------------------------------------------------------------
     # Default handlers
     # ------------------------------------------------------------------
-    def _handle_snapshot(self, command: str) -> Mapping[str, Any]:
+    def _handle_snapshot(self, command: ConsoleCommandEnvelope) -> Mapping[str, Any]:
         _ = command
         return self._world.snapshot()
 
-    def _handle_help(self, command: str) -> Mapping[str, Any]:  # pragma: no cover - deterministic
+    def _handle_help(self, command: ConsoleCommandEnvelope) -> Mapping[str, Any]:  # pragma: no cover - deterministic
         _ = command
         return {
             "commands": sorted(self._handlers.keys()),
@@ -58,22 +70,38 @@ class ConsoleRouter:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _dispatch(self, command: str) -> Mapping[str, Any]:
-        name = command.strip().lower().split()[0] if command.strip() else ""
-        handler = self._handlers.get(name)
-        if handler is None:
-            return {
-                "ok": False,
-                "error": f"unknown command '{name}'",
-            }
+    def _coerce_envelope(self, payload: object) -> ConsoleCommandEnvelope:
+        if isinstance(payload, ConsoleCommandEnvelope):
+            return payload
+        if isinstance(payload, str):
+            command = payload.strip()
+            if not command:
+                raise ValueError("console command must not be empty")
+            return ConsoleCommandEnvelope(name=command)
         try:
-            response = handler(command)
+            return ConsoleCommandEnvelope.from_payload(payload)
+        except ConsoleCommandError as exc:  # pragma: no cover - defensive
+            raise ValueError(f"Invalid console command payload: {exc}") from exc
+
+    def _execute(self, envelope: ConsoleCommandEnvelope, *, tick: int | None) -> ConsoleCommandResult:
+        handler = self._handlers.get(envelope.name.strip().lower())
+        if handler is None:
+            return ConsoleCommandResult.from_error(
+                envelope,
+                code="unknown_command",
+                message=f"unknown command '{envelope.name}'",
+                tick=tick,
+            )
+        try:
+            payload = handler(envelope)
         except Exception as exc:  # pragma: no cover - defensive
-            return {
-                "ok": False,
-                "error": str(exc),
-            }
-        return {"ok": True, **response}
+            return ConsoleCommandResult.from_error(
+                envelope,
+                code="handler_error",
+                message=str(exc),
+                tick=tick,
+            )
+        return ConsoleCommandResult.ok(envelope, payload, tick=tick)
 
 
 __all__ = ["ConsoleRouter"]

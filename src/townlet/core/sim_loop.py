@@ -16,18 +16,15 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
-from townlet.core.factory_registry import (
-    resolve_policy,
-    resolve_telemetry,
-    resolve_world,
-)
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
     WorldRuntimeProtocol,
 )
+from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.observations.builder import ObservationBuilder
 from townlet.rewards.engine import RewardEngine
@@ -44,6 +41,10 @@ from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.grid import WorldState
+from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
+from townlet.policy.runner import PolicyRuntime
+from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,25 @@ class SimulationLoop:
         self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
         self._health = SimulationLoopHealth()
         self._world_adapter: WorldRuntimeAdapter | None = None
+        self._world_port = None
+        self._policy_port = None
+        self._telemetry_port = None
+        self._policy_controller: PolicyController | None = None
+        self._console_router: ConsoleRouter | None = None
+        self._health_monitor: HealthMonitor | None = None
+        self._rivalry_history: list[dict[str, object]] = []
+        self._last_transport_status: dict[str, object] = {
+            "provider": "port",
+            "queue_length": 0,
+            "dropped_messages": 0,
+            "last_flush_duration_ms": None,
+            "worker_alive": True,
+            "worker_error": None,
+            "worker_restart_count": 0,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "auth_enabled": False,
+        }
         self._apply_runtime_overrides_from_config()
         self._build_components()
 
@@ -152,6 +172,7 @@ class SimulationLoop:
         self._rng_world = random.Random(self._derive_seed("world"))
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
+        self._rivalry_history = []
         self.world = WorldState.from_config(
             self.config,
             rng=self._rng_world,
@@ -165,32 +186,61 @@ class SimulationLoop:
         )
         self.observations = ObservationBuilder(config=self.config)
         policy_kwargs = {"config": self.config, **self._policy_options}
-        policy_instance: PolicyBackendProtocol = resolve_policy(self._policy_provider, **policy_kwargs)
-        self.policy = policy_instance
+        policy_backend = PolicyRuntime(**policy_kwargs)
+        self._policy_port = create_policy(
+            provider=self._policy_provider,
+            backend=policy_backend,
+        )
+        self.policy = policy_backend
+        self._policy_controller = PolicyController(backend=policy_backend, port=self._policy_port)
+        if self._policy_controller is not None:
+            self._policy_controller.bind_world_supplier(lambda: self.world)
         self._resolved_providers["policy"] = self._policy_provider
-        self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
-        if self.config.training.anneal_enable_policy_blend:
-            self.policy.enable_anneal_blend(True)
+        controller = self._policy_controller
+        if controller is not None:
+            controller.register_ctx_reset_callback(self.world.request_ctx_reset)
+            if self.config.training.anneal_enable_policy_blend:
+                controller.enable_anneal_blend(True)
+        else:  # pragma: no cover - defensive
+            self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
+            if self.config.training.anneal_enable_policy_blend:
+                self.policy.enable_anneal_blend(True)
         self.rewards = RewardEngine(config=self.config)
         telemetry_kwargs = {"config": self.config, **self._telemetry_options}
-        telemetry_instance: TelemetrySinkProtocol = resolve_telemetry(self._telemetry_provider, **telemetry_kwargs)
-        self.telemetry = telemetry_instance
+        telemetry_publisher = TelemetryPublisher(**telemetry_kwargs)
+        self._telemetry_port = create_telemetry(
+            provider=self._telemetry_provider,
+            publisher=telemetry_publisher,
+        )
+        self.telemetry = telemetry_publisher
         self._resolved_providers["telemetry"] = self._telemetry_provider
         self.stability = StabilityMonitor(config=self.config)
         log_path = Path("logs/promotion_history.jsonl")
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
         self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
-        world_kwargs = {
-            "world": self.world,
-            "lifecycle": self.lifecycle,
-            "perturbations": self.perturbations,
-            "ticks_per_day": self._ticks_per_day,
+        legacy_runtime = LegacyWorldRuntime(
+            world=self.world,
+            lifecycle=self.lifecycle,
+            perturbations=self.perturbations,
+            ticks_per_day=self._ticks_per_day,
             **self._world_options,
-        }
-        runtime_instance: WorldRuntimeProtocol = resolve_world(self._world_provider, **world_kwargs)
+        )
+        self._world_port = create_world(
+            provider=self._world_provider,
+            runtime=legacy_runtime,
+            observation_builder=self.observations,
+        )
+        runtime_instance: WorldRuntimeProtocol = self._world_port.legacy_runtime
         self.runtime = runtime_instance
         self._resolved_providers["world"] = self._world_provider
+        self._console_router = ConsoleRouter(
+            world=self._world_port,
+            telemetry=self._telemetry_port,
+        )
+        monitor_config = getattr(self.config, "monitor", None)
+        monitor_window = getattr(monitor_config, "window", 100) if monitor_config is not None else 100
+        self._health_monitor = HealthMonitor(window=monitor_window)
         if self._world_adapter is not None:
             bind_adapter = getattr(runtime_instance, "bind_world_adapter", None)
             if callable(bind_adapter):
@@ -227,6 +277,12 @@ class SimulationLoop:
             super().__setattr__("_world_adapter", adapter)
         return adapter
 
+    @property
+    def policy_controller(self) -> PolicyController | None:
+        """Expose the policy controller facade (transitional)."""
+
+        return self._policy_controller
+
     def register_failure_handler(self, handler: Callable[[SimulationLoop, int, BaseException], None]) -> None:
         """Register a callback that runs whenever the loop records a failure."""
 
@@ -237,7 +293,11 @@ class SimulationLoop:
         self._build_components()
 
     def set_anneal_ratio(self, ratio: float | None) -> None:
-        self.policy.set_anneal_ratio(ratio)
+        controller = self._policy_controller
+        if controller is not None:
+            controller.set_anneal_ratio(ratio)
+        else:  # pragma: no cover - defensive
+            self.policy.set_anneal_ratio(ratio)
 
     # ------------------------------------------------------------------
     # Snapshot helpers
@@ -247,10 +307,17 @@ class SimulationLoop:
 
         target_root = Path(root).expanduser() if root is not None else self.config.snapshot_root()
         manager = SnapshotManager(root=target_root)
+        controller = self._policy_controller
+        policy_hash = controller.active_policy_hash() if controller is not None else self.policy.active_policy_hash()
+        anneal_ratio = (
+            controller.current_anneal_ratio()
+            if controller is not None
+            else self.policy.current_anneal_ratio()
+        )
         identity_payload = self.config.build_snapshot_identity(
-            policy_hash=self.policy.active_policy_hash(),
+            policy_hash=policy_hash,
             runtime_observation_variant=self.config.observation_variant,
-            runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+            runtime_anneal_ratio=anneal_ratio,
         )
         self.telemetry.update_policy_identity(identity_payload)
         state = snapshot_from_world(
@@ -281,7 +348,11 @@ class SimulationLoop:
             allow_downgrade=self.config.snapshot.guardrails.allow_downgrade,
             require_exact_config=self.config.snapshot.guardrails.require_exact_config,
         )
-        self.policy.reset_state()
+        controller = self._policy_controller
+        if controller is not None:
+            controller.reset_state()
+        else:  # pragma: no cover - defensive
+            self.policy.reset_state()
         self.perturbations.reset_state()
         apply_snapshot_to_world(
             self.world,
@@ -341,16 +412,25 @@ class SimulationLoop:
         """Advance the simulation loop by one tick and return observations/rewards."""
         tick_start = time.perf_counter()
         next_tick = self.tick + 1
-        console_ops = self.telemetry.drain_console_buffer()
+        console_ops = list(self.telemetry.drain_console_buffer())
+        if self._console_router is not None:
+            for command in console_ops:
+                try:
+                    self._console_router.enqueue(command)
+                except ValueError:
+                    logger.warning("Ignoring invalid console command payload: %r", command)
         runtime = self.runtime
         if runtime is None:  # pragma: no cover - defensive guard
             raise RuntimeError("WorldRuntime is not initialised")
 
+        controller = self._policy_controller
         try:
             self.tick = next_tick
             runtime.queue_console(console_ops)
 
             def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
+                if controller is not None:
+                    return controller.decide(world, current_tick)
                 return self.policy.decide(world, current_tick)
 
             runtime_result = runtime.tick(
@@ -361,6 +441,8 @@ class SimulationLoop:
             events = runtime_result.events
             terminated = runtime_result.terminated
             termination_reasons = runtime_result.termination_reasons
+            if self._console_router is not None:
+                self._console_router.run_pending(tick=self.tick)
 
             self.telemetry.record_console_results(console_results)
             episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
@@ -368,12 +450,21 @@ class SimulationLoop:
                 snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
             rewards = self.rewards.compute(self.world, terminated, termination_reasons)
             reward_breakdown = self.rewards.latest_reward_breakdown()
-            self.policy.post_step(rewards, terminated)
+            if controller is not None:
+                controller.post_step(rewards, terminated)
+            else:  # pragma: no cover - defensive
+                self.policy.post_step(rewards, terminated)
             observations = self.observations.build_batch(self.world_adapter, terminated)
-            self.policy.flush_transitions(observations)
-            policy_snapshot = self.policy.latest_policy_snapshot()
-            possessed_agents = self.policy.possessed_agents()
-            option_switch_counts = self.policy.consume_option_switch_counts()
+            if controller is not None:
+                controller.flush_transitions(observations)
+                policy_snapshot = controller.latest_policy_snapshot()
+                possessed_agents = controller.possessed_agents()
+                option_switch_counts = controller.consume_option_switch_counts()
+            else:  # pragma: no cover - defensive fallback
+                self.policy.flush_transitions(observations)
+                policy_snapshot = self.policy.latest_policy_snapshot()
+                possessed_agents = self.policy.possessed_agents()
+                option_switch_counts = self.policy.consume_option_switch_counts()
             hunger_levels = {agent_id: float(snapshot.needs.get("hunger", 1.0)) for agent_id, snapshot in self.world.agents.items()}
             stability_inputs = {
                 "hunger_levels": hunger_levels,
@@ -381,39 +472,65 @@ class SimulationLoop:
                 "reward_samples": dict(rewards),
             }
             perturbation_state = self.perturbations.latest_state()
+            policy_hash = controller.active_policy_hash() if controller is not None else self.policy.active_policy_hash()
+            anneal_ratio = controller.current_anneal_ratio() if controller is not None else self.policy.current_anneal_ratio()
             policy_identity = self.config.build_snapshot_identity(
-                policy_hash=self.policy.active_policy_hash(),
+                policy_hash=policy_hash,
                 runtime_observation_variant=self.config.observation_variant,
-                runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+                runtime_anneal_ratio=anneal_ratio,
             )
-            self.telemetry.publish_tick(
-                tick=self.tick,
-                world=self.world,
-                observations=observations,
-                rewards=rewards,
-                events=events,
-                policy_snapshot=policy_snapshot,
-                kpi_history=True,
-                reward_breakdown=reward_breakdown,
-                stability_inputs=stability_inputs,
-                perturbations=perturbation_state,
-                policy_identity=policy_identity,
-                possessed_agents=possessed_agents,
-                social_events=self.rewards.latest_social_events(),
-                runtime_variant=self._runtime_variant,
-            )
+            adapter = self.world_adapter
+            queue_metrics = self._collect_queue_metrics()
+            embedding_metrics = self._collect_embedding_metrics(adapter)
+            job_snapshot = self._collect_job_snapshot(adapter)
+            employment_metrics = self._collect_employment_metrics()
+            rivalry_events = self._collect_rivalry_events(adapter)
+            snapshot_for_health: dict[str, Any] = {
+                "tick": self.tick,
+                "events": list(events),
+            }
+            try:
+                queue_export = self.world.queue_manager.export_state()
+                queues_payload = queue_export.get("queues", {}) if isinstance(queue_export, dict) else {}
+                if isinstance(queues_payload, dict):
+                    queue_length = float(sum(len(entries or []) for entries in queues_payload.values()))
+                else:  # pragma: no cover - defensive
+                    queue_length = 0.0
+            except Exception:  # pragma: no cover - defensive
+                queue_length = 0.0
+            snapshot_for_health["metrics"] = {"queue_length": queue_length}
+            if self._health_monitor is not None and self._telemetry_port is not None:
+                self._health_monitor.on_tick(snapshot_for_health, self._telemetry_port)
+            if self._telemetry_port is not None:
+                tick_event_payload = {
+                    "tick": self.tick,
+                    "world": self.world,
+                    "observations": observations,
+                    "rewards": rewards,
+                    "events": events,
+                    "policy_snapshot": policy_snapshot,
+                    "kpi_history": True,
+                    "reward_breakdown": reward_breakdown,
+                    "stability_inputs": stability_inputs,
+                    "perturbations": perturbation_state,
+                    "policy_identity": policy_identity,
+                    "possessed_agents": possessed_agents,
+                    "social_events": self.rewards.latest_social_events(),
+                    "runtime_variant": self._runtime_variant,
+                }
+                self._telemetry_port.emit_event("loop.tick", tick_event_payload)
             self.stability.track(
                 tick=self.tick,
                 rewards=rewards,
                 terminated=terminated,
-                queue_metrics=self.telemetry.latest_queue_metrics(),
-                embedding_metrics=self.telemetry.latest_embedding_metrics(),
-                job_snapshot=self.telemetry.latest_job_snapshot(),
-                events=self.telemetry.latest_events(),
-                employment_metrics=self.telemetry.latest_employment_metrics(),
+                queue_metrics=queue_metrics,
+                embedding_metrics=embedding_metrics,
+                job_snapshot=job_snapshot,
+                events=events,
+                employment_metrics=employment_metrics,
                 hunger_levels=hunger_levels,
                 option_switch_counts=option_switch_counts,
-                rivalry_events=self.telemetry.latest_rivalry_events(),
+                rivalry_events=rivalry_events,
             )
             stability_metrics = self.stability.latest_metrics()
             self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
@@ -421,7 +538,7 @@ class SimulationLoop:
             self.telemetry.record_stability_metrics(stability_metrics)
             self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
-            transport_status = self.telemetry.latest_transport_status()
+            transport_status = self._build_transport_status(queue_length=len(console_results))
             health_payload = {
                 "tick": self.tick,
                 "status": "ok",
@@ -494,7 +611,7 @@ class SimulationLoop:
                 logger.exception("Failed to capture failure snapshot")
                 snapshot_path = None
         self._health.last_snapshot_path = snapshot_path
-        transport_status = self.telemetry.latest_transport_status()
+        transport_status = self._last_transport_status
         payload = {
             "tick": tick,
             "status": "error",
@@ -512,6 +629,102 @@ class SimulationLoop:
                 handler(self, tick, exc)
             except Exception:  # pragma: no cover - handlers should not break the loop
                 logger.exception("Simulation loop failure handler raised")
+
+    def _collect_queue_metrics(self) -> dict[str, int]:
+        metrics: dict[str, int] = {}
+        try:
+            raw = self.world.queue_manager.metrics()
+            metrics = {str(key): int(value) for key, value in raw.items()}
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("queue_metrics_unavailable", exc_info=True)
+        return metrics
+
+    def _collect_embedding_metrics(self, adapter: WorldRuntimeAdapter) -> dict[str, float]:
+        try:
+            metrics = adapter.embedding_allocator.metrics()
+            return {str(key): float(value) for key, value in metrics.items()}
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("embedding_metrics_unavailable", exc_info=True)
+            return {}
+
+    def _collect_job_snapshot(self, adapter: WorldRuntimeAdapter) -> dict[str, dict[str, object]]:
+        snapshot: dict[str, dict[str, object]] = {}
+        for agent_id, agent in adapter.agent_snapshots_view().items():
+            inventory = agent.inventory or {}
+            snapshot[str(agent_id)] = {
+                "job_id": agent.job_id,
+                "on_shift": bool(agent.on_shift),
+                "wallet": float(agent.wallet),
+                "lateness_counter": int(agent.lateness_counter),
+                "wages_earned": int(inventory.get("wages_earned", 0) or 0),
+                "meals_cooked": int(inventory.get("meals_cooked", 0) or 0),
+                "meals_consumed": int(inventory.get("meals_consumed", 0) or 0),
+                "basket_cost": float(inventory.get("basket_cost", 0.0) or 0.0),
+                "shift_state": agent.shift_state,
+                "attendance_ratio": float(agent.attendance_ratio),
+                "late_ticks_today": int(agent.late_ticks_today),
+                "absent_shifts_7d": int(agent.absent_shifts_7d),
+                "wages_withheld": float(agent.wages_withheld),
+                "exit_pending": bool(agent.exit_pending),
+                "needs": {
+                    str(need): float(value)
+                    for need, value in agent.needs.items()
+                },
+            }
+        return snapshot
+
+    def _collect_employment_metrics(self) -> dict[str, object]:
+        try:
+            metrics = self.world.employment_queue_snapshot()
+            if isinstance(metrics, Mapping):
+                return {str(key): value for key, value in metrics.items()}
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("employment_metrics_unavailable", exc_info=True)
+        return {}
+
+    def _collect_rivalry_events(self, adapter: WorldRuntimeAdapter) -> list[dict[str, object]]:
+        try:
+            raw_events = adapter.consume_rivalry_events()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("rivalry_events_unavailable", exc_info=True)
+            raw_events = []
+        clean_events: list[dict[str, object]] = []
+        for event in raw_events:
+            if not isinstance(event, Mapping):
+                continue
+            clean_events.append(
+                {
+                    "tick": int(event.get("tick", self.tick)),
+                    "agent_a": str(event.get("agent_a", "")),
+                    "agent_b": str(event.get("agent_b", "")),
+                    "intensity": float(event.get("intensity", 0.0)),
+                    "reason": str(event.get("reason", "")),
+                }
+            )
+        if clean_events:
+            self._rivalry_history.extend(clean_events)
+            if len(self._rivalry_history) > 120:
+                self._rivalry_history = self._rivalry_history[-120:]
+        return list(self._rivalry_history)
+
+    def _build_transport_status(self, *, queue_length: int) -> dict[str, object]:
+        status = dict(self._last_transport_status)
+        status.update(
+            {
+                "provider": status.get("provider", "port"),
+                "queue_length": queue_length,
+                "dropped_messages": status.get("dropped_messages", 0),
+                "last_flush_duration_ms": status.get("last_flush_duration_ms"),
+                "worker_alive": status.get("worker_alive", True),
+                "worker_error": status.get("worker_error"),
+                "worker_restart_count": status.get("worker_restart_count", 0),
+                "payloads_flushed_total": status.get("payloads_flushed_total", 0),
+                "bytes_flushed_total": status.get("bytes_flushed_total", 0),
+                "auth_enabled": status.get("auth_enabled", False),
+            }
+        )
+        self._last_transport_status = status
+        return status
 
     def _load_affordance_runtime_factory(
         self, runtime_config: AffordanceRuntimeConfig

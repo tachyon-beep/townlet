@@ -29,6 +29,11 @@ class StdoutTelemetryAdapter(TelemetrySink):
         self._started = False
 
     def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
+        if name == "loop.tick":
+            if not isinstance(payload, Mapping):
+                raise TypeError("loop.tick payload must be a mapping")
+            self._publisher.publish_tick(**payload)
+            return
         self._publisher._latest_events.append(  # type: ignore[attr-defined]
             {
                 "type": name,
@@ -42,6 +47,12 @@ class StdoutTelemetryAdapter(TelemetrySink):
             "value": float(value),
             "tags": dict(tags),
         }
+
+    @property
+    def publisher(self) -> TelemetryPublisher:
+        """Expose the wrapped telemetry publisher for transitional call sites."""
+
+        return self._publisher
 
 
 __all__ = ["StdoutTelemetryAdapter"]

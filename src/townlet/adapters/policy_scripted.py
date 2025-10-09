@@ -41,5 +41,11 @@ class ScriptedPolicyAdapter(PolicyBackend):
 
         self._world_provider = provider
 
+    @property
+    def backend(self) -> PolicyRuntime:
+        """Expose the wrapped legacy backend for transitional call sites."""
+
+        return self._backend
+
 
 __all__ = ["ScriptedPolicyAdapter"]

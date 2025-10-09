@@ -8,6 +8,7 @@ from typing import Any
 from townlet.observations.builder import ObservationBuilder
 from townlet.ports.world import WorldRuntime
 from townlet.world.core.runtime_adapter import WorldRuntimeAdapter, ensure_world_adapter
+from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult, WorldRuntime as LegacyWorldRuntime
 
 
@@ -72,6 +73,18 @@ class DefaultWorldAdapter(WorldRuntime):
         # Clear cached events now that they have been exposed.
         self._last_events = []
         return payload
+
+    @property
+    def legacy_runtime(self) -> LegacyWorldRuntime:
+        """Expose the wrapped legacy runtime for transitional call sites."""
+
+        return self._runtime
+
+    @property
+    def world_state(self) -> WorldState:
+        """Expose the legacy world instance for compatibility."""
+
+        return self._runtime.world
 
 
 __all__ = ["DefaultWorldAdapter"]

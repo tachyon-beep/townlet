@@ -47,7 +47,10 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
 
     def __init__(self, world: WorldState) -> None:
         self._world = world
-        self._allocator_adapter = _EmbeddingAllocatorAdapter(world.embedding_allocator)
+        allocator = getattr(world, "embedding_allocator", None)
+        if allocator is None:
+            raise TypeError("WorldRuntimeAdapter requires world with embedding allocator")
+        self._allocator_adapter = _EmbeddingAllocatorAdapter(allocator)
 
     @property
     def tick(self) -> int:
@@ -143,6 +146,8 @@ def ensure_world_adapter(
 
     if isinstance(world, WorldState):
         return WorldRuntimeAdapter(world)
+    if isinstance(world, WorldContext):
+        return WorldRuntimeAdapter(world.state)
     raise TypeError(
         "world must be a WorldRuntimeAdapterProtocol or WorldState; got" f" {type(world)!r}"
     )

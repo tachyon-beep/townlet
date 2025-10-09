@@ -6,8 +6,8 @@
 - Step 4 in progress: enriched `AgentRegistry` with metadata/tick bookkeeping and implemented the new `WorldState` container (RNG seeding, ctx-reset queue, event buffering). Unit tests cover both modules.
 - Step 5 kickoff: action schema/validation implemented with interim apply pipeline (`move`/`noop` mutations, structured events, invalid handling) plus unit coverage.
 - Step 6 complete: world context now orchestrates queue, affordance, employment, relationship, economy, and perturbation systems using the modular pipeline; RNG streams are sourced from `RngStreamManager`, and the legacy `WorldState` exposes the port-friendly views (`agent_records_view`, `event_dispatcher`, `emit_event`) required by the new action pipeline. `WorldRuntime.tick` recognises the new facade, and parity tests cover queue reservation helpers plus the systems modules.
-- WP1 Step 4 (loop refactor) deferred to this work package.
-- Next: begin Step 7 (adapter & factory integration) so the simulation loop resolves the modular world context directly and the remaining legacy shims can be removed.
+- WP1 Step 4 (loop refactor) is progressing in tandem: the loop now resolves providers via the new factories and the orchestration services (`ConsoleRouter`, `HealthMonitor`) are wired in, though policy/telemetry/world callers still depend on legacy fallbacks.
+- Step 7 (adapter & factory integration) is underway—adapters expose transitional handles so we can finish migrating consumers off the legacy APIs before swapping in the modular world context end-to-end. The policy path now routes through a controller façade; telemetry/world callers remain on the migration list.
 
 Update as tasks progress.
 

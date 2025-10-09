@@ -4,16 +4,16 @@ Purpose: capture findings, decisions, and progress while implementing Work Packa
 
 ## TODO / Progress Checklist
 
-- [ ] Inventory SimulationLoop dependencies (world, policy, telemetry methods used).
-- [ ] Audit current world implementation entry points (`world/core`, adapters).
-- [ ] Audit policy runtime / orchestrator interfaces.
-- [ ] Audit telemetry publisher surface.
-- [ ] Draft port protocol stubs aligning with ADR-001.
-- [ ] Outline adapter delegations for default providers.
-- [ ] Define registry module responsibilities & key names.
-- [ ] Identify required dummies/testing hooks.
-- [ ] Plan composition root refactor sequence.
-- [ ] Note integration tests to add/adjust.
+- [x] Inventory `SimulationLoop` dependencies (world, policy, telemetry methods used).
+- [x] Audit current world implementation entry points (`world/core`, adapters).
+- [x] Audit policy runtime / orchestrator interfaces.
+- [x] Audit telemetry publisher surface.
+- [x] Draft port protocol stubs aligning with ADR-001.
+- [x] Outline adapter delegations for default providers.
+- [x] Define registry module responsibilities & key names.
+- [x] Identify required dummies/testing hooks.
+- [x] Plan composition root refactor sequence.
+- [x] Note integration tests to add/adjust.
 
 ## Findings & Open Questions
 
@@ -36,6 +36,27 @@ Purpose: capture findings, decisions, and progress while implementing Work Packa
 ### Open Questions
 - Where to relocate policy anneal blend + hash reporting so the WP1 port remains minimal?
 - Can telemetry `latest_*` queries be satisfied via caching DTOs in the adapter while exposing only generic `emit_*` calls on the port?
+
+### Step 6 recap (handover from WP2)
+- `WorldContext` now returns `RuntimeStepResult`, manages modular systems, and exposes the interfaces the WP1 ports expect (`reset`, `apply_actions`, `tick`, `snapshot`).
+- Legacy `WorldState` exposes the new helpers (`agent_records_view`, `emit_event`, `event_dispatcher`, `rng_seed`), ensuring the adapter path and the modular pipeline remain compatible.
+- Targeted test suites (`pytest tests/world -q`, `pytest tests/test_world_context.py -q`) verify queue/affordance/employment/relationship/economy/perturbation systems as well as the new action pipeline.
+
+### Step 7 plan (WP1 Step 4 resumption)
+- **Factory & adapter wiring**
+  - Update `townlet.factories.world_factory.create_world` to construct `WorldContext` (and supporting services) directly.
+  - Refresh `WorldRuntimeAdapter` so policy/telemetry consumers see the new facade; ensure dummy providers keep working for smoke tests.
+- **Simulation loop refactor**
+  - Swap `SimulationLoop` over to `create_world/policy/telemetry`; drop `resolve_*` helpers.
+  - Introduce the orchestration services promised by external guidance (`ConsoleRouter`, `HealthMonitor`) and route telemetry through events/metrics instead of `latest_*` getters.
+  - Ensure policy/telemetry helper functions (`policy_provider_name`, stub detection) read provider metadata via the new factories.
+- **Tests**
+  - Add loop-level smoke tests that instantiate the new providers (`tests/test_loop_with_dummies.py`, `tests/test_loop_with_adapters_smoke.py`).
+  - Implement console/health monitor suites once the services land (`tests/test_console_router.py`, `tests/test_health_monitor.py`).
+  - Add a guard test that fails if the loop calls telemetry `latest_*` helpers.
+- **Docs**
+  - Extend ADR-001 with provider table updates; draft the promised console/monitor ADR.
+  - Update this README and WP1 task sheet as milestones close; capture migration instructions for downstream teams.
 
 ## References
 
@@ -89,8 +110,9 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
   - `DefaultWorldAdapter` wraps legacy `WorldRuntime`, hosts `ObservationBuilder`, emits per-tick events via snapshot.
   - `ScriptedPolicyAdapter` bridges the current scripted policy backend to the minimal port (temporary world-provider dependency; will align with new observation flow during loop refactor).
   - `StdoutTelemetryAdapter` wraps `TelemetryPublisher` as a sink; currently stores emitted events/metrics in publisher state pending new pipeline wiring.
-- Added orchestration stubs (`ConsoleRouter`, `HealthMonitor`) to prepare for event-first loop.
-- Further work: integrate adapters with factories, flesh out event/metric handling, and remove legacy telemetry getter usage during composition refactor.
+- `ConsoleRouter` and `HealthMonitor` are now instantiated by `SimulationLoop`; console commands drain through the router (while still forwarding to the legacy runtime for now) and the health monitor emits baseline queue/event metrics via the telemetry port.
+- Added a transitional `PolicyController` facade so the loop can gradually move off `PolicyRuntime` while the scripted backend continues to supply anneal/metadata hooks.
+- Further work: finish migrating telemetry consumers away from publisher getters, move policy-side callbacks into adapters, and remove the remaining legacy world touch points during the ongoing composition refactor.
 
 ### Step 3 Progress (Factories)
 - Added `townlet.factories` package with shared registry utilities and domain-specific factory helpers (`create_world`, `create_policy`, `create_telemetry`).
@@ -110,4 +132,7 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
 - Decision: retain the strategy while implementing code tailored to Townlet’s runtime in Steps 4+.
 
 ### Step 4 Status
-- Full composition-loop refactor (SimulationLoop using the new factories/ports, ConsoleRouter + HealthMonitor integration, removal of telemetry getters) is **deferred** until WP2 lands the world/telemetry modularisation. Current code continues to exercise legacy paths; revisit this section after WP2 implementation.
+- Phase 1 (factory swap) is complete: `SimulationLoop` now resolves world/policy/telemetry via `create_*` helpers while maintaining legacy behaviour behind the adapters.
+- Phase 2 has started: the loop routes console traffic through `ConsoleRouter` and feeds `HealthMonitor` snapshots each tick (emitting metrics via the telemetry port) but still mirrors data back into the legacy publisher for parity.
+- Phase 3 underway: telemetry getters are no longer pulled from the loop—the tick step computes queue/employment metrics directly and emits a `loop.tick` event through the telemetry port, leaving only the legacy record calls to phase out.
+- Remaining work: finish migrating policy callers to the port layer (observation-first decisions) and drop the legacy runtime dependencies once world context + adapters provide all required data.

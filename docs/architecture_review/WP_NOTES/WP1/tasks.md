@@ -40,30 +40,23 @@
 - [x] Note any pre-commit hooks or CI jobs relevant to WP1.
 
 ## 6. Documentation Alignment
-- [ ] Keep `docs/architecture_review/WP_TASKINGS/WP1.md` open; ensure tasks map 1:1.
-- [ ] Cross-reference ADR-001 for method names and registry keys.
-- [ ] Note dependencies with WP2/WP3 docs to avoid divergence.
-- [ ] Update `README.md` findings section as decisions solidify.
+- [x] Keep `docs/architecture_review/WP_TASKINGS/WP1.md` open; ensure tasks map 1:1.
+- [x] Cross-reference ADR-001 for method names and registry keys.
+- [x] Note dependencies with WP2/WP3 docs to avoid divergence.
+- [x] Update `README.md` findings section as decisions solidify.
 
 Maintain this checklist during WP1 implementation.
 
-## 7. Build Adapters & Services
-- [ ] Implement adapters (`world_default`, `policy_scripted`, `telemetry_stdout`) wrapping legacy implementations.
-- [ ] Embed `ObservationBuilder` inside world adapter; ensure snapshot emits per-tick events.
-- [ ] Implement `ConsoleRouter` in `orchestration/console.py`.
-- [ ] Implement `HealthMonitor` in `orchestration/health.py`.
-- [ ] Document event schema + adapter responsibilities in README.
+## 7. Step 7 — Factory & Adapter Wiring (in progress)
+- [ ] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext`.
+- [ ] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context.
+- [ ] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap.
 
-## 8. Refactor Composition & Tests
-- [ ] Update `SimulationLoop` to use factories, routers, monitors (no telemetry getters).
-- [ ] Update helper utilities (`policy_provider_name`, etc.) for new factories.
-- [ ] Implement dummy providers & register keys.
-- [ ] Add/adjust tests (ports surface, factories, console router, health monitor, observation profile, loop smoke, telemetry getter guard).
-- [ ] Draft console/monitor ADR + update tasking/docs.
+## 8. Step 8 — Composition Root Integration
+- [x] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers.
+- [~] Introduce `ConsoleRouter` and `HealthMonitor` orchestration services; emit telemetry exclusively via events/metrics. *(Router/monitor instantiated each tick; legacy `runtime.queue_console` and telemetry health writers still active pending migration.)*
+- [~] Remove telemetry `latest_*` pulls from the loop and helper utilities. *(Loop now computes queue/employment metrics directly and emits `loop.tick` events through the telemetry port; failure/health recording still calls legacy writers until the new sink lands.)*
 
-## 9. Composition Refactor
-- [ ] Replace legacy factory_registry usage with `townlet.factories` helpers in `SimulationLoop` and related modules.
-- [ ] Instantiate `ConsoleRouter` and `HealthMonitor`; integrate into tick pipeline.
-- [ ] Remove telemetry getter reliance (`latest_*`) from loop (use snapshot/events + monitors instead).
-- [ ] Ensure provider info/helpers (`policy_provider_name`, etc.) remain coherent.
-- [ ] Update imports/cleanup unused legacy glue.
+## 9. Step 8 Testing & Docs
+- [ ] Add/refresh test suites (`tests/test_ports_surface.py`, `tests/test_factories.py`, loop smoke tests, console router, health monitor, telemetry getter guard).
+- [ ] Update ADR-001 appendices; draft console/monitor ADR; refresh README/tasking once Step 8 lands.
