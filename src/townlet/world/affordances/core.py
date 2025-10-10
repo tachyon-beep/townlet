@@ -527,28 +527,6 @@ class DefaultAffordanceRuntime:
                 entry_queued,
             )
         start_time = time.perf_counter()
-        queue_manager.on_tick(tick)
-        for object_id, occupant in list(active_reservations.items()):
-            queue = queue_manager.queue_snapshot(object_id)
-            if not queue:
-                continue
-            if queue_manager.record_blocked_attempt(object_id):
-                waiting = queue_manager.queue_snapshot(object_id)
-                rival = waiting[0] if waiting else None
-                queue_manager.release(object_id, occupant, tick, success=False)
-                queue_manager.requeue_to_tail(object_id, occupant, tick)
-                if rival is not None:
-                    record_queue_conflict(
-                        object_id=object_id,
-                        actor=occupant,
-                        rival=rival,
-                        reason="ghost_step",
-                        queue_length=len(waiting),
-                        intensity=None,
-                    )
-                self.running_affordances.pop(object_id, None)
-                ctx.sync_reservation(object_id)
-
         for object_id, running in list(self.running_affordances.items()):
             running.duration_remaining -= 1
             if running.duration_remaining <= 0:

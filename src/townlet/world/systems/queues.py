@@ -11,9 +11,23 @@ from .base import SystemContext
 
 
 def step(ctx: SystemContext) -> None:
-    """Run queue-related updates (WP2 Step 6 will populate)."""
+    """Synchronise queue state each tick."""
 
-    return
+    state = ctx.state
+    manager = getattr(state, "queue_manager", None)
+    if manager is None:
+        return
+
+    tick = getattr(state, "tick", 0)
+    on_tick = getattr(manager, "on_tick", None)
+    if callable(on_tick):
+        on_tick(tick)
+
+    refresh = getattr(state, "refresh_reservations", None)
+    if callable(refresh):
+        refresh()
+
+    _process_queue_conflicts(state, manager, tick)
 
 
 def request_access(
@@ -94,6 +108,59 @@ def record_blocked_attempt(manager: QueueManager, object_id: str) -> bool:
 
     return manager.record_blocked_attempt(object_id)
 
+
+def _process_queue_conflicts(state: Any, manager: QueueManager, tick: int) -> None:
+    active_reservations: Mapping[str, str] = getattr(state, "_active_reservations", {})
+    if not active_reservations:
+        return
+
+    record_conflict = getattr(state, "_record_queue_conflict", None)
+    sync_reservation = getattr(state, "_sync_reservation", None)
+    queue_conflicts = getattr(state, "_queue_conflicts", None)
+    runtime_service = getattr(state, "_affordance_service", None)
+
+    for object_id, occupant in list(active_reservations.items()):
+        queue = manager.queue_snapshot(object_id)
+        if not queue:
+            continue
+        if not manager.record_blocked_attempt(object_id):
+            continue
+
+        waiting = manager.queue_snapshot(object_id)
+        rival = waiting[0] if waiting else None
+        manager.release(object_id, occupant, tick, success=False)
+        manager.requeue_to_tail(object_id, occupant, tick)
+
+        if runtime_service is not None:
+            try:
+                runtime_service.remove_agent(occupant)
+            except AttributeError:
+                pass
+
+        if callable(sync_reservation):
+            sync_reservation(object_id)
+
+        if rival is not None and callable(record_conflict):
+            record_conflict(
+                object_id=object_id,
+                actor=occupant,
+                rival=rival,
+                reason="ghost_step",
+                queue_length=len(waiting),
+                intensity=None,
+            )
+        elif queue_conflicts is not None:
+            try:
+                queue_conflicts.record_queue_conflict(
+                    object_id=object_id,
+                    actor=occupant,
+                    rival=rival or occupant,
+                    reason="ghost_step",
+                    queue_length=len(waiting),
+                    intensity=None,
+                )
+            except Exception:
+                pass
 
 __all__ = [
     "record_blocked_attempt",

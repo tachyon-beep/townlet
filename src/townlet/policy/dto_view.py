@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from townlet.world.dto.observation import ObservationEnvelope
 
+
+def _normalize_agent_id(agent: Any) -> str | None:
+    if agent is None:
+        return None
+    identifier = str(agent)
+    if "#" in identifier:
+        base = identifier.split("#", 1)[0].strip()
+        if base:
+            return base
+    return identifier if identifier else None
 
 def _as_tuple(value: Any) -> tuple[Any, ...]:
     if value is None:
@@ -28,8 +38,11 @@ class DTOQueueManagerView:
         queue_info = self.queues.get("active", {})
         active = queue_info.get(object_id)
         if active is None and self.fallback is not None:
-            return self.fallback.active_agent(object_id)
-        return active
+            value = self.fallback.active_agent(object_id)
+            normalized = _normalize_agent_id(value)
+            return normalized if normalized is not None else value
+        normalized = _normalize_agent_id(active)
+        return normalized if normalized is not None else active
 
     def queue_snapshot(self, object_id: str) -> tuple[Any, ...]:
         queues_dict = self.queues.get("queues", {})
@@ -41,8 +54,18 @@ class DTOQueueManagerView:
                 return ()
         if isinstance(entries, Mapping):
             data = entries.get("queue") or entries.get("pending") or []
-            return _as_tuple(data)
-        return _as_tuple(entries)
+        else:
+            data = entries
+
+        cleaned: list[Any] = []
+        for item in _as_tuple(data):
+            if isinstance(item, Mapping):
+                candidate = item.get("agent_id") or item.get("agent")
+                if isinstance(candidate, str):
+                    cleaned.append(candidate)
+                    continue
+            cleaned.append(item)
+        return tuple(cleaned)
 
 
 @dataclass(slots=True)
@@ -109,6 +132,7 @@ class DTOWorldView:
         *,
         envelope: ObservationEnvelope,
         world: Any | None = None,
+        guardrail_emitter: Callable[[str, Mapping[str, Any]], None] | None = None,
     ) -> None:
         global_ctx = envelope.global_context
         queues = global_ctx.queues or {}
@@ -129,6 +153,7 @@ class DTOWorldView:
         )
         self._world = world
         self.tick = getattr(world, "tick", envelope.tick)
+        self._guardrail_emitter = guardrail_emitter
 
     # ------------------------------------------------------------------
     # Relationship helpers
@@ -145,13 +170,67 @@ class DTOWorldView:
     # ------------------------------------------------------------------
     # Mutation hooks (fallback to legacy world until event pipeline replaces them)
     # ------------------------------------------------------------------
-    def record_chat_failure(self, *args: Any, **kwargs: Any) -> None:
-        if self._world is not None and hasattr(self._world, "record_chat_failure"):
-            self._world.record_chat_failure(*args, **kwargs)
+    def record_chat_failure(self, speaker: str, listener: str) -> None:
+        payload = {"speaker": speaker, "listener": listener}
+        self._emit_guardrail_request("chat_failure", payload)
 
-    def record_relationship_guard_block(self, *args: Any, **kwargs: Any) -> None:
-        if self._world is not None and hasattr(self._world, "record_relationship_guard_block"):
-            self._world.record_relationship_guard_block(*args, **kwargs)
+    def record_relationship_guard_block(
+        self,
+        *,
+        agent_id: str,
+        reason: str,
+        target_agent: str | None = None,
+        object_id: str | None = None,
+    ) -> None:
+        payload = {
+            "agent_id": agent_id,
+            "reason": reason,
+            "target_agent": target_agent,
+            "object_id": object_id,
+        }
+        self._emit_guardrail_request("relationship_block", payload)
+
+    def _emit_guardrail_request(
+        self,
+        variant: str,
+        payload: Mapping[str, Any],
+    ) -> None:
+        request = {"variant": variant}
+        for key, value in payload.items():
+            if value is not None:
+                request[key] = value
+
+        emitter = self._guardrail_emitter
+        if callable(emitter):
+            emitter("policy.guardrail.request", request)
+            return
+
+        world = self._world
+        if world is not None and hasattr(world, "emit_event"):
+            world.emit_event("policy.guardrail.request", request)
+            return
+
+        # Fallback for legacy contexts lacking emit_event (should be temporary).
+        if (
+            variant == "chat_failure"
+            and world is not None
+            and hasattr(world, "record_chat_failure")
+        ):
+            world.record_chat_failure(
+                payload.get("speaker"),
+                payload.get("listener"),
+            )
+        elif (
+            variant == "relationship_block"
+            and world is not None
+            and hasattr(world, "record_relationship_guard_block")
+        ):
+            world.record_relationship_guard_block(
+                agent_id=payload.get("agent_id"),
+                reason=payload.get("reason"),
+                target_agent=payload.get("target_agent"),
+                object_id=payload.get("object_id"),
+            )
 
 
 __all__ = [

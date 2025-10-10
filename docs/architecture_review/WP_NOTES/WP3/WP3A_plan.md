@@ -74,14 +74,17 @@ retiring legacy telemetry artefacts.
        `world_port` snapshots for write paths during transition). *(Initial
        version in `src/townlet/policy/dto_view.py`; exposes queue manager,
        affordance runtime, relationship tie helpers with legacy fallbacks.)*
-   - **Behaviour refactor**
-     - Update scripted behaviours/guardrails to consume DTO adapters; fall back
-       to legacy world access behind a feature flag until parity confirmed.
-       *(Guardrail path now accepts `DTOWorldView` via `PolicyRuntime` but
-       scripted behaviour still relies on `WorldState`; next step.)*
-   - **Mutation/event pipeline**
-     - Replace direct calls to `world.record_*` guardrail helpers with DTO/port
-       emitted events consumed by telemetry or downstream logic.
+  - **Behaviour refactor**
+    - Update scripted behaviours/guardrails to consume DTO adapters; fall back
+      to legacy world access behind a feature flag until parity confirmed.
+      *(Scripted behaviour now pulls queue/affordance/relationship data from
+      `DTOWorldView`; legacy world is only used when envelopes are absent.)*
+  - **Mutation/event pipeline**
+    - Replace direct calls to `world.record_*` guardrail helpers with DTO/port
+      emitted events consumed by telemetry or downstream logic. *(Done via
+      `policy.guardrail.request` events handled in `WorldState`; `WorldContext`
+      still replays legacy `apply_actions` + `resolve_affordances` for parity and
+      should be retired once modular systems are complete.)*
    - **Risk mitigation & rollout**
      - Gate adapter usage via config flag; monitor payload size impacts; ensure
        schema version is bumped when envelope structure changes.

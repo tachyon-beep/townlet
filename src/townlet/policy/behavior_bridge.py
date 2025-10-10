@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from townlet.policy.behavior import AgentIntent, BehaviorController
+from townlet.policy.dto_view import DTOWorldView
 from townlet.world.grid import WorldState
 
 
@@ -115,10 +116,12 @@ class BehaviorBridge:
         agent_id: str,
         tick: int,
         guardrail_fn: Callable[[WorldState, str, AgentIntent], AgentIntent],
+        *,
+        dto_world: DTOWorldView | None = None,
     ) -> tuple[AgentIntent, bool]:
         """Determine an agent intent and enforce option commit guardrails."""
 
-        scripted = self.behavior.decide(world, agent_id)
+        scripted = self.behavior.decide(world, agent_id, dto_world=dto_world)
         blended = self._select_intent_with_blend(world, agent_id, scripted)
         guarded = guardrail_fn(world, agent_id, blended)
         intent, enforced = self._enforce_option_commit(agent_id, tick, guarded)

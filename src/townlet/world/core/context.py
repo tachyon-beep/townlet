@@ -13,6 +13,7 @@ from townlet.world.actions import Action, apply_actions
 from townlet.world.rng import RngStreamManager
 from townlet.world.systems import default_systems
 from townlet.world.systems.base import SystemContext, SystemStep
+from townlet.world.systems.affordances import process_actions
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.affordance_runtime_service import AffordanceRuntimeService
@@ -148,6 +149,8 @@ class WorldContext:
         action_objects = self._coerce_actions(combined_actions)
         if action_objects:
             apply_actions(state, action_objects)
+        if combined_actions:
+            process_actions(state, combined_actions, tick=tick)
         self._pending_actions.clear()
 
         rng_manager = self.rng_manager or RngStreamManager.from_seed(getattr(state, "rng_seed", None))

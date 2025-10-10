@@ -140,8 +140,26 @@ def test_conflict_tolerance_relaxes_queue_guard() -> None:
     setup(disabled_world)
     setup(enabled_world)
 
-    assert behavior_disabled._rivals_in_queue(disabled_world, "stoic", "fridge_1") is True
-    assert behavior_enabled._rivals_in_queue(enabled_world, "stoic", "fridge_1") is False
+    assert (
+        behavior_disabled._rivals_in_queue(
+            disabled_world,
+            "stoic",
+            "fridge_1",
+            queue_view=disabled_world.queue_manager,
+            relationship_view=disabled_world,
+        )
+        is True
+    )
+    assert (
+        behavior_enabled._rivals_in_queue(
+            enabled_world,
+            "stoic",
+            "fridge_1",
+            queue_view=enabled_world.queue_manager,
+            relationship_view=enabled_world,
+        )
+        is False
+    )
 
 
 def test_need_threshold_respects_multipliers() -> None:
@@ -172,6 +190,8 @@ def test_need_threshold_respects_multipliers() -> None:
     assert intent_disabled.kind == "request"
     assert intent_disabled.object_id == "bed_1"
     assert intent_enabled.kind != "request"
+
+
 def test_personality_metrics_align_with_baseline_when_disabled() -> None:
     baseline_path = Path("tests/data/baselines/demo_story_arc_personality_baseline.json")
     expected = json.loads(baseline_path.read_text(encoding="utf-8"))

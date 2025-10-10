@@ -230,6 +230,7 @@ class WorldState:
         self._running_affordances = {}
         self._pending_events = {}
         self._event_dispatcher = EventDispatcher()
+        self._event_dispatcher.register(self._handle_guardrail_request)
         self.store_stock = {}
         self._job_keys = list(self.config.jobs.keys())
         self.employment = create_employment_coordinator(self.config, self._emit_event)
@@ -830,107 +831,7 @@ class WorldState:
 
     def apply_actions(self, actions: dict[str, Any]) -> None:
         """Apply agent actions for the current tick."""
-        current_tick = self.tick
-        runtime = self._affordance_service
-        for agent_id, action in actions.items():
-            snapshot = self.agents.get(agent_id)
-            if snapshot is None:
-                continue
-            if not isinstance(action, dict):
-                continue
-
-            kind = action.get("kind")
-            object_id = action.get("object")
-            action_success = False
-            action_duration = int(action.get("duration", 1))
-            outcome_affordance_id: str | None = None
-            outcome_metadata: dict[str, object] = {}
-
-            if kind == "request" and object_id:
-                granted = queue_system.request_access(
-                    manager=self.queue_manager,
-                    objects=self.objects,
-                    active_reservations=self._active_reservations,
-                    spatial_index=self._spatial_index,
-                    object_id=object_id,
-                    agent_id=agent_id,
-                    tick=current_tick,
-                )
-                if not granted and action.get("blocked"):
-                    self._handle_blocked(object_id, current_tick)
-                action_success = bool(granted)
-            elif kind == "move" and action.get("position"):
-                target_pos = tuple(action["position"])
-                self._spatial_index.move_agent(snapshot.agent_id, target_pos)
-                snapshot.position = target_pos
-                action_success = True
-            elif kind == "chat":
-                target_id = action.get("target") or action.get("listener")
-                if not isinstance(target_id, str):
-                    continue
-                listener = self.agents.get(target_id)
-                if listener is None:
-                    continue
-                if self.rivalry_should_avoid(agent_id, target_id):
-                    self.record_chat_failure(agent_id, target_id)
-                    continue
-                if listener.position != snapshot.position:
-                    self.record_chat_failure(agent_id, target_id)
-                    continue
-                quality_value = action.get("quality", 0.5)
-                try:
-                    quality = float(quality_value)
-                except (TypeError, ValueError):
-                    quality = 0.5
-                self.record_chat_success(agent_id, target_id, quality)
-                action_success = True
-            elif kind == "start" and object_id:
-                affordance_id = action.get("affordance")
-                if affordance_id:
-                    affordance_id_str = str(affordance_id)
-                    action_success, start_metadata = affordance_system.start(
-                        runtime,
-                        agent_id=agent_id,
-                        object_id=object_id,
-                        affordance_id=affordance_id_str,
-                        tick=current_tick,
-                    )
-                    outcome_affordance_id = affordance_id_str
-                    if start_metadata:
-                        outcome_metadata.update(start_metadata)
-            elif kind == "release" and object_id:
-                success = bool(action.get("success", True))
-                affordance_hint = action.get("affordance")
-                reason_value = action.get("reason")
-                outcome_affordance_id, release_metadata = affordance_system.release(
-                    runtime,
-                    agent_id=agent_id,
-                    object_id=object_id,
-                    success=success,
-                    reason=str(reason_value) if reason_value is not None else None,
-                    requested_affordance_id=str(affordance_hint)
-                    if affordance_hint is not None
-                    else None,
-                    tick=current_tick,
-                )
-                action_success = success
-                if release_metadata:
-                    outcome_metadata.update(release_metadata)
-            elif kind == "blocked" and object_id:
-                affordance_system.handle_blocked(runtime, object_id, current_tick)
-                action_success = False
-
-            if kind:
-                affordance_system.apply_outcome(
-                    snapshot,
-                    kind=str(kind),
-                    success=action_success,
-                    duration=action_duration,
-                    object_id=str(object_id) if isinstance(object_id, str) else None,
-                    affordance_id=str(outcome_affordance_id) if outcome_affordance_id else None,
-                    tick=current_tick,
-                    metadata=dict(outcome_metadata) if outcome_metadata else {},
-                )
+        affordance_system.process_actions(self, actions, tick=self.tick)
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
@@ -1239,6 +1140,33 @@ class WorldState:
         )
 
     def record_chat_failure(self, speaker: str, listener: str) -> None:
+        self._process_chat_failure(speaker, listener, emit=True)
+
+    def record_relationship_guard_block(
+        self,
+        *,
+        agent_id: str,
+        reason: str,
+        target_agent: str | None = None,
+        object_id: str | None = None,
+    ) -> None:
+        self._process_relationship_guard_block(
+            agent_id,
+            reason,
+            target_agent=target_agent,
+            object_id=object_id,
+            emit=True,
+        )
+
+    def _process_chat_failure(
+        self,
+        speaker: str,
+        listener: str,
+        *,
+        emit: bool,
+    ) -> None:
+        if not speaker or not listener:
+            return
         relationship_system.update_relationship(
             self._relationships,
             speaker,
@@ -1256,30 +1184,72 @@ class WorldState:
                 "tick": self.tick,
             }
         )
-        self._emit_event(
-            "chat_failure",
-            {
-                "speaker": speaker,
-                "listener": listener,
-            },
-        )
+        if emit:
+            self._emit_event(
+                "chat_failure",
+                {
+                    "speaker": speaker,
+                    "listener": listener,
+                },
+            )
 
-    def record_relationship_guard_block(
+    def _process_relationship_guard_block(
         self,
-        *,
         agent_id: str,
         reason: str,
-        target_agent: str | None = None,
-        object_id: str | None = None,
+        *,
+        target_agent: str | None,
+        object_id: str | None,
+        emit: bool,
     ) -> None:
-        payload = {
+        queue_payload = {
             "agent": agent_id,
             "reason": reason,
             "target": target_agent,
             "object_id": object_id,
             "tick": int(self.tick),
         }
-        self._queue_conflicts.record_avoidance_event(payload)
+        self._queue_conflicts.record_avoidance_event(queue_payload)
+        if emit:
+            event_payload = {
+                "agent_id": agent_id,
+                "reason": reason,
+                "target_agent": target_agent,
+                "object_id": object_id,
+                "tick": int(self.tick),
+            }
+            self._emit_event("policy.guardrail.block", event_payload)
+
+    def _handle_guardrail_request(self, event: Event) -> None:
+        if event.type != "policy.guardrail.request":
+            return
+        payload = dict(event.payload)
+        variant = str(payload.get("variant") or "")
+        if variant == "chat_failure":
+            speaker = str(payload.get("speaker") or payload.get("agent") or "")
+            listener_value = (
+                payload.get("listener")
+                or payload.get("target_agent")
+                or payload.get("target")
+                or ""
+            )
+            listener = str(listener_value)
+            if speaker and listener:
+                self._process_chat_failure(speaker, listener, emit=True)
+        elif variant == "relationship_block":
+            agent = str(payload.get("agent_id") or payload.get("agent") or "")
+            reason = str(payload.get("reason") or "")
+            if not agent or not reason:
+                return
+            target_agent = payload.get("target_agent") or payload.get("target")
+            object_id = payload.get("object_id")
+            self._process_relationship_guard_block(
+                agent,
+                reason,
+                target_agent=target_agent,
+                object_id=object_id,
+                emit=True,
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers

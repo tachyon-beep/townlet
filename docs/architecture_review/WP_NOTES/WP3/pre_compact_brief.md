@@ -12,11 +12,11 @@ Latest context snapshot so we can resume quickly after memory compaction.
   - `dto_example_tick.json` + `dto_sample_tick.json` provide baseline payloads.
   - `dto_worldstate_usage.json` auto-extracted usage map for converters.
 - DTO schema models scaffolded in `src/townlet/world/dto/observation.py` and re-exported through `townlet.world.dto` (`DTO_SCHEMA_VERSION = "0.1.0"`); `build_observation_envelope` factory + `tests/world/test_observation_dto_factory.py` validate JSON readiness, and `SimulationLoop` caches/attaches the DTO payload to `loop.tick` events (`observations_dto`).
-  Envelope now includes queue rosters, running affordances, and relationship metrics. `PolicyRuntime` consumes cached DTO data via `DTOWorldView` (guardrails now use DTO data with legacy fallback); scripted behaviour/world services still rely on `WorldState` until adapters expand.
+  Envelope now includes queue rosters, running affordances, and relationship metrics. `PolicyRuntime` consumes cached DTO data via `DTOWorldView`; scripted behaviour now reads queue/affordance/relationship info from the DTO view and emits guardrail requests as events (legacy fallbacks remain for missing envelopes). `WorldContext.tick` now routes combined actions through `affordances.process_actions` (extracted from the legacy world) to keep behaviour parity while we work towards dropping the remaining `resolve_affordances` wrapper under WP3B, and `queues.step` handles ghost-step queue conflicts directly.
 
 ## Outstanding Work (DTO Rollout)
-1. Expand `DTOWorldView` usage across scripted behaviours/queue helpers; replace
-   remaining world mutations with event emission.
+1. Move policy metadata/ML adapters onto DTO batches and stream
+   `policy.metadata`/`policy.possession`/`policy.anneal.update` events.
 2. Extend parity harness to cover reward breakdown comparisons and run at least
    one ML-backed scenario (short PPO/BC run) to prove DTO-only parity.
 3. Remove legacy observation payloads / world supplier hooks once parity and
@@ -30,3 +30,6 @@ Latest context snapshot so we can resume quickly after memory compaction.
   `WorldRuntimeAdapter.relationships_snapshot()` and `WorldState.rng_seed()`.
 - Keep `dto_example_tick.json` updated whenever schema changes; regression
   tests will rely on it.
+- Follow up work packages:
+  - **WP3B**: modular system reattachment + bridge removal.
+  - **WP3C**: DTO parity expansion with ML validation and legacy observation retirement.

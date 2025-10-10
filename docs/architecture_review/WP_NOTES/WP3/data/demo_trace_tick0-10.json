@@ -1,0 +1,834 @@
+{
+  "ticks": 10,
+  "trace": [
+    {
+      "tick": 1,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "wait"
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "chat_success",
+          "tick": 0,
+          "speaker": "demo_1",
+          "listener": "demo_2",
+          "quality": 0.9
+        },
+        {
+          "event": "chat_success",
+          "tick": 0,
+          "speaker": "demo_2",
+          "listener": "demo_3",
+          "quality": 0.9
+        },
+        {
+          "event": "chat_success",
+          "tick": 0,
+          "speaker": "demo_3",
+          "listener": "demo_1",
+          "quality": 0.9
+        },
+        {
+          "event": "action.invalid",
+          "tick": 1,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 1,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 1,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "chat_success",
+          "tick": 0,
+          "speaker": "demo_1",
+          "listener": "demo_2",
+          "quality": 0.9
+        },
+        {
+          "event": "chat_success",
+          "tick": 0,
+          "speaker": "demo_2",
+          "listener": "demo_3",
+          "quality": 0.9
+        },
+        {
+          "event": "chat_success",
+          "tick": 0,
+          "speaker": "demo_3",
+          "listener": "demo_1",
+          "quality": 0.9
+        },
+        {
+          "event": "action.invalid",
+          "tick": 1,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 1,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 1,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 2,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "wait"
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 2,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 2,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 2,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 2,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 2,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 2,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 3,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "wait"
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 3,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 3,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 3,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 3,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 3,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 3,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 4,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "wait"
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 4,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 4,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 4,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 4,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 4,
+          "agent_id": "demo_2",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 4,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 5,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ]
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 5,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 5,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 5,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 5,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 5,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 5,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 6,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ]
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 6,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 6,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 6,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 6,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 6,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 6,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 7,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ]
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 7,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 7,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 7,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 7,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 7,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 7,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 8,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ]
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 8,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 8,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 8,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 8,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 8,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 8,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 9,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ]
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 9,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 9,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 9,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 9,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 9,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 9,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    },
+    {
+      "tick": 10,
+      "actions": {
+        "demo_1": {
+          "kind": "wait"
+        },
+        "demo_2": {
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ]
+        },
+        "demo_3": {
+          "kind": "wait"
+        }
+      },
+      "events": [
+        {
+          "event": "action.invalid",
+          "tick": 10,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 10,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 10,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.invalid",
+          "tick": 10,
+          "agent_id": "demo_1",
+          "error": "unsupported action kind 'wait'"
+        },
+        {
+          "event": "action.move",
+          "tick": 10,
+          "kind": "move",
+          "object": null,
+          "affordance": null,
+          "blocked": false,
+          "position": [
+            11,
+            13
+          ],
+          "duration": 1,
+          "agent_id": "demo_2",
+          "success": true,
+          "pending": false
+        },
+        {
+          "event": "action.invalid",
+          "tick": 10,
+          "agent_id": "demo_3",
+          "error": "unsupported action kind 'wait'"
+        }
+      ],
+      "terminated": {
+        "demo_1": false,
+        "demo_2": false,
+        "demo_3": false
+      }
+    }
+  ],
+  "queue_state": {
+    "active": {},
+    "queues": {},
+    "cooldowns": [],
+    "stall_counts": {}
+  },
+  "needs_state": {
+    "demo_1": {
+      "hunger": 0.39999999999999997,
+      "hygiene": 0.52,
+      "energy": 0.45999999999999996
+    },
+    "demo_2": {
+      "hunger": 0.44999999999999996,
+      "hygiene": 0.47,
+      "energy": 0.45999999999999996
+    },
+    "demo_3": {
+      "hunger": 0.5,
+      "hygiene": 0.42000000000000004,
+      "energy": 0.45999999999999996
+    }
+  },
+  "relationships": {
+    "demo_1->demo_2": {
+      "trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "rivalry": 0.0
+    },
+    "demo_1->demo_3": {
+      "trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "rivalry": 0.0
+    },
+    "demo_2->demo_1": {
+      "trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "rivalry": 0.0
+    },
+    "demo_2->demo_3": {
+      "trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "rivalry": 0.0
+    },
+    "demo_3->demo_1": {
+      "trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "rivalry": 0.0
+    },
+    "demo_3->demo_2": {
+      "trust": 0.295,
+      "familiarity": 0.29000000000000004,
+      "rivalry": 0.0
+    }
+  }
+}

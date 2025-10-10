@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -165,7 +165,12 @@ class PolicyRuntime:
         dto_world: DTOWorldView | None = None
         if envelope is not None:
             self._latest_envelope = envelope
-            dto_world = DTOWorldView(envelope=envelope, world=world)
+            guardrail_emitter = getattr(world, "emit_event", None)
+            dto_world = DTOWorldView(
+                envelope=envelope,
+                world=world,
+                guardrail_emitter=guardrail_emitter,
+            )
         self._tick = tick
         self._trajectory_service.begin_tick(tick)
         actions: dict[str, object] = {}
@@ -186,6 +191,7 @@ class PolicyRuntime:
                 agent_id=agent_id,
                 tick=tick,
                 guardrail_fn=_guard,
+                dto_world=dto_world,
             )
             if selected_intent.kind == "wait":
                 wait_payload: dict[str, object] = {"kind": "wait"}
@@ -255,8 +261,15 @@ class PolicyRuntime:
                         target_agent=intent.target_agent,
                     )
                 else:
-                    world.record_chat_failure(agent_id, intent.target_agent)
-                    world.record_relationship_guard_block(
+                    self._emit_guardrail_request(
+                        world,
+                        "chat_failure",
+                        speaker=agent_id,
+                        listener=intent.target_agent,
+                    )
+                    self._emit_guardrail_request(
+                        world,
+                        "relationship_block",
                         agent_id=agent_id,
                         reason="chat_rival",
                         target_agent=intent.target_agent,
@@ -267,7 +280,21 @@ class PolicyRuntime:
                 return AgentIntent(kind="wait", blocked=True)
         if intent.kind in {"request", "start"} and intent.object_id:
             guard = getattr(self.behavior, "_rivals_in_queue", None)
-            if callable(guard) and guard(world, agent_id, intent.object_id):
+            queue_view = None
+            relationship_view = None
+            if dto_world is not None:
+                queue_view = dto_world.queue_manager
+                relationship_view = dto_world
+            else:
+                queue_view = world.queue_manager
+                relationship_view = world
+            if callable(guard) and guard(
+                world,
+                agent_id,
+                intent.object_id,
+                queue_view=queue_view,
+                relationship_view=relationship_view,
+            ):
                 if dto_world is not None:
                     dto_world.record_relationship_guard_block(
                         agent_id=agent_id,
@@ -275,7 +302,9 @@ class PolicyRuntime:
                         object_id=intent.object_id,
                     )
                 else:
-                    world.record_relationship_guard_block(
+                    self._emit_guardrail_request(
+                        world,
+                        "relationship_block",
                         agent_id=agent_id,
                         reason="queue_rival",
                         object_id=intent.object_id,
@@ -285,6 +314,22 @@ class PolicyRuntime:
                     cancel(agent_id)
                 return AgentIntent(kind="wait", blocked=True)
         return intent
+
+    def _emit_guardrail_request(
+        self,
+        world: WorldState,
+        variant: str,
+        **payload: Any,
+    ) -> None:
+        emitter = getattr(world, "emit_event", None)
+        request: dict[str, Any] = {"variant": variant}
+        for key, value in payload.items():
+            if value is not None:
+                request[key] = value
+        if callable(emitter):
+            emitter("policy.guardrail.request", request)
+            return
+        raise RuntimeError("WorldState.emit_event unavailable for guardrail event request")
 
     def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
         """Record rewards and termination signals into internal buffers."""
