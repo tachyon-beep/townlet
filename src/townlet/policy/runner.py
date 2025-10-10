@@ -184,6 +184,11 @@ class PolicyRuntime:
 
         self._behavior_bridge.set_policy_action_provider(provider)
 
+    def supports_observation_envelope(self) -> bool:
+        """PolicyRuntime requires DTO observation envelopes."""
+
+        return True
+
     def decide(
         self,
         world: WorldState,

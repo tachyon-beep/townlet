@@ -24,6 +24,28 @@ class PolicyController:
         self._port = port
         self._world_supplier: Callable[[], Any] | None = None
         self._legacy_observation_warning_emitted = False
+        capability = getattr(self._backend, "supports_observation_envelope", None)
+        if capability is None or not callable(capability):
+            raise TypeError(
+                "Policy backend must implement supports_observation_envelope(); upgrade provider."
+            )
+        if not bool(capability()):
+            logger.warning(
+                "policy_backend_dto_support_missing provider=%s message='Backend reports "
+                "missing DTO support; legacy observation batches will stop working soon.'",
+                self._backend.__class__.__name__,
+            )
+        port_capability = getattr(self._port, "supports_observation_envelope", None)
+        if port_capability is None or not callable(port_capability):
+            raise TypeError(
+                "Policy port must expose supports_observation_envelope(); update adapter."
+            )
+        if not bool(port_capability()):
+            logger.warning(
+                "policy_port_dto_support_missing adapter=%s message='Policy adapter does not "
+                "support DTO envelopes; legacy compatibility will be removed soon.'",
+                self._port.__class__.__name__,
+            )
         self._attach_world_supplier()
 
     # ------------------------------------------------------------------

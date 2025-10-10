@@ -7,6 +7,7 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import logging
 import random
@@ -138,6 +139,9 @@ class SimulationLoop:
         self._policy_observation_envelope = None
         self._policy_observation_batch: dict[str, object] | None = None
         self._legacy_observations_warning_emitted = False
+        self._last_policy_metadata_event: dict[str, object] | None = None
+        self._last_policy_possession_agents: tuple[str, ...] | None = None
+        self._last_policy_anneal_event: dict[str, object] | None = None
         self._last_transport_status: dict[str, object] = {
             "provider": "port",
             "queue_length": 0,
@@ -180,6 +184,9 @@ class SimulationLoop:
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
         self._rivalry_history = []
+        self._last_policy_metadata_event = None
+        self._last_policy_possession_agents = None
+        self._last_policy_anneal_event = None
         self.world = WorldState.from_config(
             self.config,
             rng=self._rng_world,
@@ -530,11 +537,13 @@ class SimulationLoop:
                 runtime_observation_variant=self.config.observation_variant,
                 runtime_anneal_ratio=anneal_ratio,
             )
+            possessed_agents_list = sorted(str(agent) for agent in possessed_agents)
             policy_metadata = {
                 "identity": policy_identity,
-                "possessed_agents": list(possessed_agents),
+                "possessed_agents": possessed_agents_list,
                 "option_switch_counts": {
-                    str(agent): int(count) for agent, count in option_switch_counts.items()
+                    str(agent): int(count)
+                    for agent, count in sorted(option_switch_counts.items())
                 },
                 "anneal_ratio": anneal_ratio,
             }
@@ -601,6 +610,14 @@ class SimulationLoop:
             except Exception:  # pragma: no cover - defensive
                 logger.debug("anneal_context_unavailable", exc_info=True)
 
+            if self._telemetry_port is not None:
+                self._emit_policy_events(
+                    policy_metadata=policy_metadata,
+                    possessed_agents=possessed_agents_list,
+                    anneal_ratio=anneal_ratio,
+                    anneal_context=anneal_context,
+                )
+
             dto_envelope = build_observation_envelope(
                 tick=self.tick,
                 observations=observations,
@@ -653,7 +670,7 @@ class SimulationLoop:
                     "perturbations": perturbation_state,
                     "policy_identity": policy_identity,
                     "policy_metadata": policy_metadata,
-                    "possessed_agents": possessed_agents,
+                    "possessed_agents": possessed_agents_list,
                     "social_events": self.rewards.latest_social_events(),
                     "runtime_variant": self._runtime_variant,
                     "observations_dto": dto_envelope.model_dump(by_alias=True),
@@ -781,6 +798,62 @@ class SimulationLoop:
         backend_consumer = getattr(self.policy, "update_observation_envelope", None)
         if callable(backend_consumer):
             backend_consumer(envelope)
+
+    def _emit_policy_events(
+        self,
+        *,
+        policy_metadata: Mapping[str, object],
+        possessed_agents: Iterable[str],
+        anneal_ratio: float | None,
+        anneal_context: Mapping[str, object] | None,
+    ) -> None:
+        telemetry = self._telemetry_port
+        if telemetry is None:
+            return
+
+        metadata_copy = copy.deepcopy(dict(policy_metadata))
+        option_counts = metadata_copy.get("option_switch_counts")
+        if isinstance(option_counts, Mapping):
+            metadata_copy["option_switch_counts"] = {
+                str(agent): int(count)
+                for agent, count in sorted(option_counts.items())
+            }
+        sorted_agents = tuple(sorted(str(agent) for agent in possessed_agents))
+        metadata_copy["possessed_agents"] = list(sorted_agents)
+        metadata_payload: dict[str, object] = {
+            "tick": self.tick,
+            "provider": str(self._policy_provider),
+            "metadata": metadata_copy,
+        }
+        if metadata_payload != self._last_policy_metadata_event:
+            telemetry.emit_event("policy.metadata", metadata_payload)
+            self._last_policy_metadata_event = copy.deepcopy(metadata_payload)
+
+        if (
+            self._last_policy_possession_agents is None
+            or sorted_agents != self._last_policy_possession_agents
+        ):
+            possession_payload: dict[str, object] = {
+                "tick": self.tick,
+                "provider": str(self._policy_provider),
+                "agents": list(sorted_agents),
+                "possessed_agents": list(sorted_agents),
+            }
+            telemetry.emit_event("policy.possession", possession_payload)
+            self._last_policy_possession_agents = sorted_agents
+
+        context_payload: dict[str, object] = {}
+        if isinstance(anneal_context, Mapping):
+            context_payload = copy.deepcopy(dict(anneal_context))
+        anneal_payload: dict[str, object] = {
+            "tick": self.tick,
+            "provider": str(self._policy_provider),
+            "ratio": float(anneal_ratio) if anneal_ratio is not None else None,
+            "context": context_payload,
+        }
+        if anneal_payload != self._last_policy_anneal_event:
+            telemetry.emit_event("policy.anneal.update", anneal_payload)
+            self._last_policy_anneal_event = copy.deepcopy(anneal_payload)
 
     def _build_bootstrap_policy_envelope(self) -> "ObservationEnvelope":
         """Build a DTO envelope from the current world when none has been recorded."""

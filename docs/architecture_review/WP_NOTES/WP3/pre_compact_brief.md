@@ -15,10 +15,11 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Stage 3A wiring landed: `SimulationLoop` now bootstraps DTO envelopes before policy decisions, logs whenever legacy observation batches are consumed, and pushes envelopes into the policy backend cache. `PolicyRuntime` tracks envelopes via `ObservationEnvelopeCache`, and `PolicyController` enforces DTO-aware adapters (raises if providers reject the envelope).
 - Stage 3B completed: `DTOWorldView` exposes DTO agent snapshots/iterators, scripted behaviour decisions run entirely off DTO data (with fallback logging), and regression tests (`tests/policy/test_scripted_behavior_dto.py`) cover pending intent promotion, chat selection, and rivalry guardrails.
 - Stage 3C started: `TrajectoryService.flush_transitions` accepts DTO envelopes (preserving map/features/anneal payloads) and the training orchestrator now records DTO-backed rollouts (`tests/policy/test_trajectory_service_dto.py`, `tests/policy/test_training_orchestrator_capture.py`).
+- Stage 3D progressing: `PolicyBackend` ports/backends now advertise DTO support, `resolve_policy_backend` validates the capability, the stub backend raises a `DeprecationWarning` if legacy observation batches are provided without a DTO envelope, and `SimulationLoop` streams `policy.metadata` / `policy.possession` / `policy.anneal.update` events via the dispatcher.
+- Stage 3E safeguards added: DTO parity harness re-run, policy controllers guard against missing envelopes, telemetry policy-event smokes land, and rollout capture tests continue to validate DTO trajectory plumbing.
 
 ## Outstanding Work (DTO Rollout)
-1. Move policy metadata/ML adapters onto DTO batches and stream
-   `policy.metadata`/`policy.possession`/`policy.anneal.update` events.
+1. Finish migrating ML adapters onto DTO batches and ensure policy metadata events remain accurate during training flows.
 2. Extend parity harness to cover reward breakdown comparisons and run at least
    one ML-backed scenario (short PPO/BC run) to prove DTO-only parity.
 3. Remove legacy observation payloads / world supplier hooks once parity and

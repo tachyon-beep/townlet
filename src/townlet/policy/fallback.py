@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from collections.abc import Mapping
 from typing import Any, TYPE_CHECKING
 
@@ -35,6 +36,11 @@ class StubPolicyBackend(PolicyBackendProtocol):
     def reset_state(self) -> None:
         return None
 
+    def supports_observation_envelope(self) -> bool:
+        """Stub backend tolerates envelopes but does not require them."""
+
+        return True
+
     def decide(
         self,
         world: Any,
@@ -43,6 +49,13 @@ class StubPolicyBackend(PolicyBackendProtocol):
         envelope: "ObservationEnvelope | None" = None,
         observations: Mapping[str, object] | None = None,
     ) -> Mapping[str, object]:
+        if envelope is None and observations is not None:
+            warnings.warn(
+                "StubPolicyBackend received legacy observation batches without a DTO "
+                "envelope; support for this path will be removed in a future release.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         _ = world, tick, envelope, observations
         return {}
 

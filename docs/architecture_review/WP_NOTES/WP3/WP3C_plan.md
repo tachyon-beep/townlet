@@ -167,24 +167,25 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
      consumes DTOs and produces the older schema solely for export, with TODO to drop after Stage 5.
 
 ### Stage 3D – Surface/port adjustments
-1. **Ports and stubs**
+1. **Ports and stubs** *(completed 2025-10-10)*
    - Update the `PolicyBackend` protocol (`townlet/policy/api.py`) and stub implementations to make
      DTO support explicit. Emit a `DeprecationWarning` if the stub consumes `observations` instead of
      the DTO envelope.
-2. **Telemetry events**
+2. **Telemetry events** *(completed 2025-10-10)*
    - Emit `policy.metadata`, `policy.possession`, and `policy.anneal.update` events directly from
      DTO-derived data, ensuring the event dispatcher gets fed without needing world lookups.
 
 ### Stage 3E – Regression safety net
-1. **Parities**
-   - Re-run Stage 2 parity harness after each sub-stage and compare diff logs (`dto_parity`)
-     to confirm behaviour parity.
-2. **Targeted tests**
-   - Add smoke for `SimulationLoop.step` verifying the action provider raises if no DTO is present,
-     and that scripted guardrails fire purely via DTO data.
-3. **Rollout capture**
-   - Execute a short end-to-end rollout (`scripts/run_simulation.py`) ensuring the training
-     orchestrator can still harvest frames and that telemetry captures the new policy events.
+1. **Parities** *(completed 2025-10-10)*
+   - DTO parity harness exercised via `pytest tests/core/test_sim_loop_dto_parity.py -q`;
+     results archived in `docs/architecture_review/WP_NOTES/WP3/dto_parity/`.
+2. **Targeted tests** *(completed 2025-10-10)*
+   - Added DTO enforcement smoke (`tests/orchestration/test_policy_controller_dto_guard.py`) and
+     telemetry policy-event coverage (`tests/core/test_sim_loop_policy_events.py`,
+     `tests/telemetry/test_policy_events.py`).
+3. **Rollout capture** *(completed 2025-10-10)*
+   - `tests/policy/test_training_orchestrator_capture.py` continues to validate DTO rollouts while
+     the new telemetry policy events remain available for downstream consumers.
 
 **Risks & mitigations**
 - Torch optionality: gate new ML-dependent tests with `pytest.importorskip("torch")` and mark them

@@ -68,6 +68,8 @@ class TelemetryPublisher:
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
         self._latest_events: list[dict[str, object]] = []
+        self._latest_policy_metadata_event: dict[str, object] | None = None
+        self._latest_policy_anneal_event: dict[str, object] | None = None
         self._event_subscribers: list[Callable[[list[dict[str, object]]], None]] = []
         self._latest_employment_metrics: dict[str, object] = {}
         self._latest_conflict_snapshot: dict[str, object] = {
@@ -420,6 +422,10 @@ class TelemetryPublisher:
         state["rivalry_events"] = list(self._rivalry_event_history)
         state["console_results"] = list(self._console_results_batch)
         state["possessed_agents"] = list(self._latest_possessed_agents)
+        if self._latest_policy_metadata_event is not None:
+            state["policy_metadata_event"] = copy.deepcopy(self._latest_policy_metadata_event)
+        if self._latest_policy_anneal_event is not None:
+            state["policy_anneal_event"] = copy.deepcopy(self._latest_policy_anneal_event)
         if self._latest_precondition_failures:
             state["precondition_failures"] = [
                 dict(entry) for entry in self._latest_precondition_failures
@@ -675,6 +681,16 @@ class TelemetryPublisher:
             self._latest_possessed_agents = [str(agent) for agent in possessed_payload]
         else:
             self._latest_possessed_agents = []
+        metadata_event_payload = payload.get("policy_metadata_event")
+        if isinstance(metadata_event_payload, Mapping):
+            self._latest_policy_metadata_event = copy.deepcopy(dict(metadata_event_payload))
+        else:
+            self._latest_policy_metadata_event = None
+        anneal_event_payload = payload.get("policy_anneal_event")
+        if isinstance(anneal_event_payload, Mapping):
+            self._latest_policy_anneal_event = copy.deepcopy(dict(anneal_event_payload))
+        else:
+            self._latest_policy_anneal_event = None
         failures_payload = payload.get("precondition_failures")
         if isinstance(failures_payload, list):
             self._latest_precondition_failures = [
@@ -1350,6 +1366,62 @@ class TelemetryPublisher:
             return None
         return dict(self._latest_policy_identity)
 
+    def _ingest_policy_metadata(self, payload: Mapping[str, Any]) -> None:
+        metadata_payload = payload.get("metadata")
+        if not isinstance(metadata_payload, Mapping):
+            self._latest_policy_metadata_event = None
+            return
+        metadata_copy = copy.deepcopy(dict(metadata_payload))
+        option_counts = metadata_copy.get("option_switch_counts")
+        if isinstance(option_counts, Mapping):
+            metadata_copy["option_switch_counts"] = {
+                str(agent): int(count)
+                for agent, count in sorted(option_counts.items())
+            }
+        possessed_payload = metadata_copy.get("possessed_agents")
+        if isinstance(possessed_payload, Iterable) and not isinstance(
+            possessed_payload, (str, bytes)
+        ):
+            agents = sorted({str(agent) for agent in possessed_payload})
+            metadata_copy["possessed_agents"] = agents
+        event_payload: dict[str, object] = {
+            "tick": int(payload.get("tick", -1)),
+            "provider": str(payload.get("provider", "")),
+            "metadata": metadata_copy,
+        }
+        self._latest_policy_metadata_event = copy.deepcopy(event_payload)
+        identity_payload = metadata_copy.get("identity")
+        if isinstance(identity_payload, Mapping):
+            self.update_policy_identity(identity_payload)
+
+    def latest_policy_metadata(self) -> dict[str, object] | None:
+        if self._latest_policy_metadata_event is None:
+            return None
+        return copy.deepcopy(self._latest_policy_metadata_event)
+
+    def _ingest_policy_anneal(self, payload: Mapping[str, Any]) -> None:
+        event_payload: dict[str, object] = {
+            "tick": int(payload.get("tick", -1)),
+            "provider": str(payload.get("provider", "")),
+        }
+        if "ratio" in payload:
+            ratio_value = payload.get("ratio")
+            if isinstance(ratio_value, (int, float)):
+                event_payload["ratio"] = float(ratio_value)
+            elif ratio_value is None:
+                event_payload["ratio"] = None
+        context_payload = payload.get("context")
+        if isinstance(context_payload, Mapping):
+            event_payload["context"] = copy.deepcopy(dict(context_payload))
+        else:
+            event_payload["context"] = {}
+        self._latest_policy_anneal_event = copy.deepcopy(event_payload)
+
+    def latest_policy_anneal(self) -> dict[str, object] | None:
+        if self._latest_policy_anneal_event is None:
+            return None
+        return copy.deepcopy(self._latest_policy_anneal_event)
+
     def _ingest_snapshot_migrations(self, applied: Iterable[str]) -> None:
         self._latest_snapshot_migrations = [str(item) for item in applied]
 
@@ -1526,10 +1598,16 @@ class TelemetryPublisher:
         if name == "loop.failure":
             self._ingest_loop_failure(payload)
             return
+        if name == "policy.metadata":
+            self._ingest_policy_metadata(payload)
+            return
         if name == "policy.possession":
             agents = payload.get("agents", payload.get("possessed_agents", ()))
             if isinstance(agents, Iterable):
                 self._ingest_possessed_agents(agents)
+            return
+        if name == "policy.anneal.update":
+            self._ingest_policy_anneal(payload)
             return
         if name == "console.result":
             result_payload = dict(payload)

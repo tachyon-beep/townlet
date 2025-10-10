@@ -15,12 +15,15 @@ class PolicyBackend(Protocol):
     def on_episode_start(self, agent_ids: Iterable[str]) -> None:
         """Prepare the backend for a new episode, receiving participating agent IDs."""
 
+    def supports_observation_envelope(self) -> bool:
+        """Return True when the backend consumes DTO observation envelopes."""
+
     def decide(
         self,
         observations: Mapping[str, Any],
         *,
         tick: int,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
     ) -> Mapping[str, Any]:
         """Return an action mapping for the provided observations/DTO envelope."""
 

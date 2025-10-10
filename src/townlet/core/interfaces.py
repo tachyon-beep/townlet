@@ -66,12 +66,15 @@ class PolicyBackendProtocol(Protocol):
     def reset_state(self) -> None:
         """Reset any cached policy state (e.g., trajectories, RNG streams)."""
 
+    def supports_observation_envelope(self) -> bool:
+        """Return True when the backend expects DTO observation envelopes."""
+
     def decide(
         self,
         world: WorldState,
         tick: int,
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
         observations: ObservationBatch | None = None,
     ) -> Mapping[str, object]:
         """Return an action mapping for the provided world/tick."""

@@ -16,7 +16,7 @@
   - Capture representative tick dumps from a baseline simulation/training run for analysis.
   - Produce a draft DTO envelope (per-agent + global) and document outstanding gaps / risks prior to adapter changes.
 - [x] Implement DTO dataclasses/converters plus validation harness comparing legacy observations vs DTO payloads. *(Schema v0.2.0 live: per-agent needs/wallet/job/inventory/personality + global employment/economy/anneal snapshots; parity harness now exercises these fields via recorded world state.)*
-- [~] Update `PolicyController` + scripted adapter to consume DTOs and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events (temporary legacy bridge for ML paths). *(Scripted behaviour now uses `DTOWorldView` queue/affordance/relationship data and emits guardrail events; ML metadata streaming still outstanding.)*
+- [x] Update `PolicyController` + scripted adapter to consume DTOs and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events. *(SimulationLoop now streams policy metadata/possession/anneal events from DTO payloads; ML backends continue under WP3C for full parity validation.)*
 - [x] Replace transitional bridges (`WorldContext.apply_actions` fallback, queue snapshot normalisation) once modular systems cover the full mutation pipeline. *(`process_actions`/`advance_running_affordances` now own the pipeline; `employment`/`economy`/`relationships` steps run each tick, and `state.resolve_affordances` is no longer invoked by the modular path.)*
 - [x] Execute WP3B_plan: reattach modular systems (queues/affordances/employment/economy) and drop the legacy bridge.
 - [ ] Execute WP3C_plan: expand DTO parity harness, run ML smoke, and remove legacy observation payloads.

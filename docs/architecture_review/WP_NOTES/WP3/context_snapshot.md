@@ -32,7 +32,7 @@ Use this as reorientation material if the working memory is compacted. It summar
   remains outstanding for DTO-only validation.
 - Todo:
   - Define observation DTOs from `WorldContext`/observation builder.
-  - Update policy adapters (scripted + ML) to consume DTO batches and emit `policy.metadata` / `policy.possession` / `policy.anneal.update` events via telemetry.
+  - DTO-driven policy events (`policy.metadata` / `policy.possession` / `policy.anneal.update`) now stream from `SimulationLoop`; finish migrating ML adapters to the DTO pathway before retiring remaining legacy hooks.
   - Adjust training/orchestrator code to the new DTO flow.
 
 ## Simulation Loop Cleanup (WP3 Section 3)

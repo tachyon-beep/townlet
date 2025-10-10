@@ -28,12 +28,17 @@ class ScriptedPolicyAdapter(PolicyBackend):
         self._backend.reset_state()
         self._tick = 0
 
+    def supports_observation_envelope(self) -> bool:
+        """Expose DTO envelope support expected by the policy controller."""
+
+        return True
+
     def decide(
         self,
         observations: Mapping[str, Any],
         *,
         tick: int,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
     ) -> Mapping[str, Any]:
         if self._world_provider is None:
             raise RuntimeError("Policy adapter world provider not configured")

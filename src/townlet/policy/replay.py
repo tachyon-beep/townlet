@@ -545,6 +545,9 @@ def frames_to_replay_sample(frames: Sequence[dict[str, Any]]) -> ReplaySample:
     if not frames:
         raise ValueError("frames sequence cannot be empty")
 
+    # TODO(WP3 Stage 5): drop this legacy export translator once external replay
+    # payloads move to native DTO artefacts.
+
     timesteps = len(frames)
     map_seq = np.stack(
         [np.asarray(frame["map"], dtype=np.float32) for frame in frames], axis=0
