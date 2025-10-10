@@ -27,6 +27,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.employment_service import EmploymentCoordinator
     from townlet.world.grid import WorldState
     from townlet.world.perturbations.service import PerturbationService
+    from townlet.world.observations.interfaces import ObservationServiceProtocol
     from townlet.world.queue import QueueConflictTracker, QueueManager
     from townlet.lifecycle.manager import LifecycleManager
     from townlet.scheduler.perturbations import PerturbationScheduler
@@ -52,6 +53,7 @@ class WorldContext:
     config: object
     emit_event_callback: Callable[[str, dict[str, Any]], None]
     sync_reservation_callback: Callable[[str], None]
+    observation_service: "ObservationServiceProtocol | None" = None
     systems: tuple[SystemStep, ...] | None = None
     rng_manager: RngStreamManager | None = None
     _pending_actions: dict[str, object] = field(default_factory=dict, init=False, repr=False)

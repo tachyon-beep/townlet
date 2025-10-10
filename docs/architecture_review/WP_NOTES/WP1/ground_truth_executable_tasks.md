@@ -104,3 +104,13 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - Completed **WC-C** – tightened `WorldContext.apply_actions` with validation and added regression test `test_world_context_apply_actions_validation`.
 - WC-D plan: validate `WorldContext.tick` orchestrates actions + systems via tests covering (1) pending vs prepared action merge/clear, (2) nightly reset invocation on cadence, ensuring returned `RuntimeStepResult` matches expectations. No structural code changes anticipated; focus on regression coverage.
 - Completed **WC-D** – added regression tests `test_world_context_tick_merges_pending_and_prepared` and `test_world_context_tick_triggers_nightly_reset` to cover tick orchestration behaviour.
+
+### WC-E – Observation envelope support (planned work)
+- **OBS-Prep1** Inventory `build_observation_envelope` inputs and map each field to a world/context source (queues, employment, policy metadata, etc.); capture the mapping in a short table under `docs/architecture_review/WP_NOTES/WP1`.
+- **OBS-Prep2** Design a lightweight observation service interface (`WorldObservationService`) responsible for assembling raw observation batches and agent contexts; document API and dependencies.
+- **OBS-Prep3** Thread the observation service through `WorldState` → `WorldContext` construction (update `WorldState.__post_init__` and context factory wiring) without changing behaviour.
+- **OBS-Prep4** Implement data collection helpers inside `WorldContext.tick` (or dedicated methods) that surface queue metrics, running affordances, relationship snapshots, employment/economy snapshots, and anneal context so the DTO builder no longer depends on the simulation loop.
+- **OBS-Prep5** Add `WorldContext.observe` implementation calling `build_observation_envelope` using the data gathered above; ensure the method accepts optional agent IDs and returns DTO envelopes.
+- **OBS-Prep6** Write unit/integration tests covering: (a) per-agent DTO fields (needs, wallet, queue state, pending intent), (b) terminated flag propagation, (c) global context snapshots. Use fixture worlds to ensure determinism.
+- **OBS-Prep7** Update `SimulationLoop` to consume the new `WorldContext.observe` method instead of rebuilding envelopes manually; adjust policy/telemetry emission code accordingly and run DTO parity harness to confirm no regressions.
+- Completed **OBS-Prep3** – threaded optional observation service through `WorldState` and `WorldContext` construction (no behavioural changes).

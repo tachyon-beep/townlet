@@ -57,9 +57,8 @@ from townlet.world.hooks import load_modules as load_hook_modules
 from townlet.world.observation import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )
-from townlet.world.observation import (
-    snapshot_precondition_context,
-)
+from townlet.world.observation import snapshot_precondition_context
+from townlet.world.observations.interfaces import ObservationServiceProtocol
 from townlet.world.perturbations import PerturbationService
 from townlet.world.preconditions import (
     CompiledPrecondition,
@@ -190,6 +189,9 @@ class WorldState:
     _console_controller: WorldConsoleController = field(init=False, repr=False)
     _spatial_index: WorldSpatialIndex = field(init=False, repr=False)
     _queue_conflicts: QueueConflictTracker = field(init=False)
+    _observation_service: ObservationServiceProtocol | None = field(
+        init=False, default=None, repr=False
+    )
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
     _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
@@ -288,6 +290,7 @@ class WorldState:
             record_rivalry_conflict=self._apply_rivalry_conflict,
         )
         self._hook_registry = HookRegistry()
+        self._observation_service = None
         modules = list(self.config.affordances.runtime.hook_allowlist)
         if not modules:
             modules.append("townlet.world.hooks.default")
@@ -430,6 +433,7 @@ class WorldState:
             config=self.config,
             emit_event_callback=self._emit_event,
             sync_reservation_callback=self._sync_reservation,
+            observation_service=self._observation_service,
         )
 
     @property
