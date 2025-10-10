@@ -117,9 +117,12 @@ class BehaviorBridge:
         tick: int,
         guardrail_fn: Callable[[WorldState, str, AgentIntent], AgentIntent],
         *,
-        dto_world: DTOWorldView | None = None,
+        dto_world: DTOWorldView,
     ) -> tuple[AgentIntent, bool]:
         """Determine an agent intent and enforce option commit guardrails."""
+
+        if dto_world is None:  # pragma: no cover - defensive guard
+            raise ValueError("BehaviorBridge.decide_agent requires a DTO world view")
 
         scripted = self.behavior.decide(world, agent_id, dto_world=dto_world)
         blended = self._select_intent_with_blend(world, agent_id, scripted)

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from townlet.world.dto.observation import AgentObservationDTO, ObservationEnvelope
 
 
 @dataclass
@@ -39,24 +42,23 @@ class TrajectoryService:
         entry.setdefault("rewards", []).append(reward)
         entry.setdefault("dones", []).append(bool(done))
 
-    def flush_transitions(self, observations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    def flush_transitions(
+        self,
+        observations: Mapping[str, Mapping[str, Any]] | ObservationEnvelope,
+        *,
+        envelope: ObservationEnvelope | None = None,
+    ) -> list[dict[str, Any]]:
         """Combine transitions with observations and clear the per-agent cache."""
 
-        frames: list[dict[str, Any]] = []
-        for agent_id, payload in observations.items():
-            entry = self._transitions.get(agent_id, {})
-            frame = {
-                "tick": self._current_tick,
-                "agent_id": agent_id,
-                "map": payload.get("map"),
-                "features": payload.get("features"),
-                "metadata": payload.get("metadata"),
-                "action": entry.get("action"),
-                "action_id": entry.get("action_id"),
-                "rewards": entry.get("rewards", []),
-                "dones": entry.get("dones", []),
-            }
-            frames.append(frame)
+        frames: list[dict[str, Any]]
+        if isinstance(observations, ObservationEnvelope):
+            envelope = observations
+            frames = self._frames_from_envelope(observations)
+        elif envelope is not None:
+            frames = self._frames_from_envelope(envelope, fallback=observations)
+        else:
+            frames = self._frames_from_mapping(observations)
+
         self._transitions.clear()
         return frames
 
@@ -91,3 +93,73 @@ class TrajectoryService:
 
         return self._trajectory
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _frames_from_mapping(
+        self,
+        observations: Mapping[str, Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        frames: list[dict[str, Any]] = []
+        for agent_id, payload in observations.items():
+            entry = self._transitions.get(agent_id, {})
+            frame = {
+                "tick": self._current_tick,
+                "agent_id": agent_id,
+                "map": payload.get("map"),
+                "features": payload.get("features"),
+                "metadata": payload.get("metadata"),
+                "action": entry.get("action"),
+                "action_id": entry.get("action_id"),
+                "rewards": entry.get("rewards", []),
+                "dones": entry.get("dones", []),
+            }
+            frames.append(frame)
+        return frames
+
+    def _frames_from_envelope(
+        self,
+        envelope: ObservationEnvelope,
+        *,
+        fallback: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        frames: list[dict[str, Any]] = []
+        agent_lookup = {agent.agent_id: agent for agent in envelope.agents}
+        if fallback:
+            for agent_id, payload in fallback.items():
+                if agent_id not in agent_lookup:
+                    # Allow transitional callers to include legacy payloads for agents
+                    # that were not present in the DTO (should not happen after Stage 3C).
+                    agent_lookup[agent_id] = self._build_agent_from_mapping(
+                        agent_id, payload
+                    )
+        anneal_context = dict(envelope.global_context.anneal_context or {})
+
+        for agent_id, agent in sorted(agent_lookup.items(), key=lambda item: item[0]):
+            entry = self._transitions.get(agent_id, {})
+            frame = {
+                "tick": self._current_tick,
+                "agent_id": agent_id,
+                "map": agent.map,
+                "features": agent.features,
+                "metadata": dict(getattr(agent, "metadata", {}) or {}),
+                "anneal_context": anneal_context,
+                "action": entry.get("action"),
+                "action_id": entry.get("action_id"),
+                "rewards": entry.get("rewards", []),
+                "dones": entry.get("dones", []),
+            }
+            frames.append(frame)
+        return frames
+
+    def _build_agent_from_mapping(
+        self,
+        agent_id: str,
+        payload: Mapping[str, Any],
+    ) -> AgentObservationDTO:
+        return AgentObservationDTO(
+            agent_id=agent_id,
+            map=payload.get("map"),
+            features=payload.get("features"),
+            metadata=payload.get("metadata") or {},
+        )

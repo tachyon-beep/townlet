@@ -89,8 +89,13 @@ class PolicyController:
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:
         self._backend.post_step(rewards, terminated)
 
-    def flush_transitions(self, observations: Mapping[str, object]) -> None:
-        self._backend.flush_transitions(observations)
+    def flush_transitions(
+        self,
+        observations: Mapping[str, object],
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+    ) -> None:
+        self._backend.flush_transitions(observations, envelope=envelope)
 
     # ------------------------------------------------------------------
     # Diagnostics / telemetry helpers

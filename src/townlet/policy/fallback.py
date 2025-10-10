@@ -49,8 +49,13 @@ class StubPolicyBackend(PolicyBackendProtocol):
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:
         _ = rewards, terminated
 
-    def flush_transitions(self, observations: Mapping[str, object]) -> None:
-        _ = observations
+    def flush_transitions(
+        self,
+        observations: Mapping[str, object],
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+    ) -> None:
+        _ = observations, envelope
 
     def latest_policy_snapshot(self) -> Mapping[str, Mapping[str, object]]:
         return {}

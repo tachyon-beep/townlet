@@ -381,10 +381,20 @@ class PolicyRuntime:
                 self._behavior_bridge.clear_commit_state(agent_id)
 
     def flush_transitions(
-        self, observations: dict[str, dict[str, object]]
+        self,
+        observations: Mapping[str, Mapping[str, object]],
+        *,
+        envelope: "ObservationEnvelope | None" = None,
     ) -> list[dict[str, object]]:
         """Combine stored transition data with observations and return frames."""
-        frames = self._trajectory_service.flush_transitions(observations)
+        dto_envelope = envelope
+        if dto_envelope is None and self._envelope_cache is not None:
+            dto_envelope = self._envelope_cache.envelope
+
+        frames = self._trajectory_service.flush_transitions(
+            observations,
+            envelope=dto_envelope,
+        )
         for frame in frames:
             self._annotate_with_policy_outputs(frame)
         self._trajectory_service.extend_trajectory(frames)

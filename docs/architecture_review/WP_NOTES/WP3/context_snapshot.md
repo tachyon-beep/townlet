@@ -22,6 +22,12 @@ Use this as reorientation material if the working memory is compacted. It summar
   behaviour parity. DTO queue snapshots normalise to agent identifiers to keep guardrails compatible,
   `queues.step` now captures ghost-step conflicts, and `advance_running_affordances` handles
   completion/hand-over events via the runtime service.
+- Scripted behaviour now consumes DTO-backed agent snapshots/iterators provided by `DTOWorldView`;
+  guard tests (`tests/policy/test_scripted_behavior_dto.py`) cover pending-intent promotion, chat
+  selection, and rivalry avoidance without touching legacy world state.
+- `TrajectoryService.flush_transitions` accepts DTO envelopes (with anneal context preserved) and is
+  covered by `tests/policy/test_trajectory_service_dto.py`; loop wiring still passes legacy batches
+  until Stage 3C completes the adapter migration.
 - Scripted parity smokes (`tests/test_behavior_personality_bias.py`) now pass; reward/ML parity
   remains outstanding for DTO-only validation.
 - Todo:

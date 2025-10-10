@@ -59,20 +59,17 @@ post-tick need levels.
 
 ## Stage 3A – Direct `WorldState` reads (2025-10-10)
 
-Audit of the remaining policy code paths that still reach into the raw `WorldState`
-instead of the DTO façade. These references are now tracked so we can close them out during WP3B/WP3C.
+Initial audit of the policy layer highlighted the last pockets of legacy world access.
+Stage 3B executes the remediation plan summarised below.
 
-- `src/townlet/policy/behavior.py` (`decide_agent`, guardrail helpers) – guardrail logic inspects
-  `world.agents` snapshots and queue/relationship helpers. DTO equivalents live in `DTOWorldView`
-  but the scripted behaviours still fall back to `world` for trust/rivalry details.
-- `src/townlet/policy/behavior.py` (`_rivals_in_queue`, chat guard) – reads `world.queue_manager`
-  and `world.relationship_tie` when DTO queue data is missing. Tagged for removal once DTO queue
-  helpers are exercised in Stage 3B.
-- `src/townlet/policy/scripted.py` – scripted capture adapters still enumerate `world.agents` to
-  emit wait actions and update snapshots; DTO-backed scripted fixtures will replace these during the
-  Stage 3B parity sweep.
-- `src/townlet/policy/scenario_utils.py` – scenario seeding utilities populate `loop.world.agents`
-  directly; intentional for fixtures, but noted so runtime logic does not depend on it.
+## Stage 3B Summary (2025-10-10)
 
-All other `WorldState` accesses inside the policy runtime now pass through `DTOWorldView` courtesy of
-the Stage 3A wiring. This list should shrink as we execute the Stage 3B plan.
+- `DTOWorldView` now materialises per-agent snapshots (needs, job, personality, pending intent) and
+  exposes iterator helpers plus queue affinity metrics. Legacy fallbacks log once when invoked.
+- `ScriptedBehavior` routes all decision logic (`decide`, `_satisfy_needs`, `_maybe_chat`,
+  `_avoid_rivals`, `_rivals_in_queue`, `should_avoid`) through the DTO façade; tests guard the
+  DTO-only path (`tests/policy/test_scripted_behavior_dto.py`).
+- `BehaviorBridge.decide_agent` requires a DTO view; policy runtime already guarantees this after Stage 3A.
+  TODO marker remains on `_find_object_of_type` until DTOs export object rosters (Stage 5).
+- Remaining legacy reads: scripted CLI adapters (`policy/scripted.py`) and scenario seed helpers still
+  touch `loop.world.agents` by design; they will migrate once DTO-capable capture tooling lands.

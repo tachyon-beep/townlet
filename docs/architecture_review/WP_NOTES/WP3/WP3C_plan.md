@@ -110,30 +110,51 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
      allowing ML paths to opt-in gradually.
 
 ### Stage 3B – DTO world view & scripted behaviour parity
-1. **DTOWorldView enrichment**
-   - Provide agent lookup helpers (`agent_snapshot`, `agent_inventory`, `pending_intent`) sourced
-     from the DTO global context and per-agent blocks.
-   - Add queue/relationship convenience wrappers returning pure data so scripted behaviours can drop
-     their `world.` fallbacks (retain guarded fallback for tests until Stage 5).
-2. **Behavior bridge integration**
-   - Update `BehaviorBridge.decide_agent` and the guardrail pipelines to accept a required
-     `dto_world` parameter. Audit `_rivals_in_queue`, `cancel_pending`, and anneal machinery—ensure
-     they no longer touch `world` objects directly.
-   - For any remaining lookups (e.g., object affordance metadata) add TODO comments pointing to the
-     Stage 5 clean-up.
-3. **Scripted policy audit**
-   - Update scripted behaviour modules under `townlet/policy/scripted` to rely on DTO helpers.
-   - Add targeted fast tests (under `tests/policy/test_scripted_behavior_dto.py`) covering guardrail
-     scenarios, queue rivalry blocks, and pending-intent resets while exercising DTO-only data.
+*Status: completed 2025-10-10 — DTO view exposes agent snapshots; scripted behaviour + bridge consume DTO data with guard tests in place.*
+
+1. **DTOWorldView enrichment (`src/townlet/policy/dto_view.py`)**
+   - Build an `DTOAgentSnapshot` helper (SimpleNamespace or dataclass) capturing needs, wallet, inventory,
+     job context, personality traits, pending intent, and metadata derived from `ObservationEnvelope.agents`.
+   - Add lookup APIs:
+     - `agent_snapshot(agent_id)` returning the DTO-backed snapshot (fallback to legacy world if missing).
+     - `iter_agent_snapshots()` yielding `(agent_id, snapshot)` pairs in sorted order.
+     - `agent_position(agent_id)`, `agent_needs(agent_id)`, and `pending_intent(agent_id)` convenience accessors.
+     - `agents_at_position(position)` to support chat/avoid logic without scanning `world.agents`.
+   - Preserve existing queue/relationship views but expose DTO-derived `queue_affinity_metrics` where available.
+   - Ensure legacy fallbacks remain guarded (log once when invoked) so we can track stragglers prior to Stage 5.
+
+2. **Behavior bridge integration (`src/townlet/policy/behavior_bridge.py`)**
+   - Require a non-null `DTOWorldView` in `decide_agent` and downstream helpers; tighten type hints and early error if
+     it is absent (policy runtime now guarantees availability after Stage 3A).
+   - Thread the DTO view through blend/guardrail hooks so scripted behaviour no longer needs direct `WorldState` access
+     during decision making (policy action provider may still receive the legacy world for now).
+   - Add docstrings/TODO markers wherever we still rely on legacy affordance metadata so Stage 5 clean-up is explicit.
+
+3. **Scripted policy audit (`src/townlet/policy/behavior.py`, `src/townlet/policy/scripted.py`)**
+   - Route snapshot, rival, and agent iteration logic through the DTO helpers:
+     - Replace `world.agents[...]` lookups with `dto_world.agent_snapshot(...)`.
+     - Swap queue/relationship checks to DTO-first access, logging or falling back only when DTO data is absent.
+     - Abstract object lookups (`_find_object_of_type`) so DTO pathways can provide overrides later; document remaining
+       legacy dependencies (e.g., `world.objects`) with TODOs for Stage 5.
+   - Ensure pending-intent bookkeeping and guardrail calls operate purely on DTO-provided identifiers.
+
+4. **Targeted tests (`tests/policy/test_scripted_behavior_dto.py`)**
+   - Construct DTO fixtures from `dto_example_tick.json` to validate:
+     - Pending intent promotion uses DTO queue state even when the legacy queue manager raises (regression guard).
+     - Rivalry/chat logic iterates over DTO agent snapshots (configure world stub to raise if `agents` is accessed).
+     - Behaviour returns stable intents for DTO-only worlds (world stub lacking agent data).
+   - Patch existing behaviour tests, if needed, to inject DTO views and keep parity.
+
+5. **Documentation / tracking**
+   - Update `WP3B_trace_notes.md` with the new DTO-backed access patterns and list any residual legacy hooks.
+   - Record the change in `status.md` / `pre_compact_brief.md` once tests pass; flag remaining Stage 3C blockers.
 
 ### Stage 3C – Trajectory and training plumbing
-1. **Trajectory service**
-   - Extend `TrajectoryService.begin_tick/record_observation/flush_transitions` so they accept DTO
-     agent payloads. Ensure the structure used by PPO/BC (`map`, `features`, `anneal_context`) stays
-     identical by extracting tensors from the DTO converter rather than re-building them from
-     `WorldState`.
-   - Add unit coverage (`tests/policy/test_trajectory_service_dto.py`) to compare DTO-backed frames
-     against Stage 2 parity snapshots.
+1. **Trajectory service** *(completed 2025-10-10)*
+   - `TrajectoryService.flush_transitions` now accepts DTO envelopes (and optional legacy batches) and
+     consumes agent tensors plus anneal context directly from the `ObservationEnvelope`.
+   - Added regression coverage in `tests/policy/test_trajectory_service_dto.py` to ensure DTO frames
+     carry action/reward data and anneal context without touching legacy world state.
 2. **Training orchestrator**
    - Refactor `PolicyTrainingOrchestrator.capture_rollout`, `run_rollout_ppo`, and replay exporters
      so they pull observation data from the DTO cache held by `SimulationLoop.policy` instead of

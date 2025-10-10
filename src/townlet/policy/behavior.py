@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Protocol
+from typing import Any, Iterable, Mapping, Protocol
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
@@ -71,7 +71,7 @@ class ScriptedBehavior(BehaviorController):
         *,
         dto_world: DTOWorldView | None = None,
     ) -> AgentIntent:
-        snapshot = world.agents.get(agent_id)
+        snapshot = self._agent_snapshot(world, agent_id, dto_world)
         if snapshot is None:
             return AgentIntent(kind="wait")
 
@@ -99,6 +99,7 @@ class ScriptedBehavior(BehaviorController):
                 object_id,
                 queue_view=queue_view,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             ):
                 return AgentIntent(kind="request", object_id=object_id)
             self.pending.pop(agent_id, None)
@@ -120,6 +121,7 @@ class ScriptedBehavior(BehaviorController):
             snapshot,
             queue_view=queue_view,
             relationship_view=relationship_view,
+            dto_world=dto_world,
         )
         if need_intent:
             return need_intent
@@ -129,6 +131,7 @@ class ScriptedBehavior(BehaviorController):
             agent_id,
             snapshot,
             relationship_view=relationship_view,
+            dto_world=dto_world,
             current_tick=current_tick,
         )
         if chat_intent:
@@ -139,6 +142,7 @@ class ScriptedBehavior(BehaviorController):
             agent_id,
             snapshot,
             relationship_view=relationship_view,
+            dto_world=dto_world,
         )
         if avoid_intent:
             return avoid_intent
@@ -202,6 +206,7 @@ class ScriptedBehavior(BehaviorController):
         *,
         queue_view: object,
         relationship_view: object,
+        dto_world: DTOWorldView | None,
     ) -> AgentIntent | None:
         hunger = snapshot.needs.get("hunger", 1.0)
         hygiene = snapshot.needs.get("hygiene", 1.0)
@@ -223,6 +228,7 @@ class ScriptedBehavior(BehaviorController):
                 agent_id,
                 queue_view=queue_view,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             )
             if intent:
                 return intent
@@ -234,6 +240,7 @@ class ScriptedBehavior(BehaviorController):
                 shower_id,
                 queue_view=queue_view,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             ):
                 self.pending[agent_id] = {
                     "object_id": shower_id,
@@ -248,6 +255,7 @@ class ScriptedBehavior(BehaviorController):
                 bed_id,
                 queue_view=queue_view,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             ):
                 self.pending[agent_id] = {
                     "object_id": bed_id,
@@ -263,6 +271,7 @@ class ScriptedBehavior(BehaviorController):
         snapshot: object,
         *,
         relationship_view: object,
+        dto_world: DTOWorldView | None,
         current_tick: int,
     ) -> AgentIntent | None:
         relationships_stage = getattr(self.config.features.stages, "relationships", "OFF")
@@ -302,7 +311,7 @@ class ScriptedBehavior(BehaviorController):
             return None
 
         candidates: list[tuple[float, str, float]] = []
-        for other_id, other in world.agents.items():
+        for other_id, other in self._iter_agent_snapshots(world, dto_world):
             if other_id == agent_id:
                 continue
             if getattr(other, "position", None) != position:
@@ -312,6 +321,7 @@ class ScriptedBehavior(BehaviorController):
                 agent_id,
                 other_id,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             ):
                 continue
             tie = relationship_view.relationship_tie(agent_id, other_id)
@@ -347,6 +357,7 @@ class ScriptedBehavior(BehaviorController):
         snapshot: object,
         *,
         relationship_view: object,
+        dto_world: DTOWorldView | None,
     ) -> AgentIntent | None:
         position = getattr(snapshot, "position", None)
         if position is None:
@@ -360,8 +371,9 @@ class ScriptedBehavior(BehaviorController):
                 agent_id,
                 other_id,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             )
-            for other_id, other in world.agents.items()
+            for other_id, other in self._iter_agent_snapshots(world, dto_world)
         )
         if not rivals_present:
             return None
@@ -370,7 +382,7 @@ class ScriptedBehavior(BehaviorController):
         width, height = int(grid_size[0]), int(grid_size[1])
         occupied_positions = {
             getattr(agent, "position", None)
-            for agent in world.agents.values()
+            for _, agent in self._iter_agent_snapshots(world, dto_world)
         }
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             nx, ny = cx + dx, cy + dy
@@ -390,6 +402,7 @@ class ScriptedBehavior(BehaviorController):
         *,
         queue_view: object,
         relationship_view: object,
+        dto_world: DTOWorldView | None,
     ) -> bool:
         active = queue_view.active_agent(object_id)
         if (
@@ -400,6 +413,7 @@ class ScriptedBehavior(BehaviorController):
                 agent_id,
                 active,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             )
         ):
             return True
@@ -412,6 +426,7 @@ class ScriptedBehavior(BehaviorController):
                 agent_id,
                 rival_id,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             ):
                 return True
         return False
@@ -423,6 +438,7 @@ class ScriptedBehavior(BehaviorController):
         *,
         queue_view: object,
         relationship_view: object,
+        dto_world: DTOWorldView | None,
     ) -> AgentIntent | None:
         fridge_id = self._find_object_of_type(world, "fridge")
         stove_id = self._find_object_of_type(world, "stove")
@@ -437,6 +453,7 @@ class ScriptedBehavior(BehaviorController):
                     fridge_id,
                     queue_view=queue_view,
                     relationship_view=relationship_view,
+                    dto_world=dto_world,
                 )
             ):
                 self.pending[agent_id] = {
@@ -455,6 +472,7 @@ class ScriptedBehavior(BehaviorController):
                     stove_id,
                     queue_view=queue_view,
                     relationship_view=relationship_view,
+                    dto_world=dto_world,
                 )
             ):
                 self.pending[agent_id] = {
@@ -467,6 +485,7 @@ class ScriptedBehavior(BehaviorController):
     def _find_object_of_type(
         self, world: WorldState, object_type: str
     ) -> str | None:
+        # TODO(WP3C): expose object roster via DTO to remove this legacy fallback.
         for object_id, obj in world.objects.items():
             if obj.object_type == object_type:
                 return object_id
@@ -521,10 +540,13 @@ class ScriptedBehavior(BehaviorController):
         agent_id: str,
         other_id: str,
         *,
+        dto_world: DTOWorldView | None = None,
         relationship_view: object | None = None,
     ) -> bool:
-        snapshot = world.agents.get(agent_id)
-        view = relationship_view if relationship_view is not None else world
+        snapshot = self._agent_snapshot(world, agent_id, dto_world)
+        view = relationship_view if relationship_view is not None else (
+            dto_world if dto_world is not None else world
+        )
         if snapshot is None:
             checker = getattr(view, "rivalry_should_avoid", None)
             if callable(checker):
@@ -589,6 +611,39 @@ class ScriptedBehavior(BehaviorController):
         if dto_world is not None:
             return int(dto_world.tick)
         return int(getattr(world, "tick", 0))
+
+    def _agent_snapshot(
+        self,
+        world: WorldState,
+        agent_id: str,
+        dto_world: DTOWorldView | None,
+    ) -> object | None:
+        if dto_world is not None:
+            snapshot = dto_world.agent_snapshot(agent_id)
+            if snapshot is not None:
+                return snapshot
+        agents = getattr(world, "agents", None)
+        if agents is None:
+            return None
+        getter = getattr(agents, "get", None)
+        if callable(getter):
+            return getter(agent_id)
+        return None
+
+    def _iter_agent_snapshots(
+        self,
+        world: WorldState,
+        dto_world: DTOWorldView | None,
+    ) -> Iterable[tuple[str, object]]:
+        if dto_world is not None:
+            yield from dto_world.iter_agent_snapshots()
+            return
+        agents = getattr(world, "agents", None)
+        if agents is None:
+            return
+        items = getattr(agents, "items", None)
+        if callable(items):
+            yield from items()
 
 
 def build_behavior(config: SimulationConfig) -> BehaviorController:

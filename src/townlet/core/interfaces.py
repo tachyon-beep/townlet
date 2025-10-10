@@ -83,7 +83,12 @@ class PolicyBackendProtocol(Protocol):
     ) -> None:
         """Record rewards and termination flags emitted by the environment."""
 
-    def flush_transitions(self, observations: ObservationBatch) -> None:
+    def flush_transitions(
+        self,
+        observations: ObservationBatch,
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+    ) -> None:
         """Flush buffered transitions once observations have been produced."""
 
     def latest_policy_snapshot(self) -> Mapping[str, Mapping[str, object]]:
