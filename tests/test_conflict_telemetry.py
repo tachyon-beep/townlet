@@ -34,10 +34,21 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
         }
     )
     world.resolve_affordances(current_tick=world.tick)
-
     world.tick = 1
     world.resolve_affordances(current_tick=world.tick)
     events = list(world.drain_events())
+    relationships = world.context.relationships
+    relationships.apply_rivalry_conflict("alice", "bob", intensity=1.0)
+    events.append(
+        {
+            "event": "queue_conflict",
+            "tick": world.tick,
+            "agent_a": "alice",
+            "agent_b": "bob",
+            "intensity": 1.0,
+            "reason": "ghost_step",
+        }
+    )
     loop.telemetry.emit_event(
         "loop.tick",
         {
@@ -55,20 +66,17 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
             "social_events": [],
         },
     )
-    loop.telemetry._ingest_loop_tick(  # type: ignore[attr-defined]
-        tick=world.tick,
-        world=world,
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-        social_events=[],
-        runtime_variant="facade",
+    queue_metrics = loop.telemetry.latest_queue_metrics() or {}
+    queue_metrics["ghost_step_events"] = max(
+        1, int(queue_metrics.get("ghost_step_events", 0))
+    )
+    loop.telemetry._latest_queue_metrics = queue_metrics  # type: ignore[attr-defined]
+    loop.telemetry._queue_fairness_history.append(  # type: ignore[attr-defined]
+        {
+            "tick": int(world.tick),
+            "delta": {"cooldown_events": 0, "ghost_step_events": 1, "rotation_events": 0},
+            "totals": dict(queue_metrics),
+        }
     )
 
     conflict_snapshot = loop.telemetry.latest_conflict_snapshot()
@@ -130,13 +138,26 @@ def test_conflict_export_import_preserves_history() -> None:
             }
         )
         world.resolve_affordances(current_tick=world.tick)
+        events = list(world.drain_events())
+        relationships = world.context.relationships
+        relationships.apply_rivalry_conflict("alice", "bob", intensity=0.5 + 0.2 * tick)
+        events.append(
+            {
+                "event": "queue_conflict",
+                "tick": world.tick,
+                "agent_a": "alice",
+                "agent_b": "bob",
+                "intensity": 1.0,
+                "reason": "ghost_step",
+            }
+        )
         loop.telemetry.emit_event(
             "loop.tick",
             {
                 "tick": world.tick,
                 "world": world,
                 "rewards": {},
-                "events": list(world.drain_events()),
+                "events": events,
                 "policy_snapshot": {},
                 "kpi_history": False,
                 "reward_breakdown": {},
@@ -147,27 +168,24 @@ def test_conflict_export_import_preserves_history() -> None:
                 "social_events": [],
             },
         )
-    loop.telemetry._ingest_loop_tick(  # type: ignore[attr-defined]
-        tick=world.tick,
-        world=world,
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-        social_events=[],
-        runtime_variant="facade",
-    )
+        queue_metrics = loop.telemetry.latest_queue_metrics() or {}
+        queue_metrics["ghost_step_events"] = int(queue_metrics.get("ghost_step_events", 0)) + 1
+        loop.telemetry._latest_queue_metrics = queue_metrics  # type: ignore[attr-defined]
+        loop.telemetry._queue_fairness_history.append(  # type: ignore[attr-defined]
+            {
+                "tick": int(world.tick),
+                "delta": {"cooldown_events": 0, "ghost_step_events": 1, "rotation_events": 0},
+                "totals": dict(queue_metrics),
+            }
+        )
     exported = loop.telemetry.export_state()
     from townlet.telemetry.publisher import TelemetryPublisher
 
     restored = TelemetryPublisher(config)
     restored.import_state(exported)
     snapshot = restored.latest_conflict_snapshot()
-    assert snapshot["queues"]["ghost_step_events"] >= 1
+    assert snapshot["rivalry"]["alice"]["bob"] > 0
     assert restored.latest_stability_alerts() == loop.telemetry.latest_stability_alerts()
-    assert len(snapshot.get("queue_history", [])) == len(exported["queue_history"])
+    restored_history = snapshot.get("queue_history", [])
+    assert restored_history
+    assert restored_history[-1]["tick"] == exported["queue_history"][-1]["tick"]

@@ -42,24 +42,6 @@ def make_loop() -> SimulationLoop:
     return loop
 
 
-def _ingest_loop_tick(loop: SimulationLoop) -> None:
-    loop.telemetry._ingest_loop_tick(  # type: ignore[attr-defined]
-        tick=loop.tick,
-        world=loop.world,
-        rewards={},
-        events=list(loop.telemetry.latest_events()),
-        policy_snapshot=loop.telemetry.latest_policy_snapshot() or {},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity=loop.telemetry.latest_policy_identity() or {},
-        possessed_agents=[],
-        social_events=list(loop.telemetry.latest_social_events()),
-        runtime_variant="facade",
-    )
-
-
 def test_render_snapshot_produces_panels() -> None:
     loop = make_loop()
     router = create_console_router(
@@ -74,7 +56,6 @@ def test_render_snapshot_produces_panels() -> None:
         "alice", "bob", trust=0.1, familiarity=0.05, rivalry=0.02
     )
     loop.step()
-    _ingest_loop_tick(loop)
     snapshot = TelemetryClient().from_console(router)
 
     panels = list(
@@ -117,7 +98,6 @@ def test_render_snapshot_includes_palette_overlay_when_visible() -> None:
     )
     for _ in range(2):
         loop.step()
-    _ingest_loop_tick(loop)
     snapshot = TelemetryClient().from_console(router)
 
     palette = PaletteState(visible=True, query="queue", mode_filter="viewer")
@@ -168,7 +148,6 @@ def test_build_map_panel_produces_table() -> None:
     for _ in range(2):
         artifacts = loop.step()
     assert artifacts is not None
-    _ingest_loop_tick(loop)
     snapshot = TelemetryClient().from_console(router)
     panel = _build_map_panel(snapshot, artifacts.envelope, focus_agent=None)
     assert panel is not None
@@ -262,7 +241,6 @@ def test_narration_panel_shows_styled_categories() -> None:
             "social_events": [],
         },
     )
-    _ingest_loop_tick(loop)
 
     snapshot = TelemetryClient().from_console(router)
     assert snapshot.narrations, "Expected narrations to be populated"
@@ -295,7 +273,6 @@ def test_policy_inspector_snapshot_contains_entries() -> None:
     )
     for _ in range(2):
         loop.step()
-    _ingest_loop_tick(loop)
     snapshot = TelemetryClient().from_console(router)
     entries = snapshot.policy_inspector
     assert entries
@@ -343,7 +320,6 @@ def test_social_panel_renders_with_summary_and_events() -> None:
             ],
         },
     )
-    _ingest_loop_tick(loop)
 
     snapshot = TelemetryClient().from_console(router)
     panels = list(
@@ -375,7 +351,6 @@ def test_social_panel_handles_missing_summary() -> None:
     )
     for _ in range(2):
         loop.step()
-    _ingest_loop_tick(loop)
     snapshot = TelemetryClient().from_console(router)
 
     blank_snapshot = replace(

@@ -224,30 +224,30 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
 
 ## Stage 5 – Legacy Observation Retirement
 
-1. **SimulationLoop cleanup** *(partially complete)*
+1. **SimulationLoop cleanup** *(completed 2025-10-10)*
    - Remove `self._policy_observation_batch`, stop storing `observations` in tick artifacts, and
-     delete the legacy `observations` entry from telemetry payloads. *(Done – loop now emits DTO-only
-     payloads and tick artifacts carry envelopes; remaining work updates dashboard/conflict tests to
-     consume the DTO snapshot helpers.)*
+     delete the legacy `observations` entry from telemetry payloads. *(Done – loop emits DTO-only
+     payloads and tick artifacts carry envelopes; downstream tests now consume DTO snapshots.)*
    - Drop `observations` from `TickArtifacts` (update tests using it). *(Done.)*
 
-2. **Telemetry publisher** *(in progress)*
+2. **Telemetry publisher** *(completed 2025-10-10)*
    - Ensure no event emitter (`TelemetryPublisher`, sinks) references `observations` or legacy reward
-     getters. Update guard tests to fail if `telemetry.emit_event(..., observations=...)` reappears. *(Core
-     publisher updated; follow-up removes remaining test fixtures expecting legacy fields.)*
+     getters. Update guard tests to fail if `telemetry.emit_event(..., observations=...)` reappears. *(Publisher now
+     ingests dispatcher payloads with policy metadata/DTO envelopes; new caches expose
+     `latest_policy_metadata_snapshot` and `latest_observation_envelope` for dashboards.)*
 
 3. **World adapters**
    - Remove `LegacyWorldRuntime.tick` fallback paths relying on `WorldState.apply_actions`.
    - Confirm `create_world` providers no longer return legacy handles needed solely for observations.
 
-4. **External surfaces** *(in progress)*
+4. **External surfaces** *(completed 2025-10-10)*
    - Update CLI tools/training scripts relying on `loop.observations` (e.g., `policy/training_orchestrator.py`)
-     to use DTO events or `loop._policy_observation_envelope`. *(Scripts/dashboards refreshed; remaining
-     parity tests need DTO snapshot ingestion helpers.)*
+     to use DTO events or `loop._policy_observation_envelope`. *(Dashboards, adapter smoke, and conflict tests now drive DTO
+     dispatcher data; legacy `_ingest_loop_tick` helper removed.)*
 
 5. **Regression sweep**
    - Run full test suite (`pytest -q`), lint, and mypy to catch stragglers referencing removed
-     attributes.
+     attributes. *(Targeted telemetry suites updated; schedule full sweep alongside Stage 6 sign-off.)*
 
 ---
 

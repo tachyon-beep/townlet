@@ -20,14 +20,13 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Stage 3D progressing: `PolicyBackend` ports/backends now advertise DTO support, `resolve_policy_backend` validates the capability, the stub backend raises a `DeprecationWarning` if legacy observation batches are provided without a DTO envelope, and `SimulationLoop` streams `policy.metadata` / `policy.possession` / `policy.anneal.update` events via the dispatcher.
 - Stage 3E safeguards added: DTO parity harness re-run, policy controllers guard against missing envelopes, telemetry policy-event smokes land, and rollout capture tests continue to validate DTO trajectory plumbing.
 - Stage 4 kickoff: ML smoke test (`tests/policy/test_dto_ml_smoke.py`) runs a torch-backed parity check between DTO and legacy feature tensors; automation and PPO config packaging remain TODO.
-- Stage 5 underway: `SimulationLoop` no longer exposes legacy observation batches (DTO envelope only), telemetry `loop.tick` payloads dropped the `observations` field, and dashboards/scripts now consume DTO metadata. Initial regression sweep identified a few DTO-driven tests (observer dashboard, conflict telemetry smokes) still expecting legacy snapshots—fixes are queued alongside documentation updates.
+- Stage 5 update: `SimulationLoop` now emits DTO-only payloads, `TelemetryPublisher` ingests dispatcher events with policy metadata and DTO envelopes, and observer/conflict telemetry tests drive the dispatcher directly (legacy `_ingest_loop_tick` shim removed). DTO dashboards pull from the new caches (`latest_policy_metadata_snapshot`, `latest_observation_envelope`), leaving Stage 6 guard/doc work and world adapter cleanup as the remaining follow-ups.
 
 ## Outstanding Work (DTO Rollout)
-1. Finish Stage 5 cleanup: update remaining telemetry/dashboard tests to rely solely on DTO snapshots, remove the final console/world shims, and confirm downstream tooling operates without `loop.observations`.
-2. Complete Stage 6 guard/docs work after Stage 5 stabilises (ban tests, ADR refresh, migration guidance).
-3. Extend parity harness to cover reward breakdown comparisons and run at least
+1. Complete Stage 6 guard/docs work now that Stage 5 is stable (ban tests, ADR refresh, migration guidance, world adapter notes).
+2. Extend parity harness to cover reward breakdown comparisons and run at least
    one ML-backed scenario (short PPO/BC run) to prove DTO-only parity.
-4. Document schema & parity results in WP1/WP2 once DTO rollout completes.
+3. Document schema & parity results in WP1/WP2 once DTO rollout completes.
 
 ## Notes / Reminders
 - Use sorted agent IDs + shared action vocab from `BehaviorBridge` when

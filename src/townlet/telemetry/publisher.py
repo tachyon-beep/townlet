@@ -70,6 +70,7 @@ class TelemetryPublisher:
         self._latest_events: list[dict[str, object]] = []
         self._latest_policy_metadata_event: dict[str, object] | None = None
         self._latest_policy_anneal_event: dict[str, object] | None = None
+        self._latest_policy_metadata_snapshot: dict[str, object] | None = None
         self._event_subscribers: list[Callable[[list[dict[str, object]]], None]] = []
         self._latest_employment_metrics: dict[str, object] = {}
         self._latest_conflict_snapshot: dict[str, object] = {
@@ -134,6 +135,7 @@ class TelemetryPublisher:
         self._pending_manual_narrations: list[dict[str, object]] = []
         self._manual_narration_lock = threading.Lock()
         self._runtime_variant: str | None = None
+        self._latest_observation_envelope: dict[str, Any] | None = None
         self._event_dispatcher = TelemetryEventDispatcher()
         self._event_dispatcher.register_subscriber(self._handle_event)
         transport_cfg = self.config.telemetry.transport
@@ -887,7 +889,7 @@ class TelemetryPublisher:
         self,
         *,
         tick: int,
-        world: WorldState,
+        world: WorldState | "WorldRuntimeAdapterProtocol" | None = None,
         rewards: dict[str, float],
         events: Iterable[dict[str, object]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
@@ -896,16 +898,30 @@ class TelemetryPublisher:
         stability_inputs: Mapping[str, object] | None = None,
         perturbations: Mapping[str, object] | None = None,
         policy_identity: Mapping[str, object] | None = None,
+        policy_metadata: Mapping[str, object] | None = None,
         possessed_agents: Iterable[str] | None = None,
         social_events: Iterable[dict[str, object]] | None = None,
         runtime_variant: str | None = None,
+        observations_dto: Mapping[str, object] | None = None,
+        **extra: Any,
     ) -> None:
         # Rewards are consumed for downstream side effects.
         _ = rewards
+        _ = extra
         tick = int(tick)
         if runtime_variant is not None:
             self._runtime_variant = runtime_variant
         self._current_tick = tick
+        if world is None:
+            raise ValueError("loop.tick ingestion requires a world snapshot")
+        if policy_metadata is not None:
+            self._latest_policy_metadata_snapshot = copy.deepcopy(dict(policy_metadata))
+        else:
+            self._latest_policy_metadata_snapshot = None
+        if observations_dto is not None:
+            self._latest_observation_envelope = copy.deepcopy(dict(observations_dto))
+        else:
+            self._latest_observation_envelope = None
         adapter = ensure_world_adapter(world)
         raw_world = getattr(adapter, "_world", world)
         self._narration_limiter.begin_tick(tick)
@@ -913,9 +929,25 @@ class TelemetryPublisher:
         self._latest_narrations = manual_narrations
         previous_queue_metrics = dict(self._latest_queue_metrics or {})
         try:
-            queue_metrics = adapter.queue_manager.metrics()
+            queue_metrics = adapter.queue_manager.metrics() if adapter is not None else None
         except Exception:  # pragma: no cover - defensive guard for stubs
             logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+            queue_metrics = {
+                "cooldown_events": 0,
+                "ghost_step_events": 0,
+                "rotation_events": 0,
+            }
+        if queue_metrics is None and isinstance(observations_dto, Mapping):
+            global_payload = observations_dto.get("global")
+            if isinstance(global_payload, Mapping):
+                queue_metrics_payload = global_payload.get("queue_metrics")
+                if isinstance(queue_metrics_payload, Mapping):
+                    queue_metrics = {
+                        "cooldown_events": int(queue_metrics_payload.get("cooldown_events", 0)),
+                        "ghost_step_events": int(queue_metrics_payload.get("ghost_step_events", 0)),
+                        "rotation_events": int(queue_metrics_payload.get("rotation_events", 0)),
+                    }
+        if queue_metrics is None:
             queue_metrics = {
                 "cooldown_events": 0,
                 "ghost_step_events": 0,
@@ -939,7 +971,26 @@ class TelemetryPublisher:
                 - int(previous_queue_metrics.get("rotation_events", 0)),
             ),
         }
-        rivalry_snapshot = dict(adapter.rivalry_snapshot())
+        rivalry_snapshot = {}
+        if adapter is not None:
+            try:
+                rivalry_snapshot = dict(adapter.rivalry_snapshot())
+            except Exception:  # pragma: no cover - defensive guard for stubs
+                logger.debug("Telemetry rivalry snapshot unavailable", exc_info=True)
+        if not rivalry_snapshot and isinstance(observations_dto, Mapping):
+            global_payload = observations_dto.get("global")
+            rivalry_snapshot_payload = (
+                global_payload.get("relationship_snapshot") if isinstance(global_payload, Mapping) else None
+            )
+            if isinstance(rivalry_snapshot_payload, Mapping):
+                rivalry_snapshot = {
+                    str(agent): {
+                        str(other_agent): dict(metrics)
+                        for other_agent, metrics in compatibility.items()
+                        if isinstance(metrics, Mapping)
+                    }
+                    for agent, compatibility in rivalry_snapshot_payload.items()
+                }
         self._queue_fairness_history.append(
             {
                 "tick": int(tick),
@@ -1363,6 +1414,16 @@ class TelemetryPublisher:
         if self._latest_policy_identity is None:
             return None
         return dict(self._latest_policy_identity)
+
+    def latest_policy_metadata_snapshot(self) -> dict[str, object] | None:
+        if self._latest_policy_metadata_snapshot is None:
+            return None
+        return copy.deepcopy(self._latest_policy_metadata_snapshot)
+
+    def latest_observation_envelope(self) -> dict[str, object] | None:
+        if self._latest_observation_envelope is None:
+            return None
+        return copy.deepcopy(self._latest_observation_envelope)
 
     def _ingest_policy_metadata(self, payload: Mapping[str, Any]) -> None:
         metadata_payload = payload.get("metadata")

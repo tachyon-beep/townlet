@@ -20,21 +20,7 @@ def short_loop() -> SimulationLoop:
 def test_telemetry_publish_uses_adapter(short_loop: SimulationLoop) -> None:
     loop = short_loop
     telemetry = loop.telemetry
-    telemetry._ingest_loop_tick(  # type: ignore[attr-defined]
-        tick=loop.tick,
-        world=loop.world,
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-        social_events=[],
-        runtime_variant="facade",
-    )
+    loop.step()
 
     assert telemetry.latest_queue_metrics() is not None
     assert telemetry._latest_relationship_snapshot is not None  # type: ignore[attr-defined]
