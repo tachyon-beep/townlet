@@ -65,6 +65,10 @@ class PolicyController:
         """Return policy actions for the given world/tick."""
 
         if envelope is None:
+            latest = getattr(self._backend, "latest_envelope", None)
+            if callable(latest):
+                envelope = latest()
+        if envelope is None:
             raise RuntimeError(
                 "PolicyController.decide requires an observation DTO envelope; "
                 "ensure SimulationLoop prepared the Stage 3 DTO payload.",
@@ -94,8 +98,8 @@ class PolicyController:
         observations: Mapping[str, object],
         *,
         envelope: "ObservationEnvelope | None" = None,
-    ) -> None:
-        self._backend.flush_transitions(observations, envelope=envelope)
+    ) -> Mapping[str, object] | list[dict[str, object]] | None:
+        return self._backend.flush_transitions(observations, envelope=envelope)
 
     # ------------------------------------------------------------------
     # Diagnostics / telemetry helpers

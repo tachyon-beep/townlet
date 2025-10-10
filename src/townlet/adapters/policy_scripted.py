@@ -50,6 +50,14 @@ class ScriptedPolicyAdapter(PolicyBackend):
     def on_episode_end(self) -> None:  # pragma: no cover - thin bridge
         self._backend.flush_transitions({})
 
+    def flush_transitions(
+        self,
+        observations: Mapping[str, object],
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+    ) -> Mapping[str, object] | list[dict[str, object]] | None:
+        return self._backend.flush_transitions(observations, envelope=envelope)
+
     def attach_world(self, provider: Callable[[], Any]) -> None:
         """Transitional hook for legacy paths that still expect world access."""
 

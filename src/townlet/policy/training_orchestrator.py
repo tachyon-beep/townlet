@@ -166,11 +166,7 @@ class PolicyTrainingOrchestrator:
             seed_default_agents,
         )
 
-        if self._capture_loop is None:
-            self._capture_loop = SimulationLoop(self.config)
-        else:
-            self._capture_loop.reset()
-        loop = self._capture_loop
+        loop = SimulationLoop(self.config)
         scenario_config = getattr(self.config, "scenario", None)
         if scenario_config:
             apply_scenario(loop, scenario_config)
@@ -190,9 +186,12 @@ class PolicyTrainingOrchestrator:
         for _ in range(ticks):
             loop.step()
             frames = loop.policy.collect_trajectory(clear=True)
-            buffer.extend(frames)
+            if frames:
+                buffer.extend(frames)
             buffer.record_events(loop.telemetry.latest_events())
-        buffer.extend(loop.policy.collect_trajectory(clear=True))
+        leftover_frames = loop.policy.collect_trajectory(clear=True)
+        if leftover_frames:
+            buffer.extend(leftover_frames)
         buffer.set_tick_count(ticks)
 
         if output_dir is not None:

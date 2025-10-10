@@ -155,12 +155,11 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
      consumes agent tensors plus anneal context directly from the `ObservationEnvelope`.
    - Added regression coverage in `tests/policy/test_trajectory_service_dto.py` to ensure DTO frames
      carry action/reward data and anneal context without touching legacy world state.
-2. **Training orchestrator**
-   - Refactor `PolicyTrainingOrchestrator.capture_rollout`, `run_rollout_ppo`, and replay exporters
-     so they pull observation data from the DTO cache held by `SimulationLoop.policy` instead of
-     `loop.observations`.
-   - Update telemetry/metadata emissions (`PPO_TELEMETRY_VERSION`, anneal progress) to rely on DTO
-     events; remove any `loop.observations[...]` indexing.
+2. **Training orchestrator** *(completed 2025-10-10)*
+   - `capture_rollout` now instantiates a fresh `SimulationLoop` per run, consumes DTO-backed
+     trajectory frames, and relies on telemetry events for metrics (no `loop.observations` access).
+   - Added DTO regression coverage (`tests/policy/test_training_orchestrator_capture.py`) via stubbed
+     loops, ensuring collected frames expose map/features and anneal context.
 3. **Backends and dataset builders**
    - Ensure PPO/BC builders (`policy/models.py`, `policy/backends/pytorch/*`, `policy/replay.py`)
      can ingest DTO-derived frames without needing legacy observation dicts.

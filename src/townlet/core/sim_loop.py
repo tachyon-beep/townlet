@@ -256,6 +256,10 @@ class SimulationLoop:
         self._runtime_variant = "facade"
         self.telemetry.set_runtime_variant(self._runtime_variant)
         self._health = SimulationLoopHealth(last_tick=self.tick)
+        # Seed an initial DTO envelope so policy backends can operate before the
+        # first tick produces observations.
+        bootstrap_envelope = self._build_bootstrap_policy_envelope()
+        self._set_policy_observation_envelope(bootstrap_envelope)
 
     @property
     def health(self) -> SimulationLoopHealth:
@@ -439,6 +443,10 @@ class SimulationLoop:
             self.tick = next_tick
             runtime.queue_console(console_ops)
 
+            if self._policy_observation_envelope is None:
+                bootstrap_envelope = self._build_bootstrap_policy_envelope()
+                self._set_policy_observation_envelope(bootstrap_envelope)
+
             def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
                 envelope = self._ensure_policy_envelope()
                 observations_batch = self._policy_observation_batch or {}
@@ -490,16 +498,24 @@ class SimulationLoop:
             else:  # pragma: no cover - defensive
                 self.policy.post_step(rewards, terminated)
             observations = self.observations.build_batch(self.world_adapter, terminated)
+            frames: list[dict[str, object]] | None = None
             if controller is not None:
-                controller.flush_transitions(observations)
+                frames = controller.flush_transitions(
+                    observations,
+                    envelope=None,
+                )
                 policy_snapshot = controller.latest_policy_snapshot()
                 possessed_agents = controller.possessed_agents()
                 option_switch_counts = controller.consume_option_switch_counts()
             else:  # pragma: no cover - defensive fallback
-                self.policy.flush_transitions(observations)
+                frames = self.policy.flush_transitions(
+                    observations,
+                    envelope=None,
+                )
                 policy_snapshot = self.policy.latest_policy_snapshot()
                 possessed_agents = self.policy.possessed_agents()
                 option_switch_counts = self.policy.consume_option_switch_counts()
+            frames = list(frames or [])
             hunger_levels = {agent_id: float(snapshot.needs.get("hunger", 1.0)) for agent_id, snapshot in self.world.agents.items()}
             stability_inputs = {
                 "hunger_levels": hunger_levels,
@@ -613,6 +629,14 @@ class SimulationLoop:
                 anneal_context=anneal_context,
                 agent_contexts=agent_contexts,
             )
+            if frames:
+                anneal_ctx = dto_envelope.global_context.anneal_context or {}
+                metadata_copy = dict(policy_metadata)
+                for frame in frames:
+                    frame.setdefault("anneal_context", anneal_ctx)
+                    meta = frame.setdefault("metadata", {})
+                    if isinstance(meta, dict):
+                        meta.update(metadata_copy)
             self._set_policy_observation_envelope(dto_envelope)
             self._policy_observation_batch = dict(observations)
             if self._telemetry_port is not None:
