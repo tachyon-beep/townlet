@@ -117,6 +117,11 @@ class PolicyRuntime:
 
         return self._trajectory_service.trajectory
 
+    def anneal_context(self) -> dict[str, object]:
+        """Return anneal and option commit context for diagnostics."""
+
+        return self._behavior_bridge.snapshot()
+
 
     @behavior.setter
     def behavior(self, controller: BehaviorController) -> None:

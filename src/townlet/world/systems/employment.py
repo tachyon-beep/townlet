@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Mapping
 
 from townlet.config import EmploymentConfig
@@ -11,11 +12,25 @@ from townlet.world.agents.snapshot import AgentSnapshot
 
 from .base import SystemContext
 
+logger = logging.getLogger(__name__)
+
 
 def step(ctx: SystemContext) -> None:
-    """Update employment state and lifecycle hooks (implementation pending)."""
+    """Advance employment scheduling and wage bookkeeping."""
 
-    return
+    state = ctx.state
+    service = getattr(state, "_employment_service", None)
+
+    if service is None:
+        legacy = getattr(state, "_apply_job_state", None)
+        if callable(legacy):
+            legacy()
+        else:
+            logger.debug("employment_step_skipped service_missing state=%s", type(state).__name__)
+        return
+
+    assign_jobs(service)
+    apply_job_state(service)
 
 
 def nightly_reset(service: NightlyResetService, tick: int) -> list[str]:

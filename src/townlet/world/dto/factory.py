@@ -38,11 +38,35 @@ def build_observation_envelope(
     running_affordances: Mapping[str, Any] | None = None,
     relationship_snapshot: Mapping[str, Any] | None = None,
     relationship_metrics: Mapping[str, Any] | None = None,
+    agent_snapshots: Mapping[str, Any] | None = None,
+    job_snapshot: Mapping[str, Any] | None = None,
+    queue_affinity_metrics: Mapping[str, Any] | None = None,
+    employment_snapshot: Mapping[str, Any] | None = None,
+    economy_snapshot: Mapping[str, Any] | None = None,
+    anneal_context: Mapping[str, Any] | None = None,
+    agent_contexts: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ObservationEnvelope:
     """Build an observation envelope ready for policy/telemetry consumers."""
 
     agent_ids = sorted(observations.keys())
     agent_dtos: list[AgentObservationDTO] = []
+
+    active_lookup: dict[str, str] = {}
+    queue_entries: dict[str, list[Mapping[str, Any]]] = {}
+    cooldown_entries: list[Mapping[str, Any]] = []
+    if isinstance(queues, Mapping):
+        active_lookup = {
+            str(object_id): str(agent)
+            for object_id, agent in _iter_mapping(queues.get("active", {}))
+        }
+        raw_entries = queues.get("queues", {})
+        if isinstance(raw_entries, Mapping):
+            queue_entries = {
+                str(object_id): list(raw_entries.get(object_id) or [])
+                for object_id in raw_entries.keys()
+            }
+        cooldown_entries = list(queues.get("cooldowns", []) or [])
+
     for agent_id in agent_ids:
         payload = observations.get(agent_id, {})
         map_tensor = _coerce_ndarray(payload.get("map"))
@@ -56,6 +80,60 @@ def build_observation_envelope(
             }
         else:
             rewards_dict = None
+
+        snapshot = agent_snapshots.get(agent_id) if agent_snapshots else None
+        context = agent_contexts.get(agent_id) if agent_contexts else None
+
+        needs_payload: Mapping[str, float] | None = None
+        wallet_value: float | None = None
+        inventory_payload: Mapping[str, Any] | None = None
+        position_payload: Sequence[float] | None = None
+        personality_payload: Mapping[str, Any] | None = None
+        job_payload: Mapping[str, Any] | None = None
+
+        if snapshot is not None:
+            needs_payload = {
+                str(key): float(value)
+                for key, value in getattr(snapshot, "needs", {}).items()
+            }
+            wallet_value = float(getattr(snapshot, "wallet", 0.0))
+            inventory = getattr(snapshot, "inventory", None)
+            if isinstance(inventory, Mapping):
+                inventory_payload = {
+                    str(key): _to_builtin(value) for key, value in inventory.items()
+                }
+            position = getattr(snapshot, "position", None)
+            if position is not None and len(position) >= 2:
+                try:
+                    position_payload = [float(position[0]), float(position[1])]
+                except Exception:
+                    position_payload = None
+            personality = getattr(snapshot, "personality", None)
+            if is_dataclass(personality):
+                personality_payload = _to_builtin(asdict(personality))
+            if job_snapshot and agent_id in job_snapshot:
+                job_payload = _to_builtin(job_snapshot[agent_id])
+            else:
+                job_payload = {
+                    "job_id": getattr(snapshot, "job_id", None),
+                    "on_shift": bool(getattr(snapshot, "on_shift", False)),
+                    "shift_state": getattr(snapshot, "shift_state", None),
+                    "lateness_counter": int(getattr(snapshot, "lateness_counter", 0)),
+                    "attendance_ratio": float(getattr(snapshot, "attendance_ratio", 0.0)),
+                    "exit_pending": bool(getattr(snapshot, "exit_pending", False)),
+                }
+
+        queue_state = _build_queue_state(
+            agent_id=agent_id,
+            active_lookup=active_lookup,
+            queue_entries=queue_entries,
+            cooldown_entries=cooldown_entries,
+        )
+
+        pending_intent = None
+        if context and "pending_intent" in context:
+            pending_intent = _to_builtin(context["pending_intent"])
+
         agent_dtos.append(
             AgentObservationDTO(
                 agent_id=agent_id,
@@ -66,6 +144,14 @@ def build_observation_envelope(
                 terminated=bool(terminated.get(agent_id, False))
                 if terminated
                 else None,
+                position=position_payload,
+                needs=needs_payload,
+                wallet=wallet_value,
+                inventory=inventory_payload,
+                job=job_payload,
+                personality=personality_payload,
+                queue_state=queue_state,
+                pending_intent=pending_intent,
             )
         )
 
@@ -91,6 +177,10 @@ def build_observation_envelope(
         running_affordances=_to_builtin(running_affordances) if running_affordances is not None else {},
         relationship_snapshot=_to_builtin(relationship_snapshot) if relationship_snapshot is not None else {},
         relationship_metrics=_to_builtin(relationship_metrics) if relationship_metrics is not None else {},
+        employment_snapshot=_to_builtin(employment_snapshot) if employment_snapshot is not None else {},
+        queue_affinity_metrics=_to_builtin(queue_affinity_metrics) if queue_affinity_metrics is not None else {},
+        economy_snapshot=_to_builtin(economy_snapshot) if economy_snapshot is not None else {},
+        anneal_context=_to_builtin(anneal_context) if anneal_context is not None else {},
     )
 
     actions_payload = (
@@ -174,3 +264,44 @@ def _to_builtin(value: Any) -> Any:
 
 
 __all__ = ["build_observation_envelope"]
+
+
+def _build_queue_state(
+    *,
+    agent_id: str,
+    active_lookup: Mapping[str, str],
+    queue_entries: Mapping[str, Sequence[Mapping[str, Any]]],
+    cooldown_entries: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    active_objects = [
+        object_id for object_id, occupant in active_lookup.items() if occupant == agent_id
+    ]
+    queue_memberships: list[Mapping[str, Any]] = []
+    for object_id, entries in queue_entries.items():
+        if not entries:
+            continue
+        for index, entry in enumerate(entries):
+            entry_agent = entry.get("agent_id") or entry.get("agent")
+            if str(entry_agent) == agent_id:
+                queue_memberships.append(
+                    {
+                        "object_id": object_id,
+                        "position": int(index),
+                        "joined_tick": int(entry.get("joined_tick", 0)),
+                    }
+                )
+    cooldowns = [
+        {
+            "object_id": str(entry.get("object_id", "")),
+            "expiry": int(entry.get("expiry", 0)),
+        }
+        for entry in cooldown_entries
+        if str(entry.get("agent_id", "")) == agent_id
+    ]
+    if not (active_objects or queue_memberships or cooldowns):
+        return None
+    return {
+        "active_objects": active_objects,
+        "queue_memberships": queue_memberships,
+        "cooldowns": cooldowns,
+    }

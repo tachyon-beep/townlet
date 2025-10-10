@@ -1,175 +1,177 @@
 {
-  "tick": 12,
-  "dto_schema_version": "0.1.0",
-  "agents": [
-    {
-      "agent_id": "alice",
-      "map": [
-        [
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0]
-        ],
-        [
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0]
-        ]
-      ],
-      "features": [
-        0.30000001192092896,
-        0.699999988079071,
-        0.10000000149011612
-      ],
-      "metadata": {
-        "variant": "full",
-        "local_summary": {
-          "agent_ratio": 0.2,
-          "nearest_agent_distance": 0.5
-        }
-      },
-      "rewards": {
-        "clip_adjustment": 0.0,
-        "survival": 1.0,
-        "total": 1.25
-      },
-      "terminated": false
-    },
-    {
-      "agent_id": "bob",
-      "map": [
-        [
-          [1.0, 1.0, 1.0],
-          [1.0, 1.0, 1.0],
-          [1.0, 1.0, 1.0]
-        ],
-        [
-          [1.0, 1.0, 1.0],
-          [1.0, 1.0, 1.0],
-          [1.0, 1.0, 1.0]
-        ]
-      ],
-      "features": [
-        0.6000000238418579,
-        0.4000000059604645,
-        0.8999999761581421
-      ],
-      "metadata": {
-        "variant": "full"
-      },
-      "rewards": {
-        "needs_penalty": -1.5,
-        "survival": 1.0,
-        "total": -0.5
-      },
-      "terminated": true
-    }
-  ],
+  "tick": 1,
+  "dto_schema_version": "0.2.0",
+  "agents": [],
   "global": {
     "queue_metrics": {
-      "cooldown_events": 1,
+      "cooldown_events": 0,
       "ghost_step_events": 0,
-      "rotation_events": 2
+      "rotation_events": 0
     },
-    "rewards": {
-      "alice": {
-        "clip_adjustment": 0.0,
-        "survival": 1.0,
-        "total": 1.25
-      },
-      "bob": {
-        "needs_penalty": -1.5,
-        "survival": 1.0,
-        "total": -0.5
-      }
-    },
+    "rewards": {},
     "perturbations": {
-      "active": {
-        "weather": {
-          "type": "storm",
-          "remaining_ticks": 5
-        }
-      },
-      "pending": [],
+      "active": {},
       "cooldowns": {
         "agents": {},
         "spec": {}
-      }
-    },
-    "policy_snapshot": {
-      "provider": "scripted",
-      "hash": "abc123",
-      "anneal_ratio": 0.4
-    },
-    "rivalry_events": [
-      {
-        "tick": 12,
-        "agent_a": "alice",
-        "agent_b": "bob",
-        "intensity": 0.6,
-        "reason": "queue_cut"
-      }
-    ],
-    "stability_metrics": {
-      "alerts": [
-        "queue_fairness_pressure"
-      ],
-      "queue_totals": {
-        "cooldown_events": 3,
-        "ghost_step_events": 0,
-        "rotation_events": 2
       },
-      "reward_mean": 0.4,
-      "reward_variance": 0.2
+      "pending": []
+    },
+    "policy_snapshot": {},
+    "rivalry_events": [],
+    "stability_metrics": {
+      "alerts": [],
+      "option_samples": 1,
+      "option_switch_rate": 0.0,
+      "promotion": {
+        "candidate_ready": false,
+        "last_evaluated_tick": null,
+        "last_result": null,
+        "pass_streak": 0,
+        "required_passes": 2,
+        "window_end": 1000,
+        "window_start": 0,
+        "window_ticks": 1000
+      },
+      "promotion_state": {
+        "candidate": null,
+        "candidate_ready": false,
+        "candidate_ready_tick": null,
+        "current_release": {
+          "config_id": "v1.3.0"
+        },
+        "history": [],
+        "initial_release": {
+          "config_id": "v1.3.0"
+        },
+        "last_evaluated_tick": null,
+        "last_result": null,
+        "pass_streak": 0,
+        "required_passes": 2,
+        "state": "monitoring"
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "reward_mean": null,
+      "reward_samples": 0,
+      "reward_variance": null,
+      "rivalry_events": [],
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "thresholds": {
+        "affordance_fail_threshold": 5,
+        "lateness_threshold": 3,
+        "option_thrash": {
+          "max_switch_rate": 0.25,
+          "min_samples": 10,
+          "window_ticks": 600
+        },
+        "reward_variance": {
+          "max_variance": 0.25,
+          "min_samples": 20,
+          "window_ticks": 1000
+        },
+        "starvation": {
+          "hunger_threshold": 0.05,
+          "max_incidents": 0,
+          "min_duration_ticks": 30,
+          "window_ticks": 1000
+        }
+      }
     },
     "promotion_state": {
+      "candidate": null,
       "candidate_ready": false,
-      "window_start": 0,
-      "window_end": 1000,
-      "last_result": null
+      "candidate_ready_tick": null,
+      "current_release": {
+        "config_id": "v1.3.0"
+      },
+      "history": [],
+      "initial_release": {
+        "config_id": "v1.3.0"
+      },
+      "last_evaluated_tick": null,
+      "last_result": null,
+      "pass_streak": 0,
+      "required_passes": 2,
+      "state": "monitoring"
     },
     "policy_metadata": {
+      "anneal_ratio": null,
       "identity": {
-        "hash": "abc123",
-        "provider": "scripted",
-        "anneal_ratio": 0.4
+        "config_id": "v1.3.0",
+        "observation_variant": "hybrid"
       },
-      "possessed_agents": [
-        "spectator_1"
-      ],
-      "option_switch_counts": {
-        "alice": 0,
-        "bob": 2
-      }
+      "option_switch_counts": {},
+      "possessed_agents": []
     },
-    "rng_seed": 12345,
-    "queues": {},
+    "rng_seed": null,
+    "queues": {
+      "active": {},
+      "cooldowns": [],
+      "queues": {},
+      "stall_counts": {}
+    },
     "running_affordances": {},
     "relationship_snapshot": {},
-    "relationship_metrics": {}
-  },
-  "actions": {
-    "alice": {
-      "agent_id": "alice",
-      "kind": "move",
-      "payload": {
-        "position": [
-          2,
-          3
-        ]
+    "relationship_metrics": {
+      "history": [],
+      "owners": {},
+      "reasons": {},
+      "total": 0,
+      "window_end": 600,
+      "window_start": 0
+    },
+    "employment_snapshot": {
+      "daily_exit_cap": 2,
+      "exits_today": 0,
+      "pending": [],
+      "pending_count": 0,
+      "queue_limit": 8,
+      "review_window": 1440
+    },
+    "queue_affinity_metrics": {
+      "assign_calls": 0,
+      "assign_ns": 0,
+      "blocked_calls": 0,
+      "blocked_ns": 0,
+      "release_ns": 0,
+      "releases": 0,
+      "request_ns": 0,
+      "requests": 0
+    },
+    "economy_snapshot": {
+      "active_price_spikes": {},
+      "settings": {
+        "cook_energy_cost": 0.05,
+        "cook_hygiene_cost": 0.02,
+        "ingredients_cost": 0.15,
+        "meal_cost": 0.4,
+        "stove_stock_replenish": 2.0,
+        "wage_income": 0.02
+      },
+      "utility_snapshot": {
+        "power": true,
+        "water": true
       }
     },
-    "bob": {
-      "agent_id": "bob",
-      "kind": "noop",
-      "payload": {}
+    "anneal_context": {
+      "anneal_ratio": null,
+      "blend_enabled": false,
+      "commit_state": {},
+      "option_commit_ticks": 15,
+      "possessed_agents": []
     }
   },
-  "terminated": {
-    "alice": false,
-    "bob": true
-  },
-  "termination_reasons": {
-    "bob": "hunger"
-  }
+  "actions": {},
+  "terminated": {},
+  "termination_reasons": {}
 }

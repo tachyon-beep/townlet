@@ -2,15 +2,30 @@
 
 from __future__ import annotations
 
+import logging
+
 from townlet.world.economy import EconomyService
 
 from .base import SystemContext 
+
+logger = logging.getLogger(__name__)
 
 
 def step(ctx: SystemContext) -> None:
     """Update economy metrics and utilities (implementation pending)."""
 
-    return
+    state = ctx.state
+    service = getattr(state, "_economy_service", None)
+
+    if service is None:
+        legacy = getattr(state, "_update_basket_metrics", None)
+        if callable(legacy):
+            legacy()
+        else:
+            logger.debug("economy_step_skipped service_missing state=%s", type(state).__name__)
+        return
+
+    update_basket_metrics(service)
 
 
 def update_basket_metrics(service: EconomyService) -> None:

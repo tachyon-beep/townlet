@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from townlet.world.agents.snapshot import AgentSnapshot
+from townlet.world.events import EventDispatcher
+from townlet.world.rng import RngStreamManager
+from townlet.world.systems import SystemContext
 from townlet.world.systems import affordances
 
 
@@ -101,3 +102,53 @@ def test_apply_outcome_updates_snapshot() -> None:
     assert snapshot.last_action_id == "start"
     assert snapshot.last_action_success is True
     assert snapshot.last_action_duration == 3
+
+
+def test_step_uses_runtime_service() -> None:
+    class DummyService:
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        def runtime(self):
+            return None
+
+        def resolve(self, *, tick: int) -> None:
+            self.calls.append(tick)
+
+    class DummyState:
+        def __init__(self) -> None:
+            self.tick = 42
+            self._affordance_service = DummyService()
+            self.legacy_calls: list[int] = []
+
+        def resolve_affordances(self, *, current_tick: int) -> None:
+            self.legacy_calls.append(current_tick)
+
+    state = DummyState()
+    ctx = SystemContext(
+        state=state,
+        rng=RngStreamManager.from_seed(123),
+        events=EventDispatcher(),
+    )
+
+    affordances.step(ctx)
+
+    assert state._affordance_service.calls == [42]
+    assert state.legacy_calls == []
+
+
+def test_step_falls_back_when_service_missing() -> None:
+    class DummyState:
+        def __init__(self) -> None:
+            self.tick = 7
+
+    state = DummyState()
+    ctx = SystemContext(
+        state=state,
+        rng=RngStreamManager.from_seed(999),
+        events=EventDispatcher(),
+    )
+
+    affordances.step(ctx)
+
+    # No service configured; step is a no-op rather than invoking legacy hooks.

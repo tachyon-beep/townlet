@@ -10,9 +10,18 @@ from .base import SystemContext
 
 
 def step(ctx: SystemContext) -> None:
-    """Placeholder system step. Concrete logic will arrive in later phases."""
+    """Advance relationship decay each tick."""
 
-    return
+    state = ctx.state
+    service = getattr(state, "_relationships", None)
+
+    if service is None:
+        legacy_decay = getattr(state, "relationship_decay", None)
+        if callable(legacy_decay):
+            legacy_decay()
+        return
+
+    decay(service)
 
 
 def relationships_snapshot(service: RelationshipService) -> dict[str, dict[str, dict[str, float]]]:

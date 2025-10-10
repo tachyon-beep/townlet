@@ -19,12 +19,8 @@ def step(ctx: SystemContext) -> None:
     state = ctx.state
     runtime = getattr(state, "_affordance_service", None)
     if runtime is not None:
-        runtime_getter = getattr(runtime, "runtime", None)
-        runtime_obj = runtime_getter() if callable(runtime_getter) else runtime_getter
-        if runtime_obj is not None:
-            _advance_runtime(runtime_obj, tick=state.tick)
-            return
-    state.resolve_affordances(current_tick=state.tick)
+        resolve(runtime, tick=state.tick)
+        return
 
 
 def start(

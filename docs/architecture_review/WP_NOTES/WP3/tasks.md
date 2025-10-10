@@ -17,8 +17,8 @@
   - Produce a draft DTO envelope (per-agent + global) and document outstanding gaps / risks prior to adapter changes.
 - [~] Implement DTO dataclasses/converters plus validation harness comparing legacy observations vs DTO payloads. *(DTO models + `build_observation_envelope` landed; `SimulationLoop` caches/emits `observations_dto` with queue/running-affordance/relationship data; policy controller/ports accept DTOs. Harness `tests/core/test_sim_loop_dto_parity.py` compares DTO tensors vs legacy observations; world detachment still pending.)*
 - [~] Update `PolicyController` + scripted adapter to consume DTOs and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events (temporary legacy bridge for ML paths). *(Scripted behaviour now uses `DTOWorldView` queue/affordance/relationship data and emits guardrail events; ML metadata streaming still outstanding.)*
-- [ ] Replace transitional bridges (`WorldContext.apply_actions` fallback, queue snapshot normalisation) once modular systems cover the full mutation pipeline. *(`process_actions` and `advance_running_affordances` handle modular actions/completions; employment/economy steps still pending before the legacy `resolve_affordances` wrapper can be dropped.)*
-- [ ] Execute WP3B_plan: reattach modular systems (queues/affordances/employment/economy) and drop the legacy bridge.
+- [x] Replace transitional bridges (`WorldContext.apply_actions` fallback, queue snapshot normalisation) once modular systems cover the full mutation pipeline. *(`process_actions`/`advance_running_affordances` now own the pipeline; `employment`/`economy`/`relationships` steps run each tick, and `state.resolve_affordances` is no longer invoked by the modular path.)*
+- [x] Execute WP3B_plan: reattach modular systems (queues/affordances/employment/economy) and drop the legacy bridge.
 - [ ] Execute WP3C_plan: expand DTO parity harness, run ML smoke, and remove legacy observation payloads.
 - [ ] Migrate ML adapters & training orchestrator to DTO flow; update replay/export tooling and run behavioural parity checks.
 - [ ] Cleanup loop/console interactions (drop `runtime.queue_console`, remove direct `WorldState` mutation, rely on DTO/event caches).
@@ -32,7 +32,7 @@
 ## 4. Testing & Parity
 - [x] Add guard tests preventing reintroduction of telemetry getters/writers.
 - [x] Add event-driven loop smoke tests covering stdout adapter and stub sink.
-- [ ] Run parity comparison (queue fairness, rivalry counts, promotion triggers) between legacy writer path and new events.
+- [ ] Run parity comparison (queue fairness, rivalry counts, promotion triggers) between legacy writer path and new events. *(Queued under WP3C once DTO parity harness expands.)*
 - [ ] CI: ensure `pytest`, `ruff`, `mypy` pass with the new telemetry architecture.
 
 ## 5. Documentation & Coordination

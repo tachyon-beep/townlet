@@ -1374,9 +1374,12 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        relationship_system.decay(self._relationships)
-        self._apply_job_state()
-        self._update_basket_metrics()
+        if getattr(self, "_relationships", None) is None:
+            relationship_system.decay(self._relationships)
+        if getattr(self, "_employment_service", None) is None:
+            self._apply_job_state()
+        if getattr(self, "_economy_service", None) is None:
+            self._update_basket_metrics()
 
     def apply_nightly_reset(self) -> list[str]:
         return employment_system.nightly_reset(self._nightly_reset_service, self.tick)
@@ -1387,7 +1390,16 @@ class WorldState:
         employment_system.assign_jobs(self._employment_service)
 
     def _apply_job_state(self) -> None:
-        employment_system.apply_job_state(self._employment_service)
+        service = getattr(self, "_employment_service", None)
+        if service is not None:
+            employment_system.apply_job_state(service)
+            return
+        coordinator = getattr(self, "employment", None)
+        if coordinator is not None:
+            try:
+                coordinator._apply_job_state_legacy(self)  # type: ignore[attr-defined]
+            except AttributeError:
+                pass
 
     def _apply_job_state_legacy(self) -> None:
         self.employment._apply_job_state_legacy(self)

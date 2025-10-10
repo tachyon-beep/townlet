@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DTO_SCHEMA_VERSION = "0.1.0"
+DTO_SCHEMA_VERSION = "0.2.0"
 
 
 class _FrozenModel(BaseModel):
@@ -25,6 +25,14 @@ class AgentObservationDTO(_FrozenModel):
     metadata: Mapping[str, Any] = Field(default_factory=dict)
     rewards: Mapping[str, float] | None = None
     terminated: bool | None = None
+    position: Sequence[float] | None = None
+    needs: Mapping[str, float] | None = None
+    wallet: float | None = None
+    inventory: Mapping[str, Any] | None = None
+    job: Mapping[str, Any] | None = None
+    personality: Mapping[str, Any] | None = None
+    queue_state: Mapping[str, Any] | None = None
+    pending_intent: Mapping[str, Any] | None = None
 
 
 class GlobalObservationDTO(_FrozenModel):
@@ -43,6 +51,10 @@ class GlobalObservationDTO(_FrozenModel):
     running_affordances: Mapping[str, Any] = Field(default_factory=dict)
     relationship_snapshot: Mapping[str, Any] = Field(default_factory=dict)
     relationship_metrics: Mapping[str, Any] = Field(default_factory=dict)
+    employment_snapshot: Mapping[str, Any] = Field(default_factory=dict)
+    queue_affinity_metrics: Mapping[str, Any] = Field(default_factory=dict)
+    economy_snapshot: Mapping[str, Any] = Field(default_factory=dict)
+    anneal_context: Mapping[str, Any] = Field(default_factory=dict)
 
 
 class ObservationEnvelope(_FrozenModel):

@@ -4,13 +4,14 @@
 - Port protocols, registry framework, and default adapters were completed in the initial WP1 pass; smoke tests for the new factories remain pending because the composition root still uses the legacy registry helpers.
 - WP2 Step 6 is now finished: `WorldContext` returns `RuntimeStepResult`, modular systems run via `SystemContext`, and the legacy `WorldState` exposes the helper methods expected by the port layer (`agent_records_view`, `emit_event`, `event_dispatcher`, deterministic RNG seed access). Targeted suites (`pytest tests/world -q`, `pytest tests/test_world_context.py -q`) pass.
 - `WorldRuntime.tick` recognises the modular result, so swapping the simulation loop over to `WorldContext` is unblocked.
+- WP3B (modular systems reattachment) is complete: the world tick no longer calls the legacy `resolve_affordances` bridge and employment/economy/relationship steps run through modular services. Remaining blocker for Step 8 is WP3C (DTO-only policy adapters + parity harness) so the loop can detach from `WorldState`.
 
 **Up next (Step 7 / WP1 Step 4 resume)**
 - World factory now builds `WorldContext`; dummy/stub providers are updated and `tests/world/test_world_factory.py` covers the path.
 - Next steps focus on the simulation loop refactor (Step 8): introduce the factory helpers, wire in `ConsoleRouter`/`HealthMonitor`, and migrate telemetry usage from getter-style pulls to event/metric emissions.
-- Work proceeds incrementally per the detailed plan (Phase 1: factory swap, Phase 2: console/monitor integration, Phase 3: telemetry getter removal, Phase 4: cleanup/docs).
+- Work proceeds incrementally per the detailed plan (Phase 1: factory swap, Phase 2: console/monitor integration, Phase 3: telemetry getter removal, Phase 4: cleanup/docs). Step 8 execution is paused until WP3C delivers DTO-only policy paths; once complete we can remove `runtime.queue_console`, drop `WorldState` mutations, and finish the telemetry/console migration.
 - Console routing and health monitoring now initialise inside `SimulationLoop`: console commands are mirrored into the new router (still forwarded to the legacy runtime for execution) and `HealthMonitor` emits baseline queue/event metrics via the telemetry port.
-- Telemetry events (`loop.tick`, `loop.health`, `loop.failure`) now flow through the WP3 dispatcher via the port adapters. A guard suite (`tests/test_telemetry_surface_guard.py`) keeps the event-only surface locked while HTTP transport support lands.
+- Telemetry events (`loop.tick`, `loop.health`, `loop.failure`) now flow through the WP3 dispatcher via the port adapters. A guard suite (`tests/test_telemetry_surface_guard.py`) keeps the event-only surface locked; HTTP transport is operational, streaming transport will follow once WP3 exposes it.
 
 **Legacy caller inventory (2025-10-09 snapshot)**
 - Policy:

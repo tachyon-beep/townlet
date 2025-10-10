@@ -156,6 +156,21 @@ class BehaviorBridge:
         self._option_switch_counts.clear()
         return snapshot
 
+    def snapshot(self) -> dict[str, object]:
+        """Return a diagnostic snapshot of anneal and commit state."""
+
+        commit_state = {
+            str(agent_id): int(until)
+            for agent_id, until in self._option_commit_until.items()
+        }
+        return {
+            "anneal_ratio": self.current_anneal_ratio(),
+            "blend_enabled": self._anneal_blend_enabled,
+            "option_commit_ticks": int(self.option_commit_ticks),
+            "possessed_agents": self.possessed_agents(),
+            "commit_state": commit_state,
+        }
+
     def mark_termination(self, agent_id: str) -> None:
         """Reset commit/option tracking for ``agent_id`` after termination."""
 

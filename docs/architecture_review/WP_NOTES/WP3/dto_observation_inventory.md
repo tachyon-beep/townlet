@@ -2,7 +2,7 @@
 
 Date: 2025-10-09
 
-This note captures the outputs of WP3 Step 1 — building a complete inventory of
+This note captures the outputs of WP3 Step 1 (updated 2025-10-09) — building a complete inventory of
 current `WorldState` consumers, gathering representative observation payloads, and
 highlighting the initial schema sketch + gaps prior to adapter work.
 
@@ -47,30 +47,22 @@ cleanup tasks.
 
 ## 3. Base Types, Optionality & Validation
 
-- **Per-agent DTO (proposal):**
+- **Per-agent DTO (schema v0.2.0):**
   - `agent_id: str`
-  - `position: [int, int] | null`
-  - `needs: {"hunger": float, "hygiene": float, "energy": float}`
-  - `employment: {job_id: str, lateness_counter: int, attendance_ratio: float, ...}` *(optional)*
-  - `inventory: {wallet: float, queue_tokens: int, ...}` *(optional keys as enabled by config)*
-  - `personality: {extroversion: float, agreeableness: float, ...}` *(present only if personalities enabled)*
-  - `queue_state: {pending_action: str | null, reservation: str | null, rivalry_flags: {...}}`
-  - `policy_metadata: {option_commit: bool, possessed: bool}` *(used by controller guardrails)*
+  - `map: float[][][] | null`
+  - `features: float[] | null`
+  - `metadata`: unchanged (variant details, channel info, social context)
+  - `rewards`: per-component reward breakdown
+  - `terminated: bool | null`
+  - **New in v0.2.0:** `position`, `needs`, `wallet`, `inventory`, `job`, `personality`, `queue_state`, `pending_intent`
 
-- **Global envelope fields:**
-  - `tick: int`
-  - `queue_metrics: {cooldown_events: int, ...}`
-  - `rivalry_events: [{agent_a: str, agent_b: str, intensity: float, reason: str, tick: int}]`
-  - `stability_metrics`: float counters + alert list; `stability_inputs`: hunger/option switches/reward samples.
-  - `rewards: {agent_id: {component: float}}`
-  - `perturbations: {active: {...}, pending: [...], cooldowns: {...}}`
-  - `promotion_state`: optional dict from `PromotionManager.snapshot()`
-  - `policy_metadata`: provider hash, anneal ratio, possession state.
-  - `rng_seed`: optional int (global seed for reproducibility).
+- **Global envelope fields (schema v0.2.0):**
+  - Existing keys retained (`queue_metrics`, `rewards`, `perturbations`, `policy_snapshot`, `policy_metadata`, `rivalry_events`, `stability_metrics`, `promotion_state`, `rng_seed`, `queues`, `running_affordances`, `relationship_snapshot`, `relationship_metrics`)
+  - **New in v0.2.0:** `employment_snapshot`, `queue_affinity_metrics`, `economy_snapshot`, `anneal_context`
 
 - **Optionality rules:** omit keys when data is unavailable rather than sending
   empty objects. Downstream consumers must guard for absence.
-- **Schema versioning:** include `dto_schema_version` (starting `0.1.0`) in the
+- **Schema versioning:** include `dto_schema_version` (now `0.2.0`) in the
   envelope. Any breaking change bumps the minor version and updates fixtures.
 - **Validation:** introduce Pydantic (or equivalent) DTO models in the converter
   module. CI will load captured fixtures (`dto_example_tick.json`,

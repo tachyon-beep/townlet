@@ -46,6 +46,9 @@ from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 from townlet.policy.runner import PolicyRuntime
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
+from townlet.world.observations.context import (
+    agent_context as observation_agent_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -561,6 +564,18 @@ class SimulationLoop:
             running_affordances = adapter.running_affordances_snapshot()
             relationship_snapshot = adapter.relationships_snapshot()
             relationship_metrics = adapter.relationship_metrics_snapshot()
+            agent_snapshots_map = dict(adapter.agent_snapshots_view())
+            agent_contexts = {
+                agent: observation_agent_context(adapter, agent)
+                for agent in agent_snapshots_map.keys()
+            }
+            queue_affinity_metrics = self._collect_queue_affinity_metrics()
+            economy_snapshot = self._collect_economy_snapshot()
+            anneal_context = {}
+            try:
+                anneal_context = self.policy.anneal_context()
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("anneal_context_unavailable", exc_info=True)
 
             dto_envelope = build_observation_envelope(
                 tick=self.tick,
@@ -582,6 +597,13 @@ class SimulationLoop:
                 running_affordances=running_affordances,
                 relationship_snapshot=relationship_snapshot,
                 relationship_metrics=relationship_metrics,
+                agent_snapshots=agent_snapshots_map,
+                job_snapshot=job_snapshot,
+                queue_affinity_metrics=queue_affinity_metrics,
+                employment_snapshot=employment_metrics,
+                economy_snapshot=economy_snapshot,
+                anneal_context=anneal_context,
+                agent_contexts=agent_contexts,
             )
             self._policy_observation_envelope = dto_envelope
             self._policy_observation_batch = dict(observations)
@@ -718,6 +740,14 @@ class SimulationLoop:
             logger.debug("queue_metrics_unavailable", exc_info=True)
         return metrics
 
+    def _collect_queue_affinity_metrics(self) -> dict[str, int]:
+        try:
+            raw = self.world.queue_manager.performance_metrics()
+            return {str(key): int(value) for key, value in raw.items()}
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("queue_affinity_metrics_unavailable", exc_info=True)
+            return {}
+
     def _collect_embedding_metrics(self, adapter: WorldRuntimeAdapter) -> dict[str, float]:
         try:
             metrics = adapter.embedding_allocator.metrics()
@@ -785,6 +815,22 @@ class SimulationLoop:
             if len(self._rivalry_history) > 120:
                 self._rivalry_history = self._rivalry_history[-120:]
         return list(self._rivalry_history)
+
+    def _collect_economy_snapshot(self) -> dict[str, object]:
+        snapshot: dict[str, object] = {}
+        try:
+            snapshot["settings"] = self.world.economy_settings()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("economy_settings_unavailable", exc_info=True)
+        try:
+            snapshot["active_price_spikes"] = self.world.active_price_spikes()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("economy_price_spikes_unavailable", exc_info=True)
+        try:
+            snapshot["utility_snapshot"] = self.world.utility_snapshot()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("economy_utility_snapshot_unavailable", exc_info=True)
+        return snapshot
 
     def _build_transport_status(self, *, queue_length: int) -> dict[str, object]:
         status = dict(self._last_transport_status)

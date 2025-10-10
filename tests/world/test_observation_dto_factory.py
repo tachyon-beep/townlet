@@ -65,6 +65,11 @@ def test_build_observation_envelope_coerces_numpy_payloads(tmp_path: Path) -> No
     assert data["agents"][0]["features"] == [1.0, 2.0]
     assert data["agents"][0]["rewards"] == reward_breakdown["alice"]
     assert data["agents"][0]["metadata"]["local_summary"] == approx([0.1, 0.2])
+    assert data["agents"][0]["position"] is None
+    assert data["agents"][0]["needs"] is None
+    assert data["agents"][0]["wallet"] is None
+    assert data["agents"][0]["job"] is None
+    assert data["agents"][0]["queue_state"] is None
     assert data["actions"]["alice"]["payload"]["position"] == [1, 2]
     assert data["terminated"]["bob"] is True
     assert data["termination_reasons"]["bob"] == "fatigue"
@@ -75,6 +80,10 @@ def test_build_observation_envelope_coerces_numpy_payloads(tmp_path: Path) -> No
     assert data["global"].get("running_affordances") == {}
     assert data["global"].get("relationship_snapshot") == {}
     assert data["global"].get("relationship_metrics") == {}
+    assert data["global"].get("employment_snapshot") == {}
+    assert data["global"].get("queue_affinity_metrics") == {}
+    assert data["global"].get("economy_snapshot") == {}
+    assert data["global"].get("anneal_context") == {}
 
 
 @pytest.mark.parametrize(

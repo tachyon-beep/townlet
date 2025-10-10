@@ -20,6 +20,7 @@ from townlet.world.agents.interfaces import (
 )
 from townlet.world.preconditions import evaluate_preconditions
 from townlet.world.queue import QueueManager
+from townlet.world.systems import queues as queue_system
 
 logger = logging.getLogger("townlet.world.grid")
 
@@ -403,6 +404,7 @@ class DefaultAffordanceRuntime:
         metadata: dict[str, object] = {}
         running = self.running_affordances.pop(object_id, None)
         affordance_id = requested_affordance_id
+        waiting_before_release: list[str] = queue_manager.queue_snapshot(object_id)
         if running is not None:
             affordance_id = running.affordance_id
             if success:
@@ -430,8 +432,22 @@ class DefaultAffordanceRuntime:
                 obj = ctx.objects.get(object_id)
                 if obj is not None:
                     obj.occupied_by = None
-        queue_manager.release(object_id, agent_id, tick, success=success)
-        ctx.sync_reservation(object_id)
+        if success:
+            queue_system.handle_handover(
+                manager=queue_manager,
+                object_id=object_id,
+                departing_agent=agent_id,
+                tick=tick,
+                waiting=waiting_before_release,
+                preferred_agent=None,
+                record_queue_conflict=ctx.record_queue_conflict,
+                queue_conflicts=getattr(ctx, "queue_conflicts", None),
+                sync_reservation=ctx.sync_reservation,
+                intensity=0.5,
+            )
+        else:
+            queue_manager.release(object_id, agent_id, tick, success=success)
+            ctx.sync_reservation(object_id)
         if not success:
             if reason:
                 metadata["reason"] = reason
@@ -583,20 +599,18 @@ def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int)
             running.agent_id,
             waiting,
         )
-        if preferred is not None:
-            queue_manager.promote_agent(object_id, preferred)
-        queue_manager.release(object_id, running.agent_id, tick, success=True)
-        ctx.sync_reservation(object_id)
-        if waiting:
-            next_agent = preferred if preferred is not None else waiting[0]
-            record_queue_conflict(
-                object_id=object_id,
-                actor=running.agent_id,
-                rival=next_agent,
-                reason="handover",
-                queue_length=len(waiting),
-                intensity=0.5,
-            )
+        queue_system.handle_handover(
+            manager=queue_manager,
+            object_id=object_id,
+            departing_agent=running.agent_id,
+            tick=tick,
+            waiting=waiting,
+            preferred_agent=preferred,
+            record_queue_conflict=record_queue_conflict,
+            queue_conflicts=getattr(ctx, "queue_conflicts", None),
+            sync_reservation=ctx.sync_reservation,
+            intensity=0.5,
+        )
         ctx.emit_event(
             "affordance_finish",
             {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from typing import Any, Mapping, MutableMapping
 
 from townlet.world.queue.manager import QueueManager
@@ -109,6 +110,65 @@ def record_blocked_attempt(manager: QueueManager, object_id: str) -> bool:
     return manager.record_blocked_attempt(object_id)
 
 
+def handle_handover(
+    *,
+    manager: QueueManager,
+    object_id: str,
+    departing_agent: str,
+    tick: int,
+    waiting: Sequence[str],
+    preferred_agent: str | None,
+    record_queue_conflict: Callable[..., None] | None = None,
+    queue_conflicts: Any | None = None,
+    sync_reservation: Callable[[str], None] | None = None,
+    intensity: float = 0.5,
+) -> None:
+    """Promote the next queued agent after a successful affordance completion."""
+
+    if preferred_agent not in waiting:
+        preferred_agent = None
+    if preferred_agent is not None:
+        manager.promote_agent(object_id, preferred_agent)
+
+    manager.release(object_id, departing_agent, tick, success=True)
+
+    if callable(sync_reservation):
+        sync_reservation(object_id)
+
+    if not waiting:
+        return
+
+    rival = preferred_agent if preferred_agent is not None else waiting[0]
+    _emit_queue_conflict(
+        record_conflict=record_queue_conflict,
+        queue_conflicts=queue_conflicts,
+        payload={
+            "object_id": object_id,
+            "actor": departing_agent,
+            "rival": rival,
+            "reason": "handover",
+            "queue_length": len(waiting),
+            "intensity": intensity,
+        },
+    )
+
+
+def _emit_queue_conflict(
+    *,
+    record_conflict: Callable[..., None] | None,
+    queue_conflicts: Any | None,
+    payload: Mapping[str, object],
+) -> None:
+    if callable(record_conflict):
+        record_conflict(**payload)
+        return
+    if queue_conflicts is not None:
+        try:
+            queue_conflicts.record_queue_conflict(**payload)
+        except Exception:
+            pass
+
+
 def _process_queue_conflicts(state: Any, manager: QueueManager, tick: int) -> None:
     active_reservations: Mapping[str, str] = getattr(state, "_active_reservations", {})
     if not active_reservations:
@@ -140,29 +200,22 @@ def _process_queue_conflicts(state: Any, manager: QueueManager, tick: int) -> No
         if callable(sync_reservation):
             sync_reservation(object_id)
 
-        if rival is not None and callable(record_conflict):
-            record_conflict(
-                object_id=object_id,
-                actor=occupant,
-                rival=rival,
-                reason="ghost_step",
-                queue_length=len(waiting),
-                intensity=None,
-            )
-        elif queue_conflicts is not None:
-            try:
-                queue_conflicts.record_queue_conflict(
-                    object_id=object_id,
-                    actor=occupant,
-                    rival=rival or occupant,
-                    reason="ghost_step",
-                    queue_length=len(waiting),
-                    intensity=None,
-                )
-            except Exception:
-                pass
+        rival_id = rival if rival is not None else occupant
+        _emit_queue_conflict(
+            record_conflict=record_conflict,
+            queue_conflicts=queue_conflicts,
+            payload={
+                "object_id": object_id,
+                "actor": occupant,
+                "rival": rival_id,
+                "reason": "ghost_step",
+                "queue_length": len(waiting),
+                "intensity": None,
+            },
+        )
 
 __all__ = [
+    "handle_handover",
     "record_blocked_attempt",
     "refresh_reservations",
     "request_access",

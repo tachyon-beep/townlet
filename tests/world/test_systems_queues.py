@@ -175,6 +175,141 @@ def test_step_records_ghost_step_conflict() -> None:
     conflict_events = tracker.consume_rivalry_events()
     assert conflict_events
     assert conflict_events[0]["reason"] == "ghost_step"
+
+
+def test_handle_handover_promotes_next_agent() -> None:
+    manager = _make_manager()
+    objects = {
+        "stall": SimpleNamespace(position=(1, 2), occupied_by=None),
+    }
+    active: dict[str, str] = {}
+    spatial_index = WorldSpatialIndex()
+
+    assert queues.request_access(
+        manager=manager,
+        objects=objects,
+        active_reservations=active,
+        spatial_index=spatial_index,
+        object_id="stall",
+        agent_id="alice",
+        tick=0,
+    )
+    queues.request_access(
+        manager=manager,
+        objects=objects,
+        active_reservations=active,
+        spatial_index=spatial_index,
+        object_id="stall",
+        agent_id="bob",
+        tick=1,
+    )
+    waiting = manager.queue_snapshot("stall")
+    events: list[dict[str, object]] = []
+
+    def record_conflict(**payload: object) -> None:
+        events.append(dict(payload))
+
+    def sync_reservation(object_id: str) -> None:
+        queues.sync_reservation(
+            manager=manager,
+            objects=objects,
+            active_reservations=active,
+            spatial_index=spatial_index,
+            object_id=object_id,
+        )
+
+    queues.handle_handover(
+        manager=manager,
+        object_id="stall",
+        departing_agent="alice",
+        tick=5,
+        waiting=waiting,
+        preferred_agent=None,
+        record_queue_conflict=record_conflict,
+        queue_conflicts=None,
+        sync_reservation=sync_reservation,
+    )
+
+    assert manager.active_agent("stall") == "bob"
+    assert active["stall"] == "bob"
+    assert objects["stall"].occupied_by == "bob"
+    assert events
+    assert events[0]["reason"] == "handover"
+    assert events[0]["actor"] == "alice"
+    assert events[0]["rival"] == "bob"
+    assert events[0]["queue_length"] == len(waiting)
+
+
+def test_handle_handover_respects_preferred_agent() -> None:
+    manager = _make_manager()
+    objects = {
+        "stall": SimpleNamespace(position=(3, 4), occupied_by=None),
+    }
+    active: dict[str, str] = {}
+    spatial_index = WorldSpatialIndex()
+
+    assert queues.request_access(
+        manager=manager,
+        objects=objects,
+        active_reservations=active,
+        spatial_index=spatial_index,
+        object_id="stall",
+        agent_id="alice",
+        tick=0,
+    )
+    queues.request_access(
+        manager=manager,
+        objects=objects,
+        active_reservations=active,
+        spatial_index=spatial_index,
+        object_id="stall",
+        agent_id="bob",
+        tick=1,
+    )
+    queues.request_access(
+        manager=manager,
+        objects=objects,
+        active_reservations=active,
+        spatial_index=spatial_index,
+        object_id="stall",
+        agent_id="carol",
+        tick=2,
+    )
+    waiting = manager.queue_snapshot("stall")
+    events: list[dict[str, object]] = []
+
+    def record_conflict(**payload: object) -> None:
+        events.append(dict(payload))
+
+    def sync_reservation(object_id: str) -> None:
+        queues.sync_reservation(
+            manager=manager,
+            objects=objects,
+            active_reservations=active,
+            spatial_index=spatial_index,
+            object_id=object_id,
+        )
+
+    queues.handle_handover(
+        manager=manager,
+        object_id="stall",
+        departing_agent="alice",
+        tick=10,
+        waiting=waiting,
+        preferred_agent="carol",
+        record_queue_conflict=record_conflict,
+        queue_conflicts=None,
+        sync_reservation=sync_reservation,
+    )
+
+    assert manager.active_agent("stall") == "carol"
+    assert active["stall"] == "carol"
+    assert objects["stall"].occupied_by == "carol"
+    assert events
+    assert events[0]["rival"] == "carol"
+    assert events[0]["queue_length"] == len(waiting)
+    assert manager.metrics()["rotation_events"] >= 1
+
 def test_step_calls_on_tick_and_refresh() -> None:
     class DummyManager:
         def __init__(self) -> None:

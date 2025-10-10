@@ -1,51 +1,46 @@
 from __future__ import annotations
 
-from townlet.world.systems import economy
+from types import SimpleNamespace
+
+from townlet.world.events import EventDispatcher
+from townlet.world.rng import RngStreamManager
+from townlet.world.systems import SystemContext, economy
 
 
-class FakeEconomyService:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, tuple, dict]] = []
-
-    def update_basket_metrics(self) -> None:
-        self.calls.append(("update_basket_metrics", (), {}))
-
-    def restock_economy(self) -> None:
-        self.calls.append(("restock_economy", (), {}))
-
-    def utility_online(self, utility: str) -> bool:
-        self.calls.append(("utility_online", (utility,), {}))
-        return utility == "power"
-
-    def economy_settings(self) -> dict[str, float]:
-        self.calls.append(("economy_settings", (), {}))
-        return {"price": 1.0}
-
-    def active_price_spikes(self) -> dict[str, dict[str, object]]:
-        self.calls.append(("active_price_spikes", (), {}))
-        return {"event": {}}
-
-    def utility_snapshot(self) -> dict[str, bool]:
-        self.calls.append(("utility_snapshot", (), {}))
-        return {"power": True}
+def _make_context(state: object) -> SystemContext:
+    return SystemContext(
+        state=state,  # type: ignore[arg-type]
+        rng=RngStreamManager.from_seed(321),
+        events=EventDispatcher(),
+    )
 
 
-def test_economy_wrappers_delegate() -> None:
-    service = FakeEconomyService()
+def test_step_updates_basket_metrics() -> None:
+    calls: list[str] = []
 
-    economy.update_basket_metrics(service)
-    economy.restock(service)
-    assert economy.utility_online(service, "power") is True
-    assert economy.economy_settings(service) == {"price": 1.0}
-    assert economy.active_price_spikes(service) == {"event": {}}
-    assert economy.utility_snapshot(service) == {"power": True}
+    class DummyService:
+        def update_basket_metrics(self) -> None:
+            calls.append("update")
 
-    names = [name for name, _, _ in service.calls]
-    assert names == [
-        "update_basket_metrics",
-        "restock_economy",
-        "utility_online",
-        "economy_settings",
-        "active_price_spikes",
-        "utility_snapshot",
-    ]
+    state = SimpleNamespace(_economy_service=DummyService())
+
+    economy.step(_make_context(state))
+
+    assert calls == ["update"]
+
+
+def test_step_falls_back_to_legacy() -> None:
+    calls: list[str] = []
+
+    class LegacyState:
+        def __init__(self) -> None:
+            self._economy_service = None
+
+        def _update_basket_metrics(self) -> None:
+            calls.append("legacy")
+
+    state = LegacyState()
+
+    economy.step(_make_context(state))
+
+    assert calls == ["legacy"]
