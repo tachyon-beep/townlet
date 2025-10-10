@@ -35,7 +35,6 @@ class ScriptedPolicyAdapter(PolicyBackend):
 
     def decide(
         self,
-        observations: Mapping[str, Any],
         *,
         tick: int,
         envelope: "ObservationEnvelope",
@@ -47,21 +46,23 @@ class ScriptedPolicyAdapter(PolicyBackend):
             world,
             tick,
             envelope=envelope,
-            observations=observations,
         )
         self._tick = tick + 1
         return actions
 
     def on_episode_end(self) -> None:  # pragma: no cover - thin bridge
-        self._backend.flush_transitions({})
+        envelope = getattr(self._backend, "latest_envelope", None)
+        if callable(envelope):
+            latest = envelope()
+            if latest is not None:
+                self._backend.flush_transitions(envelope=latest)
 
     def flush_transitions(
         self,
-        observations: Mapping[str, object],
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
     ) -> Mapping[str, object] | list[dict[str, object]] | None:
-        return self._backend.flush_transitions(observations, envelope=envelope)
+        return self._backend.flush_transitions(envelope=envelope)
 
     def attach_world(self, provider: Callable[[], Any]) -> None:
         """Transitional hook for legacy paths that still expect world access."""

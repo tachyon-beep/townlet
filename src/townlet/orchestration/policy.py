@@ -23,7 +23,6 @@ class PolicyController:
         self._backend = backend
         self._port = port
         self._world_supplier: Callable[[], Any] | None = None
-        self._legacy_observation_warning_emitted = False
         capability = getattr(self._backend, "supports_observation_envelope", None)
         if capability is None or not callable(capability):
             raise TypeError(
@@ -81,7 +80,6 @@ class PolicyController:
         world: Any,
         tick: int,
         *,
-        observations: Mapping[str, Any] | None = None,
         envelope: "ObservationEnvelope | None" = None,
     ) -> Mapping[str, Any]:
         """Return policy actions for the given world/tick."""
@@ -96,16 +94,8 @@ class PolicyController:
                 "ensure SimulationLoop prepared the Stage 3 DTO payload.",
             )
 
-        if observations and not self._legacy_observation_warning_emitted:
-            logger.warning(
-                "PolicyController received legacy observation batches alongside DTO "
-                "envelopes; this compatibility path will be removed during WP3C Stage 5.",
-            )
-            self._legacy_observation_warning_emitted = True
-
-        payload = observations or {}
         try:
-            return self._port.decide(payload, tick=tick, envelope=envelope)
+            return self._port.decide(tick=tick, envelope=envelope)
         except TypeError as exc:  # pragma: no cover - transitional fallback
             raise RuntimeError(
                 "Policy backend must accept DTO envelopes. Update the policy provider "
@@ -117,11 +107,10 @@ class PolicyController:
 
     def flush_transitions(
         self,
-        observations: Mapping[str, object],
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
     ) -> Mapping[str, object] | list[dict[str, object]] | None:
-        return self._backend.flush_transitions(observations, envelope=envelope)
+        return self._backend.flush_transitions(envelope=envelope)
 
     # ------------------------------------------------------------------
     # Diagnostics / telemetry helpers

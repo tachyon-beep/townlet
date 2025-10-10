@@ -75,7 +75,6 @@ class PolicyBackendProtocol(Protocol):
         tick: int,
         *,
         envelope: "ObservationEnvelope",
-        observations: ObservationBatch | None = None,
     ) -> Mapping[str, object]:
         """Return an action mapping for the provided world/tick."""
 
@@ -88,11 +87,10 @@ class PolicyBackendProtocol(Protocol):
 
     def flush_transitions(
         self,
-        observations: ObservationBatch,
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
     ) -> None:
-        """Flush buffered transitions once observations have been produced."""
+        """Flush buffered transitions once the DTO envelope is available."""
 
     def latest_policy_snapshot(self) -> Mapping[str, Mapping[str, object]]:
         """Expose the most recent policy metadata snapshot."""

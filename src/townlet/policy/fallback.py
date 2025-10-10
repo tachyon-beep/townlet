@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import warnings
 from collections.abc import Mapping
 from typing import Any, TYPE_CHECKING
 
@@ -46,17 +45,9 @@ class StubPolicyBackend(PolicyBackendProtocol):
         world: Any,
         tick: int,
         *,
-        envelope: "ObservationEnvelope | None" = None,
-        observations: Mapping[str, object] | None = None,
+        envelope: "ObservationEnvelope",
     ) -> Mapping[str, object]:
-        if envelope is None and observations is not None:
-            warnings.warn(
-                "StubPolicyBackend received legacy observation batches without a DTO "
-                "envelope; support for this path will be removed in a future release.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        _ = world, tick, envelope, observations
+        _ = world, tick, envelope
         return {}
 
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:
@@ -64,11 +55,10 @@ class StubPolicyBackend(PolicyBackendProtocol):
 
     def flush_transitions(
         self,
-        observations: Mapping[str, object],
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
     ) -> None:
-        _ = observations, envelope
+        _ = envelope
 
     def latest_policy_snapshot(self) -> Mapping[str, Mapping[str, object]]:
         return {}

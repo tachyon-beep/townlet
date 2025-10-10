@@ -28,13 +28,13 @@ class _BackendStub(PolicyBackendProtocol):
     def supports_observation_envelope(self) -> bool:
         return True
 
-    def decide(self, world, tick, *, envelope, observations=None):
+    def decide(self, world, tick, *, envelope):
         return {}
 
     def post_step(self, rewards, terminated) -> None:  # pragma: no cover
         return None
 
-    def flush_transitions(self, observations, *, envelope=None):
+    def flush_transitions(self, *, envelope):
         return []
 
     def latest_policy_snapshot(self):
@@ -63,7 +63,7 @@ class _PortStub(PolicyBackend):
     def supports_observation_envelope(self) -> bool:
         return True
 
-    def decide(self, observations, *, tick, envelope):
+    def decide(self, *, tick, envelope):
         return {}
 
 

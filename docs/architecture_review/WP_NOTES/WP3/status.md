@@ -12,6 +12,7 @@
 - **Stage 3B (DTO behaviour parity)** complete: `DTOWorldView` exposes per-agent snapshots/iterators, `ScriptedBehavior` and `BehaviorBridge.decide_agent` consume DTO data end-to-end, and guard tests (`tests/policy/test_scripted_behavior_dto.py`) ensure queue/chat/guardrail flows stay DTO-first (legacy fallbacks now log once when exercised).
 - Stage 3C in progress: `TrajectoryService` consumes DTO envelopes (`tests/policy/test_trajectory_service_dto.py`) and the training orchestrator captures DTO-backed rollouts (`tests/policy/test_training_orchestrator_capture.py`); replay pipelines no longer touch `loop.observations`.
 - **Stage 3D**: policy ports/backends now advertise DTO envelope support, `resolve_policy_backend` enforces the capability check, `StubPolicyBackend` emits a `DeprecationWarning` for legacy observation batches, and `SimulationLoop` streams `policy.metadata` / `policy.possession` / `policy.anneal.update` events through the dispatcher.
+- **Stage 3C DTO path cleanup**: legacy observation batches are no longer cached/passed to policy providers; `TrajectoryService`, `PolicyController`, and adapters operate strictly on DTO envelopes.
 - **Stage 3E**: regression guards in place—DTO parity harness re-run, `PolicyController` raises when DTO envelopes are absent, telemetry policy events are covered by new smokes, and rollout capture tests continue to verify DTO trajectory plumbing.
 - **Stage 4 (in progress)**: DTO ML smoke harness executes random-weight torch parity checks across DTO vs legacy feature tensors (`tests/policy/test_dto_ml_smoke.py`); automation + PPO config hardening still pending.
 - **WP3B complete:** queue/affordance/employment/economy/relationship systems now run entirely through modular services. `WorldContext.tick` no longer calls legacy apply/resolve helpers, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and targeted system tests (`tests/world/test_systems_*.py`) lock the behaviour. World-level smokes (`pytest tests/world -q`) pass with the bridge removed.
@@ -23,10 +24,3 @@
 **Dependencies**
 - Unblocks WP1 Step 8 (removal of legacy telemetry writers and `runtime.queue_console` usage).
 - Unblocks WP2 Step 7 (policy/world adapters still exposing legacy handles until observation-first DTOs are available).
-
-**Upcoming Milestones**
-1. Telemetry event API & sink refactor.
-2. Policy observation/controller update (port-driven decisions, metadata streaming).
-3. Loop finalisation & documentation sweep (complete WP1/WP2 blockers).
-
-Update this file as WP3 tasks progress.

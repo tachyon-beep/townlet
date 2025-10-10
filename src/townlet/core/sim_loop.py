@@ -137,8 +137,6 @@ class SimulationLoop:
         self._health_monitor: HealthMonitor | None = None
         self._rivalry_history: list[dict[str, object]] = []
         self._policy_observation_envelope = None
-        self._policy_observation_batch: dict[str, object] | None = None
-        self._legacy_observations_warning_emitted = False
         self._last_policy_metadata_event: dict[str, object] | None = None
         self._last_policy_possession_agents: tuple[str, ...] | None = None
         self._last_policy_anneal_event: dict[str, object] | None = None
@@ -456,26 +454,16 @@ class SimulationLoop:
 
             def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
                 envelope = self._ensure_policy_envelope()
-                observations_batch = self._policy_observation_batch or {}
-                if observations_batch and not self._legacy_observations_warning_emitted:
-                    logger.warning(
-                        "SimulationLoop is still supplying legacy observation batches "
-                        "to policy backends; this compatibility path will be removed "
-                        "during WP3C Stage 5.",
-                    )
-                    self._legacy_observations_warning_emitted = True
                 if controller is not None:
                     return controller.decide(
                         world,
                         current_tick,
-                        observations=observations_batch,
                         envelope=envelope,
                     )
                 return self.policy.decide(
                     world,
                     current_tick,
                     envelope=envelope,
-                    observations=observations_batch,
                 )
 
             runtime_result = runtime.tick(
@@ -505,24 +493,14 @@ class SimulationLoop:
             else:  # pragma: no cover - defensive
                 self.policy.post_step(rewards, terminated)
             observations = self.observations.build_batch(self.world_adapter, terminated)
-            frames: list[dict[str, object]] | None = None
             if controller is not None:
-                frames = controller.flush_transitions(
-                    observations,
-                    envelope=None,
-                )
                 policy_snapshot = controller.latest_policy_snapshot()
                 possessed_agents = controller.possessed_agents()
                 option_switch_counts = controller.consume_option_switch_counts()
             else:  # pragma: no cover - defensive fallback
-                frames = self.policy.flush_transitions(
-                    observations,
-                    envelope=None,
-                )
                 policy_snapshot = self.policy.latest_policy_snapshot()
                 possessed_agents = self.policy.possessed_agents()
                 option_switch_counts = self.policy.consume_option_switch_counts()
-            frames = list(frames or [])
             hunger_levels = {agent_id: float(snapshot.needs.get("hunger", 1.0)) for agent_id, snapshot in self.world.agents.items()}
             stability_inputs = {
                 "hunger_levels": hunger_levels,
@@ -646,6 +624,11 @@ class SimulationLoop:
                 anneal_context=anneal_context,
                 agent_contexts=agent_contexts,
             )
+            if controller is not None:
+                frames = controller.flush_transitions(envelope=dto_envelope)
+            else:  # pragma: no cover - defensive fallback
+                frames = self.policy.flush_transitions(envelope=dto_envelope)
+            frames = list(frames or [])
             if frames:
                 anneal_ctx = dto_envelope.global_context.anneal_context or {}
                 metadata_copy = dict(policy_metadata)
@@ -655,7 +638,6 @@ class SimulationLoop:
                     if isinstance(meta, dict):
                         meta.update(metadata_copy)
             self._set_policy_observation_envelope(dto_envelope)
-            self._policy_observation_batch = dict(observations)
             if self._telemetry_port is not None:
                 tick_event_payload = {
                     "tick": self.tick,

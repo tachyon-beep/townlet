@@ -35,7 +35,7 @@ def test_flush_transitions_with_dto_envelope() -> None:
         termination_reasons={},
     )
 
-    frames = service.flush_transitions(envelope)
+    frames = service.flush_transitions(envelope=envelope)
 
     assert len(frames) == 1
     frame = frames[0]

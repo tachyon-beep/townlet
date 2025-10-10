@@ -11,13 +11,14 @@ from townlet.core import policy_registry, telemetry_registry
 from townlet.factories.registry import register as factory_register
 from townlet.policy.fallback import StubPolicyBackend
 from townlet.telemetry.fallback import StubTelemetrySink
+from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
 
 
 def _register_stub_ports() -> None:
     policy_registry().register("dto_stub", lambda **kwargs: StubPolicyBackend(**kwargs))
     telemetry_registry().register("dto_stub", lambda **kwargs: StubTelemetrySink(**kwargs))
     factory_register("policy", "dto_stub")(
-        lambda **kwargs: StubPolicyBackend(**kwargs)
+        lambda **kwargs: ScriptedPolicyAdapter(kwargs["backend"])
     )
     factory_register("telemetry", "dto_stub")(
         lambda **kwargs: StubTelemetrySink(**kwargs)

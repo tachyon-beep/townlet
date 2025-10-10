@@ -73,3 +73,37 @@ Stage 3B executes the remediation plan summarised below.
   TODO marker remains on `_find_object_of_type` until DTOs export object rosters (Stage 5).
 - Remaining legacy reads: scripted CLI adapters (`policy/scripted.py`) and scenario seed helpers still
   touch `loop.world.agents` by design; they will migrate once DTO-capable capture tooling lands.
+
+### Stage 3C (Policy DTO Path Cleanup – 2025-10-10)
+
+- `SimulationLoop` no longer caches `_policy_observation_batch` or forwards legacy observations to
+  policy providers; action providers require DTO envelopes and raise immediately if a backend refuses them.
+- `PolicyController`/`ScriptedPolicyAdapter`/`PolicyRuntime` now expose DTO-only signatures while
+  keeping telemetry/TickArtifacts legacy-compatible until Stage 5.
+- `TrajectoryService.flush_transitions` consumes DTO envelopes exclusively; the mapping fallback has
+  been removed.
+
+## Stage 3C Audit – Remaining Legacy Consumers (2025-10-10)
+
+- **SimulationLoop**
+  - `_policy_observation_batch` cache still populated and forwarded to policy backends
+    (`src/townlet/core/sim_loop.py:140`, `:459`, `:471`, `:478`, `:658`).
+  - Legacy observation warnings + `TickArtifacts(observations=...)` persist; DTO envelope coexists.
+- **Policy façade**
+  - `PolicyController.decide` and `ScriptedPolicyAdapter.decide` accept/forward `observations`
+    keywords (`src/townlet/orchestration/policy.py:82`, `src/townlet/adapters/policy_scripted.py:36`).
+  - `PolicyRuntime.decide/post_step/flush_transitions` still accept optional `observations`
+    payloads (`src/townlet/policy/runner.py:202`, `:347`).
+- **TelemetryPublisher**
+  - `emit_event("loop.tick", ...)` continues to include `observations` for downstream consumers and
+    `_handle_event` ingests the legacy mapping (`src/townlet/telemetry/publisher.py:1147`, `:1529`).
+- **Training/Trajectory tooling**
+  - `TrajectoryService.flush_transitions` retains mapping fallback path (`src/townlet/policy/trajectory_service.py:45`).
+  - `PolicyTrainingOrchestrator.capture_rollout` gathers DTO frames but relies on loop.policy
+    caches that still accept legacy batches (`src/townlet/policy/training_orchestrator.py:187`).
+- **World access**
+  - Policy runtime still iterates `world.agents` when building intents (`src/townlet/policy/runner.py:219`),
+    though DTO guardrails mitigate direct reads.
+
+These sites are the target for Stage 3C migration work (DTO-only policy path) before Stage 5 removes
+the legacy observation payload entirely.

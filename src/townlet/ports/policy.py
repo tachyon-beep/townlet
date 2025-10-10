@@ -20,12 +20,11 @@ class PolicyBackend(Protocol):
 
     def decide(
         self,
-        observations: Mapping[str, Any],
         *,
         tick: int,
         envelope: "ObservationEnvelope",
     ) -> Mapping[str, Any]:
-        """Return an action mapping for the provided observations/DTO envelope."""
+        """Return an action mapping for the provided DTO envelope."""
 
     def on_episode_end(self) -> None:
         """Clean up backend state at the end of an episode."""

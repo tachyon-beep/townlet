@@ -18,7 +18,7 @@ runtime:
   telemetry:
     provider: "stub"
 training:
-  source: "rollout"
+  source: "bc"
   rollout_ticks: 10
   rollout_auto_seed_agents: true
   replay_manifest: null
@@ -88,4 +88,12 @@ queue_fairness:
   age_priority_weight: 0.1
 telemetry:
   transport:
-    type: stub
+    type: stdout
+  scenario:
+    agents:
+      alice:
+        archetype: balanced
+        position: [2, 2]
+      bob:
+        archetype: balanced
+        position: [3, 2]

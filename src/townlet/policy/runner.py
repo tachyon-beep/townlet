@@ -126,7 +126,6 @@ class PolicyRuntime:
         if isinstance(config_policy_hash, str) and config_policy_hash:
             self._policy_hash = config_policy_hash
         self._envelope_cache: ObservationEnvelopeCache | None = None
-        self._legacy_observations_warned = False
 
     @property
     def behavior(self) -> BehaviorController:
@@ -195,17 +194,10 @@ class PolicyRuntime:
         tick: int,
         *,
         envelope: "ObservationEnvelope",
-        observations: Mapping[str, Any] | None = None,
     ) -> dict[str, object]:
         """Return an action dictionary per agent for the current tick."""
 
         self._envelope_cache = ObservationEnvelopeCache.from_envelope(envelope)
-        if observations and not self._legacy_observations_warned:
-            logger.warning(
-                "PolicyRuntime received legacy observation batches; this compatibility "
-                "path will be retired during WP3C Stage 5.",
-            )
-            self._legacy_observations_warned = True
 
         guardrail_emitter = getattr(world, "emit_event", None)
         dto_world = DTOWorldView(
@@ -387,7 +379,6 @@ class PolicyRuntime:
 
     def flush_transitions(
         self,
-        observations: Mapping[str, Mapping[str, object]],
         *,
         envelope: "ObservationEnvelope | None" = None,
     ) -> list[dict[str, object]]:
@@ -396,8 +387,10 @@ class PolicyRuntime:
         if dto_envelope is None and self._envelope_cache is not None:
             dto_envelope = self._envelope_cache.envelope
 
+        if dto_envelope is None:
+            raise RuntimeError("Observation envelope unavailable when flushing transitions")
+
         frames = self._trajectory_service.flush_transitions(
-            observations,
             envelope=dto_envelope,
         )
         for frame in frames:
