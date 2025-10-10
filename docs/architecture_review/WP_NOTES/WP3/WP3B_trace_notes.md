@@ -83,27 +83,49 @@ Stage 3B executes the remediation plan summarised below.
 - `TrajectoryService.flush_transitions` consumes DTO envelopes exclusively; the mapping fallback has
   been removed.
 
-## Stage 3C Audit – Remaining Legacy Consumers (2025-10-10)
+## Stage 3C Audit – Legacy Consumer Follow-up (2025-10-10)
 
 - **SimulationLoop**
-  - `_policy_observation_batch` cache still populated and forwarded to policy backends
-    (`src/townlet/core/sim_loop.py:140`, `:459`, `:471`, `:478`, `:658`).
-  - Legacy observation warnings + `TickArtifacts(observations=...)` persist; DTO envelope coexists.
+  - Legacy `_policy_observation_batch` cache has been removed; DTO envelopes are now the sole
+    payload delivered to policy providers.
+  - `TickArtifacts` still surface `observations` for compatibility; this flag is tracked for removal
+    under WP3 Stage 5.
 - **Policy façade**
-  - `PolicyController.decide` and `ScriptedPolicyAdapter.decide` accept/forward `observations`
-    keywords (`src/townlet/orchestration/policy.py:82`, `src/townlet/adapters/policy_scripted.py:36`).
-  - `PolicyRuntime.decide/post_step/flush_transitions` still accept optional `observations`
-    payloads (`src/townlet/policy/runner.py:202`, `:347`).
+  - `PolicyController`, `PolicyRuntime`, and scripted adapters require DTO envelopes. Optional
+    `observations` kwargs were removed; guard tests cover the DTO-only path.
 - **TelemetryPublisher**
-  - `emit_event("loop.tick", ...)` continues to include `observations` for downstream consumers and
-    `_handle_event` ingests the legacy mapping (`src/townlet/telemetry/publisher.py:1147`, `:1529`).
+  - `loop.tick` events continue to include the legacy `observations` blob for downstream consumers.
+    `_handle_event` tolerance remains until Stage 5 replaces external consumers.
 - **Training/Trajectory tooling**
-  - `TrajectoryService.flush_transitions` retains mapping fallback path (`src/townlet/policy/trajectory_service.py:45`).
-  - `PolicyTrainingOrchestrator.capture_rollout` gathers DTO frames but relies on loop.policy
-    caches that still accept legacy batches (`src/townlet/policy/training_orchestrator.py:187`).
+  - Trajectory service and orchestrator run purely on DTO frames; remaining translator helper
+    (`frames_to_replay_sample`) is earmarked for Stage 5 once export artefacts adopt DTO-native
+    schemas.
 - **World access**
-  - Policy runtime still iterates `world.agents` when building intents (`src/townlet/policy/runner.py:219`),
-    though DTO guardrails mitigate direct reads.
+  - Behaviour bridge still touches `world.objects` for object lookups; TODO markers persist for
+    Stage 5 when DTO rosters land.
 
-These sites are the target for Stage 3C migration work (DTO-only policy path) before Stage 5 removes
-the legacy observation payload entirely.
+These residual touchpoints define the Stage 5 scope to finish deprecating the legacy observation
+payload after the DTO rollout ships.
+
+## Stage 3C Training Adapter Audit (2025-10-10)
+
+- **PolicyTrainingOrchestrator**
+  - `capture_rollout`, `run_rollout_ppo`, and anneal helpers no longer touch `loop.observations`;
+    trajectory frames flow exclusively from `PolicyRuntime.collect_trajectory`, which already emits
+    DTO-backed `map`/`features` tensors and anneal context.
+  - Telemetry emissions still rely on DTO-derived metadata (`policy.metadata`, `policy.possession`,
+    `policy.anneal.update`), so no legacy getters remain.
+- **TrajectoryService**
+  - `flush_transitions` requires an `ObservationEnvelope` and builds frames directly from DTO agents.
+    The old observation batch fallback has been removed.
+- **Replay tooling**
+  - `build_batch` / `ReplayDataset` operate on DTO-generated frames; no calls to ObservationBuilder.
+  - `frames_to_replay_sample` persists as a translator for external replay artefacts. It consumes
+    DTO frame fields (`map`, `features`, rewards, dones) and is already flagged for retirement in
+    WP3 Stage 5 once downstream exporters accept DTO-native payloads.
+- **PPO / BC adapters**
+  - `policy/models.py` and `policy/backends/pytorch/*` consume the stacked DTO tensors provided by
+    replay batches; no direct world or legacy observation access remains.
+
+**Next steps:** migrate the residual translator helpers and replay exporters to emit DTO-native
+datasets (WP3C Stage 3D/Stage 5), then drop the compatibility layer.

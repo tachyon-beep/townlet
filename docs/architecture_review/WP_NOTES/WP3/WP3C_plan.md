@@ -161,9 +161,11 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
    - Added DTO regression coverage (`tests/policy/test_training_orchestrator_capture.py`) via stubbed
      loops, ensuring collected frames expose map/features and anneal context.
 3. **Backends and dataset builders**
-   - Ensure PPO/BC builders (`policy/models.py`, `policy/backends/pytorch/*`, `policy/replay.py`)
-     can ingest DTO-derived frames without needing legacy observation dicts.
-   - Where legacy format is still required for external files, introduce a thin translator that
+   - [x] Embed DTO agent/global context into trajectory frame metadata so replay samples retain
+     needs, wallet, job, queue, and pending intent details alongside `dto_schema_version`.
+   - [x] Persist anneal context and DTO metadata in `frames_to_replay_sample` so PPO/BC datasets see
+     the richer envelope-derived information while keeping existing tensor shapes unchanged.
+   - [ ] Where legacy format is still required for external files, introduce a thin translator that
      consumes DTOs and produces the older schema solely for export, with TODO to drop after Stage 5.
 
 ### Stage 3D – Surface/port adjustments

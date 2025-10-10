@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from townlet.world.dto.observation import ObservationEnvelope
 
@@ -97,12 +97,38 @@ class TrajectoryService:
 
         for agent_id, agent in sorted(agent_lookup.items(), key=lambda item: item[0]):
             entry = self._transitions.get(agent_id, {})
+            metadata = dict(getattr(agent, "metadata", {}) or {})
+            dto_meta = metadata.get("dto")
+            if not isinstance(dto_meta, dict):
+                dto_meta = {}
+            metadata["dto"] = dto_meta
+            dto_meta["schema_version"] = envelope.schema_version
+            if agent.position:
+                dto_meta["position"] = _coerce_sequence(agent.position)
+            if agent.needs:
+                dto_meta["needs"] = _coerce_mapping(agent.needs)
+            if agent.wallet is not None:
+                try:
+                    dto_meta["wallet"] = float(agent.wallet)
+                except (TypeError, ValueError):
+                    dto_meta["wallet"] = agent.wallet
+            if agent.inventory:
+                dto_meta["inventory"] = _coerce_mapping(agent.inventory)
+            if agent.job:
+                dto_meta["job"] = _coerce_mapping(agent.job)
+            if agent.personality:
+                dto_meta["personality"] = _coerce_mapping(agent.personality)
+            if agent.queue_state:
+                dto_meta["queue_state"] = _coerce_mapping(agent.queue_state)
+            if agent.pending_intent:
+                dto_meta["pending_intent"] = _coerce_mapping(agent.pending_intent)
+
             frame = {
                 "tick": self._current_tick,
                 "agent_id": agent_id,
                 "map": agent.map,
                 "features": agent.features,
-                "metadata": dict(getattr(agent, "metadata", {}) or {}),
+                "metadata": metadata,
                 "anneal_context": anneal_context,
                 "action": entry.get("action"),
                 "action_id": entry.get("action_id"),
@@ -111,3 +137,28 @@ class TrajectoryService:
             }
             frames.append(frame)
         return frames
+
+
+def _coerce_mapping(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    if payload is None:
+        return {}
+    return {str(key): _coerce_value(value) for key, value in payload.items()}
+
+
+def _coerce_sequence(payload: Sequence[Any] | None) -> list[Any]:
+    if payload is None:
+        return []
+    return [_coerce_value(value) for value in payload]
+
+
+def _coerce_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _coerce_mapping(value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return _coerce_sequence(value)
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+    except Exception:
+        pass
+    return value

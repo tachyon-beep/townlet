@@ -603,6 +603,12 @@ def frames_to_replay_sample(frames: Sequence[dict[str, Any]]) -> ReplaySample:
         value_preds = np.zeros(1, dtype=np.float32)
 
     metadata = dict(frames[-1].get("metadata", {}))
+    dto_meta = metadata.get("dto")
+    if isinstance(dto_meta, dict) and "schema_version" in dto_meta:
+        metadata.setdefault("dto_schema_version", dto_meta.get("schema_version"))
+    anneal_context = frames[-1].get("anneal_context")
+    if anneal_context:
+        metadata.setdefault("anneal_context", dict(anneal_context))
     metadata.update(
         {
             "training_arrays": list(TRAINING_ARRAY_FIELDS),
