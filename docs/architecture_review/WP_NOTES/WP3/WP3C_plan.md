@@ -7,15 +7,15 @@ scenarios, and retire the final legacy observation plumbing so WP1/WP2 compositi
 
 ## Stage 0 – Pre-flight Analysis & Baselines
 
-- [ ] Re-run the scripted baseline (`configs/examples/poc_hybrid.yaml`) capturing:
-  - Legacy observation batches + DTO envelope dumps for 10 ticks (`dto_parity_baseline_legacy.jsonl`,
-    `dto_parity_baseline_dto.jsonl` under `tests/data/dto_parity/`).
+- [x] Re-run the scripted baseline (`configs/examples/poc_hybrid.yaml`) capturing:
+  - Legacy observation batches + DTO envelope dumps for 10 ticks (`docs/architecture_review/WP_NOTES/WP3/dto_parity/legacy_baseline.jsonl`,
+    `docs/architecture_review/WP_NOTES/WP3/dto_parity/dto_baseline.jsonl`).
   - Reward breakdown history, queue metrics, policy metadata, rivalry events, and stability metrics.
-- [ ] Inspect current ML training configs (`configs/training/*.yml`) to confirm feature dimensions,
-  map sizes, and action vocab expected by PPO/BC trainers.
+- [x] Inspect current ML training configs (`configs/training/*.yml`) to confirm feature dimensions,
+  map sizes, and action vocab expected by PPO/BC trainers. *(Baseline dimensions recorded in `dto_parity/ml_dimensions.txt`.)*
 - [ ] Document outstanding schema gaps discovered during WP3A (e.g. per-agent needs, job context,
   inventory, DTO queue promotions) in `dto_observation_inventory.md` and map each to a source.
-- [ ] Freeze current `dto_example_tick.json` + `dto_sample_tick.json` snapshots to ease diffs after
+- [x] Freeze current `dto_example_tick.json` + `dto_sample_tick.json` snapshots to ease diffs after
   schema changes.
 
 ---
