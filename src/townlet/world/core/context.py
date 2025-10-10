@@ -114,12 +114,19 @@ class WorldContext:
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
         for agent_id, payload in actions.items():
+            if payload is None:
+                # Treat None as an explicit "no action" marker.
+                self._pending_actions.pop(agent_id, None)
+                continue
             if isinstance(payload, Action):
                 self._pending_actions[agent_id] = payload
-            elif isinstance(payload, Mapping):
+                continue
+            if isinstance(payload, Mapping):
                 self._pending_actions[agent_id] = dict(payload)
-            else:
-                self._pending_actions[agent_id] = payload
+                continue
+            raise TypeError(
+                f"Unsupported action payload for agent '{agent_id}': {type(payload)!r}"
+            )
 
     def tick(
         self,

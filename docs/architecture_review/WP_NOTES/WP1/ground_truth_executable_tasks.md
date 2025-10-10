@@ -1,0 +1,106 @@
+# WP1 Ground Truth Remediation – Executable Task Breakdown
+
+Each section expands the issues from `ground_truth_issues.md` into concrete tasks (T#). Use these to track work as we close out WP1.
+
+## 1. Legacy world factory path still active
+- **T1.1** Implement `WorldContext.from_config` (or equivalent builder) that wires `WorldState`, lifecycle, perturbations, modular systems, and returns an object satisfying `WorldRuntime`.
+- **T1.2** Update `_build_default_world` so it constructs and returns the modular `WorldContext`; remove all `LegacyWorldRuntime`/`ObservationBuilder` references.
+- **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly.
+- **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events.
+- **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config).
+
+## 2. DefaultWorldAdapter is a legacy bridge
+- **T2.1** Replace `DefaultWorldAdapter` implementation with a wrapper around the modular `WorldContext` and DTO helpers.
+- **T2.2** Remove `.world_state` and any direct `LegacyWorldRuntime` dependencies; expose only the `WorldRuntime` port.
+- **T2.3** Ensure observation building is handled by DTO pipeline; drop `ObservationBuilder` usage.
+- **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour.
+
+## 3. WorldContext is unimplemented
+- **T3.1** Port tick orchestration into `WorldContext` (`reset`, `tick`, `agents`, `observe`, `apply_actions`, `snapshot`).
+- **T3.2** Integrate modular systems/services and deterministic RNG streams; ensure events populate `snapshot()`.
+- **T3.3** Provide unit/system tests comparing modular tick behaviour with legacy parity fixtures.
+- **T3.4** Update `WorldContext` exports/documentation to reflect the implementation.
+
+## 4. SimulationLoop remains tied to legacy runtime
+- **T4.1** Refactor `_build_components` to resolve world/policy/telemetry strictly via factories (no direct `WorldState`/builder instantiation).
+- **T4.2** Remove direct `runtime.queue_console` usage; pipe console input through `ConsoleRouter.enqueue`/`run_pending`.
+- **T4.3** Ensure policy decisions operate on cached DTO envelopes; drop observation dict caches.
+- **T4.4** Refresh loop tick flow to emit telemetry via ports only (no legacy writer calls).
+- **T4.5** Add loop smoke tests for modular providers and DTO parity.
+
+## 5. Missing dummy providers and promised tests
+- **T5.1** Create `src/townlet/testing/` with dummy world/policy/telemetry implementations satisfying the ports.
+- **T5.2** Register dummy providers in the factories under documented keys.
+- **T5.3** Write `tests/test_ports_surface.py` validating method presence/forbidden symbols on ports/adapters.
+- **T5.4** Add `tests/test_loop_with_dummies.py` (fast smoke) driving the loop through dummy providers.
+- **T5.5** Implement console router & health monitor smokes as per WP1 plan.
+
+## 6. Port boundaries still leak legacy types
+- **T6.1** Revise `WorldRuntime` port signatures to remove `WorldState`/console coupling; document DTO expectation.
+- **T6.2** Update adapters and loop to match the refined signatures; remove dependency on `core.interfaces` legacy protocols.
+- **T6.3** Provide guard tests ensuring the loop imports only `townlet.ports.*` interfaces.
+- **T6.4** Deprecate/remove unused members from `core.interfaces` once the loop migrates.
+
+## High-Complexity Task Breakdown
+
+### T1.1 / T3.x – Implement modular WorldContext
+- **T1.1a** Extract current tick orchestration flow from `LegacyWorldRuntime.tick` into a design doc snippet mapping each phase (apply actions, systems, snapshot).
+- **T1.1b** Stub `WorldContext` methods with TODOs and wire constructor dependencies (state, services, dispatcher) without behaviour yet.
+- **T1.1c** Implement `WorldContext.reset` using `WorldState.from_config` and deterministic RNG setup; add unit test covering seed reproducibility.
+- **T1.1d** Implement `apply_actions` + `tick` using modular services; include event buffering + RuntimeStepResult construction.
+- **T1.1e** Implement `agents`/`observe` returning DTO envelopes via the existing DTO factory; unit test per-agent output and terminated flag handling.
+- **T1.1f** Implement `snapshot` returning world/global DTO-friendly payloads; add regression test comparing against legacy snapshot for baseline config.
+- **T1.1g** Run parity harness (`tests/core/test_sim_loop_dto_parity.py`) against new context and capture any deltas for follow-up fixes.
+
+### T4.x – Refactor SimulationLoop onto modular ports
+- **T4.1a** Introduce seam in `_build_components` that accepts pre-built world/policy/telemetry objects (for test injection) to aid migration.
+- **T4.1b** Remove direct `WorldState` construction, instead call `create_world` and pull context/adapter details via the port; update tests depending on `loop.world` attribute.
+- **T4.1c** Replace `_observation_builder` usage with DTO envelope caching; ensure reward engine consumes the DTO data.
+- **T4.2a** Move console queueing into `ConsoleRouter.enqueue` during input ingestion; delete `runtime.queue_console` calls.
+- **T4.2b** Update telemetry emission to rely solely on port methods (`emit_event/emit_metric`), removing legacy writer fallbacks.
+- **T4.4a** Update failure handling and snapshotting to use modular runtime outputs; adjust `SnapshotManager` helpers accordingly.
+- **T4.5a** Add new smoke test `tests/core/test_sim_loop_modular_smoke.py` covering two ticks with default providers, asserting DTO envelope + telemetry events.
+
+### T6.x – Tighten port boundaries
+- **T6.1a** Draft revised `WorldRuntime` protocol without `WorldState` references; circulate with WP2 owner for sign-off.
+- **T6.1b** Update adapters (`world_default`, dummy world) to satisfy new signatures; ensure type check passes.
+- **T6.2a** Update `SimulationLoop` to import only `townlet.ports.world.WorldRuntime`; remove use of `core.interfaces.WorldRuntimeProtocol`.
+- **T6.3a** Add guard test `tests/core/test_loop_port_imports.py` ensuring the loop cannot import legacy protocols.
+- **T6.4a** Deprecate unused members in `core/interfaces.py` and document removal timeline; follow up with final deletion once callers migrate.
+
+## Additional subdivision for complex tasks
+
+### WorldContext implementation (supersedes T1.1a–T1.1g)
+- **WC-A** Capture an action/system/snapshot sequence diagram from `LegacyWorldRuntime.tick` and note required dependencies (no code changes yet).
+- **WC-B** Implement `WorldContext.__init__`/`reset` wiring state, RNG builders, dispatcher stubs; write seed determinism test.
+- **WC-C** Implement `WorldContext.apply_actions` (queue actions, basic validation) with unit test using stub state/service.
+- **WC-D** Implement `WorldContext.tick` orchestrating action processing → systems → event buffer, returning a provisional `RuntimeStepResult` (without DTO dependency yet); add unit test with mocked systems verifying call order.
+- **WC-E** Integrate DTO observation builder: update `WorldContext.observe` to call `build_observation_envelope`; unit-test per-agent payload and terminated flag handling.
+- **WC-F** Implement `WorldContext.snapshot` to emit tick, events, and DTO/global metrics; unit-test shape and event clearing.
+- **WC-G** Run parity harness against the new context and capture delta report; open follow-up tasks for any discrepancies.
+
+### SimulationLoop migration (supersedes T4.1a–T4.5a)
+- **SL-A** Introduce constructor seams (dependency injection hooks) for world/policy/telemetry to ease staged migration; add tests ensuring defaults still work.
+- **SL-B** Replace direct `WorldState` creation with `create_world` call; adjust loop attributes and tests that relied on `self.world` being the legacy object.
+- **SL-C** Swap policy setup to use `create_policy` output directly, ensuring controller binding works; add regression test for pending intent handling.
+- **SL-D** Swap telemetry setup to use `create_telemetry`, removing direct `TelemetryPublisher` mutation; verify telemetry events via existing tests.
+- **SL-E** Remove `_observation_builder` cache; update reward engine and policy decision path to consume the DTO envelope; add unit test ensuring policy sees matching agent IDs.
+- **SL-F** Route console commands via `ConsoleRouter` exclusively and delete `runtime.queue_console`; extend console smoke test to assert router usage.
+- **SL-G** Update failure/snapshot handling to pull data from modular runtime (`runtime.snapshot`), adjusting `SnapshotManager` tests as needed.
+- **SL-H** Add new smoke `tests/core/test_sim_loop_modular_smoke.py` running two ticks and asserting DTO envelope + telemetry events (stdout adapter stub).
+
+### Port boundary tightening (supersedes T6.x)
+- **PB-A** Draft revised `WorldRuntime` protocol without `WorldState`/console references and circulate for sign-off; no code changes yet.
+- **PB-B** Introduce transitional methods on adapters (e.g., `queue_console_router`) to support new protocol while keeping tests passing.
+- **PB-C** Update `DefaultWorldAdapter` and dummy world to satisfy the revised protocol; unit test behaviour.
+- **PB-D** Update `SimulationLoop` to import and use only `townlet.ports.world.WorldRuntime`; remove `core.interfaces.WorldRuntimeProtocol` usage.
+- **PB-E** Add guard test ensuring loop modules don’t import `core.interfaces`; enforce via CI.
+- **PB-F** Deprecate unused members in `core/interfaces.py`; schedule follow-up removal once call sites are gone.
+
+---
+## Progress Log (2025-10-10)
+- Completed **WC-A** – legacy tick flow documented (`WC_A_tick_flow.md`).
+- Completed **WC-B** – added deterministic reset regression test (`tests/test_world_context.py::test_world_context_reset_deterministic`).
+- Completed **WC-C** – tightened `WorldContext.apply_actions` with validation and added regression test `test_world_context_apply_actions_validation`.
+- WC-D plan: validate `WorldContext.tick` orchestrates actions + systems via tests covering (1) pending vs prepared action merge/clear, (2) nightly reset invocation on cadence, ensuring returned `RuntimeStepResult` matches expectations. No structural code changes anticipated; focus on regression coverage.
+- Completed **WC-D** – added regression tests `test_world_context_tick_merges_pending_and_prepared` and `test_world_context_tick_triggers_nightly_reset` to cover tick orchestration behaviour.
