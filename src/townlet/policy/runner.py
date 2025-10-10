@@ -21,6 +21,8 @@ from townlet.policy.models import (
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.grid import WorldState
 
+from .dto_view import DTOWorldView
+
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.dto.observation import ObservationEnvelope
 
@@ -160,8 +162,10 @@ class PolicyRuntime:
     ) -> dict[str, object]:
         """Return an action dictionary per agent for the current tick."""
 
+        dto_world: DTOWorldView | None = None
         if envelope is not None:
             self._latest_envelope = envelope
+            dto_world = DTOWorldView(envelope=envelope, world=world)
         self._tick = tick
         self._trajectory_service.begin_tick(tick)
         actions: dict[str, object] = {}
@@ -169,11 +173,19 @@ class PolicyRuntime:
             if self._behavior_bridge.is_possessed(agent_id):
                 actions[agent_id] = {"kind": "wait"}
                 continue
+            def _guard(world_ref: WorldState, agent: str, intent: AgentIntent) -> AgentIntent:
+                return self._apply_relationship_guardrails(
+                    world_ref,
+                    agent,
+                    intent,
+                    dto_world=dto_world,
+                )
+
             selected_intent, commit_enforced = self._behavior_bridge.decide_agent(
                 world=world,
                 agent_id=agent_id,
                 tick=tick,
-                guardrail_fn=self._apply_relationship_guardrails,
+                guardrail_fn=_guard,
             )
             if selected_intent.kind == "wait":
                 wait_payload: dict[str, object] = {"kind": "wait"}
@@ -217,8 +229,11 @@ class PolicyRuntime:
         world: WorldState,
         agent_id: str,
         intent: AgentIntent,
+        *,
+        dto_world: DTOWorldView | None = None,
     ) -> AgentIntent:
         avoidance = getattr(self.behavior, "should_avoid", None)
+        rivalry_source = dto_world if dto_world is not None else world
 
         def _should_avoid(target_agent: str) -> bool:
             if not target_agent:
@@ -227,17 +242,25 @@ class PolicyRuntime:
                 try:
                     return bool(avoidance(world, agent_id, target_agent))
                 except Exception:  # pragma: no cover - defensive hook
-                    return world.rivalry_should_avoid(agent_id, target_agent)
-            return world.rivalry_should_avoid(agent_id, target_agent)
+                    return rivalry_source.rivalry_should_avoid(agent_id, target_agent)
+            return rivalry_source.rivalry_should_avoid(agent_id, target_agent)
 
         if intent.kind == "chat" and intent.target_agent:
             if _should_avoid(intent.target_agent):
-                world.record_chat_failure(agent_id, intent.target_agent)
-                world.record_relationship_guard_block(
-                    agent_id=agent_id,
-                    reason="chat_rival",
-                    target_agent=intent.target_agent,
-                )
+                if dto_world is not None:
+                    dto_world.record_chat_failure(agent_id, intent.target_agent)
+                    dto_world.record_relationship_guard_block(
+                        agent_id=agent_id,
+                        reason="chat_rival",
+                        target_agent=intent.target_agent,
+                    )
+                else:
+                    world.record_chat_failure(agent_id, intent.target_agent)
+                    world.record_relationship_guard_block(
+                        agent_id=agent_id,
+                        reason="chat_rival",
+                        target_agent=intent.target_agent,
+                    )
                 cancel = getattr(self.behavior, "cancel_pending", None)
                 if callable(cancel):
                     cancel(agent_id)
@@ -245,11 +268,18 @@ class PolicyRuntime:
         if intent.kind in {"request", "start"} and intent.object_id:
             guard = getattr(self.behavior, "_rivals_in_queue", None)
             if callable(guard) and guard(world, agent_id, intent.object_id):
-                world.record_relationship_guard_block(
-                    agent_id=agent_id,
-                    reason="queue_rival",
-                    object_id=intent.object_id,
-                )
+                if dto_world is not None:
+                    dto_world.record_relationship_guard_block(
+                        agent_id=agent_id,
+                        reason="queue_rival",
+                        object_id=intent.object_id,
+                    )
+                else:
+                    world.record_relationship_guard_block(
+                        agent_id=agent_id,
+                        reason="queue_rival",
+                        object_id=intent.object_id,
+                    )
                 cancel = getattr(self.behavior, "cancel_pending", None)
                 if callable(cancel):
                     cancel(agent_id)

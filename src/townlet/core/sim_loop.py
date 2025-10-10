@@ -216,7 +216,7 @@ class SimulationLoop:
             provider=self._telemetry_provider,
             publisher=telemetry_publisher,
         )
-        self.telemetry = self._telemetry_port
+        self.telemetry = telemetry_publisher
         self._resolved_providers["telemetry"] = self._telemetry_provider
         self.stability = StabilityMonitor(config=self.config)
         log_path = Path("logs/promotion_history.jsonl")
@@ -524,10 +524,15 @@ class SimulationLoop:
             queues_snapshot: dict[str, object] = {}
             try:
                 queue_export = self.world.queue_manager.export_state()
-                queues_payload = queue_export.get("queues", {}) if isinstance(queue_export, dict) else {}
-                if isinstance(queues_payload, dict):
-                    queues_snapshot = queues_payload
-                    queue_length = float(sum(len(entries or []) for entries in queues_payload.values()))
+                if isinstance(queue_export, dict):
+                    queues_snapshot = queue_export
+                    queues_payload = queue_export.get("queues", {})
+                    if isinstance(queues_payload, dict):
+                        queue_length = float(
+                            sum(len(entries or []) for entries in queues_payload.values())
+                        )
+                    else:
+                        queue_length = 0.0
                 else:  # pragma: no cover - defensive
                     queue_length = 0.0
             except Exception:  # pragma: no cover - defensive

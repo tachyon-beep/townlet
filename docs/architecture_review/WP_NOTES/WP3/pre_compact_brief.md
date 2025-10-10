@@ -12,14 +12,15 @@ Latest context snapshot so we can resume quickly after memory compaction.
   - `dto_example_tick.json` + `dto_sample_tick.json` provide baseline payloads.
   - `dto_worldstate_usage.json` auto-extracted usage map for converters.
 - DTO schema models scaffolded in `src/townlet/world/dto/observation.py` and re-exported through `townlet.world.dto` (`DTO_SCHEMA_VERSION = "0.1.0"`); `build_observation_envelope` factory + `tests/world/test_observation_dto_factory.py` validate JSON readiness, and `SimulationLoop` caches/attaches the DTO payload to `loop.tick` events (`observations_dto`).
-  Envelope now includes queue rosters, running affordances, and relationship metrics.
+  Envelope now includes queue rosters, running affordances, and relationship metrics. `PolicyRuntime` consumes cached DTO data via `DTOWorldView` (guardrails now use DTO data with legacy fallback); scripted behaviour/world services still rely on `WorldState` until adapters expand.
 
 ## Outstanding Work (DTO Rollout)
-1. Integrate the converter into world/policy paths and extend validation harness
-   (parity checks now cover DTO tensor parity; next add action/reward parity and world-state detachment).
-2. Update scripted policy path to consume DTOs and emit telemetry events.
-3. Extend to ML/training adapters, then remove `runtime.queue_console` + legacy
-   world mutations.
+1. Expand `DTOWorldView` usage across scripted behaviours/queue helpers; replace
+   remaining world mutations with event emission.
+2. Extend parity harness to cover reward breakdown comparisons and run at least
+   one ML-backed scenario (short PPO/BC run) to prove DTO-only parity.
+3. Remove legacy observation payloads / world supplier hooks once parity and
+   adapters land; update telemetry/docs and notify downstream consumers.
 4. Document schema & parity results in WP1/WP2 once DTO rollout complete.
 
 ## Notes / Reminders

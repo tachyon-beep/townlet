@@ -63,17 +63,22 @@ retiring legacy telemetry artefacts.
      affordances, relationship tie strengths, guardrail mutation hooks).
 
 3. **Implementation**
-   - **Schema updates**
+   - **Schema updates** *(done — queue/affordance/relationship context added)*
      - Extend DTO envelope builder with queue roster/running affordance data and
-       relationship metrics; adjust parity tests accordingly.
+       relationship metrics; adjust parity tests accordingly. *(Done in
+       `src/townlet/world/dto/observation.py` & `src/townlet/world/dto/factory.py`.)*
      - Provide migration notes for downstream consumers when schema changes.
    - **Adapter scaffolding**
      - Implement DTO-backed world view classes (`DTOWorldView`, guardrail helpers)
        leveraging the enriched envelope + auxiliary services (e.g.,
-       `world_port` snapshots for write paths during transition).
+       `world_port` snapshots for write paths during transition). *(Initial
+       version in `src/townlet/policy/dto_view.py`; exposes queue manager,
+       affordance runtime, relationship tie helpers with legacy fallbacks.)*
    - **Behaviour refactor**
      - Update scripted behaviours/guardrails to consume DTO adapters; fall back
        to legacy world access behind a feature flag until parity confirmed.
+       *(Guardrail path now accepts `DTOWorldView` via `PolicyRuntime` but
+       scripted behaviour still relies on `WorldState`; next step.)*
    - **Mutation/event pipeline**
      - Replace direct calls to `world.record_*` guardrail helpers with DTO/port
        emitted events consumed by telemetry or downstream logic.
