@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -15,6 +16,7 @@ from townlet.policy.replay_buffer import (
     InMemoryReplayDataset,
     InMemoryReplayDatasetConfig,
 )
+from townlet.world.dto.observation import DTO_SCHEMA_VERSION
 
 
 @dataclass
@@ -27,6 +29,9 @@ class AgentRollout:
 
     def to_replay_sample(self) -> ReplaySample:
         return frames_to_replay_sample(self.frames)
+
+    def to_dto_artifact(self) -> dict[str, Any]:
+        return build_dto_rollout_artifact(self.agent_id, self.frames)
 
 
 class RolloutBuffer:
@@ -119,8 +124,11 @@ class RolloutBuffer:
             meta["metrics"] = sample_metrics
             metrics_map[sample_path.name] = sample_metrics
             meta_path.write_text(json.dumps(meta, indent=2))
+            dto_path = output_dir / f"{stem}_dto.json"
+            dto_payload = rollout.to_dto_artifact()
+            dto_path.write_text(json.dumps(dto_payload, indent=2))
             manifest_entries.append(
-                {"sample": sample_path.name, "meta": meta_path.name}
+                {"sample": sample_path.name, "meta": meta_path.name, "dto": dto_path.name}
             )
 
         manifest_path = output_dir / f"{prefix}_manifest.json"
@@ -204,3 +212,63 @@ class RolloutBuffer:
             else:
                 aggregate[key] = total / occurrences
         return aggregate
+
+
+def build_dto_rollout_artifact(agent_id: str, frames: Sequence[dict[str, object]]) -> dict[str, Any]:
+    """Normalise rollout frames into a DTO-native export payload."""
+
+    if not frames:
+        raise ValueError("frames cannot be empty when building DTO rollout export")
+
+    resolved_agent_id = str(agent_id) if agent_id else None
+    ticks: list[int] = []
+    normalised_frames: list[dict[str, Any]] = []
+    for frame in frames:
+        frame_agent = str(frame.get("agent_id", resolved_agent_id or "unknown"))
+        if resolved_agent_id is None:
+            resolved_agent_id = frame_agent
+        elif frame_agent != resolved_agent_id:
+            raise ValueError(
+                f"mixed agent identifiers in rollout frames ({resolved_agent_id} vs {frame_agent})"
+            )
+        tick_value = frame.get("tick", 0)
+        try:
+            ticks.append(int(tick_value))
+        except (TypeError, ValueError):
+            ticks.append(0)
+        normalised_frames.append(_normalise_frame(frame))
+
+    if resolved_agent_id is None:
+        resolved_agent_id = "unknown"
+
+    return {
+        "schema_version": DTO_SCHEMA_VERSION,
+        "agent_id": resolved_agent_id,
+        "frame_count": len(normalised_frames),
+        "tick_first": min(ticks),
+        "tick_last": max(ticks),
+        "frames": normalised_frames,
+    }
+
+
+def _normalise_frame(frame: Mapping[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in frame.items():
+        payload[str(key)] = _to_builtin(value)
+    return payload
+
+
+def _to_builtin(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): _to_builtin(v) for k, v in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_to_builtin(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    return value

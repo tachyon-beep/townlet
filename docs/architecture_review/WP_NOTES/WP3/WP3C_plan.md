@@ -165,8 +165,11 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
      needs, wallet, job, queue, and pending intent details alongside `dto_schema_version`.
    - [x] Persist anneal context and DTO metadata in `frames_to_replay_sample` so PPO/BC datasets see
      the richer envelope-derived information while keeping existing tensor shapes unchanged.
-   - [ ] Where legacy format is still required for external files, introduce a thin translator that
+   - [x] Where legacy format is still required for external files, introduce a thin translator that
      consumes DTOs and produces the older schema solely for export, with TODO to drop after Stage 5.
+     `RolloutBuffer.save` now emits DTO-native JSON exports alongside the legacy `.npz` samples; the
+     translator is isolated to `frames_to_replay_sample` for compatibility and flagged for removal in
+     Stage 5.
 
 ### Stage 3D – Surface/port adjustments
 1. **Ports and stubs** *(completed 2025-10-10)*
