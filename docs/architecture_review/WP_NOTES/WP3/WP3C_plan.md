@@ -208,11 +208,12 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
    - Smoke test verifies finite reward streams while DTO-derived policy events are active; failures
      surface via numpy assertions.
 
-3. **Automation** *(completed 2025-10-10)*  
+3. **Automation** *(completed 2025-10-10)*
    - Added `tox -e ml` profile (see `tox.ini`) running the DTO smoke test; document in WP notes.
 
-4. **Risk prep** *(pending)*  
-   - Provide lightweight PPO config + diff tooling if we expand beyond the random-weight harness.
+4. **Risk prep** *(completed 2025-10-10)*  
+   - Checked in `configs/training/dto_smoke.yaml` (10-tick scripted rollout, stub telemetry) and
+     drafted migration guidance in `docs/architecture_review/WP_NOTES/WP3/dto_migration.md`.
 
 ---
 
