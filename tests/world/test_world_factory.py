@@ -28,6 +28,7 @@ def test_create_world_instantiates_context_from_config() -> None:
 
     # Initial world should have no agents and tick safely.
     assert list(world_runtime.agents()) == []
-    world_runtime.tick()
+    result = world_runtime.tick(tick=1, policy_actions={})
     snapshot = world_runtime.snapshot()
     assert snapshot["tick"] == 1
+    assert isinstance(result.console_results, list)

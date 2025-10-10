@@ -11,14 +11,18 @@
     "tests/test_telemetry_surface_guard.py::test_loop_tick_payload_is_dto_only"
   ],
   "next_steps": [
-    "Run full pytest, ruff, mypy",
-    "Drop legacy world adapter handles once DTO parity verified",
+    "Complete DTO ML parity & adapter cleanup (drop ObservationBuilder shims / queue_console hooks)",
+    "Run full pytest + mypy (ruff sweep deferred until legacy cleanup)",
     "Prep release comms (CHANGELOG, stakeholder note)"
   ],
   "notes": [
     {
       "timestamp": "2025-10-10T16:00:55.779280",
       "detail": "Full repo lint (ruff) deferred until final Stage 6 wrap \u2014 current codebase has 175 legacy violations unrelated to DTO guardrails."
+    },
+    {
+      "timestamp": "2025-10-11T03:22:38.480257",
+      "detail": "Default world adapter now fronts the runtime (legacy_runtime removed from SimulationLoop); focus shifts to ML parity + ObservationBuilder shims before final lint sweep."
     }
   ]
 }

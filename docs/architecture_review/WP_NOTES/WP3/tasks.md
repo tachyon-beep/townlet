@@ -27,7 +27,7 @@
 ## 3. Simulation Loop Cleanup
 - [ ] Replace `runtime.queue_console` usage with router-driven action application; ensure no direct `WorldState` mutation.
 - [x] Emit telemetry via events only (`loop.tick`, `loop.health`, `loop.failure`); remove `record_console_results`, `record_health_metrics`, `record_loop_failure` calls.
-- [ ] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity. *(Simulation loop now DTO-only; follow-up refactor will remove remaining world/policy fallbacks.)*
+- [x] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity. *(Default world adapter now fronts the runtime; simulation loop no longer reaches through `legacy_runtime`.)*
 
 ## 4. Testing & Parity
 - [x] Add guard tests preventing reintroduction of telemetry getters/writers.

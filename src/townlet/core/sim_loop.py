@@ -44,7 +44,6 @@ from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.dto import build_observation_envelope
 from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.grid import WorldState
-from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 from townlet.policy.runner import PolicyRuntime
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
@@ -238,20 +237,16 @@ class SimulationLoop:
         else:
             ticks_per_day = getattr(self._observation_builder.hybrid_cfg, "time_ticks_per_day", 1440)
         self._ticks_per_day = max(1, int(ticks_per_day))
-        legacy_runtime = LegacyWorldRuntime(
+        self._world_port = create_world(
+            provider=self._world_provider,
             world=self.world,
             lifecycle=self.lifecycle,
             perturbations=self.perturbations,
             ticks_per_day=self._ticks_per_day,
-            **self._world_options,
-        )
-        self._world_port = create_world(
-            provider=self._world_provider,
-            runtime=legacy_runtime,
+            world_kwargs=self._world_options,
             observation_builder=self._observation_builder,
         )
-        runtime_instance: WorldRuntimeProtocol = self._world_port.legacy_runtime
-        self.runtime = runtime_instance
+        self.runtime = self._world_port
         self._resolved_providers["world"] = self._world_provider
         self._console_router = ConsoleRouter(
             world=self._world_port,
@@ -261,7 +256,7 @@ class SimulationLoop:
         monitor_window = getattr(monitor_config, "window", 100) if monitor_config is not None else 100
         self._health_monitor = HealthMonitor(window=monitor_window)
         if self._world_adapter is not None:
-            bind_adapter = getattr(runtime_instance, "bind_world_adapter", None)
+            bind_adapter = getattr(self.runtime, "bind_world_adapter", None)
             if callable(bind_adapter):
                 bind_adapter(self._world_adapter)
         self._runtime_variant = "facade"

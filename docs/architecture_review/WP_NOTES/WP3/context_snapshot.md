@@ -9,18 +9,18 @@ Use this as reorientation material if the working memory is compacted. It summar
 - **Transports**:
   - `StdoutTelemetryAdapter` and `StubTelemetrySink` emit events through the dispatcher; publisher shims have been removed.
   - HTTP transport now posts dispatcher events; streaming/WebSocket transports remain inactive until downstream consumers need them.
-- **Loop Emission**: `SimulationLoop` now emits events exclusively for console results, stability metrics, loop health/failure, and loop tick; it no longer calls `record_*` directly.
+- **Loop Emission**: `SimulationLoop` emits events exclusively for console results, stability metrics, loop health/failure, and loop tick; it no longer calls `record_*` directly.
 - **Next steps**: Expand transport coverage to streaming/WebSocket once required and keep parity checks running while the DTO rollout proceeds.
 
 ## Policy DTOs (WP3 Section 2)
 
-- Current status: `PolicyController` facade exists but still delegates to `PolicyRuntime.decide(world, tick)`.
+- Current status: `PolicyController` still delegates to `PolicyRuntime.decide(world, tick)` but all decisions consume DTO envelopes; fallback logging remains for missing data during migration.
 - DTO schema models scaffolded at `src/townlet/world/dto/observation.py` (re-exported via `townlet.world.dto`); converter helper `build_observation_envelope`, fixture smoke tests, and a loop parity harness (`tests/core/test_sim_loop_dto_parity.py`) exist. `SimulationLoop` caches/emits the envelope while policy/world detachment remains, and the envelope carries queue rosters, running affordances, and relationship metrics for DTO adapters.
 - Scripted behaviour now consumes the DTO-backed queue/affordance/relationship views (`DTOWorldView`) and guardrail mutations emit `policy.guardrail.request` events; legacy fallbacks remain for envelopes absent during migration. Unit coverage lives in `tests/policy/test_dto_world_view.py` and `tests/world/test_guardrail_events.py`.
-- `WorldContext.tick` now routes combined actions through `affordances.process_actions`
+- `WorldContext.tick` routes combined actions through `affordances.process_actions`
   (extracted from `WorldState.apply_actions`), eliminating the extra legacy bridge while keeping
   behaviour parity. DTO queue snapshots normalise to agent identifiers to keep guardrails compatible,
-  `queues.step` now captures ghost-step conflicts, and `advance_running_affordances` handles
+  `queues.step` captures ghost-step conflicts, and `advance_running_affordances` handles
   completion/hand-over events via the runtime service.
 - Scripted behaviour now consumes DTO-backed agent snapshots/iterators provided by `DTOWorldView`;
   guard tests (`tests/policy/test_scripted_behavior_dto.py`) cover pending-intent promotion, chat
@@ -32,21 +32,21 @@ Use this as reorientation material if the working memory is compacted. It summar
   remains outstanding for DTO-only validation.
 - Todo:
   - Define observation DTOs from `WorldContext`/observation builder.
-  - DTO-driven policy events (`policy.metadata` / `policy.possession` / `policy.anneal.update`) now stream from `SimulationLoop`; finish migrating ML adapters to the DTO pathway before retiring remaining legacy hooks.
+  - DTO-driven policy events (`policy.metadata` / `policy.possession` / `policy.anneal.update`) stream from `SimulationLoop`; finish migrating ML adapters to the DTO pathway before retiring remaining legacy hooks.
   - DTO ML smoke harness (`tests/policy/test_dto_ml_smoke.py`) keeps torch-based parity between DTO and legacy feature tensors; integrate into automated ML workflows next.
-  - Adjust training/orchestrator code to the new DTO flow.
+  - Adjust training/orchestrator code to the new DTO flow and record updated parity baselines.
 
 ## Simulation Loop Cleanup (WP3 Section 3)
 
 - Remaining direct legacy usage:
-  - `runtime.queue_console` still invoked by the loop (console commands forwarded to legacy runtime). Need router-driven apply path.
-  - Loop still mutates `WorldState` (`world.agents`) directly; needs `WorldContext` helpers/DTOs after WP2/WP3 DTO work.
-- Plan: once policy DTOs are in place and telemetry events are fully streamed, remove `runtime.queue_console`, drop `legacy_runtime` handles, and mark WP1 Step 8 / WP2 Step 7 complete.
+  - `runtime.queue_console` still invoked by the loop (console commands forwarded via the adapter). Need router-driven apply path that emits events/DTO updates directly.
+  - World adapter still wraps `ObservationBuilder` for legacy observation batches; these shims remain until ML consumers migrate to DTO only.
+- Plan: finish ML parity work, remove `runtime.queue_console` usage, drop `ObservationBuilder` shims, and mark WP1 Step 8 / WP2 Step 7 complete.
 
 ## Cross-Package Dependencies
 
 - **WP1** waits on WP3 for: observation-first policy decisions and removal of `runtime.queue_console`.
-- **WP2** waits on WP3 for: observation DTO schema so adapters expose DTOs instead of raw `WorldState`.
+- **WP2** waits on WP3 for: observation DTO schema (done) and removal of legacy adapter shims; once DTO-only ML parity lands we can drop the ObservationBuilder/queue-console compatibility paths.
 - **WP3 telemetry cleanup** now focuses on transport parity and guard tests before WP1/WP2 closure.
 - Transitional bridge removal (legacy apply/resolves) is tracked under WP3B once modular systems
   are fully operational.

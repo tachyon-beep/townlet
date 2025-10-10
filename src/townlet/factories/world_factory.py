@@ -8,8 +8,8 @@ from typing import Any
 from townlet.adapters.world_default import DefaultWorldAdapter
 from townlet.observations.builder import ObservationBuilder
 from townlet.ports.world import WorldRuntime
-from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 from townlet.world.grid import WorldState
+from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 
 from .registry import register, resolve
 
@@ -23,6 +23,7 @@ def create_world(provider: str = "default", **kwargs: Any) -> WorldRuntime:
 def _build_default_world(
     *,
     runtime: LegacyWorldRuntime | None = None,
+    world: WorldState | None = None,
     config: Any | None = None,
     lifecycle: Any | None = None,
     perturbations: Any | None = None,
@@ -32,10 +33,14 @@ def _build_default_world(
     **legacy_kwargs: Any,
 ) -> WorldRuntime:
     if runtime is None:
+        if world is None:
+            if config is None:
+                raise TypeError("create_world requires either 'runtime' or 'world'/'config'")
+            world_options = dict(world_kwargs or {})
+            world = WorldState.from_config(config, **world_options)  # type: ignore[arg-type]
         missing = [
             name
             for name, value in (
-                ("config", config),
                 ("lifecycle", lifecycle),
                 ("perturbations", perturbations),
             )
@@ -43,10 +48,8 @@ def _build_default_world(
         ]
         if missing:
             raise TypeError(
-                "create_world requires runtime or ({})".format(", ".join(missing))
+                "create_world requires lifecycle/perturbations when 'runtime' is not supplied"
             )
-        world_options = dict(world_kwargs or {})
-        world = WorldState.from_config(config, **world_options)  # type: ignore[arg-type]
         runtime = LegacyWorldRuntime(
             world=world,
             lifecycle=lifecycle,
