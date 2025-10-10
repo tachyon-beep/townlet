@@ -1,6 +1,6 @@
 # WP3 Status
 
-**Current state (2025-10-09)**
+**Current state (2025-10-10)**
 - Scoping complete: WP3 owns the telemetry sink rework, policy observation flow, and the final simulation loop cleanup.
 - Event schema drafted (`event_schema.md`) covering `loop.tick`, `loop.health`, `loop.failure`, `console.result`, and policy/stability payloads.
 - `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks; Stdout adapter now routes lifecycle events through the dispatcher, and the stub sink logs events via the same path.
@@ -8,6 +8,7 @@
 - DTO Step 1 complete: `dto_observation_inventory.md` maps consumers → fields, `dto_example_tick.json`/`dto_sample_tick.json` capture the baseline envelope (schema **v0.2.0**), and converters/tests exist in `src/townlet/world/dto`. The envelope now exposes queue rosters, running affordances, relationship metrics, enriched per-agent context (position/needs/job/inventory/personality), and global employment/economy/anneal snapshots; `SimulationLoop` emits DTO payloads alongside events.
 - DTO parity harness expanded (`tests/core/test_sim_loop_dto_parity.py`) to assert DTO vs legacy values for rewards, needs, wallets, job snapshots, economy metrics, queue affinity, and anneal context using baselines captured in `docs/architecture_review/WP_NOTES/WP3/dto_parity/`.
 - Scripted behaviour path consumes DTO-backed views via `DTOWorldView`, emitting guardrail events while maintaining legacy fallbacks for missing envelopes.
+- **Stage 3A (DTO wiring)** complete: `SimulationLoop` now requires DTO envelopes before delegating to policy providers, logs when legacy observation batches are used, and bootstraps the envelope on reset. `PolicyRuntime` caches envelopes via `ObservationEnvelopeCache`, and `PolicyController` enforces DTO-aware backends (raising when providers reject the envelope). Legacy observation batches remain available temporarily but emit warnings.
 - **WP3B complete:** queue/affordance/employment/economy/relationship systems now run entirely through modular services. `WorldContext.tick` no longer calls legacy apply/resolve helpers, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and targeted system tests (`tests/world/test_systems_*.py`) lock the behaviour. World-level smokes (`pytest tests/world -q`) pass with the bridge removed.
 - Behaviour parity smokes (`tests/test_behavior_personality_bias.py`) remain green; DTO parity harness awaits reward/ML scenarios under WP3C.
 - Remaining work packages:

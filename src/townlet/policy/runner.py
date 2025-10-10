@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import warnings
+import logging
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -28,6 +30,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 # NOTE: Training orchestrator is imported lazily by TrainingHarness to avoid
 # importing Torch-dependent modules during test collection in non-ML envs.
+
+logger = logging.getLogger(__name__)
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
@@ -61,6 +65,28 @@ def _pretty_action(action_repr: str) -> str:
             label = f"{label}:{aff}"
         return label
     return action_repr
+
+
+@dataclass(slots=True)
+class ObservationEnvelopeCache:
+    """Caches DTO envelopes plus derived helper views for diagnostics."""
+
+    envelope: "ObservationEnvelope"
+    agent_ids: tuple[str, ...]
+    anneal_context: Mapping[str, Any]
+    action_lookup: dict[str, Any]
+
+    @classmethod
+    def from_envelope(cls, envelope: "ObservationEnvelope") -> "ObservationEnvelopeCache":
+        agent_ids = tuple(dto.agent_id for dto in envelope.agents)
+        anneal_ctx = dict(envelope.global_context.anneal_context or {})
+        action_lookup = dict(envelope.actions or {})
+        return cls(
+            envelope=envelope,
+            agent_ids=agent_ids,
+            anneal_context=anneal_ctx,
+            action_lookup=action_lookup,
+        )
 
 
 class PolicyRuntime:
@@ -99,7 +125,8 @@ class PolicyRuntime:
         config_policy_hash = getattr(self.config, "policy_hash", None)
         if isinstance(config_policy_hash, str) and config_policy_hash:
             self._policy_hash = config_policy_hash
-        self._latest_envelope: "ObservationEnvelope | None" = None
+        self._envelope_cache: ObservationEnvelopeCache | None = None
+        self._legacy_observations_warned = False
 
     @property
     def behavior(self) -> BehaviorController:
@@ -162,20 +189,25 @@ class PolicyRuntime:
         world: WorldState,
         tick: int,
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: "ObservationEnvelope",
         observations: Mapping[str, Any] | None = None,
     ) -> dict[str, object]:
         """Return an action dictionary per agent for the current tick."""
 
-        dto_world: DTOWorldView | None = None
-        if envelope is not None:
-            self._latest_envelope = envelope
-            guardrail_emitter = getattr(world, "emit_event", None)
-            dto_world = DTOWorldView(
-                envelope=envelope,
-                world=world,
-                guardrail_emitter=guardrail_emitter,
+        self._envelope_cache = ObservationEnvelopeCache.from_envelope(envelope)
+        if observations and not self._legacy_observations_warned:
+            logger.warning(
+                "PolicyRuntime received legacy observation batches; this compatibility "
+                "path will be retired during WP3C Stage 5.",
             )
+            self._legacy_observations_warned = True
+
+        guardrail_emitter = getattr(world, "emit_event", None)
+        dto_world = DTOWorldView(
+            envelope=envelope,
+            world=world,
+            guardrail_emitter=guardrail_emitter,
+        )
         self._tick = tick
         self._trajectory_service.begin_tick(tick)
         actions: dict[str, object] = {}
@@ -553,6 +585,27 @@ class PolicyRuntime:
             action_dim=action_dim,
         )
         return ConflictAwarePolicyNetwork(config)
+
+    # ------------------------------------------------------------------
+    # DTO cache helpers
+    # ------------------------------------------------------------------
+    def update_observation_envelope(self, envelope: "ObservationEnvelope") -> None:
+        """Persist the latest DTO envelope for diagnostics and downstream consumers."""
+
+        self._envelope_cache = ObservationEnvelopeCache.from_envelope(envelope)
+
+    def latest_envelope(self) -> "ObservationEnvelope | None":
+        """Return the most recent observation envelope."""
+
+        cache = self._envelope_cache
+        return cache.envelope if cache is not None else None
+
+    def latest_agent_ids(self) -> tuple[str, ...]:
+        """Expose the agent id ordering from the last envelope (for tests)."""
+
+        cache = self._envelope_cache
+        return cache.agent_ids if cache is not None else ()
+
 
 class TrainingHarness:
     """Backward-compatible, lazy wrapper around PolicyTrainingOrchestrator.

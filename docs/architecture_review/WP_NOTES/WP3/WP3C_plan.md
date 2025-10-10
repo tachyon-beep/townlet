@@ -83,43 +83,96 @@ scenarios, and retire the final legacy observation plumbing so WP1/WP2 compositi
 
 ## Stage 3 – Policy & Training Adapter Migration
 
-**Objective:** Move policy decision + training code onto DTO-only data, keeping scripted parity.
+**Objective:** Move policy decision + training code onto DTO-only data, keeping scripted parity and
+preserving telemetry output until Stage 5 retires the legacy payloads.
 
-1. **PolicyController / PolicyRuntime**
-   - Update `_action_provider` in `SimulationLoop._tick_impl` to pass only the DTO envelope to the
-     controller. Replace `observations_batch` usage with DTO-derived data.
-   - Store per-tick DTO envelopes in `PolicyRuntime` and expose them via `policy.port.decide`.
-   - Make `PolicyController.decide` raise if the backend requests legacy `world` access (after guard).
+### Stage 3A – Policy runtime wiring
+*Status: completed 2025-10-10 — runtime/controller wiring landed; legacy observation batches now emit warnings.*
+1. **Catalogue current usage**
+   - Search for `_policy_observation_batch`, `observations_batch`, and `world.agents` reads inside
+     `SimulationLoop`, `PolicyRuntime`, `PolicyController`, and scripted behaviours.
+   - Document any remaining direct `WorldState` reads in `WP3B_trace_notes.md` so we can verify
+     they are covered by DTO helpers before removal.
+2. **Simulation loop provider**
+   - Update `_action_provider` inside `SimulationLoop.step` so DTO envelopes are always constructed
+     before policy calls and become the primary payload passed to controllers/backends.
+   - Guard the legacy `observations` mapping: keep it available during Stage 3 but mark it as
+     deprecated in log output when accessed.
+3. **Policy runtime state**
+   - Replace `_latest_envelope` with a typed `ObservationEnvelopeCache` storing the DTO plus derived
+     helper views (sorted agent list, anneal context, action vocab). Expose this via
+     `PolicyRuntime.latest_envelope()` for diagnostics.
+   - Adjust `PolicyRuntime.decide` signature and call sites so DTO envelopes are required; thread the
+     existing `world` reference only for mutation shims that will emit events.
+4. **Policy controller surface**
+   - Ensure `PolicyController.decide` forwards DTO envelopes to backends and raises a clear error if
+     a backend requests `world` without declaring DTO support. Implement a temporary feature flag
+     allowing ML paths to opt-in gradually.
 
-2. **BehaviorBridge & Scripted Behaviour**
-   - Enhance `DTOWorldView` with helpers providing:
-     - Agent lookup (position, needs, inventory) compiled from DTO global context.
-     - Object roster / affordance availability; inject from legacy world until we emit DTO
-       object snapshots (mark TODO).
-   - Refactor `ScriptedBehavior` methods to read from `dto_world` first, using the fallback `world`
-     only for object lookups until Stage 5.
+### Stage 3B – DTO world view & scripted behaviour parity
+1. **DTOWorldView enrichment**
+   - Provide agent lookup helpers (`agent_snapshot`, `agent_inventory`, `pending_intent`) sourced
+     from the DTO global context and per-agent blocks.
+   - Add queue/relationship convenience wrappers returning pure data so scripted behaviours can drop
+     their `world.` fallbacks (retain guarded fallback for tests until Stage 5).
+2. **Behavior bridge integration**
+   - Update `BehaviorBridge.decide_agent` and the guardrail pipelines to accept a required
+     `dto_world` parameter. Audit `_rivals_in_queue`, `cancel_pending`, and anneal machinery—ensure
+     they no longer touch `world` objects directly.
+   - For any remaining lookups (e.g., object affordance metadata) add TODO comments pointing to the
+     Stage 5 clean-up.
+3. **Scripted policy audit**
+   - Update scripted behaviour modules under `townlet/policy/scripted` to rely on DTO helpers.
+   - Add targeted fast tests (under `tests/policy/test_scripted_behavior_dto.py`) covering guardrail
+     scenarios, queue rivalry blocks, and pending-intent resets while exercising DTO-only data.
 
-3. **TrajectoryService & Training flows**
-   - Change `TrajectoryService.flush_transitions` signature to accept DTO agents:
-     convert `AgentObservationDTO` payloads into frames (features/map remain identical).
-   - Update PPO/BC trainers (`policy/models`, `policy/backends/pytorch/bc.py`,
-     `policy/backends/pytorch/ppo_utils.py`) to accept DTO frames.
-   - Adjust `PolicyTrainingOrchestrator.capture_rollout` & `run_rollout_ppo` so they no longer read
-     from `loop.observations` but pull data from DTO envelopes and telemetry events.
+### Stage 3C – Trajectory and training plumbing
+1. **Trajectory service**
+   - Extend `TrajectoryService.begin_tick/record_observation/flush_transitions` so they accept DTO
+     agent payloads. Ensure the structure used by PPO/BC (`map`, `features`, `anneal_context`) stays
+     identical by extracting tensors from the DTO converter rather than re-building them from
+     `WorldState`.
+   - Add unit coverage (`tests/policy/test_trajectory_service_dto.py`) to compare DTO-backed frames
+     against Stage 2 parity snapshots.
+2. **Training orchestrator**
+   - Refactor `PolicyTrainingOrchestrator.capture_rollout`, `run_rollout_ppo`, and replay exporters
+     so they pull observation data from the DTO cache held by `SimulationLoop.policy` instead of
+     `loop.observations`.
+   - Update telemetry/metadata emissions (`PPO_TELEMETRY_VERSION`, anneal progress) to rely on DTO
+     events; remove any `loop.observations[...]` indexing.
+3. **Backends and dataset builders**
+   - Ensure PPO/BC builders (`policy/models.py`, `policy/backends/pytorch/*`, `policy/replay.py`)
+     can ingest DTO-derived frames without needing legacy observation dicts.
+   - Where legacy format is still required for external files, introduce a thin translator that
+     consumes DTOs and produces the older schema solely for export, with TODO to drop after Stage 5.
 
-4. **Port interfaces**
-   - Update `townlet/ports/policy.PolicyBackend.decide` docstring to emphasise DTO usage.
-   - Ensure fallback stub (`StubPolicyBackend`) logs when DTO envelopes are ignored (short-term for
-     backward compatibility).
+### Stage 3D – Surface/port adjustments
+1. **Ports and stubs**
+   - Update the `PolicyBackend` protocol (`townlet/policy/api.py`) and stub implementations to make
+     DTO support explicit. Emit a `DeprecationWarning` if the stub consumes `observations` instead of
+     the DTO envelope.
+2. **Telemetry events**
+   - Emit `policy.metadata`, `policy.possession`, and `policy.anneal.update` events directly from
+     DTO-derived data, ensuring the event dispatcher gets fed without needing world lookups.
 
-5. **Testing**
-   - Add unit tests for `TrajectoryService` verifying DTO → frame conversion.
-   - Update scripted behaviour tests (if any) to inject DTO views (create targeted fixtures).
+### Stage 3E – Regression safety net
+1. **Parities**
+   - Re-run Stage 2 parity harness after each sub-stage and compare diff logs (`dto_parity`)
+     to confirm behaviour parity.
+2. **Targeted tests**
+   - Add smoke for `SimulationLoop.step` verifying the action provider raises if no DTO is present,
+     and that scripted guardrails fire purely via DTO data.
+3. **Rollout capture**
+   - Execute a short end-to-end rollout (`scripts/run_simulation.py`) ensuring the training
+     orchestrator can still harvest frames and that telemetry captures the new policy events.
 
-6. **Risks**
-   - ML extras might not be available in CI: keep adapter updates behind optional imports and gate
-     tests with `pytest.importorskip("torch")`.
-   - Behaviour parity: run scripted parity harness (Stage 2) immediately after adapter changes.
+**Risks & mitigations**
+- Torch optionality: gate new ML-dependent tests with `pytest.importorskip("torch")` and mark them
+  `@pytest.mark.slow` to keep core CI lean.
+- Behaviour drift: keep Stage 2 parity fixtures up to date and diff outputs in review; capture a new
+  baseline only after confirming DTO parity.
+- External consumers: note in documentation that the legacy observation dict is deprecated but still
+  available until Stage 5, so downstream tooling has a transition window.
 
 ---
 

@@ -137,6 +137,7 @@ class SimulationLoop:
         self._rivalry_history: list[dict[str, object]] = []
         self._policy_observation_envelope = None
         self._policy_observation_batch: dict[str, object] | None = None
+        self._legacy_observations_warning_emitted = False
         self._last_transport_status: dict[str, object] = {
             "provider": "port",
             "queue_length": 0,
@@ -439,8 +440,15 @@ class SimulationLoop:
             runtime.queue_console(console_ops)
 
             def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
+                envelope = self._ensure_policy_envelope()
                 observations_batch = self._policy_observation_batch or {}
-                envelope = self._policy_observation_envelope
+                if observations_batch and not self._legacy_observations_warning_emitted:
+                    logger.warning(
+                        "SimulationLoop is still supplying legacy observation batches "
+                        "to policy backends; this compatibility path will be removed "
+                        "during WP3C Stage 5.",
+                    )
+                    self._legacy_observations_warning_emitted = True
                 if controller is not None:
                     return controller.decide(
                         world,
@@ -605,7 +613,7 @@ class SimulationLoop:
                 anneal_context=anneal_context,
                 agent_contexts=agent_contexts,
             )
-            self._policy_observation_envelope = dto_envelope
+            self._set_policy_observation_envelope(dto_envelope)
             self._policy_observation_batch = dict(observations)
             if self._telemetry_port is not None:
                 tick_event_payload = {
@@ -730,6 +738,116 @@ class SimulationLoop:
                 handler(self, tick, exc)
             except Exception:  # pragma: no cover - handlers should not break the loop
                 logger.exception("Simulation loop failure handler raised")
+
+    def _ensure_policy_envelope(self) -> "ObservationEnvelope":
+        """Ensure a DTO envelope is available for policy decisions."""
+
+        envelope = self._policy_observation_envelope
+        if envelope is not None:
+            return envelope
+        bootstrap = self._build_bootstrap_policy_envelope()
+        self._set_policy_observation_envelope(bootstrap)
+        logger.debug("policy_envelope_bootstrap", extra={"tick": self.tick})
+        return bootstrap
+
+    def _set_policy_observation_envelope(self, envelope: "ObservationEnvelope") -> None:
+        """Persist the current observation envelope and notify the backend."""
+
+        self._policy_observation_envelope = envelope
+        backend_consumer = getattr(self.policy, "update_observation_envelope", None)
+        if callable(backend_consumer):
+            backend_consumer(envelope)
+
+    def _build_bootstrap_policy_envelope(self) -> "ObservationEnvelope":
+        """Build a DTO envelope from the current world when none has been recorded."""
+
+        adapter = self.world_adapter
+        observations = self.observations.build_batch(adapter, {})
+        agent_ids = list(observations.keys())
+        terminated = {agent_id: False for agent_id in agent_ids}
+        rewards = {agent_id: 0.0 for agent_id in agent_ids}
+        reward_breakdown = {agent_id: {} for agent_id in agent_ids}
+        queue_metrics = self._collect_queue_metrics()
+        queue_affinity_metrics = self._collect_queue_affinity_metrics()
+        employment_metrics = self._collect_employment_metrics()
+        economy_snapshot = self._collect_economy_snapshot()
+        job_snapshot = self._collect_job_snapshot(adapter)
+        running_affordances = adapter.running_affordances_snapshot()
+        relationship_snapshot = adapter.relationships_snapshot()
+        relationship_metrics = adapter.relationship_metrics_snapshot()
+        agent_snapshots_map = dict(adapter.agent_snapshots_view())
+        agent_contexts = {
+            agent: observation_agent_context(adapter, agent)
+            for agent in agent_snapshots_map.keys()
+        }
+        perturbation_state = self.perturbations.latest_state()
+        try:
+            policy_snapshot = self.policy.latest_policy_snapshot()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("policy_snapshot_unavailable_bootstrap", exc_info=True)
+            policy_snapshot = {}
+        try:
+            anneal_ratio = self.policy.current_anneal_ratio()
+        except Exception:  # pragma: no cover - defensive
+            anneal_ratio = None
+        try:
+            possessed_agents = list(self.policy.possessed_agents())
+        except Exception:  # pragma: no cover - defensive
+            possessed_agents = []
+        try:
+            policy_hash = self.policy.active_policy_hash()
+        except Exception:  # pragma: no cover - defensive
+            policy_hash = None
+        identity_payload = self.config.build_snapshot_identity(
+            policy_hash=policy_hash,
+            runtime_observation_variant=self.config.observation_variant,
+            runtime_anneal_ratio=anneal_ratio,
+        )
+        policy_metadata = {
+            "identity": identity_payload,
+            "possessed_agents": possessed_agents,
+            "option_switch_counts": {},
+            "anneal_ratio": anneal_ratio,
+        }
+        promotion_state = self.promotion.snapshot()
+        try:
+            queue_snapshot = self.world.queue_manager.export_state()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("queue_snapshot_unavailable_bootstrap", exc_info=True)
+            queue_snapshot = {}
+        try:
+            anneal_context = self.policy.anneal_context()
+        except Exception:  # pragma: no cover - defensive
+            anneal_context = {}
+
+        return build_observation_envelope(
+            tick=self.tick,
+            observations=observations,
+            actions={},
+            terminated=terminated,
+            termination_reasons={},
+            queue_metrics=queue_metrics,
+            rewards=rewards,
+            reward_breakdown=reward_breakdown,
+            perturbations=perturbation_state,
+            policy_snapshot=policy_snapshot,
+            policy_metadata=policy_metadata,
+            rivalry_events=[],
+            stability_metrics=self.stability.latest_metrics(),
+            promotion_state=promotion_state,
+            rng_seed=getattr(self.world, "rng_seed", None),
+            queues=queue_snapshot,
+            running_affordances=running_affordances,
+            relationship_snapshot=relationship_snapshot,
+            relationship_metrics=relationship_metrics,
+            agent_snapshots=agent_snapshots_map,
+            job_snapshot=job_snapshot,
+            queue_affinity_metrics=queue_affinity_metrics,
+            employment_snapshot=employment_metrics,
+            economy_snapshot=economy_snapshot,
+            anneal_context=anneal_context,
+            agent_contexts=agent_contexts,
+        )
 
     def _collect_queue_metrics(self) -> dict[str, int]:
         metrics: dict[str, int] = {}

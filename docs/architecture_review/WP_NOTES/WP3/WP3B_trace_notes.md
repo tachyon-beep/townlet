@@ -56,3 +56,23 @@ post-tick need levels.
    affordance step once modularised).
 4. **Instrumentation**: Once the bridge is gone, reproduce this trace and ensure no duplicate
    `action.*` events remain.
+
+## Stage 3A – Direct `WorldState` reads (2025-10-10)
+
+Audit of the remaining policy code paths that still reach into the raw `WorldState`
+instead of the DTO façade. These references are now tracked so we can close them out during WP3B/WP3C.
+
+- `src/townlet/policy/behavior.py` (`decide_agent`, guardrail helpers) – guardrail logic inspects
+  `world.agents` snapshots and queue/relationship helpers. DTO equivalents live in `DTOWorldView`
+  but the scripted behaviours still fall back to `world` for trust/rivalry details.
+- `src/townlet/policy/behavior.py` (`_rivals_in_queue`, chat guard) – reads `world.queue_manager`
+  and `world.relationship_tie` when DTO queue data is missing. Tagged for removal once DTO queue
+  helpers are exercised in Stage 3B.
+- `src/townlet/policy/scripted.py` – scripted capture adapters still enumerate `world.agents` to
+  emit wait actions and update snapshots; DTO-backed scripted fixtures will replace these during the
+  Stage 3B parity sweep.
+- `src/townlet/policy/scenario_utils.py` – scenario seeding utilities populate `loop.world.agents`
+  directly; intentional for fixtures, but noted so runtime logic does not depend on it.
+
+All other `WorldState` accesses inside the policy runtime now pass through `DTOWorldView` courtesy of
+the Stage 3A wiring. This list should shrink as we execute the Stage 3B plan.

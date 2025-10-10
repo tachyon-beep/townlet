@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, TYPE_CHECKING
 
@@ -12,6 +13,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.dto.observation import ObservationEnvelope
 
 
+logger = logging.getLogger(__name__)
+
+
 class PolicyController:
     """Transitional facade that keeps SimulationLoop decoupled from PolicyRuntime."""
 
@@ -19,6 +23,7 @@ class PolicyController:
         self._backend = backend
         self._port = port
         self._world_supplier: Callable[[], Any] | None = None
+        self._legacy_observation_warning_emitted = False
         self._attach_world_supplier()
 
     # ------------------------------------------------------------------
@@ -59,16 +64,27 @@ class PolicyController:
     ) -> Mapping[str, Any]:
         """Return policy actions for the given world/tick."""
 
+        if envelope is None:
+            raise RuntimeError(
+                "PolicyController.decide requires an observation DTO envelope; "
+                "ensure SimulationLoop prepared the Stage 3 DTO payload.",
+            )
+
+        if observations and not self._legacy_observation_warning_emitted:
+            logger.warning(
+                "PolicyController received legacy observation batches alongside DTO "
+                "envelopes; this compatibility path will be removed during WP3C Stage 5.",
+            )
+            self._legacy_observation_warning_emitted = True
+
         payload = observations or {}
         try:
             return self._port.decide(payload, tick=tick, envelope=envelope)
-        except TypeError:  # pragma: no cover - transitional fallback
-            return self._backend.decide(
-                world,
-                tick,
-                envelope=envelope,
-                observations=observations,
-            )
+        except TypeError as exc:  # pragma: no cover - transitional fallback
+            raise RuntimeError(
+                "Policy backend must accept DTO envelopes. Update the policy provider "
+                "to match the Stage 3 contract."
+            ) from exc
 
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:
         self._backend.post_step(rewards, terminated)
