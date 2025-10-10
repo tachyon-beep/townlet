@@ -8,7 +8,8 @@
 - HTTP transport now posts dispatcher events via simple JSON POSTs; streaming/WebSocket transport remains a TODO once external consumers require it.
 - Telemetry guard tests cover the event-only surface and dispatcher smoke path, preventing regressions while DTO work proceeds.
 - DTO Step 1 complete: `dto_observation_inventory.md` documents an attribute→consumer map, and `dto_example_tick.json` provides a baseline envelope for schema validation (with planned `dto_schema_version` + Pydantic checks).
-- Next immediate work item: complete the observation inventory/schema prototype—catalogue all `WorldState` consumers, capture representative tick dumps, and draft the DTO envelope before adapter migration begins.
+- DTO schema surface scaffolded at `src/townlet/world/dto/observation.py` (exported via `townlet.world.dto`) with `DTO_SCHEMA_VERSION = 0.1.0`; converter helper `build_observation_envelope`, fixture-backed smoke tests (`tests/world/test_observation_dto_factory.py`), and a loop-level parity harness (`tests/core/test_sim_loop_dto_parity.py`) now exist—`SimulationLoop` caches/forwards envelopes while we complete world detachment.
+- DTO envelope now includes queue rosters, running affordances, and relationship metrics (`src/townlet/world/dto/observation.py`, `src/townlet/world/dto/factory.py`, `src/townlet/core/sim_loop.py`), with tests/fixtures updated accordingly.
 - WP1 telemetry blockers cleared; remaining dependency is routing console commands without `runtime.queue_console`. WP2 still requires observation-first DTOs.
 - WP2 adapters still expose `legacy_runtime` handles so policy consumers can pull `WorldState`; observation-first DTOs from WP3 will remove that dependency.
 

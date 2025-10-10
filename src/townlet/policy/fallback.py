@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from townlet.core.interfaces import PolicyBackendProtocol
+
+if TYPE_CHECKING:  # pragma: no cover
+    from townlet.world.dto.observation import ObservationEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +17,9 @@ logger = logging.getLogger(__name__)
 class StubPolicyBackend(PolicyBackendProtocol):
     """Minimal policy backend that emits wait actions and logs capability gaps."""
 
-    def __init__(self, config: Any | None = None) -> None:
+    def __init__(self, config: Any | None = None, backend: Any | None = None) -> None:
         self.config = config
+        self.backend = backend
         logger.warning("policy_backend_stub_active provider=stub message='PyTorch extras missing; scripted decisions only.'")
         self._reset_callback: Any | None = None
 
@@ -31,8 +35,15 @@ class StubPolicyBackend(PolicyBackendProtocol):
     def reset_state(self) -> None:
         return None
 
-    def decide(self, world: Any, tick: int) -> Mapping[str, object]:
-        _ = world, tick
+    def decide(
+        self,
+        world: Any,
+        tick: int,
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+        observations: Mapping[str, object] | None = None,
+    ) -> Mapping[str, object]:
+        _ = world, tick, envelope, observations
         return {}
 
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:

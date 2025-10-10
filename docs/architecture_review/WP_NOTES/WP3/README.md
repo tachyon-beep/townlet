@@ -22,6 +22,7 @@ Purpose: capture the design intent, decisions, and progress for Work Package 3. 
   - policy/health/stability metrics
 - Updated adapters (`StdoutTelemetryAdapter`, HTTP sink, stubs) translating the new events to existing transports.
 - Policy DTO exporter (observation-first `decide` inputs, metadata events) and removal of `PolicyRuntime` leaks.
+- DTO envelope enriched with queue/affordance/relationship context to support DTO-only policy decisions.
 - Finalised `SimulationLoop` implementation using only port surfaces.
 
 ## Dependencies & Blockers

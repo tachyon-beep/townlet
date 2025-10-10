@@ -73,8 +73,8 @@ cleanup tasks.
 - **Schema versioning:** include `dto_schema_version` (starting `0.1.0`) in the
   envelope. Any breaking change bumps the minor version and updates fixtures.
 - **Validation:** introduce Pydantic (or equivalent) DTO models in the converter
-  module. CI will load captured fixtures (`dto_example_tick.json`) through the
-  models to catch regressions.
+  module. CI will load captured fixtures (`dto_example_tick.json`,
+  `dto_sample_tick.json`) through the models to catch regressions (`tests/world/test_observation_dto_factory.py` exercises this path).
 
 ## 4. Initial Schema Sketch, Gaps & Source Mapping
 
@@ -102,3 +102,5 @@ cleanup tasks.
   requirements (dashboards, analytics).
 - Plan to extend parity harness to compare DTO vs legacy observations over a
   short simulation window (queue fairness, rivalry events, reward trajectories).
+- DTO models now live in `src/townlet/world/dto/observation.py` (exported via `townlet.world.dto`); converters should target these Pydantic surfaces.
+- `SimulationLoop` currently emits and caches the DTO envelope alongside `loop.tick` telemetry (`observations_dto`) while policy paths continue to consume the legacy `WorldState`; the parity harness (`tests/core/test_sim_loop_dto_parity.py`) verifies DTO tensor equality across ticks. Global context now includes queue rosters, running affordances, and relationship metrics.

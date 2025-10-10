@@ -11,11 +11,11 @@
 - [x] Provide compatibility wrappers, then remove writer/getter APIs once WP1 call sites are migrated.
 
 ## 2. Policy DTO & Controller Update
-- [ ] Observation inventory & schema prototype
+- [x] Observation inventory & schema prototype
   - Map every `WorldState` consumer (policy runtime, training orchestrator, loop, CLI) with file:line references and required fields.
   - Capture representative tick dumps from a baseline simulation/training run for analysis.
   - Produce a draft DTO envelope (per-agent + global) and document outstanding gaps / risks prior to adapter changes.
-- [ ] Implement DTO dataclasses/converters plus validation harness comparing legacy observations vs DTO payloads.
+- [~] Implement DTO dataclasses/converters plus validation harness comparing legacy observations vs DTO payloads. *(DTO models + `build_observation_envelope` landed; `SimulationLoop` caches/emits `observations_dto` with queue/running-affordance/relationship data; policy controller/ports accept DTOs. Harness `tests/core/test_sim_loop_dto_parity.py` compares DTO tensors vs legacy observations; world detachment still pending.)*
 - [ ] Update `PolicyController` + scripted adapter to consume DTOs and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events (temporary legacy bridge for ML paths).
 - [ ] Migrate ML adapters & training orchestrator to DTO flow; update replay/export tooling and run behavioural parity checks.
 - [ ] Cleanup loop/console interactions (drop `runtime.queue_console`, remove direct `WorldState` mutation, rely on DTO/event caches).

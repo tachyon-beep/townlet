@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -19,6 +20,9 @@ from townlet.policy.models import (
 )
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.grid import WorldState
+
+if TYPE_CHECKING:  # pragma: no cover
+    from townlet.world.dto.observation import ObservationEnvelope
 
 # NOTE: Training orchestrator is imported lazily by TrainingHarness to avoid
 # importing Torch-dependent modules during test collection in non-ML envs.
@@ -93,6 +97,7 @@ class PolicyRuntime:
         config_policy_hash = getattr(self.config, "policy_hash", None)
         if isinstance(config_policy_hash, str) and config_policy_hash:
             self._policy_hash = config_policy_hash
+        self._latest_envelope: "ObservationEnvelope | None" = None
 
     @property
     def behavior(self) -> BehaviorController:
@@ -145,8 +150,18 @@ class PolicyRuntime:
 
         self._behavior_bridge.set_policy_action_provider(provider)
 
-    def decide(self, world: WorldState, tick: int) -> dict[str, object]:
+    def decide(
+        self,
+        world: WorldState,
+        tick: int,
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+        observations: Mapping[str, Any] | None = None,
+    ) -> dict[str, object]:
         """Return an action dictionary per agent for the current tick."""
+
+        if envelope is not None:
+            self._latest_envelope = envelope
         self._tick = tick
         self._trajectory_service.begin_tick(tick)
         actions: dict[str, object] = {}

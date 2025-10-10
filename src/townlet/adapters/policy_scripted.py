@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
+from townlet.core.interfaces import PolicyBackendProtocol
 from townlet.ports.policy import PolicyBackend
-from townlet.policy.runner import PolicyRuntime
+
+if TYPE_CHECKING:  # pragma: no cover
+    from townlet.world.dto.observation import ObservationEnvelope
 
 
 class ScriptedPolicyAdapter(PolicyBackend):
@@ -14,7 +17,7 @@ class ScriptedPolicyAdapter(PolicyBackend):
 
     def __init__(
         self,
-        backend: PolicyRuntime,
+        backend: PolicyBackendProtocol,
     ) -> None:
         self._backend = backend
         self._tick: int = 0
@@ -23,14 +26,25 @@ class ScriptedPolicyAdapter(PolicyBackend):
     def on_episode_start(self, agent_ids: Iterable[str]) -> None:  # pragma: no cover - thin bridge
         _ = agent_ids
         self._backend.reset_state()
+        self._tick = 0
 
-    def decide(self, observations: Mapping[str, Any]) -> Mapping[str, Any]:
-        del observations  # Observations currently unused; backend operates on world state.
+    def decide(
+        self,
+        observations: Mapping[str, Any],
+        *,
+        tick: int,
+        envelope: "ObservationEnvelope | None" = None,
+    ) -> Mapping[str, Any]:
         if self._world_provider is None:
             raise RuntimeError("Policy adapter world provider not configured")
         world = self._world_provider()
-        actions = self._backend.decide(world, self._tick)
-        self._tick += 1
+        actions = self._backend.decide(
+            world,
+            tick,
+            envelope=envelope,
+            observations=observations,
+        )
+        self._tick = tick + 1
         return actions
 
     def on_episode_end(self) -> None:  # pragma: no cover - thin bridge
@@ -42,7 +56,7 @@ class ScriptedPolicyAdapter(PolicyBackend):
         self._world_provider = provider
 
     @property
-    def backend(self) -> PolicyRuntime:
+    def backend(self) -> PolicyBackendProtocol:
         """Expose the wrapped legacy backend for transitional call sites."""
 
         return self._backend

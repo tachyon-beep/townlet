@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 class StubTelemetrySink(TelemetrySinkProtocol):
     """No-op telemetry implementation that logs missing capability."""
 
-    def __init__(self, config: Any | None = None) -> None:
+    def __init__(self, config: Any | None = None, publisher: Any | None = None) -> None:
         self.config = config
+        self.publisher = publisher
         self._console_buffer: list[object] = []
         logger.warning("telemetry_stub_active provider=stub message='Telemetry transport disabled; install extras or configure stdout.'")
 

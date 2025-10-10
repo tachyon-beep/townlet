@@ -16,6 +16,7 @@ from townlet.world.runtime import ActionMapping, ActionProvider, RuntimeStepResu
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.console.command import ConsoleCommandEnvelope
     from townlet.world.grid import WorldState
+    from townlet.world.dto.observation import ObservationEnvelope
 
 ObservationBatch: TypeAlias = Mapping[str, object]
 RewardMapping: TypeAlias = Mapping[str, float]
@@ -65,7 +66,14 @@ class PolicyBackendProtocol(Protocol):
     def reset_state(self) -> None:
         """Reset any cached policy state (e.g., trajectories, RNG streams)."""
 
-    def decide(self, world: WorldState, tick: int) -> Mapping[str, object]:
+    def decide(
+        self,
+        world: WorldState,
+        tick: int,
+        *,
+        envelope: "ObservationEnvelope | None" = None,
+        observations: ObservationBatch | None = None,
+    ) -> Mapping[str, object]:
         """Return an action mapping for the provided world/tick."""
 
     def post_step(

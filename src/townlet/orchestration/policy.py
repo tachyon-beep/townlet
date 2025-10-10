@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
+from townlet.core.interfaces import PolicyBackendProtocol
 from townlet.ports.policy import PolicyBackend
-from townlet.policy.runner import PolicyRuntime
+
+if TYPE_CHECKING:  # pragma: no cover
+    from townlet.world.dto.observation import ObservationEnvelope
 
 
 class PolicyController:
     """Transitional facade that keeps SimulationLoop decoupled from PolicyRuntime."""
 
-    def __init__(self, *, backend: PolicyRuntime, port: PolicyBackend) -> None:
+    def __init__(self, *, backend: PolicyBackendProtocol, port: PolicyBackend) -> None:
         self._backend = backend
         self._port = port
         self._world_supplier: Callable[[], Any] | None = None
@@ -46,11 +49,26 @@ class PolicyController:
     def on_episode_start(self, agent_ids: Iterable[str]) -> None:
         self._port.on_episode_start(agent_ids)
 
-    def decide(self, world: Any, tick: int) -> Mapping[str, Any]:
+    def decide(
+        self,
+        world: Any,
+        tick: int,
+        *,
+        observations: Mapping[str, Any] | None = None,
+        envelope: "ObservationEnvelope | None" = None,
+    ) -> Mapping[str, Any]:
         """Return policy actions for the given world/tick."""
 
-        # For now defer to the legacy backend; future revisions will rely on the port.
-        return self._backend.decide(world, tick)
+        payload = observations or {}
+        try:
+            return self._port.decide(payload, tick=tick, envelope=envelope)
+        except TypeError:  # pragma: no cover - transitional fallback
+            return self._backend.decide(
+                world,
+                tick,
+                envelope=envelope,
+                observations=observations,
+            )
 
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:
         self._backend.post_step(rewards, terminated)
@@ -80,7 +98,7 @@ class PolicyController:
     # Accessors
     # ------------------------------------------------------------------
     @property
-    def backend(self) -> PolicyRuntime:
+    def backend(self) -> PolicyBackendProtocol:
         return self._backend
 
     @property

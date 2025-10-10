@@ -40,16 +40,23 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 ## 2. Policy Observation & Metadata Streaming
 
 ### 2.1 Observation DTOs
-- [ ] **Observation inventory & schema prototype**
-  - **Collect callers:** trace every `WorldState` access under `policy/`, `core/sim_loop.py`, training orchestrator, CLI tools; record attribute/method usage with file:line references.
-  - **Capture sample data:** run a short simulation/training smoke (baseline config) and persist representative tick payloads (observations, rewards, queue metrics, rivalry events) for analysis.
+- [x] **Observation inventory & schema prototype**
+  - **Collect callers:** trace every `WorldState` access under `policy/`, `core/sim_loop.py`, training orchestrator, CLI tools; record attribute/method usage with file:line references. *(Captured in `dto_observation_inventory.md`.)*
+  - **Capture sample data:** run a short simulation/training smoke (baseline config) and persist representative tick payloads (observations, rewards, queue metrics, rivalry events) for analysis. *(See `dto_sample_tick.json` / `dto_example_tick.json`.)*
   - **Gap analysis:** compare required fields with what `WorldContext`/observation builder currently expose; flag missing elements (agent ordering, RNG seeds, historical metrics).
   - **Schema draft:** propose DTO structure (per-agent + global envelope) and document field definitions, types, and provenance; circulate for review with policy/training owners.
   - **Parity notes:** highlight metrics that cannot yet be satisfied, plus risk mitigations/owners before moving to adapter work.
 
-- [ ] **DTO dataclasses & validation helpers**
-  - Implement immutable DTO structures and converters inside `WorldContext` / observation builder.
-  - Add validation utilities (e.g., schema checks) and parity harness comparing legacy observations to DTO payloads.
+- [~] **DTO dataclasses & validation helpers**
+  - **Surface defined:** DTO models live in `src/townlet/world/dto/observation.py` and export via `townlet.world.dto`; `DTO_SCHEMA_VERSION` anchored at `0.1.0`.
+  - **Converter inputs:** Simulation loop already produces the required artefacts — `observations` (numpy-backed tensors), `RuntimeStepResult.actions`, `terminated`/`termination_reasons`, reward totals + breakdown, queue metrics, perturbation state, policy snapshot/identity (hash, provider, anneal), possessed agents, rivalry/stability metrics, and the world RNG seed via `WorldRuntimeAdapter`. The converter will consume these and emit JSON-friendly payloads with deterministic agent ordering.
+  - **Factory implemented:** `src/townlet/world/dto/factory.py::build_observation_envelope` builds immutable envelopes (numpy → lists, dataclass/action coercion, deterministic ordering).
+  - **Loop integration:** `SimulationLoop` now assembles DTO envelopes each tick, caches them for the next decision, and emits them alongside `loop.tick` telemetry as `observations_dto`.
+  - **Controller/port wiring:** `PolicyController` and policy ports accept DTO envelopes + observation batches; `ScriptedPolicyAdapter` forwards cached DTOs to the backend for action selection while retaining world fallbacks.
+  - **Schema enrichment:** DTO global context now carries queue rosters, running affordances, and relationship metrics populated by the loop; fixtures/tests updated (`docs/.../dto_example_tick.json`, `tests/world/test_observation_dto_factory.py`, `tests/core/test_sim_loop_dto_parity.py`).
+  - **Parity harness:** `tests/core/test_sim_loop_dto_parity.py` runs a stubbed simulation loop for several ticks and asserts that DTO tensors match the legacy observation batch.
+  - Implement immutable DTO structures and converters inside `WorldContext` / observation builder. *(Converter available; integration pending.)*
+  - Add validation utilities (e.g., schema checks) and parity harness comparing legacy observations to DTO payloads. *(Smoke tests live in `tests/world/test_observation_dto_factory.py`; full parity harness still to do.)*
 
 - [ ] **Scripted adapter integration**
   - Update `PolicyController`/scripted adapter to consume DTO batches and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events.

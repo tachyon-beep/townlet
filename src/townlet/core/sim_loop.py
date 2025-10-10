@@ -40,6 +40,7 @@ from townlet.stability.promotion import PromotionManager
 from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
+from townlet.world.dto import build_observation_envelope
 from townlet.world.grid import WorldState
 from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 from townlet.policy.runner import PolicyRuntime
@@ -131,6 +132,8 @@ class SimulationLoop:
         self._console_router: ConsoleRouter | None = None
         self._health_monitor: HealthMonitor | None = None
         self._rivalry_history: list[dict[str, object]] = []
+        self._policy_observation_envelope = None
+        self._policy_observation_batch: dict[str, object] | None = None
         self._last_transport_status: dict[str, object] = {
             "provider": "port",
             "queue_length": 0,
@@ -191,8 +194,9 @@ class SimulationLoop:
             provider=self._policy_provider,
             backend=policy_backend,
         )
-        self.policy = policy_backend
-        self._policy_controller = PolicyController(backend=policy_backend, port=self._policy_port)
+        backend_for_controller = getattr(self._policy_port, "backend", policy_backend)
+        self.policy = backend_for_controller
+        self._policy_controller = PolicyController(backend=backend_for_controller, port=self._policy_port)
         if self._policy_controller is not None:
             self._policy_controller.bind_world_supplier(lambda: self.world)
         self._resolved_providers["policy"] = self._policy_provider
@@ -212,7 +216,7 @@ class SimulationLoop:
             provider=self._telemetry_provider,
             publisher=telemetry_publisher,
         )
-        self.telemetry = telemetry_publisher
+        self.telemetry = self._telemetry_port
         self._resolved_providers["telemetry"] = self._telemetry_provider
         self.stability = StabilityMonitor(config=self.config)
         log_path = Path("logs/promotion_history.jsonl")
@@ -432,9 +436,21 @@ class SimulationLoop:
             runtime.queue_console(console_ops)
 
             def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
+                observations_batch = self._policy_observation_batch or {}
+                envelope = self._policy_observation_envelope
                 if controller is not None:
-                    return controller.decide(world, current_tick)
-                return self.policy.decide(world, current_tick)
+                    return controller.decide(
+                        world,
+                        current_tick,
+                        observations=observations_batch,
+                        envelope=envelope,
+                    )
+                return self.policy.decide(
+                    world,
+                    current_tick,
+                    envelope=envelope,
+                    observations=observations_batch,
+                )
 
             runtime_result = runtime.tick(
                 tick=self.tick,
@@ -487,6 +503,14 @@ class SimulationLoop:
                 runtime_observation_variant=self.config.observation_variant,
                 runtime_anneal_ratio=anneal_ratio,
             )
+            policy_metadata = {
+                "identity": policy_identity,
+                "possessed_agents": list(possessed_agents),
+                "option_switch_counts": {
+                    str(agent): int(count) for agent, count in option_switch_counts.items()
+                },
+                "anneal_ratio": anneal_ratio,
+            }
             adapter = self.world_adapter
             queue_metrics = self._collect_queue_metrics()
             embedding_metrics = self._collect_embedding_metrics(adapter)
@@ -497,36 +521,21 @@ class SimulationLoop:
                 "tick": self.tick,
                 "events": list(events),
             }
+            queues_snapshot: dict[str, object] = {}
             try:
                 queue_export = self.world.queue_manager.export_state()
                 queues_payload = queue_export.get("queues", {}) if isinstance(queue_export, dict) else {}
                 if isinstance(queues_payload, dict):
+                    queues_snapshot = queues_payload
                     queue_length = float(sum(len(entries or []) for entries in queues_payload.values()))
                 else:  # pragma: no cover - defensive
                     queue_length = 0.0
             except Exception:  # pragma: no cover - defensive
                 queue_length = 0.0
+                queues_snapshot = {}
             snapshot_for_health["metrics"] = {"queue_length": queue_length}
             if self._health_monitor is not None and self._telemetry_port is not None:
                 self._health_monitor.on_tick(snapshot_for_health, self._telemetry_port)
-            if self._telemetry_port is not None:
-                tick_event_payload = {
-                    "tick": self.tick,
-                    "world": self.world,
-                    "observations": observations,
-                    "rewards": rewards,
-                    "events": events,
-                    "policy_snapshot": policy_snapshot,
-                    "kpi_history": True,
-                    "reward_breakdown": reward_breakdown,
-                    "stability_inputs": stability_inputs,
-                    "perturbations": perturbation_state,
-                    "policy_identity": policy_identity,
-                    "possessed_agents": possessed_agents,
-                    "social_events": self.rewards.latest_social_events(),
-                    "runtime_variant": self._runtime_variant,
-                }
-                self._telemetry_port.emit_event("loop.tick", tick_event_payload)
             self.stability.track(
                 tick=self.tick,
                 rewards=rewards,
@@ -542,7 +551,55 @@ class SimulationLoop:
             )
             stability_metrics = self.stability.latest_metrics()
             self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
-            stability_metrics["promotion_state"] = self.promotion.snapshot()
+            promotion_state = self.promotion.snapshot()
+            stability_metrics["promotion_state"] = promotion_state
+            running_affordances = adapter.running_affordances_snapshot()
+            relationship_snapshot = adapter.relationships_snapshot()
+            relationship_metrics = adapter.relationship_metrics_snapshot()
+
+            dto_envelope = build_observation_envelope(
+                tick=self.tick,
+                observations=observations,
+                actions=runtime_result.actions,
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+                queue_metrics=queue_metrics,
+                rewards=rewards,
+                reward_breakdown=reward_breakdown,
+                perturbations=perturbation_state,
+                policy_snapshot=policy_snapshot,
+                policy_metadata=policy_metadata,
+                rivalry_events=rivalry_events,
+                stability_metrics=stability_metrics,
+                promotion_state=promotion_state,
+                rng_seed=getattr(self.world, "rng_seed", None),
+                queues=queues_snapshot,
+                running_affordances=running_affordances,
+                relationship_snapshot=relationship_snapshot,
+                relationship_metrics=relationship_metrics,
+            )
+            self._policy_observation_envelope = dto_envelope
+            self._policy_observation_batch = dict(observations)
+            if self._telemetry_port is not None:
+                tick_event_payload = {
+                    "tick": self.tick,
+                    "world": self.world,
+                    "observations": observations,
+                    "rewards": rewards,
+                    "events": events,
+                    "policy_snapshot": policy_snapshot,
+                    "kpi_history": True,
+                    "reward_breakdown": reward_breakdown,
+                    "stability_inputs": stability_inputs,
+                    "perturbations": perturbation_state,
+                    "policy_identity": policy_identity,
+                    "policy_metadata": policy_metadata,
+                    "possessed_agents": possessed_agents,
+                    "social_events": self.rewards.latest_social_events(),
+                    "runtime_variant": self._runtime_variant,
+                    "observations_dto": dto_envelope.model_dump(by_alias=True),
+                }
+                self._telemetry_port.emit_event("loop.tick", tick_event_payload)
             if self._telemetry_port is not None:
                 self._telemetry_port.emit_event("stability.metrics", stability_metrics)
             else:  # pragma: no cover - defensive

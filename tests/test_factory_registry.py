@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
 from townlet.config import RuntimeProviderConfig, RuntimeProviders, load_config
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.core import (
@@ -22,6 +23,7 @@ from townlet.core.interfaces import (
     WorldRuntimeProtocol,
 )
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.factories.registry import register as factory_register
 from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
 from townlet.scheduler.perturbations import PerturbationScheduler
 
@@ -75,8 +77,9 @@ class _StubPerturbations(PerturbationScheduler):
 
 
 class _StubPolicy(PolicyBackendProtocol):  # type: ignore[misc]
-    def __init__(self, config: Any) -> None:
+    def __init__(self, config: Any | None = None, backend: Any | None = None) -> None:
         self.config = config
+        self.backend = backend
         self.reset_callback: Any | None = None
 
     def register_ctx_reset_callback(self, callback: Any | None) -> None:
@@ -97,8 +100,15 @@ class _StubPolicy(PolicyBackendProtocol):  # type: ignore[misc]
     def set_policy_action_provider(self, provider: Any) -> None:
         _ = provider
 
-    def decide(self, world: Any, tick: int) -> Mapping[str, object]:
-        _ = world, tick
+    def decide(
+        self,
+        world: Any,
+        tick: int,
+        *,
+        envelope: Any | None = None,
+        observations: Mapping[str, object] | None = None,
+    ) -> Mapping[str, object]:
+        _ = world, tick, envelope, observations
         return {}
 
     def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None:
@@ -124,8 +134,9 @@ class _StubPolicy(PolicyBackendProtocol):  # type: ignore[misc]
 
 
 class _StubTelemetry(TelemetrySinkProtocol):  # type: ignore[misc]
-    def __init__(self, config: Any) -> None:
+    def __init__(self, config: Any, publisher: Any | None = None) -> None:
         self.config = config
+        self.publisher = publisher
         self.console: list[object] = []
 
     def set_runtime_variant(self, variant: str | None) -> None:
@@ -177,6 +188,26 @@ class _StubTelemetry(TelemetrySinkProtocol):  # type: ignore[misc]
         return None
 
 
+def _register_port_policy(name: str) -> None:
+    factory_register("policy", name)(
+        lambda **kwargs: ScriptedPolicyAdapter(
+            _StubPolicy(
+                kwargs.get("config") or getattr(kwargs.get("backend"), "config", None),
+                backend=kwargs.get("backend"),
+            )
+        )
+    )
+
+
+def _register_port_telemetry(name: str) -> None:
+    factory_register("telemetry", name)(
+        lambda **kwargs: _StubTelemetry(
+            kwargs.get("config") or getattr(kwargs.get("publisher"), "config", None),
+            publisher=kwargs.get("publisher"),
+        )
+    )
+
+
 @pytest.fixture(scope="module")
 def sample_config() -> Any:
     project_root = Path(__file__).resolve().parents[1]
@@ -215,7 +246,9 @@ def test_registry_type_enforcement(sample_config: Any) -> None:
 
 def test_simulation_loop_uses_registered_providers(sample_config: Any) -> None:
     policy_registry().register("stub", lambda **kwargs: _StubPolicy(kwargs.get("config")))
+    _register_port_policy("stub")
     telemetry_registry().register("stub", lambda **kwargs: _StubTelemetry(kwargs.get("config")))
+    _register_port_telemetry("stub")
 
     loop = SimulationLoop(
         sample_config,
@@ -231,7 +264,9 @@ def test_simulation_loop_uses_registered_providers(sample_config: Any) -> None:
 
 def test_simulation_loop_reads_runtime_from_config(sample_config: Any) -> None:
     policy_registry().register("config_stub", lambda **kwargs: _StubPolicy(kwargs.get("config")))
+    _register_port_policy("config_stub")
     telemetry_registry().register("config_stub", lambda **kwargs: _StubTelemetry(kwargs.get("config")))
+    _register_port_telemetry("config_stub")
 
     runtime_overrides = RuntimeProviders(
         policy=RuntimeProviderConfig(provider="config_stub"),

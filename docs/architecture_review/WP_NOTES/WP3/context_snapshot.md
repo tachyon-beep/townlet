@@ -15,6 +15,7 @@ Use this as reorientation material if the working memory is compacted. It summar
 ## Policy DTOs (WP3 Section 2)
 
 - Current status: `PolicyController` facade exists but still delegates to `PolicyRuntime.decide(world, tick)`.
+- DTO schema models scaffolded at `src/townlet/world/dto/observation.py` (re-exported via `townlet.world.dto`); converter helper `build_observation_envelope`, fixture smoke tests, and a loop parity harness (`tests/core/test_sim_loop_dto_parity.py`) exist. `SimulationLoop` caches/emits the envelope while policy/world detachment remains, and the envelope now carries queue rosters, running affordances, and relationship metrics for DTO adapters.
 - Todo:
   - Define observation DTOs from `WorldContext`/observation builder.
   - Update policy adapters (scripted + ML) to consume DTO batches and emit `policy.metadata` / `policy.possession` / `policy.anneal.update` events via telemetry.
