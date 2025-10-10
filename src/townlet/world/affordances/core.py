@@ -506,108 +506,7 @@ class DefaultAffordanceRuntime:
         return best_id
 
     def resolve(self, *, tick: int) -> None:
-        ctx = self._ctx
-        queue_manager = ctx.queue_manager
-        objects = ctx.objects
-        active_reservations = ctx.active_reservations
-        record_queue_conflict = ctx.record_queue_conflict
-        debug_enabled = self._instrumentation_enabled()
-        entry_running = 0
-        entry_queued = 0
-        if debug_enabled:
-            entry_running = len(self.running_affordances)
-            entry_queued = sum(
-                len(queue_manager.queue_snapshot(object_id))
-                for object_id in objects.keys()
-            )
-            logger.debug(
-                "world.resolve_affordances.start tick=%s running=%s queued_agents=%s",
-                tick,
-                entry_running,
-                entry_queued,
-            )
-        start_time = time.perf_counter()
-        for object_id, running in list(self.running_affordances.items()):
-            running.duration_remaining -= 1
-            if running.duration_remaining <= 0:
-                ctx.apply_affordance_effects(running.agent_id, running.effects)
-                self.running_affordances.pop(object_id, None)
-                waiting = queue_manager.queue_snapshot(object_id)
-                spec = ctx.affordances.get(running.affordance_id)
-                hook_names = tuple(spec.hooks.get("after", ())) if spec else ()
-                if debug_enabled:
-                    hook_start = time.perf_counter()
-                ctx.dispatch_hooks(
-                    "after",
-                    hook_names,
-                    agent_id=running.agent_id,
-                    object_id=object_id,
-                    spec=spec,
-                    extra={"effects": dict(running.effects)},
-                )
-                if debug_enabled:
-                    hook_duration_ms = (time.perf_counter() - hook_start) * 1000.0
-                    logger.debug(
-                        (
-                            "world.resolve_affordances.hook tick=%s stage=%s "
-                            "object=%s agent=%s duration_ms=%.2f hooks=%s"
-                        ),
-                        tick,
-                        "after",
-                        object_id,
-                        running.agent_id,
-                        hook_duration_ms,
-                        len(hook_names),
-                    )
-                preferred = self._select_handover_candidate(
-                    ctx.relationships,
-                    running.agent_id,
-                    waiting,
-                )
-                if preferred is not None:
-                    queue_manager.promote_agent(object_id, preferred)
-                queue_manager.release(object_id, running.agent_id, tick, success=True)
-                ctx.sync_reservation(object_id)
-                if waiting:
-                    next_agent = preferred if preferred is not None else waiting[0]
-                    record_queue_conflict(
-                        object_id=object_id,
-                        actor=running.agent_id,
-                        rival=next_agent,
-                        reason="handover",
-                        queue_length=len(waiting),
-                        intensity=0.5,
-                    )
-                ctx.emit_event(
-                    "affordance_finish",
-                    {
-                        "agent_id": running.agent_id,
-                        "object_id": object_id,
-                        "affordance_id": running.affordance_id,
-                    },
-                )
-
-        if debug_enabled:
-            duration_ms = (time.perf_counter() - start_time) * 1000.0
-            running_count = len(self.running_affordances)
-            queued_agents = sum(
-                len(queue_manager.queue_snapshot(object_id))
-                for object_id in objects.keys()
-            )
-            logger.debug(
-                (
-                    "world.resolve_affordances.end tick=%s duration_ms=%.2f "
-                    "running=%s queued_agents=%s running_delta=%s queued_delta=%s"
-                ),
-                tick,
-                duration_ms,
-                running_count,
-                queued_agents,
-                running_count - entry_running,
-                queued_agents - entry_queued,
-            )
-
-        ctx.apply_need_decay()
+        advance_running_affordances(self, tick=tick)
 
     def _instrumentation_enabled(self) -> bool:
         return self._instrumentation_level == "timings" or logger.isEnabledFor(logging.DEBUG)
@@ -624,6 +523,110 @@ class DefaultAffordanceRuntime:
             for object_id, running in self.running_affordances.items()
         }
 
+
+def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int) -> None:
+    ctx = runtime._ctx  # type: ignore[attr-defined]
+    queue_manager = ctx.queue_manager
+    objects = ctx.objects
+    record_queue_conflict = ctx.record_queue_conflict
+    debug_enabled = runtime._instrumentation_enabled()
+    entry_running = 0
+    entry_queued = 0
+    if debug_enabled:
+        entry_running = len(runtime.running_affordances)
+        entry_queued = sum(
+            len(queue_manager.queue_snapshot(object_id))
+            for object_id in objects.keys()
+        )
+        logger.debug(
+            "world.resolve_affordances.start tick=%s running=%s queued_agents=%s",
+            tick,
+            entry_running,
+            entry_queued,
+        )
+    start_time = time.perf_counter()
+    for object_id, running in list(runtime.running_affordances.items()):
+        running.duration_remaining -= 1
+        if running.duration_remaining > 0:
+            continue
+        ctx.apply_affordance_effects(running.agent_id, running.effects)
+        runtime.running_affordances.pop(object_id, None)
+        waiting = queue_manager.queue_snapshot(object_id)
+        spec = ctx.affordances.get(running.affordance_id)
+        hook_names = tuple(spec.hooks.get("after", ())) if spec else ()
+        if debug_enabled:
+            hook_start = time.perf_counter()
+        ctx.dispatch_hooks(
+            "after",
+            hook_names,
+            agent_id=running.agent_id,
+            object_id=object_id,
+            spec=spec,
+            extra={"effects": dict(running.effects)},
+        )
+        if debug_enabled:
+            hook_duration_ms = (time.perf_counter() - hook_start) * 1000.0
+            logger.debug(
+                (
+                    "world.resolve_affordances.hook tick=%s stage=%s "
+                    "object=%s agent=%s duration_ms=%.2f hooks=%s"
+                ),
+                tick,
+                "after",
+                object_id,
+                running.agent_id,
+                hook_duration_ms,
+                len(hook_names),
+            )
+        preferred = runtime._select_handover_candidate(
+            ctx.relationships,
+            running.agent_id,
+            waiting,
+        )
+        if preferred is not None:
+            queue_manager.promote_agent(object_id, preferred)
+        queue_manager.release(object_id, running.agent_id, tick, success=True)
+        ctx.sync_reservation(object_id)
+        if waiting:
+            next_agent = preferred if preferred is not None else waiting[0]
+            record_queue_conflict(
+                object_id=object_id,
+                actor=running.agent_id,
+                rival=next_agent,
+                reason="handover",
+                queue_length=len(waiting),
+                intensity=0.5,
+            )
+        ctx.emit_event(
+            "affordance_finish",
+            {
+                "agent_id": running.agent_id,
+                "object_id": object_id,
+                "affordance_id": running.affordance_id,
+            },
+        )
+
+    if debug_enabled:
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        running_count = len(runtime.running_affordances)
+        queued_agents = sum(
+            len(queue_manager.queue_snapshot(object_id))
+            for object_id in objects.keys()
+        )
+        logger.debug(
+            (
+                "world.resolve_affordances.end tick=%s duration_ms=%.2f "
+                "running=%s queued_agents=%s running_delta=%s queued_delta=%s"
+            ),
+            tick,
+            duration_ms,
+            running_count,
+            queued_agents,
+            running_count - entry_running,
+            queued_agents - entry_queued,
+        )
+
+    ctx.apply_need_decay()
     def clear(self) -> None:
         self.running_affordances.clear()
 

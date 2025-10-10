@@ -12,7 +12,7 @@ Latest context snapshot so we can resume quickly after memory compaction.
   - `dto_example_tick.json` + `dto_sample_tick.json` provide baseline payloads.
   - `dto_worldstate_usage.json` auto-extracted usage map for converters.
 - DTO schema models scaffolded in `src/townlet/world/dto/observation.py` and re-exported through `townlet.world.dto` (`DTO_SCHEMA_VERSION = "0.1.0"`); `build_observation_envelope` factory + `tests/world/test_observation_dto_factory.py` validate JSON readiness, and `SimulationLoop` caches/attaches the DTO payload to `loop.tick` events (`observations_dto`).
-  Envelope now includes queue rosters, running affordances, and relationship metrics. `PolicyRuntime` consumes cached DTO data via `DTOWorldView`; scripted behaviour now reads queue/affordance/relationship info from the DTO view and emits guardrail requests as events (legacy fallbacks remain for missing envelopes). `WorldContext.tick` now routes combined actions through `affordances.process_actions` (extracted from the legacy world) to keep behaviour parity while we work towards dropping the remaining `resolve_affordances` wrapper under WP3B, and `queues.step` handles ghost-step queue conflicts directly.
+  Envelope now includes queue rosters, running affordances, and relationship metrics. `PolicyRuntime` consumes cached DTO data via `DTOWorldView`; scripted behaviour now reads queue/affordance/relationship info from the DTO view and emits guardrail requests as events (legacy fallbacks remain for missing envelopes). `WorldContext.tick` now routes combined actions through `affordances.process_actions` (extracted from the legacy world), `queues.step` handles ghost-step conflicts, and `advance_running_affordances` completes hand-overs via the runtime service—keeping scripted parity while we finish migrating the remaining employment/economy hooks under WP3B.
 
 ## Outstanding Work (DTO Rollout)
 1. Move policy metadata/ML adapters onto DTO batches and stream
@@ -31,5 +31,8 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Keep `dto_example_tick.json` updated whenever schema changes; regression
   tests will rely on it.
 - Follow up work packages:
-  - **WP3B**: modular system reattachment + bridge removal.
+  - **WP3B**: modular system reattachment + bridge removal (next focus: migrate employment/economy
+    systems so we can drop `resolve_affordances` entirely, unblocking WP1 Step 8).
   - **WP3C**: DTO parity expansion with ML validation and legacy observation retirement.
+  - These unblock **WP1** (simulation loop cleanup) and **WP2** (world adapter parity) so we can
+    ship the composition-root refactor once DTO-only decisions are verified under WP3C.

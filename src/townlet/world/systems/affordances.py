@@ -6,6 +6,7 @@ from typing import Any, Mapping, MutableMapping
 
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import AffordanceOutcome, apply_affordance_outcome
+from townlet.world.affordances.core import advance_running_affordances as _advance_runtime
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.systems import queues as queue_system
 
@@ -16,6 +17,13 @@ def step(ctx: SystemContext) -> None:
     """Resolve running affordances and dispatch hooks."""
 
     state = ctx.state
+    runtime = getattr(state, "_affordance_service", None)
+    if runtime is not None:
+        runtime_getter = getattr(runtime, "runtime", None)
+        runtime_obj = runtime_getter() if callable(runtime_getter) else runtime_getter
+        if runtime_obj is not None:
+            _advance_runtime(runtime_obj, tick=state.tick)
+            return
     state.resolve_affordances(current_tick=state.tick)
 
 
@@ -62,8 +70,12 @@ def handle_blocked(runtime: AffordanceRuntimeService, object_id: str, tick: int)
 
 def resolve(runtime: AffordanceRuntimeService, tick: int) -> None:
     """Advance the runtime resolution loop."""
-
-    runtime.resolve(tick=tick)
+    runtime_getter = getattr(runtime, "runtime", None)
+    runtime_obj = runtime_getter() if callable(runtime_getter) else runtime_getter
+    if runtime_obj is not None:
+        _advance_runtime(runtime_obj, tick=tick)
+    elif hasattr(runtime, "resolve"):
+        runtime.resolve(tick=tick)
 
 
 def apply_outcome(

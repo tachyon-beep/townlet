@@ -15,7 +15,8 @@
   the extra `WorldState.apply_actions` bridge while keeping parity; DTO queue snapshots normalise
   entries so guardrails receive agent strings (tracked for further cleanup in WP3B). `queues.step`
   now handles ghost-step queue conflicts, ensuring rivalry events continue to emit without the
-  legacy loop.
+  legacy loop, and `advance_running_affordances` drives affordance completion/hand-over via the
+  runtime service.
 - Behaviour parity smokes (`tests/test_behavior_personality_bias.py`) are green again; DTO parity
   harness still needs reward/ML coverage.
 - New work packages:

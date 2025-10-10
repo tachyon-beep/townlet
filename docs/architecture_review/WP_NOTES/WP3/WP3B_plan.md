@@ -31,8 +31,9 @@ helpers.
   + affinity logic still runs inside `resolve` and needs modular extraction.)*
 - Replace the affordance step bridge by importing actions into the affordance runtime and calling
   `resolve`/`apply_need_decay` through the modular service rather than the legacy wrapper. *(Status:
-  `process_actions` extracted and `WorldContext.tick` now uses it; follow-up work will finish
-  decoupling remaining private state hooks and legacy `resolve_affordances` wrapper.)*
+  `process_actions` extracted and `advance_running_affordances` now drives completions via the
+  runtime service; remaining work is to drop the final `resolve_affordances` wrapper once employment
+  / economy steps land.)*
 - Add unit tests mirroring legacy expectations (use lightweight stubs similar to existing system
   tests).
 

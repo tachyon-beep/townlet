@@ -13,6 +13,7 @@ from .core import (
     DefaultAffordanceRuntime,
     HookPayload,
     RunningAffordanceState,
+    advance_running_affordances,
     build_hook_payload,
 )
 from .runtime import AffordanceCoordinator
@@ -52,7 +53,7 @@ class AffordanceRuntimeService:
         self.coordinator.remove_agent(agent_id)
 
     def resolve(self, tick: int) -> None:
-        self.coordinator.resolve(tick=tick)
+        advance_running_affordances(self.coordinator.runtime, tick=tick)
 
     def start(
         self,

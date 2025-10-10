@@ -20,8 +20,8 @@ Use this as reorientation material if the working memory is compacted. It summar
 - `WorldContext.tick` now routes combined actions through `affordances.process_actions`
   (extracted from `WorldState.apply_actions`), eliminating the extra legacy bridge while keeping
   behaviour parity. DTO queue snapshots normalise to agent identifiers to keep guardrails compatible,
-  and `queues.step` now captures ghost-step conflicts so rivalry events fire without the legacy
-  loop.
+  `queues.step` now captures ghost-step conflicts, and `advance_running_affordances` handles
+  completion/hand-over events via the runtime service.
 - Scripted parity smokes (`tests/test_behavior_personality_bias.py`) now pass; reward/ML parity
   remains outstanding for DTO-only validation.
 - Todo:
