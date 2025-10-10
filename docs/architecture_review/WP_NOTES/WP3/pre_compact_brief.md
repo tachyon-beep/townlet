@@ -1,17 +1,16 @@
-# WP3 Pre-Compact Brief — 2025-10-09
+# WP3 Pre-Compact Brief — 2025-10-10
 
 Latest context snapshot so we can resume quickly after memory compaction.
 
 ## Current State
 - Telemetry pipeline is fully event-driven; legacy writer APIs removed and
   guard tests protect the dispatcher surface (`tests/test_telemetry_surface_guard.py`).
-- DTO Step 1 complete:
-  - `dto_observation_inventory.md` documents every `WorldState` consumer and the
-    proposed DTO field types/optional rules.
-  - `dto_example_tick.json` + `dto_sample_tick.json` provide baseline payloads.
-  - `dto_worldstate_usage.json` auto-extracted usage map for converters.
-- DTO schema models scaffolded in `src/townlet/world/dto/observation.py` and re-exported through `townlet.world.dto` (`DTO_SCHEMA_VERSION = "0.1.0"`); `build_observation_envelope` factory + `tests/world/test_observation_dto_factory.py` validate JSON readiness, and `SimulationLoop` caches/attaches the DTO payload to `loop.tick` events (`observations_dto`).
-  Envelope now includes queue rosters, running affordances, and relationship metrics. `PolicyRuntime` consumes cached DTO data via `DTOWorldView`; scripted behaviour now reads queue/affordance/relationship info from the DTO view and emits guardrail requests as events (legacy fallbacks remain for missing envelopes). `WorldContext.tick` routes combined actions through `affordances.process_actions`, `queues.step` handles ghost-step conflicts, and `advance_running_affordances` completes hand-overs via the runtime service.
+- DTO schema v0.2.0 shipped:
+  - `dto_observation_inventory.md` updated with the expanded per-agent/global fields.
+  - `dto_example_tick.json` & `dto_sample_tick.json` regenerated under the new schema.
+  - Converter (`build_observation_envelope`) now injects per-agent needs/wallet/inventory/job/personality/queue state and global employment/economy/anneal snapshots. Coverage in `tests/world/test_observation_dto_factory.py` ensures regressions fail fast.
+  - `SimulationLoop` populates the richer envelope each tick (captures agent snapshots, employment metrics, economy snapshot, queue affinity metrics, anneal context).
+- DTO parity harness (Stage 2) expanded: `tests/core/test_sim_loop_dto_parity.py` cross-checks DTO vs recorded legacy data (needs, wallet, jobs, queue metrics, economy snapshot, anneal context). Stage 0 baselines live under `docs/architecture_review/WP_NOTES/WP3/dto_parity/`.
 - Modular system suite (WP3B) is done: `employment.step`, `economy.step`, and `relationships.step` execute each tick, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and `affordances.step` no longer calls `state.resolve_affordances`. Targeted unit suites (`tests/world/test_systems_{affordances,queues,employment,economy,relationships}.py`) plus `pytest tests/world -q` hold the regression line.
 
 ## Outstanding Work (DTO Rollout)

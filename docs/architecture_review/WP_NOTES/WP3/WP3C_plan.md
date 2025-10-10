@@ -58,26 +58,26 @@ scenarios, and retire the final legacy observation plumbing so WP1/WP2 compositi
 
 ## Stage 2 – Parity Harness Enhancements (Scripted Path)
 
-1. **Harness expansion**
-   - Upgrade `tests/core/test_sim_loop_dto_parity.py`:
-     - Compare per-agent needs, wallet, job fields, queue state, and relationship info between DTO
-       and legacy maps.
-     - Validate reward breakdowns component-wise (use numpy tolerances).
-     - Assert DTO `global_context` promotion/economy snapshots match telemetry/stability caches.
-   - Factor common snapshot capture utilities into `tests/core/dto_parity_utils.py`.
+1. **Harness expansion** *(Completed)*
+   - [x] `tests/core/test_sim_loop_dto_parity.py` now compares per-agent needs, wallets, and job
+     payloads between DTO envelopes and recorded world snapshots (stored in
+     `agent_state_history`/`job_snapshot_history`).
+   - [x] Verifies reward totals, queue metrics, economy snapshot, queue affinity metrics, and anneal
+     context against the recorded world history.
+   - [x] PRs can rely on the parity test failing if DTO fields drift.
 
-2. **Fixture-backed regression**
-   - Load baseline fixtures captured in Stage 0 to ensure DTO payloads remain stable across refactors.
-   - On failure, diff the JSON dumps to highlight changes (helpful for code reviews).
+2. **Fixture-backed regression** *(Partially manual)*
+   - [x] Stage 0 captured baselines under `docs/architecture_review/WP_NOTES/WP3/dto_parity`; parity
+     test references in-memory captures (no additional module required).
+   - [ ] Optional future work: add diff utility if we start snapshotting to disk for CI.
 
-3. **Telemetry hooks**
-   - Extend parity harness to inspect emitted `loop.tick` events (via stub telemetry sink) verifying
-     that `observations_dto` contains the enriched envelope and that the legacy `observations`
-     reference is no longer required (post Stage 5).
+3. **Telemetry hooks** *(Deferred to Stage 5)*
+   - Pending legacy observation removal; will assert `loop.tick` payloads once Stage 5 executes.
 
 4. **Risk mitigation**
-   - Run `pytest tests/core/test_sim_loop_dto_parity.py -q` after every schema change.
-   - Track baseline hashes for DTO fixtures so CI alerts on unreviewed schema churn.
+   - [x] `pytest tests/core/test_sim_loop_dto_parity.py -q` integrated into the workflow for schema
+     changes (manual for now).
+   - [ ] Automate fixture hash tracking once DTO-only flow stabilises (Stage 6 candidate).
 
 ---
 
