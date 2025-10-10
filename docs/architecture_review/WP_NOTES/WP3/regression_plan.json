@@ -1,0 +1,24 @@
+{
+  "updated": "2025-10-10T15:59:21.500466",
+  "doc_updates": [
+    "WP1/WP2/WP3 status files reference Stage 6 guardrails",
+    "WP3 pre_compact brief + plan updated with regression/adapter tasks",
+    "ADR-001 notes guardrail tests",
+    "DTO migration notes mention telemetry caches and guardrails"
+  ],
+  "guard_tests": [
+    "tests/core/test_no_legacy_observation_usage.py",
+    "tests/test_telemetry_surface_guard.py::test_loop_tick_payload_is_dto_only"
+  ],
+  "next_steps": [
+    "Run full pytest, ruff, mypy",
+    "Drop legacy world adapter handles once DTO parity verified",
+    "Prep release comms (CHANGELOG, stakeholder note)"
+  ],
+  "notes": [
+    {
+      "timestamp": "2025-10-10T16:00:55.779280",
+      "detail": "Full repo lint (ruff) deferred until final Stage 6 wrap \u2014 current codebase has 175 legacy violations unrelated to DTO guardrails."
+    }
+  ]
+}

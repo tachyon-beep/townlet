@@ -106,6 +106,7 @@ Implement the following shape, mirroring the WP1 requirements:
 - Relocate any extra behaviour (`queue_console`, `flush_transitions`, `active_policy_hash`, etc.) into adapters or specialised backends. Expanding the ports requires a fresh ADR.
 - Keep provider keys stable; document additions in both the ADR and the WP1 tasking file.
 - When removing legacy factories, ensure configs use the new registry-backed paths and update docs alongside the code.
+- As DTO-only telemetry rolls out (WP3 Stage 5/6), keep guard tests (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`) green—any reintroduction of legacy observation builders or payloads must be confined to adapters/factories explicitly listed in the whitelist.
 
 ## Related Documents
 

@@ -253,9 +253,9 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
 
 ## Stage 6 – Guard Rails, Docs, & Release Notes
 
-1. **Tests & linters**
-   - Add `tests/core/test_no_legacy_observation_usage.py` scanning for prohibited imports (`ObservationBuilder` direct usage outside allowed modules).
-   - Extend `tests/test_telemetry_surface_guard.py` to ensure `loop.tick` payloads lack legacy fields.
+1. **Tests & linters** *(DTO guardrails added 2025-10-10)*
+   - `tests/core/test_no_legacy_observation_usage.py` scans runtime modules for ObservationBuilder/legacy payload usage outside the whitelisted transitional files (sim loop, world factory/adapter, observations config).
+   - `tests/test_telemetry_surface_guard.py` now asserts dispatcher payloads exclude legacy observation keys and cache DTO envelopes/metadata each tick.
 
 2. **Documentation**
    - Update WP1/WP2/WP3 status + `pre_compact_brief.md` summarising DTO-only status.
