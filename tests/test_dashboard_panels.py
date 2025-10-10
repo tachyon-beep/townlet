@@ -57,7 +57,6 @@ def _make_loop() -> SimulationLoop:
         {
             "tick": world.tick,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [],
             "policy_snapshot": {},

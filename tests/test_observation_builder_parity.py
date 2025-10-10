@@ -6,6 +6,7 @@ import numpy as np
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.observations.builder import ObservationBuilder
 from townlet.world.grid import AgentSnapshot
 
 
@@ -42,7 +43,7 @@ def test_observation_builder_matches_baseline_snapshot(tmp_path):
         raise RuntimeError("Baseline snapshot missing; rerun Phase 0 capture (tmp/wp-c/phase4_baseline_shapes.json)")
 
     loop = _make_loop()
-    builder = loop.observations
+    builder = ObservationBuilder(loop.config)
 
     batch = builder.build_batch(loop.world_adapter, terminated={})
     assert set(batch) == {"alice", "bob"}
@@ -57,7 +58,7 @@ def test_observation_builder_matches_baseline_snapshot(tmp_path):
 
 def test_observation_builder_adapter_parity():
     loop = _make_loop()
-    builder = loop.observations
+    builder = ObservationBuilder(loop.config)
 
     batch_raw = builder.build_batch(loop.world, terminated={})
     batch_adapter = builder.build_batch(loop.world_adapter, terminated={})

@@ -42,6 +42,7 @@ from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.dto import build_observation_envelope
+from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.grid import WorldState
 from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 from townlet.policy.runner import PolicyRuntime
@@ -81,7 +82,7 @@ class SimulationLoopError(RuntimeError):
 class TickArtifacts:
     """Collects per-tick data for logging and testing."""
 
-    observations: dict[str, object]
+    envelope: ObservationEnvelope
     rewards: dict[str, float]
 
 
@@ -196,7 +197,7 @@ class SimulationLoop:
             config=self.config,
             rng=self._rng_events,
         )
-        self.observations = ObservationBuilder(config=self.config)
+        self._observation_builder = ObservationBuilder(config=self.config)
         policy_kwargs = {"config": self.config, **self._policy_options}
         policy_backend = PolicyRuntime(**policy_kwargs)
         self._policy_port = create_policy(
@@ -231,7 +232,12 @@ class SimulationLoop:
         log_path = Path("logs/promotion_history.jsonl")
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
-        self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
+        cfg = getattr(self.config, "observations_config", None)
+        if cfg is not None and getattr(cfg, "hybrid", None) is not None:
+            ticks_per_day = getattr(cfg.hybrid, "time_ticks_per_day", 1440)
+        else:
+            ticks_per_day = getattr(self._observation_builder.hybrid_cfg, "time_ticks_per_day", 1440)
+        self._ticks_per_day = max(1, int(ticks_per_day))
         legacy_runtime = LegacyWorldRuntime(
             world=self.world,
             lifecycle=self.lifecycle,
@@ -242,7 +248,7 @@ class SimulationLoop:
         self._world_port = create_world(
             provider=self._world_provider,
             runtime=legacy_runtime,
-            observation_builder=self.observations,
+            observation_builder=self._observation_builder,
         )
         runtime_instance: WorldRuntimeProtocol = self._world_port.legacy_runtime
         self.runtime = runtime_instance
@@ -262,7 +268,7 @@ class SimulationLoop:
         self.telemetry.set_runtime_variant(self._runtime_variant)
         self._health = SimulationLoopHealth(last_tick=self.tick)
         # Seed an initial DTO envelope so policy backends can operate before the
-        # first tick produces observations.
+        # first tick produces a DTO envelope.
         bootstrap_envelope = self._build_bootstrap_policy_envelope()
         self._set_policy_observation_envelope(bootstrap_envelope)
 
@@ -429,7 +435,7 @@ class SimulationLoop:
         self.run_for_ticks(max_ticks, collect=False)
 
     def step(self) -> TickArtifacts:
-        """Advance the simulation loop by one tick and return observations/rewards."""
+        """Advance the simulation loop by one tick and return the DTO envelope and rewards."""
         tick_start = time.perf_counter()
         next_tick = self.tick + 1
         console_ops = list(self.telemetry.drain_console_buffer())
@@ -483,7 +489,7 @@ class SimulationLoop:
             else:  # pragma: no cover - defensive
                 for result in console_results:
                     self.telemetry.emit_event("console.result", result.to_dict())
-            episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
+            episode_span = self._ticks_per_day
             for snapshot in self.world.agents.values():
                 snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
             rewards = self.rewards.compute(self.world, terminated, termination_reasons)
@@ -492,7 +498,7 @@ class SimulationLoop:
                 controller.post_step(rewards, terminated)
             else:  # pragma: no cover - defensive
                 self.policy.post_step(rewards, terminated)
-            observations = self.observations.build_batch(self.world_adapter, terminated)
+            observation_batch = self._observation_builder.build_batch(self.world_adapter, terminated)
             if controller is not None:
                 policy_snapshot = controller.latest_policy_snapshot()
                 possessed_agents = controller.possessed_agents()
@@ -598,7 +604,7 @@ class SimulationLoop:
 
             dto_envelope = build_observation_envelope(
                 tick=self.tick,
-                observations=observations,
+                observations=observation_batch,
                 actions=runtime_result.actions,
                 terminated=terminated,
                 termination_reasons=termination_reasons,
@@ -642,7 +648,6 @@ class SimulationLoop:
                 tick_event_payload = {
                     "tick": self.tick,
                     "world": self.world,
-                    "observations": observations,
                     "rewards": rewards,
                     "events": events,
                     "policy_snapshot": policy_snapshot,
@@ -706,7 +711,7 @@ class SimulationLoop:
                     health_payload["employment_exit_queue"],
                 )
             self._record_step_success(duration_ms)
-            return TickArtifacts(observations=observations, rewards=rewards)
+            return TickArtifacts(envelope=dto_envelope, rewards=rewards)
         except Exception as exc:
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
             self.tick = max(0, self.tick - 1)
@@ -841,8 +846,8 @@ class SimulationLoop:
         """Build a DTO envelope from the current world when none has been recorded."""
 
         adapter = self.world_adapter
-        observations = self.observations.build_batch(adapter, {})
-        agent_ids = list(observations.keys())
+        observation_batch = self._observation_builder.build_batch(adapter, {})
+        agent_ids = list(observation_batch.keys())
         terminated = {agent_id: False for agent_id in agent_ids}
         rewards = {agent_id: 0.0 for agent_id in agent_ids}
         reward_breakdown = {agent_id: {} for agent_id in agent_ids}
@@ -901,7 +906,7 @@ class SimulationLoop:
 
         return build_observation_envelope(
             tick=self.tick,
-            observations=observations,
+            observations=observation_batch,
             actions={},
             terminated=terminated,
             termination_reasons={},

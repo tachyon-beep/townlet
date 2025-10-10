@@ -224,22 +224,26 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
 
 ## Stage 5 – Legacy Observation Retirement
 
-1. **SimulationLoop cleanup**
+1. **SimulationLoop cleanup** *(partially complete)*
    - Remove `self._policy_observation_batch`, stop storing `observations` in tick artifacts, and
-     delete the legacy `observations` entry from telemetry payloads.
-   - Drop `observations` from `TickArtifacts` (update tests using it).
+     delete the legacy `observations` entry from telemetry payloads. *(Done – loop now emits DTO-only
+     payloads and tick artifacts carry envelopes; remaining work updates dashboard/conflict tests to
+     consume the DTO snapshot helpers.)*
+   - Drop `observations` from `TickArtifacts` (update tests using it). *(Done.)*
 
-2. **Telemetry publisher**
+2. **Telemetry publisher** *(in progress)*
    - Ensure no event emitter (`TelemetryPublisher`, sinks) references `observations` or legacy reward
-     getters. Update guard tests to fail if `telemetry.emit_event(..., observations=...)` reappears.
+     getters. Update guard tests to fail if `telemetry.emit_event(..., observations=...)` reappears. *(Core
+     publisher updated; follow-up removes remaining test fixtures expecting legacy fields.)*
 
 3. **World adapters**
    - Remove `LegacyWorldRuntime.tick` fallback paths relying on `WorldState.apply_actions`.
    - Confirm `create_world` providers no longer return legacy handles needed solely for observations.
 
-4. **External surfaces**
+4. **External surfaces** *(in progress)*
    - Update CLI tools/training scripts relying on `loop.observations` (e.g., `policy/training_orchestrator.py`)
-     to use DTO events or `loop._policy_observation_envelope`.
+     to use DTO events or `loop._policy_observation_envelope`. *(Scripts/dashboards refreshed; remaining
+     parity tests need DTO snapshot ingestion helpers.)*
 
 5. **Regression sweep**
    - Run full test suite (`pytest -q`), lint, and mypy to catch stragglers referencing removed

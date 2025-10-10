@@ -272,7 +272,6 @@ def seed_demo_state(
                     {
                         "tick": world.tick,
                         "world": world,
-                        "observations": {},
                         "rewards": {},
                         "events": [],
                         "policy_snapshot": {},

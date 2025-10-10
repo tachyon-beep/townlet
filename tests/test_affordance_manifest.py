@@ -107,7 +107,6 @@ def test_affordance_manifest_checksum_exposed_in_telemetry(tmp_path: Path) -> No
         {
             "tick": 1,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [],
             "policy_snapshot": {},

@@ -89,7 +89,6 @@ def test_telemetry_exposes_allocator_metrics() -> None:
         {
             "tick": 0,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [],
             "policy_snapshot": {},
@@ -141,7 +140,6 @@ def test_telemetry_records_events() -> None:
         {
             "tick": 0,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": events,
             "policy_snapshot": {},

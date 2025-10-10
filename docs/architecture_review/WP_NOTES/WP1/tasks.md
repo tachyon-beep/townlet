@@ -48,9 +48,9 @@
 Maintain this checklist during WP1 implementation.
 
 ## 7. Step 7 — Factory & Adapter Wiring (in progress)
-- [ ] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext`.
-- [ ] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context.
-- [ ] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap.
+- [x] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext`.
+- [x] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context.
+- [x] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap.
 
 ## 8. Step 8 — Composition Root Integration
 - [x] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers.
@@ -58,5 +58,5 @@ Maintain this checklist during WP1 implementation.
 - [x] Remove telemetry `latest_*` pulls from the loop and helper utilities. *(Loop now computes queue/employment metrics directly and emits `loop.tick/health/failure`, `console.result`, and `stability.metrics` via the telemetry port; guard tests ensure writer APIs stay retired.)*
 
 ## 9. Step 8 Testing & Docs
-- [~] Add/refresh test suites (`tests/test_ports_surface.py`, `tests/test_factories.py`, loop smoke tests, console router, health monitor, telemetry getter guard). *(Telemetry surface guard added; remaining suites still pending.)*
+- [~] Add/refresh test suites (`tests/test_ports_surface.py`, `tests/test_factories.py`, loop smoke tests, console router, health monitor, telemetry getter guard). *(Telemetry surface guard and DTO parity harness in place; loop/console/health monitor smokes still pending.)*
 - [ ] Update ADR-001 appendices; draft console/monitor ADR; refresh README/tasking once Step 8 lands.

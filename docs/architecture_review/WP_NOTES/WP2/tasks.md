@@ -14,7 +14,7 @@
 ## 3. Planning & Resourcing
 - [x] Produce implementation plan (see `implementation_plan.md`).
 - [x] List required fixtures/tests (unit modules, integration, golden snapshots).
-- [ ] Identify migration steps for factories/loop to adopt `WorldContext`.
+- [x] Identify migration steps for factories/loop to adopt `WorldContext`.
 
 ## 4. Execution Tracking (fill once coding begins)
 - [x] Skeleton package creation.

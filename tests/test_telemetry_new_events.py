@@ -24,7 +24,6 @@ def emit_loop_tick(
     payload = {
         "tick": tick,
         "world": world,
-        "observations": overrides.pop("observations", {}),
         "rewards": overrides.pop("rewards", {}),
         "events": overrides.pop("events", []),
         "policy_snapshot": overrides.pop("policy_snapshot", {}),

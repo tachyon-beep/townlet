@@ -51,6 +51,7 @@ from townlet_ui.telemetry import (
     TelemetryClient,
     TelemetrySnapshot,
 )
+from townlet.world.dto.observation import ObservationEnvelope
 
 if TYPE_CHECKING:
     from townlet.core.sim_loop import SimulationLoop
@@ -2030,7 +2031,7 @@ def run_dashboard(
             while max_ticks <= 0 or tick < max_ticks:
                 tick += 1
                 loop_start = time.monotonic()
-                loop.step()
+                artifacts = loop.step()
                 if on_tick is not None:
                     on_tick(loop, executor, loop.tick)
                 snapshot = client.from_console(router)
@@ -2048,10 +2049,9 @@ def run_dashboard(
                         show_personality_narration=show_personality_narration,
                     )
                 )
-                obs_batch = loop.observations.build_batch(loop.world, terminated={})
                 map_panel = _build_map_panel(
                     snapshot,
-                    obs_batch,
+                    artifacts.envelope,
                     focus_agent,
                     show_coords=show_coords,
                 )
@@ -2072,7 +2072,7 @@ def run_dashboard(
 
 def _build_map_panel(
     snapshot: TelemetrySnapshot,
-    obs_batch: Mapping[str, dict[str, np.ndarray]],
+    envelope: ObservationEnvelope,
     focus_agent: str | None,
     show_coords: bool = False,
 ) -> Panel | None:
@@ -2080,11 +2080,12 @@ def _build_map_panel(
     if not agents:
         return None
     agent_id = focus_agent if focus_agent and any(a.agent_id == focus_agent for a in agents) else agents[0].agent_id
-    obs = obs_batch.get(agent_id)
-    if not obs:
+    dto_lookup = {agent.agent_id: agent for agent in envelope.agents}
+    dto_agent = dto_lookup.get(agent_id)
+    if dto_agent is None or dto_agent.map is None:
         return None
-    map_tensor = obs.get("map")
-    if not isinstance(map_tensor, np.ndarray):
+    map_tensor = np.asarray(dto_agent.map, dtype=np.float32)
+    if map_tensor.ndim != 3:
         return None
     agents_channel = map_tensor[1]
     window = agents_channel.shape[0]

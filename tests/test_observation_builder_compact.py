@@ -33,7 +33,7 @@ def make_compact_world(*, object_channels: list[str] | None = None) -> Simulatio
 
 def test_compact_observation_features_only() -> None:
     loop = make_compact_world()
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
     obs = builder.build_batch(world, terminated={})["alice"]
 
@@ -110,7 +110,7 @@ def test_compact_observation_features_only() -> None:
 
 def test_compact_object_channels() -> None:
     loop = make_compact_world(object_channels=["stove"])
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
     obs = builder.build_batch(world, terminated={})["alice"]
 
@@ -126,4 +126,3 @@ def test_compact_object_channels() -> None:
     stove_x = radius + 2
     stove_y = radius
     assert map_tensor[stove_idx, stove_y, stove_x] == pytest.approx(1.0)
-

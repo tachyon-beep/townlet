@@ -1,46 +1,19 @@
-# WP2 Pre-Compact Brief (2025-10-09)
+# WP2 Pre-Compact Brief (2025-10-10)
 
-This note captures the exact state of WP2 before memory compaction so upcoming work can resume smoothly.
+Snapshot of WP2 so the next session can resume without re-auditing prior work.
 
-## Completed
-- **Planning (Steps 0–1):**
-  - Catalogued responsibilities in `world/grid.py`, `world/runtime.py`, observation builder.
-  - Documented couplings (console/telemetry/observations/RNG) and confirmed ADR-002 alignment.
-  - Strategy for observations: wrap existing `ObservationBuilder` inside the new context until DTOs arrive in WP3.
-- **Skeleton setup (Step 2):** created placeholder modules under `townlet/world/` (`context`, `state`, `spatial`, `agents`, `actions`, `observe`, `events`, `rng`, `systems/__init__`).
-- **Step 3 (stateless extraction):**
-  - `WorldSpatialIndex` moved into `townlet.world.spatial`; `WorldState` now imports the new class.
-  - Observation helper functions (`local_view`, `find_nearest_object_of_type`) moved into `townlet.world.observe`; `world/observations/views.py` re-exporting.
-  - Domain event primitives implemented in `townlet.world.events` with unit tests (`tests/world/test_events.py`).
-  - Unit tests added: `tests/world/test_spatial.py`, `tests/world/test_observe_helpers.py`.
-- **Step 4 (state/agents foundations):**
-  - `AgentRegistry` upgraded with created/updated tick tracking, metadata, and read-only views (`tests/world/test_agents_registry.py`).
-  - New `WorldState` container manages RNG seeding/state, ctx-reset queue, event buffering, and serialisable snapshots (`tests/world/test_world_state.py`).
-- **Step 5 (action pipeline scaffolding):**
-  - Action schema/validation implemented (`Action`, `ActionValidationError`) with coercion for supported kinds and detailed error reporting (`tests/world/test_actions.py`).
-  - Interim apply pipeline updates agent snapshots/records for implemented kinds (`move`, `noop`), emits structured events (including invalid/pending markers), and leaves hooks for future system integration.
-- **Step 6 (systems orchestration):**
-  - `WorldContext.tick` now sequences console → actions → modular systems → nightly reset → lifecycle evaluation and returns `RuntimeStepResult`.
-  - Event flow is unified via `EventDispatcher`; legacy `WorldState` exposes `emit_event`, `event_dispatcher`, and `agent_records_view` to satisfy the modular pipeline while keeping telemetry compatibility.
-  - System modules (`queues`, `affordances`, `employment`, `relationships`, `economy`, `perturbations`) execute inside the context using the shared `SystemContext`; unit suites under `tests/world/test_systems_*.py` plus `tests/test_world_context.py` are green.
-- Docs updated (`analysis.md`, `tasks.md`, `README.md`, `status.md`) to reflect the above.
+## Completed to date
+- **Steps 0–3**: planning, skeleton package creation, and stateless helper extraction (spatial index, observation helpers, event primitives) remain in place with unit coverage.
+- **Steps 4–6**: `AgentRegistry`, `WorldState`, action validation pipeline, and modular system orchestration (`queues`, `affordances`, `employment`, `relationships`, `economy`, `perturbations`) are all wired through `WorldContext.tick`, returning `RuntimeStepResult` with deterministic RNG streams. Tests across `tests/world/**` continue to pass.
+- **Step 7 factory integration**: default/dummy world providers now construct `WorldContext`, registry metadata stays accurate, and `WorldRuntimeAdapter` bridges modular results for callers still expecting the legacy runtime. Docs and tasks are updated accordingly.
+- DTO export plumbing from WP3C is compatible: trajectory frames include DTO metadata and `RolloutBuffer.save` emits `*_dto.json` artefacts referenced in manifests, so world consumers can migrate without relying on the legacy observation dict.
 
-## Remaining (per implementation plan)
-1. **Step 7 – Adapter & factory integration:** update `DefaultWorldAdapter`/`world_factory` so the simulation loop resolves the modular `WorldContext` provider by default.
-2. **Step 8 – Composition root:** revive WP1 Step 4 (SimulationLoop refactor, console router, health monitor, removal of telemetry getters) once the new context is the default world provider.
-3. **Step 9–11:** cleanup legacy modules, comprehensive test/docs update, final QA.
+## Outstanding
+1. Coordinate with WP3C to finish DTO-only policy/training adapters and retire the legacy observation translator; once complete, remove the legacy handles from world adapters/factories (Step 7 cleanup) and proceed with Step 8 composition-root refactor alongside WP1.
+2. Update ADR-002/README once the adapter cleanup lands and ensure the simulation loop no longer references `WorldState` internals.
+3. Prepare regression coverage for the default provider swap (factory tests, loop smokes) when WP1 Step 8 resumes.
 
-## Key decisions to remember
-- Observation builder remains external for now; `WorldContext.observe()` will call into it until WP3.
-- Console/telemetry services (ConsoleRouter/HealthMonitor) will be integrated during the SimulationLoop refactor after the world package is in place.
-- No DTOs yet; still using dict payloads for observations and events.
-
-## Current Git state
-- All relevant files added (`townlet/world/spatial.py`, `townlet/world/observe.py`, etc.).
-- Tests added under `tests/world/`.
-- Pending tasks tracked in `tasks.md` (State/agents extraction is next).
-
-## Next steps immediately after compaction
-1. Start Step 7 by wiring the factory/provider layer to build `WorldContext` directly (drop the compatibility adapter hand-off in `WorldRuntime`).
-2. Prepare the composition-root refactor plan (console router + health monitor) now that tick orchestration parity is in place.
-3. Maintain the new test coverage (`pytest tests/world -q` + `pytest tests/test_world_context.py -q`) as integration proceeds.
+## Key notes
+- `ObservationBuilder` remains the interim source for observation tensors; swap to DTO-native observers after WP3 Stage 5.
+- Console/telemetry orchestration is owned by WP1; WP2’s responsibility is to expose port-friendly world services and drop legacy shims when DTO parity is confirmed.
+- Track dependencies in `WP3C_plan.md` and WP1 status so we remove the legacy world handles immediately after DTO-only consumers ship.

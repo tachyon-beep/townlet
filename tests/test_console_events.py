@@ -27,7 +27,6 @@ def test_event_stream_receives_published_events() -> None:
         {
             "tick": 0,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": events,
             "policy_snapshot": {},
@@ -56,7 +55,6 @@ def test_event_stream_handles_empty_batch() -> None:
         {
             "tick": 0,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [],
             "policy_snapshot": {},

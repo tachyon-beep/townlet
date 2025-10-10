@@ -39,7 +39,7 @@ def make_full_world() -> SimulationLoop:
 
 def test_full_observation_map_and_features() -> None:
     loop = make_full_world()
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
     observations = builder.build_batch(world, terminated={})
 

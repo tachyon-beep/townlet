@@ -79,7 +79,6 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
         {
             "tick": 0,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [event],
             "policy_snapshot": {},
@@ -102,7 +101,6 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
         {
             "tick": 2,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [event],
             "policy_snapshot": {},
@@ -125,7 +123,6 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
         {
             "tick": 3,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": [priority_event],
             "policy_snapshot": {},

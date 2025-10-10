@@ -40,7 +40,7 @@ def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
 
 def test_observation_builder_hybrid_map_and_features() -> None:
     loop = make_world(enforce_job_loop=True)
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     observations = builder.build_batch(loop.world_adapter, terminated={})
 
     obs = observations["alice"]
@@ -99,7 +99,7 @@ def test_observation_builder_hybrid_map_and_features() -> None:
 
 def test_observation_ctx_reset_releases_slot() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
     observations = builder.build_batch(loop.world_adapter, terminated={"alice": True})
     obs = observations["alice"]
@@ -112,7 +112,7 @@ def test_observation_ctx_reset_releases_slot() -> None:
 def test_observation_rivalry_features_reflect_conflict() -> None:
     loop = make_world()
     loop.world.register_rivalry_conflict("alice", "bob")
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     observations = builder.build_batch(loop.world_adapter, terminated={})
     obs = observations["alice"]
     feature_names = obs["metadata"]["feature_names"]
@@ -122,7 +122,7 @@ def test_observation_rivalry_features_reflect_conflict() -> None:
 
 def test_observation_queue_and_reservation_flags() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
     world.queue_manager.request_access("stove_test", "alice", world.tick)
     world.refresh_reservations()
@@ -143,7 +143,7 @@ def test_observation_queue_and_reservation_flags() -> None:
 
 def test_observation_respawn_resets_features() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
 
     world.tick = 10
@@ -168,7 +168,7 @@ def test_observation_respawn_resets_features() -> None:
 
 def test_ctx_reset_flag_on_teleport_and_possession() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    builder: ObservationBuilder = ObservationBuilder(loop.config)
     world = loop.world
 
     envelope = ConsoleCommandEnvelope(

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop, TickArtifacts
+from townlet.world.dto.observation import ObservationEnvelope
 
 
 def test_simulation_loop_runs_one_tick(tmp_path: Path) -> None:
@@ -10,7 +11,8 @@ def test_simulation_loop_runs_one_tick(tmp_path: Path) -> None:
 
     artifacts = next(loop.run(max_ticks=1))
     assert isinstance(artifacts, TickArtifacts)
-    assert artifacts.observations == {}
+    assert isinstance(artifacts.envelope, ObservationEnvelope)
+    assert artifacts.envelope.tick == loop.tick
     assert artifacts.rewards == {}
 
 

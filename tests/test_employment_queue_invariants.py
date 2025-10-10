@@ -46,7 +46,6 @@ def test_employment_queue_snapshot_tracks_pending_agent() -> None:
         {
             "tick": loop.tick,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": world.drain_events(),
             "policy_snapshot": {},
@@ -79,7 +78,6 @@ def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
         {
             "tick": loop.tick,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": events,
             "policy_snapshot": {},

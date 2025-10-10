@@ -328,6 +328,7 @@ class PolicyRuntime:
                 intent.object_id,
                 queue_view=queue_view,
                 relationship_view=relationship_view,
+                dto_world=dto_world,
             ):
                 if dto_world is not None:
                     dto_world.record_relationship_guard_block(

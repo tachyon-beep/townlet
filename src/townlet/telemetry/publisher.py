@@ -888,7 +888,6 @@ class TelemetryPublisher:
         *,
         tick: int,
         world: WorldState,
-        observations: dict[str, object],
         rewards: dict[str, float],
         events: Iterable[dict[str, object]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
@@ -901,8 +900,8 @@ class TelemetryPublisher:
         social_events: Iterable[dict[str, object]] | None = None,
         runtime_variant: str | None = None,
     ) -> None:
-        # Observations and rewards are consumed for downstream side effects.
-        _ = observations, rewards
+        # Rewards are consumed for downstream side effects.
+        _ = rewards
         tick = int(tick)
         if runtime_variant is not None:
             self._runtime_variant = runtime_variant
@@ -1157,7 +1156,6 @@ class TelemetryPublisher:
             self._aggregator.collect_tick(
                 tick=tick,
                 world=world,
-                observations=observations,
                 rewards=rewards,
                 events=self._latest_events,
                 policy_snapshot=self._latest_policy_snapshot,

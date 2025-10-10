@@ -7,6 +7,7 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop, SimulationLoopError
+from townlet.world.dto.observation import ObservationEnvelope
 
 
 @pytest.fixture()
@@ -48,7 +49,7 @@ def test_simulation_loop_success_clears_error(simulation_loop: SimulationLoop) -
     loop = simulation_loop
     # Ensure there is at least one successful step
     artifacts = loop.step()
-    assert isinstance(artifacts.observations, dict)
+    assert isinstance(artifacts.envelope, ObservationEnvelope)
     health = loop.health
     assert health.last_error is None
     assert health.last_snapshot_path is None

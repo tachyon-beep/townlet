@@ -32,7 +32,6 @@ class TelemetryAggregator:
         *,
         tick: int,
         world,
-        observations,
         rewards,
         events: Iterable[Mapping[str, Any]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, Any]] | None = None,

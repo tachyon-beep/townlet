@@ -19,7 +19,7 @@
 - [x] Update `PolicyController` + scripted adapter to consume DTOs and emit `policy.metadata`, `policy.possession`, `policy.anneal.update` events. *(SimulationLoop now streams policy metadata/possession/anneal events from DTO payloads; ML backends continue under WP3C for full parity validation.)*
 - [x] Replace transitional bridges (`WorldContext.apply_actions` fallback, queue snapshot normalisation) once modular systems cover the full mutation pipeline. *(`process_actions`/`advance_running_affordances` now own the pipeline; `employment`/`economy`/`relationships` steps run each tick, and `state.resolve_affordances` is no longer invoked by the modular path.)*
 - [x] Execute WP3B_plan: reattach modular systems (queues/affordances/employment/economy) and drop the legacy bridge.
-- [ ] Execute WP3C_plan: expand DTO parity harness, run ML smoke, and remove legacy observation payloads.
+- [ ] Execute WP3C_plan: expand DTO parity harness, run ML smoke, and remove legacy observation payloads. *(Stage 5 in progress: simulation loop/telemetry no longer expose legacy observation dicts; outstanding work covers dashboard/conflict telemetry adjustments and downstream tooling docs.)*
 - [ ] Migrate ML adapters & training orchestrator to DTO flow; update replay/export tooling and run behavioural parity checks.
 - [ ] Cleanup loop/console interactions (drop `runtime.queue_console`, remove direct `WorldState` mutation, rely on DTO/event caches).
 - [ ] Document DTO schema, add guard tests, and refresh WP1/WP2 status once DTO rollout completes.
@@ -27,7 +27,7 @@
 ## 3. Simulation Loop Cleanup
 - [ ] Replace `runtime.queue_console` usage with router-driven action application; ensure no direct `WorldState` mutation.
 - [x] Emit telemetry via events only (`loop.tick`, `loop.health`, `loop.failure`); remove `record_console_results`, `record_health_metrics`, `record_loop_failure` calls.
-- [ ] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity.
+- [ ] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity. *(Simulation loop now DTO-only; follow-up refactor will remove remaining world/policy fallbacks.)*
 
 ## 4. Testing & Parity
 - [x] Add guard tests preventing reintroduction of telemetry getters/writers.

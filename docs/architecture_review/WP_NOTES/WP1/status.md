@@ -1,30 +1,25 @@
 # WP1 Status
 
-**Current state (2025-10-09)**
-- Port protocols, registry framework, and default adapters were completed in the initial WP1 pass; smoke tests for the new factories remain pending because the composition root still uses the legacy registry helpers.
-- WP2 Step 6 is now finished: `WorldContext` returns `RuntimeStepResult`, modular systems run via `SystemContext`, and the legacy `WorldState` exposes the helper methods expected by the port layer (`agent_records_view`, `emit_event`, `event_dispatcher`, deterministic RNG seed access). Targeted suites (`pytest tests/world -q`, `pytest tests/test_world_context.py -q`) pass.
-- `WorldRuntime.tick` recognises the modular result, so swapping the simulation loop over to `WorldContext` is unblocked.
-- WP3B (modular systems reattachment) is complete: the world tick no longer calls the legacy `resolve_affordances` bridge and employment/economy/relationship steps run through modular services. Remaining blocker for Step 8 is WP3C (DTO-only policy adapters + parity harness) so the loop can detach from `WorldState`.
+**Current state (2025-10-10)**
+- Port protocols, registry wiring, and adapter surfaces remain stable; Step 7 factory work is complete (`create_world` now returns `WorldContext`, dummy/stub providers and registry metadata are in sync, and `WorldRuntimeAdapter` bridges both modular and legacy paths for remaining callers).
+- WP2 Step 6/7 continue to supply modular tick orchestration; the simulation loop already instantiates `ConsoleRouter` and `HealthMonitor`, emits telemetry via the WP3 dispatcher, and defers console execution through the router while keeping legacy fallbacks available.
+- WP3B (modular systems) is complete and WP3C is deep in Stage 3: policy runtime/controller, scripted behaviours, trajectory service, and replay tooling all consume DTO envelopes. Recent work added DTO-rich metadata to rollout frames and manifests (`*_dto.json`) so training/replay consumers can transition away from the legacy observation blobs.
+- Outstanding WP3C items (training adapters, DTO-only ML parity, legacy observation retirement) are the primary blockers for the final WP1 Step 8 cleanup. Until those land, the loop must keep `runtime.queue_console` and the legacy world handles for policy/training.
 
-**Up next (Step 7 / WP1 Step 4 resume)**
-- World factory now builds `WorldContext`; dummy/stub providers are updated and `tests/world/test_world_factory.py` covers the path.
-- Next steps focus on the simulation loop refactor (Step 8): introduce the factory helpers, wire in `ConsoleRouter`/`HealthMonitor`, and migrate telemetry usage from getter-style pulls to event/metric emissions.
-- Work proceeds incrementally per the detailed plan (Phase 1: factory swap, Phase 2: console/monitor integration, Phase 3: telemetry getter removal, Phase 4: cleanup/docs). Step 8 execution is paused until WP3C delivers DTO-only policy paths; once complete we can remove `runtime.queue_console`, drop `WorldState` mutations, and finish the telemetry/console migration.
-- Console routing and health monitoring now initialise inside `SimulationLoop`: console commands are mirrored into the new router (still forwarded to the legacy runtime for execution) and `HealthMonitor` emits baseline queue/event metrics via the telemetry port.
-- Telemetry events (`loop.tick`, `loop.health`, `loop.failure`) now flow through the WP3 dispatcher via the port adapters. A guard suite (`tests/test_telemetry_surface_guard.py`) keeps the event-only surface locked; HTTP transport is operational, streaming transport will follow once WP3 exposes it.
+**Focus areas (Step 8 execution once unblocked)**
+- Finish the simulation loop refactor by removing `runtime.queue_console`, enforcing DTO-only policy decisions, and delegating world mutations through the modular context. Telemetry surface work is largely done; remaining effort is tied to the policy/world detach.
+- Add the pending loop/console/health-monitor smoke tests plus factory/port regression coverage. The telemetry guard suite and DTO parity harness are already in place; console and router tests remain on the to-do list.
+- Document the composition-root changes in ADR-001, draft the console/router ADR, and refresh the WP1 README once Step 8 completes.
 
-**Legacy caller inventory (2025-10-09 snapshot)**
+**Legacy caller inventory (updated 2025-10-10)**
 - Policy:
-  - `PolicyController` now owns ctx-reset/anneal hooks and per-tick bookkeeping; the loop no longer calls `PolicyRuntime` directly for these operations.
-  - `src/townlet/core/sim_loop.py:369` — controller still delegates `decide(world, tick)` straight to the scripted backend with a `WorldState`; migrate to observation-first `policy_port.decide(observations)` once world-driven observations are ready.
-  - `src/townlet/core/sim_loop.py:387-393` — controller forwards telemetry metadata from the backend; replace with port-friendly events when policy adapters expose the necessary data.
-- Telemetry (loop relies on publisher internals slated for removal):
-  - `src/townlet/core/sim_loop.py:214` and `src/townlet/core/sim_loop.py:270` — runtime variant and policy identity setters; emit these as events/metrics through the telemetry port instead of mutating publisher state.
-  - `src/townlet/core/sim_loop.py:359-380` — console buffer is still drained from telemetry to preserve legacy behaviour, but the router now emits console events; complete the migration by dropping the getter usage and feeding commands directly into the router entrypoint.
-  - `src/townlet/core/sim_loop.py:484` — loop now emits `loop.tick` events via the telemetry port; underlying adapters translate events via the dispatcher, but the composition root no longer calls the legacy API directly.
-  - `src/townlet/core/sim_loop.py:502` — queue/embedding/job/employment metrics and rivalry history are derived from the world adapter; remaining telemetry getters have been removed from the loop.
-  - `src/townlet/core/sim_loop.py:526` and `src/townlet/core/sim_loop.py:589` — health/failure payloads (and console/stability updates) now emit `loop.health`, `loop.failure`, `console.result`, and `stability.metrics` events; the publisher has moved entirely to the dispatcher path, so the loop no longer depends on writer shims.
-- World (loop still holds legacy runtime/world references):
-  - `src/townlet/core/sim_loop.py:366` and `src/townlet/core/sim_loop.py:371` — uses `runtime.queue_console` and passes an `action_provider`; after the port swap the loop should enqueue console commands through `ConsoleRouter` and call `world_port.tick()` once actions are applied.
-  - `src/townlet/core/sim_loop.py:381-383` and `src/townlet/core/sim_loop.py:392` — mutates agents directly off `WorldState`; migrate to `WorldContext` helpers (or dedicated services) so loop code no longer pokes at internal registries.
-  - `src/townlet/core/sim_loop.py:399` — reads `self.config` plus `policy.active_policy_hash()` to construct identity; ultimately the world snapshot + policy adapter should feed this via events without exposing the legacy runtime.
+  - `PolicyController` owns ctx-reset/anneal hooks; decision path still hands the legacy `WorldState` into scripted backends. Switch to DTO-only requests once WP3C Stage 3D/Stage 5 land.
+  - Training orchestrator now streams DTO frames, but replay exports keep the legacy translator until downstream consumers ingest the new JSON artefacts.
+- Telemetry:
+  - Loop identity (`runtime.variant`, `policy_info`) still mutated directly; convert these to dispatcher events post-WP3C.
+  - Console history is still sourced from telemetry for parity; once DTO-only command routing is validated, drop the getter usage.
+- World:
+  - Console queueing (`runtime.queue_console`) and direct `WorldState` mutations (pending intent/agent state writes) remain. Replace with `ConsoleRouter` queues and `WorldContext` helpers when DTO guardrails are in place.
+  - Provider metadata is correct, but the default loop retains `self.world` for legacy observers; plan to cull after WP3 Stage 5 removes the observation dict.
+
+Keep this file in sync with WP2/WP3 dependencies as Step 8 progresses.

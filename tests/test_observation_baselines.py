@@ -6,6 +6,7 @@ import numpy as np
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.observations.builder import ObservationBuilder
 from townlet.world.grid import AgentSnapshot
 
 BASE_CONFIG = Path("configs/examples/poc_hybrid.yaml")
@@ -29,7 +30,7 @@ def _build_payload(variant: str) -> dict[str, object]:
     )
     world.rebuild_spatial_index()
 
-    builder = loop.observations
+    builder = ObservationBuilder(loop.config)
     batch = builder.build_batch(world, terminated={})
     return batch["alice"]
 

@@ -197,7 +197,6 @@ def test_announce_story_command_enqueues_narration() -> None:
         {
             "tick": 1,
             "world": loop.world,
-            "observations": {},
             "rewards": {},
             "events": [],
             "policy_snapshot": {},

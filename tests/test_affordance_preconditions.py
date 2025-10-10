@@ -85,7 +85,6 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
         {
             "tick": world.tick,
             "world": world,
-            "observations": {},
             "rewards": {},
             "events": events,
             "policy_snapshot": {},
