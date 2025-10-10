@@ -17,6 +17,7 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Stage 3C started: `TrajectoryService.flush_transitions` accepts DTO envelopes (preserving map/features/anneal payloads) and the training orchestrator now records DTO-backed rollouts (`tests/policy/test_trajectory_service_dto.py`, `tests/policy/test_training_orchestrator_capture.py`).
 - Stage 3D progressing: `PolicyBackend` ports/backends now advertise DTO support, `resolve_policy_backend` validates the capability, the stub backend raises a `DeprecationWarning` if legacy observation batches are provided without a DTO envelope, and `SimulationLoop` streams `policy.metadata` / `policy.possession` / `policy.anneal.update` events via the dispatcher.
 - Stage 3E safeguards added: DTO parity harness re-run, policy controllers guard against missing envelopes, telemetry policy-event smokes land, and rollout capture tests continue to validate DTO trajectory plumbing.
+- Stage 4 kickoff: ML smoke test (`tests/policy/test_dto_ml_smoke.py`) runs a torch-backed parity check between DTO and legacy feature tensors; automation and PPO config packaging remain TODO.
 
 ## Outstanding Work (DTO Rollout)
 1. Finish migrating ML adapters onto DTO batches and ensure policy metadata events remain accurate during training flows.

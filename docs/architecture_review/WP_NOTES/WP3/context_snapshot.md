@@ -33,6 +33,7 @@ Use this as reorientation material if the working memory is compacted. It summar
 - Todo:
   - Define observation DTOs from `WorldContext`/observation builder.
   - DTO-driven policy events (`policy.metadata` / `policy.possession` / `policy.anneal.update`) now stream from `SimulationLoop`; finish migrating ML adapters to the DTO pathway before retiring remaining legacy hooks.
+  - DTO ML smoke harness (`tests/policy/test_dto_ml_smoke.py`) keeps torch-based parity between DTO and legacy feature tensors; integrate into automated ML workflows next.
   - Adjust training/orchestrator code to the new DTO flow.
 
 ## Simulation Loop Cleanup (WP3 Section 3)
