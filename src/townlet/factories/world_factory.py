@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from townlet.adapters.world_default import DefaultWorldAdapter
@@ -10,6 +10,7 @@ from townlet.lifecycle.manager import LifecycleManager
 from townlet.observations.builder import ObservationBuilder
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.testing import DummyWorldRuntime
 from townlet.world.core.context import WorldContext
 from townlet.world.grid import WorldState
 from townlet.world.rng import RngStreamManager
@@ -83,6 +84,22 @@ def _build_default_world(
         ticks_per_day=ticks,
         observation_builder=builder,
     )
+
+
+@register("world", "dummy")
+def _build_dummy_world(
+    *,
+    agents: Iterable[str] | None = None,
+    config_id: str = "dummy-config",
+    **unexpected_kwargs: Any,
+) -> WorldRuntime:
+    if unexpected_kwargs:
+        raise TypeError(
+            "Unsupported arguments for dummy world provider: {}".format(
+                ", ".join(unexpected_kwargs)
+            )
+        )
+    return DummyWorldRuntime(agents_list=tuple(agents or ()), config_id=config_id)
 
 
 __all__ = ["create_world"]
