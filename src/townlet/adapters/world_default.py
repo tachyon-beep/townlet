@@ -6,7 +6,6 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Callable
 
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.observations.builder import ObservationBuilder
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.world.core.context import WorldContext
@@ -142,6 +141,12 @@ class DefaultWorldAdapter(WorldRuntime):
     # ------------------------------------------------------------------
     def bind_world_adapter(self, adapter: "WorldRuntimeAdapterProtocol") -> None:
         self._world_adapter = adapter
+
+    @property
+    def context(self) -> WorldContext:
+        """Expose the underlying world context (for orchestration/testing hooks)."""
+
+        return self._context
 
 
 __all__ = ["DefaultWorldAdapter"]

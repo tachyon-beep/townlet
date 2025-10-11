@@ -3,22 +3,17 @@
 Each section expands the issues from `ground_truth_issues.md` into concrete tasks (T#). Use these to track work as we close out WP1.
 
 ## 1. Legacy world factory path still active
-- **T1.1** Implement `WorldContext.from_config` (or equivalent builder) that wires `WorldState`, lifecycle, perturbations, modular systems, and returns an object satisfying `WorldRuntime`.
-- **T1.2** Update `_build_default_world` so it constructs and returns the modular `WorldContext`; remove all `LegacyWorldRuntime`/`ObservationBuilder` references.
-- *2025-10-10 inventory:* No in-repo callers pass `runtime=` to `create_world`; the only instantiation of `DefaultWorldAdapter(runtime=...)` lives in the factory branch. `SimulationLoop._build_components` still supplies `world=WorldState(...)`, so the modular path stays exercised. This means we can delete the legacy runtime branch without stranding callers.
-- *2025-10-10 update:* Factory no longer accepts `runtime=`; tests assert the new contract. The modular path now covers all usages.
-- **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly.
-- **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events.
-- **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config).
+- **T1.1** Implement `WorldContext.from_config` (or equivalent builder) that wires `WorldState`, lifecycle, perturbations, modular systems, and returns an object satisfying `WorldRuntime`. *(Completed 2025-10-09.)*
+- **T1.2** Update `_build_default_world` so it constructs and returns the modular `WorldContext`; remove all `LegacyWorldRuntime`/`ObservationBuilder` references. *(Completed 2025-10-10 — factory now rejects `runtime=` and always wraps the context; see tests/factories/test_world_factory.py).*
+- **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly. *(Outstanding.)*
+- **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events. *(Partially covered by existing tests; extend to assert DTO envelope content.)*
+- **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config). *(Pending.)*
 
 ## 2. DefaultWorldAdapter is a legacy bridge
-- **T2.1** Replace `DefaultWorldAdapter` implementation with a wrapper around the modular `WorldContext` and DTO helpers.
-- **T2.2** Remove `.world_state` and any direct `LegacyWorldRuntime` dependencies; expose only the `WorldRuntime` port.
-- *2025-10-10 inventory:* `DefaultWorldAdapter.world_state` is no longer referenced anywhere in `src/` or `tests/`. All runtime interactions (`queue_console`, `tick`, `observe`) are invoked through the port. Removing the property/legacy handles only requires making the adapter context-only and updating its tests.
-- *2025-10-10 update:* Adapter now requires `WorldContext` and exposes only the port surface; `.world_state` and the legacy runtime branch have been removed.
-- **T2.3** Ensure observation building is handled by DTO pipeline; drop `ObservationBuilder` usage.
-- *2025-10-10 inventory:* `SimulationLoop` still bootstraps an `ObservationBuilder` and retains the legacy fallback when `WorldContext.observe` errors. Adapter cleanup must preserve the builder hook until the DTO path is proven resilient (ties into T4.1/T4.3).
-- **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour.
+- **T2.1** Replace `DefaultWorldAdapter` implementation with a wrapper around the modular `WorldContext` and DTO helpers. *(Completed 2025-10-10 — adapter now depends solely on `WorldContext`.)*
+- **T2.2** Remove `.world_state` and any direct `LegacyWorldRuntime` dependencies; expose only the `WorldRuntime` port. *(Completed 2025-10-10 — property removed, legacy runtime branch deleted.)*
+- **T2.3** Ensure observation building is handled by DTO pipeline; drop `ObservationBuilder` usage. *(Completed 2025-10-10 — adapter.observe now proxies `WorldContext.observe` and no longer references the legacy builder.)*
+- **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour. *(Pending — expand coverage once DTO-only flow lands.)*
 
 ## 3. WorldContext is unimplemented
 - **T3.1** Port tick orchestration into `WorldContext` (`reset`, `tick`, `agents`, `observe`, `apply_actions`, `snapshot`).
@@ -27,7 +22,9 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T3.4** Update `WorldContext` exports/documentation to reflect the implementation.
 
 ## 4. SimulationLoop remains tied to legacy runtime
-- **T4.1** Refactor `_build_components` to resolve world/policy/telemetry strictly via factories (no direct `WorldState`/builder instantiation).
+- **T4.1a** Introduce seam in `_build_components` that accepts pre-built world/policy/telemetry objects (for test injection). *(Completed 2025-10-10 — see `override_world_components`/`override_policy_components`/`override_telemetry_components` helpers.)*
+- **T4.1b** Remove direct `WorldState` construction, instead call `create_world` and pull context/adapter details via the port; update tests depending on `loop.world` attribute. *(Completed 2025-10-10 — loop now derives world/lifecycle/perturbations from `create_world` and uses adapter context for state access.)*
+- **T4.1c** Replace `_observation_builder` usage with DTO envelope caching; ensure reward engine consumes the DTO data. *(Completed 2025-10-10 — legacy observation builder fallback removed; DTO envelopes supplied exclusively by `WorldContext.observe`.)*
 - **T4.2** Remove direct `runtime.queue_console` usage; pipe console input through `ConsoleRouter.enqueue`/`run_pending`.
 - **T4.3** Ensure policy decisions operate on cached DTO envelopes; drop observation dict caches.
 - **T4.4** Refresh loop tick flow to emit telemetry via ports only (no legacy writer calls).

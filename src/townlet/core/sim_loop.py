@@ -27,7 +27,6 @@ from townlet.core.interfaces import (
 )
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.observations.builder import ObservationBuilder
 from townlet.rewards.engine import RewardEngine
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots import (
@@ -50,8 +49,35 @@ from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
 from townlet.world.observations.context import (
     agent_context as observation_agent_context,
 )
+from townlet.world.observations.interfaces import ObservationServiceProtocol
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class WorldComponents:
+    world: WorldState
+    lifecycle: LifecycleManager
+    perturbations: PerturbationScheduler
+    observation_service: ObservationServiceProtocol
+    world_port: WorldRuntimeProtocol
+    ticks_per_day: int
+    provider: str
+
+
+@dataclass(slots=True)
+class PolicyComponents:
+    port: PolicyBackendProtocol
+    controller: PolicyController | None
+    decision_backend: Any
+    provider: str
+
+
+@dataclass(slots=True)
+class TelemetryComponents:
+    port: TelemetrySinkProtocol
+    publisher: TelemetryPublisher
+    provider: str
 
 
 @dataclass
@@ -124,6 +150,10 @@ class SimulationLoop:
         self._telemetry_provider_locked = telemetry_provider is not None
         self._telemetry_options = dict(telemetry_options or {})
         self._telemetry_options_locked = telemetry_options is not None
+        self._world_components_override: Callable[["SimulationLoop"], WorldComponents] | None = None
+        self._policy_components_override: Callable[["SimulationLoop"], PolicyComponents] | None = None
+        self._telemetry_components_override: Callable[["SimulationLoop"], TelemetryComponents] | None = None
+        self._observation_service: ObservationServiceProtocol | None = None
         self._runtime_variant: str = "facade"
         self._resolved_providers: dict[str, str] = {}
         self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
@@ -185,33 +215,35 @@ class SimulationLoop:
         self._last_policy_metadata_event = None
         self._last_policy_possession_agents = None
         self._last_policy_anneal_event = None
-        self.world = WorldState.from_config(
-            self.config,
-            rng=self._rng_world,
-            affordance_runtime_factory=self._affordance_runtime_factory,
-            affordance_runtime_config=self._runtime_config,
-        )
-        self.lifecycle = LifecycleManager(config=self.config)
-        self.perturbations = PerturbationScheduler(
-            config=self.config,
-            rng=self._rng_events,
-        )
-        self._observation_builder = ObservationBuilder(config=self.config)
-        context = getattr(self.world, "context", None)
-        if context is not None and getattr(context, "observation_service", None) is None:
-            context.observation_service = self._observation_builder
-        policy_kwargs = {"config": self.config, **self._policy_options}
-        policy_backend = PolicyRuntime(**policy_kwargs)
-        self._policy_port = create_policy(
-            provider=self._policy_provider,
-            backend=policy_backend,
-        )
-        backend_for_controller = getattr(self._policy_port, "backend", policy_backend)
-        self.policy = backend_for_controller
-        self._policy_controller = PolicyController(backend=backend_for_controller, port=self._policy_port)
-        if self._policy_controller is not None:
-            self._policy_controller.bind_world_supplier(lambda: self.world)
-        self._resolved_providers["policy"] = self._policy_provider
+        world_components = self._resolve_world_components()
+        self.world = world_components.world
+        self.lifecycle = world_components.lifecycle
+        self.perturbations = world_components.perturbations
+        self._observation_service = world_components.observation_service
+        self._ticks_per_day = world_components.ticks_per_day
+        self._world_port = world_components.world_port
+        self.runtime = self._world_port
+        self._resolved_providers["world"] = world_components.provider
+
+        policy_components = self._resolve_policy_components()
+        self._policy_port = policy_components.port
+        self.policy = policy_components.decision_backend
+        self._policy_controller = policy_components.controller
+        self._resolved_providers["policy"] = policy_components.provider
+
+        telemetry_components = self._resolve_telemetry_components()
+        self._telemetry_port = telemetry_components.port
+        self.telemetry = telemetry_components.publisher
+        self._resolved_providers["telemetry"] = telemetry_components.provider
+
+        controller = self._policy_controller
+        if controller is not None:
+            controller.bind_world_supplier(lambda: self.world)
+        self.rewards = RewardEngine(config=self.config)
+        self.stability = StabilityMonitor(config=self.config)
+        log_path = Path("logs/promotion_history.jsonl")
+        self.promotion = PromotionManager(config=self.config, log_path=log_path)
+        self.tick = 0
         controller = self._policy_controller
         if controller is not None:
             controller.register_ctx_reset_callback(self.world.request_ctx_reset)
@@ -221,36 +253,6 @@ class SimulationLoop:
             self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
             if self.config.training.anneal_enable_policy_blend:
                 self.policy.enable_anneal_blend(True)
-        self.rewards = RewardEngine(config=self.config)
-        telemetry_kwargs = {"config": self.config, **self._telemetry_options}
-        telemetry_publisher = TelemetryPublisher(**telemetry_kwargs)
-        self._telemetry_port = create_telemetry(
-            provider=self._telemetry_provider,
-            publisher=telemetry_publisher,
-        )
-        self.telemetry = telemetry_publisher
-        self._resolved_providers["telemetry"] = self._telemetry_provider
-        self.stability = StabilityMonitor(config=self.config)
-        log_path = Path("logs/promotion_history.jsonl")
-        self.promotion = PromotionManager(config=self.config, log_path=log_path)
-        self.tick = 0
-        cfg = getattr(self.config, "observations_config", None)
-        if cfg is not None and getattr(cfg, "hybrid", None) is not None:
-            ticks_per_day = getattr(cfg.hybrid, "time_ticks_per_day", 1440)
-        else:
-            ticks_per_day = getattr(self._observation_builder.hybrid_cfg, "time_ticks_per_day", 1440)
-        self._ticks_per_day = max(1, int(ticks_per_day))
-        self._world_port = create_world(
-            provider=self._world_provider,
-            world=self.world,
-            lifecycle=self.lifecycle,
-            perturbations=self.perturbations,
-            ticks_per_day=self._ticks_per_day,
-            world_kwargs=self._world_options,
-            observation_builder=self._observation_builder,
-        )
-        self.runtime = self._world_port
-        self._resolved_providers["world"] = self._world_provider
         self._console_router = ConsoleRouter(
             world=self._world_port,
             telemetry=self._telemetry_port,
@@ -269,6 +271,110 @@ class SimulationLoop:
         # first tick produces a DTO envelope.
         bootstrap_envelope = self._build_bootstrap_policy_envelope()
         self._set_policy_observation_envelope(bootstrap_envelope)
+
+    def override_world_components(
+        self,
+        builder: Callable[["SimulationLoop"], WorldComponents] | None,
+    ) -> None:
+        """Override the world component builder (testing seam)."""
+
+        self._world_components_override = builder
+
+    def override_policy_components(
+        self,
+        builder: Callable[["SimulationLoop"], PolicyComponents] | None,
+    ) -> None:
+        """Override the policy component builder (testing seam)."""
+
+        self._policy_components_override = builder
+
+    def override_telemetry_components(
+        self,
+        builder: Callable[["SimulationLoop"], TelemetryComponents] | None,
+    ) -> None:
+        """Override the telemetry component builder (testing seam)."""
+
+        self._telemetry_components_override = builder
+
+    def _resolve_world_components(self) -> WorldComponents:
+        if self._world_components_override is not None:
+            return self._world_components_override(self)
+        return self._build_default_world_components()
+
+    def _resolve_policy_components(self) -> PolicyComponents:
+        if self._policy_components_override is not None:
+            return self._policy_components_override(self)
+        return self._build_default_policy_components()
+
+    def _resolve_telemetry_components(self) -> TelemetryComponents:
+        if self._telemetry_components_override is not None:
+            return self._telemetry_components_override(self)
+        return self._build_default_telemetry_components()
+
+    def _build_default_world_components(self) -> WorldComponents:
+        lifecycle = LifecycleManager(config=self.config)
+        perturbations = PerturbationScheduler(
+            config=self.config,
+            rng=self._rng_events,
+        )
+        cfg = getattr(self.config, "observations_config", None)
+        ticks_per_day = 1440
+        if cfg is not None and getattr(cfg, "hybrid", None) is not None:
+            ticks_per_day = getattr(cfg.hybrid, "time_ticks_per_day", 1440)
+        ticks_per_day = max(1, int(ticks_per_day))
+        world_port = create_world(
+            provider=self._world_provider,
+            config=self.config,
+            lifecycle=lifecycle,
+            perturbations=perturbations,
+            ticks_per_day=ticks_per_day,
+            world_kwargs=self._world_options,
+        )
+        context = getattr(world_port, "context", None)
+        if context is None:
+            raise RuntimeError("World provider did not supply a context-backed adapter")
+        observation_service = getattr(context, "observation_service", None)
+        if observation_service is None:
+            raise RuntimeError("World context missing observation service")
+        world = context.state
+        return WorldComponents(
+            world=world,
+            lifecycle=lifecycle,
+            perturbations=perturbations,
+            observation_service=observation_service,
+            world_port=world_port,
+            ticks_per_day=ticks_per_day,
+            provider=self._world_provider,
+        )
+
+    def _build_default_policy_components(self) -> PolicyComponents:
+        policy_kwargs = {"config": self.config, **self._policy_options}
+        policy_backend = PolicyRuntime(**policy_kwargs)
+        policy_port = create_policy(
+            provider=self._policy_provider,
+            backend=policy_backend,
+        )
+        decision_backend = getattr(policy_port, "backend", policy_backend)
+        controller = PolicyController(backend=decision_backend, port=policy_port)
+        return PolicyComponents(
+            port=policy_port,
+            controller=controller,
+            decision_backend=decision_backend,
+            provider=self._policy_provider,
+        )
+
+    def _build_default_telemetry_components(self) -> TelemetryComponents:
+        telemetry_kwargs = {"config": self.config, **self._telemetry_options}
+        publisher = TelemetryPublisher(**telemetry_kwargs)
+        telemetry_port = create_telemetry(
+            provider=self._telemetry_provider,
+            publisher=publisher,
+        )
+        return TelemetryComponents(
+            port=telemetry_port,
+            publisher=publisher,
+            provider=self._telemetry_provider,
+        )
 
     @property
     def health(self) -> SimulationLoopHealth:
@@ -596,7 +702,6 @@ class SimulationLoop:
                 queue_metrics=queue_metrics,
                 rewards=rewards,
                 reward_breakdown=reward_breakdown,
-                perturbations=perturbation_state,
                 policy_snapshot=policy_snapshot,
                 policy_metadata=policy_metadata,
                 rivalry_events=rivalry_events,
@@ -606,51 +711,7 @@ class SimulationLoop:
             )
 
             if dto_envelope is None:
-                observation_batch = self._observation_builder.build_batch(self.world_adapter, terminated)
-                running_affordances = adapter.running_affordances_snapshot()
-                relationship_snapshot = adapter.relationships_snapshot()
-                relationship_metrics = adapter.relationship_metrics_snapshot()
-                agent_snapshots_map = dict(adapter.agent_snapshots_view())
-                agent_contexts = {
-                    agent: observation_agent_context(adapter, agent)
-                    for agent in agent_snapshots_map.keys()
-                }
-                queue_affinity_metrics = self._collect_queue_affinity_metrics()
-                economy_snapshot = self._collect_economy_snapshot()
-
-                dto_envelope = build_observation_envelope(
-                    tick=self.tick,
-                    observations=observation_batch,
-                    actions=runtime_result.actions,
-                    terminated=terminated,
-                    termination_reasons=termination_reasons,
-                    queue_metrics=queue_metrics,
-                    rewards=rewards,
-                    reward_breakdown=reward_breakdown,
-                    perturbations=perturbation_state,
-                    policy_snapshot=policy_snapshot,
-                    policy_metadata=policy_metadata,
-                    rivalry_events=rivalry_events,
-                    stability_metrics=stability_metrics,
-                    promotion_state=promotion_state,
-                    rng_seed=getattr(self.world, "rng_seed", None),
-                    queues=queues_snapshot,
-                    running_affordances=running_affordances,
-                    relationship_snapshot=relationship_snapshot,
-                    relationship_metrics=relationship_metrics,
-                    agent_snapshots=agent_snapshots_map,
-                    job_snapshot=job_snapshot,
-                    queue_affinity_metrics=queue_affinity_metrics,
-                    employment_snapshot=employment_metrics,
-                    economy_snapshot=economy_snapshot,
-                    anneal_context=anneal_context,
-                    agent_contexts=agent_contexts,
-                )
-            else:
-                observation_batch = {
-                    agent.agent_id: agent.metadata
-                    for agent in dto_envelope.agents
-                }
+                raise SimulationLoopError(self.tick, "World context failed to produce an observation envelope")
             if controller is not None:
                 frames = controller.flush_transitions(envelope=dto_envelope)
             else:  # pragma: no cover - defensive fallback
@@ -866,26 +927,12 @@ class SimulationLoop:
     def _build_bootstrap_policy_envelope(self) -> "ObservationEnvelope":
         """Build a DTO envelope from the current world when none has been recorded."""
 
-        adapter = self.world_adapter
-        observation_batch = self._observation_builder.build_batch(adapter, {})
-        agent_ids = list(observation_batch.keys())
-        terminated = {agent_id: False for agent_id in agent_ids}
-        rewards = {agent_id: 0.0 for agent_id in agent_ids}
-        reward_breakdown = {agent_id: {} for agent_id in agent_ids}
-        queue_metrics = self._collect_queue_metrics()
-        queue_affinity_metrics = self._collect_queue_affinity_metrics()
-        employment_metrics = self._collect_employment_metrics()
-        economy_snapshot = self._collect_economy_snapshot()
-        job_snapshot = self._collect_job_snapshot(adapter)
-        running_affordances = adapter.running_affordances_snapshot()
-        relationship_snapshot = adapter.relationships_snapshot()
-        relationship_metrics = adapter.relationship_metrics_snapshot()
-        agent_snapshots_map = dict(adapter.agent_snapshots_view())
-        agent_contexts = {
-            agent: observation_agent_context(adapter, agent)
-            for agent in agent_snapshots_map.keys()
-        }
-        perturbation_state = self.perturbations.latest_state()
+        context = getattr(self.world, "context", None)
+        if context is None or getattr(context, "observation_service", None) is None:
+            raise RuntimeError("World context is not configured for observation DTOs")
+        terminated: dict[str, bool] = {}
+        rewards: dict[str, float] = {}
+        reward_breakdown: dict[str, Mapping[str, float]] = {}
         try:
             policy_snapshot = self.policy.latest_policy_snapshot()
         except Exception:  # pragma: no cover - defensive
@@ -916,42 +963,22 @@ class SimulationLoop:
         }
         promotion_state = self.promotion.snapshot()
         try:
-            queue_snapshot = self.world.queue_manager.export_state()
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("queue_snapshot_unavailable_bootstrap", exc_info=True)
-            queue_snapshot = {}
-        try:
             anneal_context = self.policy.anneal_context()
         except Exception:  # pragma: no cover - defensive
             anneal_context = {}
 
-        return build_observation_envelope(
-            tick=self.tick,
-            observations=observation_batch,
+        return context.observe(
             actions={},
             terminated=terminated,
             termination_reasons={},
-            queue_metrics=queue_metrics,
             rewards=rewards,
             reward_breakdown=reward_breakdown,
-            perturbations=perturbation_state,
             policy_snapshot=policy_snapshot,
             policy_metadata=policy_metadata,
             rivalry_events=[],
             stability_metrics=self.stability.latest_metrics(),
             promotion_state=promotion_state,
-            rng_seed=getattr(self.world, "rng_seed", None),
-            queues=queue_snapshot,
-            running_affordances=running_affordances,
-            relationship_snapshot=relationship_snapshot,
-            relationship_metrics=relationship_metrics,
-            agent_snapshots=agent_snapshots_map,
-            job_snapshot=job_snapshot,
-            queue_affinity_metrics=queue_affinity_metrics,
-            employment_snapshot=employment_metrics,
-            economy_snapshot=economy_snapshot,
             anneal_context=anneal_context,
-            agent_contexts=agent_contexts,
         )
 
     def _collect_queue_metrics(self) -> dict[str, int]:
@@ -980,7 +1007,6 @@ class SimulationLoop:
         queue_metrics: Mapping[str, int],
         rewards: Mapping[str, float],
         reward_breakdown: Mapping[str, Mapping[str, float]],
-        perturbations: Mapping[str, Any],
         policy_snapshot: Mapping[str, Any],
         policy_metadata: Mapping[str, Any],
         rivalry_events: Iterable[Mapping[str, Any]],

@@ -137,7 +137,6 @@ def test_simulation_loop_prefers_context_observe(monkeypatch: pytest.MonkeyPatch
     )
 
     loop._set_policy_observation_envelope(loop._build_bootstrap_policy_envelope())
-    loop.world.context.observation_service = ObservationBuilder(config=config)
 
     call_count = {"value": 0}
     original_observe = WorldContext.observe
@@ -147,11 +146,6 @@ def test_simulation_loop_prefers_context_observe(monkeypatch: pytest.MonkeyPatch
         return original_observe(self, *args, **kwargs)
 
     monkeypatch.setattr(WorldContext, "observe", spy_observe, raising=False)
-
-    def fail_legacy_batch(*_args, **_kwargs):
-        raise AssertionError("legacy observation builder should not run")
-
-    monkeypatch.setattr(loop._observation_builder, "build_batch", fail_legacy_batch, raising=False)
 
     try:
         artifacts = loop.step()
