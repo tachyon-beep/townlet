@@ -191,6 +191,8 @@ def test_world_context_tick_merges_pending_and_prepared(simulation_loop: Simulat
     assert world.agents["alice"].position == (2, 2)
     assert result.actions["alice"]["position"] == (2, 2)
     assert context._pending_actions == {}
+    episode_span = max(1, int(loop._ticks_per_day))
+    assert world.agents["alice"].episode_tick == 1 % episode_span
 
 
 def test_world_context_tick_triggers_nightly_reset(

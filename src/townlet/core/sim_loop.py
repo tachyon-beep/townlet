@@ -613,9 +613,6 @@ class SimulationLoop:
                 )
                 for result in console_results:
                     emitter("console.result", {"result": result.to_dict()})
-            episode_span = self._ticks_per_day
-            for snapshot in self.world.agents.values():
-                snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
             rewards = self.rewards.compute(self.world, terminated, termination_reasons)
             reward_breakdown = self.rewards.latest_reward_breakdown()
             if controller is not None:

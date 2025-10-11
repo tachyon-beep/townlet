@@ -8,7 +8,6 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly. *(Completed 2025-10-11 — factory constructs services internally; loop/tests updated, legacy kwargs now raise `TypeError`.)*
 - **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events. *(Completed 2025-10-11 — integration tests now assert DTO observation envelopes and event payloads.)*
 - **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config). *(Completed 2025-10-11 — invalid provider now raises `ConfigurationError`; missing config still raises `TypeError`.)*
-- **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config). *(Pending.)*
 
 ## 2. DefaultWorldAdapter is a legacy bridge
 - **T2.1** Replace `DefaultWorldAdapter` implementation with a wrapper around the modular `WorldContext` and DTO helpers. *(Completed 2025-10-10 — adapter now depends solely on `WorldContext`.)*
@@ -17,10 +16,10 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour. *(Completed 2025-10-10 — see `tests/adapters/test_default_world_adapter.py` for the new unit coverage.)*
 
 ## 3. WorldContext is unimplemented
-- **T3.1** Port tick orchestration into `WorldContext` (`reset`, `tick`, `agents`, `observe`, `apply_actions`, `snapshot`).
-- **T3.2** Integrate modular systems/services and deterministic RNG streams; ensure events populate `snapshot()`.
-- **T3.3** Provide unit/system tests comparing modular tick behaviour with legacy parity fixtures.
-- **T3.4** Update `WorldContext` exports/documentation to reflect the implementation.
+- **T3.1** Port tick orchestration into `WorldContext` (`reset`, `tick`, `agents`, `observe`, `apply_actions`, `snapshot`). *(Completed 2025-10-11 — see `src/townlet/world/core/context.py`; regression covered by `tests/test_world_context.py`.)*
+- **T3.2** Integrate modular systems/services and deterministic RNG streams; ensure events populate `snapshot()`. *(Completed 2025-10-11 — context orchestrates modular systems and deterministic RNG; `tests/world/test_world_context_parity.py` verifies parity.)*
+- **T3.3** Provide unit/system tests comparing modular tick behaviour with legacy parity fixtures. *(Completed 2025-10-11 — `tests/test_world_context.py` and `tests/world/test_world_context_parity.py` cover tick orchestration, nightly reset, and snapshot exports.)*
+- **T3.4** Update `WorldContext` exports/documentation to reflect the implementation. *(Completed 2025-10-11 — docs refreshed in `WC_A_tick_flow.md`; observation/export helpers mapped in `WC_E_observation_mapping.md`.)*
 
 ## 4. SimulationLoop remains tied to legacy runtime
 - **T4.1a** Introduce seam in `_build_components` that accepts pre-built world/policy/telemetry objects (for test injection). *(Completed 2025-10-10 — see `override_world_components`/`override_policy_components`/`override_telemetry_components` helpers.)*
@@ -29,7 +28,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.2** Remove direct `runtime.queue_console` usage; pipe console input through `ConsoleRouter.enqueue`/`run_pending`. *(ConsoleRouter now forwards commands; remaining telemetry cleanup tracked under T4.2b.)*
 - **T4.3** *(Completed 2025-10-10)* Ensure policy decisions operate on cached DTO envelopes; drop observation dict/collector caches (loop now pulls queue/employment/job metrics directly from `WorldContext.export_*`).
 - **T4.4** Refresh loop tick flow to emit telemetry via ports only (no legacy writer calls). *(See detailed T4.x breakdown below — T4.4a complete; T4.4b audit exposes aggregator/UI/CLI migrations still outstanding.)*
-- **T4.5** Add loop smoke tests for modular providers and DTO parity.
+- **T4.5** Add loop smoke tests for modular providers and DTO parity. *(Completed 2025-10-10 — see `tests/core/test_sim_loop_modular_smoke.py` and `tests/core/test_sim_loop_with_dummies.py`.)*
 
 ## 5. Missing dummy providers and promised tests
 - **T5.1** Create `src/townlet/testing/` with dummy world/policy/telemetry implementations satisfying the ports. *(Completed 2025-10-11 — see `townlet.testing` package for dummy world/policy/telemetry classes.)*

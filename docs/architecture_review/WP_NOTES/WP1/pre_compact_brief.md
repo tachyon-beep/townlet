@@ -25,6 +25,10 @@ The broader intent is to finish the port-first composition root so the simulatio
 - **T6.2:** completed 2025-10-11 — loop/factory/test helpers now type against `townlet.ports.world.WorldRuntime`; the legacy alias has been removed. Regression guard: `pytest tests/test_factory_registry.py tests/test_core_protocols.py tests/test_ports_surface.py -q`.
 - **T6.3:** completed 2025-10-11 — static guard (`tests/core/test_world_port_imports.py`) prevents reintroducing the old alias anywhere under core/factories/orchestration/testing/telemetry.
 
+## WorldContext Summary
+- Modular tick orchestration, observation envelopes, and snapshot exports now live entirely inside `WorldContext`. Tests (`tests/test_world_context.py`, `tests/world/test_world_context_parity.py`) verify action staging, nightly reset cadence, and per-agent `episode_tick` updates.
+- Documentation refreshed (`WC_A_tick_flow.md`, `WC_E_observation_mapping.md`); remaining loop references to `WorldState` are read-only metrics collection (`hunger_levels`, etc.).
+
 ## Dependences / Notes
 - Context wiring currently depends on the factory ensuring `observation_service` is configured; adapter.observe now proxies DTO envelopes directly from the context and adapter tests guard the behaviour.
 - Telemetry/policy DTO work (WP3) remains active—keep schema alignment in mind while removing residual legacy helpers, especially around RNG determinism and policy snapshot events.

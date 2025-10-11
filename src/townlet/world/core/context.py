@@ -263,6 +263,21 @@ class WorldContext:
 
         terminated = dict(lifecycle.evaluate(state, tick=tick))
         termination_reasons = dict(lifecycle.termination_reasons())
+
+        episode_span = None
+        if ticks_per_day and ticks_per_day > 0:
+            try:
+                episode_span = max(1, int(ticks_per_day))
+            except Exception:  # pragma: no cover - defensive
+                episode_span = None
+        if episode_span:
+            for snapshot in state.agent_snapshots_view().values():
+                current_tick = getattr(snapshot, "episode_tick", 0)
+                try:
+                    snapshot.episode_tick = (int(current_tick) + 1) % episode_span
+                except Exception:  # pragma: no cover - defensive
+                    snapshot.episode_tick = 0
+
         events = state.drain_events()
 
         result_payload = {
