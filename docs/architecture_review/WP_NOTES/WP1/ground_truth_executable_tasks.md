@@ -74,7 +74,9 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
   - Simulation loop, factory registry, and helper harnesses import the port directly; `core.interfaces.WorldRuntimeProtocol` is now a deprecated alias for backwards compatibility.
   - Added `runtime_checkable` to the port protocol so provider factories can continue validating instances structurally.
   - Updated regression tests (`tests/test_factory_registry.py`, `tests/test_core_protocols.py`) to assert against the port contract and check the telemetry/world overrides via the actual ports.
-- **T6.3** Provide guard tests ensuring the loop imports only `townlet.ports.*` interfaces.
+- **T6.3** Provide guard tests ensuring the loop imports only `townlet.ports.*` interfaces. *(Completed 2025-10-11 — see `tests/core/test_world_port_imports.py`)*.
+  - Added a static guard that fails if any core/factory/orchestration/testing/telemetry file imports `WorldRuntimeProtocol` from `townlet.core.interfaces`.
+  - Regression command: `pytest tests/core/test_world_port_imports.py -q`.
 - **T6.4** Deprecate/remove unused members from `core.interfaces` once the loop migrates.
 
 ## High-Complexity Task Breakdown
