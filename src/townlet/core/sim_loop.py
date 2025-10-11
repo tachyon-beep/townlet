@@ -197,6 +197,9 @@ class SimulationLoop:
             rng=self._rng_events,
         )
         self._observation_builder = ObservationBuilder(config=self.config)
+        context = getattr(self.world, "context", None)
+        if context is not None and getattr(context, "observation_service", None) is None:
+            context.observation_service = self._observation_builder
         policy_kwargs = {"config": self.config, **self._policy_options}
         policy_backend = PolicyRuntime(**policy_kwargs)
         self._policy_port = create_policy(
@@ -493,7 +496,6 @@ class SimulationLoop:
                 controller.post_step(rewards, terminated)
             else:  # pragma: no cover - defensive
                 self.policy.post_step(rewards, terminated)
-            observation_batch = self._observation_builder.build_batch(self.world_adapter, terminated)
             if controller is not None:
                 policy_snapshot = controller.latest_policy_snapshot()
                 possessed_agents = controller.possessed_agents()
@@ -573,16 +575,6 @@ class SimulationLoop:
             self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
             promotion_state = self.promotion.snapshot()
             stability_metrics["promotion_state"] = promotion_state
-            running_affordances = adapter.running_affordances_snapshot()
-            relationship_snapshot = adapter.relationships_snapshot()
-            relationship_metrics = adapter.relationship_metrics_snapshot()
-            agent_snapshots_map = dict(adapter.agent_snapshots_view())
-            agent_contexts = {
-                agent: observation_agent_context(adapter, agent)
-                for agent in agent_snapshots_map.keys()
-            }
-            queue_affinity_metrics = self._collect_queue_affinity_metrics()
-            economy_snapshot = self._collect_economy_snapshot()
             anneal_context = {}
             try:
                 anneal_context = self.policy.anneal_context()
@@ -597,9 +589,7 @@ class SimulationLoop:
                     anneal_context=anneal_context,
                 )
 
-            dto_envelope = build_observation_envelope(
-                tick=self.tick,
-                observations=observation_batch,
+            dto_envelope = self._try_context_observe(
                 actions=runtime_result.actions,
                 terminated=terminated,
                 termination_reasons=termination_reasons,
@@ -612,19 +602,55 @@ class SimulationLoop:
                 rivalry_events=rivalry_events,
                 stability_metrics=stability_metrics,
                 promotion_state=promotion_state,
-                rng_seed=getattr(self.world, "rng_seed", None),
-                queues=queues_snapshot,
-                running_affordances=running_affordances,
-                relationship_snapshot=relationship_snapshot,
-                relationship_metrics=relationship_metrics,
-                agent_snapshots=agent_snapshots_map,
-                job_snapshot=job_snapshot,
-                queue_affinity_metrics=queue_affinity_metrics,
-                employment_snapshot=employment_metrics,
-                economy_snapshot=economy_snapshot,
                 anneal_context=anneal_context,
-                agent_contexts=agent_contexts,
             )
+
+            if dto_envelope is None:
+                observation_batch = self._observation_builder.build_batch(self.world_adapter, terminated)
+                running_affordances = adapter.running_affordances_snapshot()
+                relationship_snapshot = adapter.relationships_snapshot()
+                relationship_metrics = adapter.relationship_metrics_snapshot()
+                agent_snapshots_map = dict(adapter.agent_snapshots_view())
+                agent_contexts = {
+                    agent: observation_agent_context(adapter, agent)
+                    for agent in agent_snapshots_map.keys()
+                }
+                queue_affinity_metrics = self._collect_queue_affinity_metrics()
+                economy_snapshot = self._collect_economy_snapshot()
+
+                dto_envelope = build_observation_envelope(
+                    tick=self.tick,
+                    observations=observation_batch,
+                    actions=runtime_result.actions,
+                    terminated=terminated,
+                    termination_reasons=termination_reasons,
+                    queue_metrics=queue_metrics,
+                    rewards=rewards,
+                    reward_breakdown=reward_breakdown,
+                    perturbations=perturbation_state,
+                    policy_snapshot=policy_snapshot,
+                    policy_metadata=policy_metadata,
+                    rivalry_events=rivalry_events,
+                    stability_metrics=stability_metrics,
+                    promotion_state=promotion_state,
+                    rng_seed=getattr(self.world, "rng_seed", None),
+                    queues=queues_snapshot,
+                    running_affordances=running_affordances,
+                    relationship_snapshot=relationship_snapshot,
+                    relationship_metrics=relationship_metrics,
+                    agent_snapshots=agent_snapshots_map,
+                    job_snapshot=job_snapshot,
+                    queue_affinity_metrics=queue_affinity_metrics,
+                    employment_snapshot=employment_metrics,
+                    economy_snapshot=economy_snapshot,
+                    anneal_context=anneal_context,
+                    agent_contexts=agent_contexts,
+                )
+            else:
+                observation_batch = {
+                    agent.agent_id: agent.metadata
+                    for agent in dto_envelope.agents
+                }
             if controller is not None:
                 frames = controller.flush_transitions(envelope=dto_envelope)
             else:  # pragma: no cover - defensive fallback
@@ -944,6 +970,47 @@ class SimulationLoop:
         except Exception:  # pragma: no cover - defensive
             logger.debug("queue_affinity_metrics_unavailable", exc_info=True)
             return {}
+
+    def _try_context_observe(
+        self,
+        *,
+        actions: Mapping[str, Any],
+        terminated: Mapping[str, bool],
+        termination_reasons: Mapping[str, str],
+        queue_metrics: Mapping[str, int],
+        rewards: Mapping[str, float],
+        reward_breakdown: Mapping[str, Mapping[str, float]],
+        perturbations: Mapping[str, Any],
+        policy_snapshot: Mapping[str, Any],
+        policy_metadata: Mapping[str, Any],
+        rivalry_events: Iterable[Mapping[str, Any]],
+        stability_metrics: Mapping[str, Any],
+        promotion_state: Mapping[str, Any] | None,
+        anneal_context: Mapping[str, Any],
+    ) -> ObservationEnvelope | None:
+        context = getattr(self.world, "context", None)
+        if context is None:
+            return None
+        if getattr(context, "observation_service", None) is None:
+            return None
+        try:
+            return context.observe(
+                actions=actions,
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+                rewards=rewards,
+                reward_breakdown=reward_breakdown,
+                perturbation_state=perturbations,
+                policy_snapshot=policy_snapshot,
+                policy_metadata=policy_metadata,
+                rivalry_events=rivalry_events,
+                stability_metrics=stability_metrics,
+                promotion_state=promotion_state,
+                anneal_context=anneal_context,
+            )
+        except Exception:  # pragma: no cover - defensive fallback
+            logger.debug("context_observe_failed", exc_info=True)
+            return None
 
     def _collect_embedding_metrics(self, adapter: WorldRuntimeAdapter) -> dict[str, float]:
         try:

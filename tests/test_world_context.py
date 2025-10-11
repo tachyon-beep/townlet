@@ -224,5 +224,13 @@ def test_world_context_tick_triggers_nightly_reset(
 
 def test_world_context_observe_uses_configured_service(simulation_loop: SimulationLoop) -> None:
     context = simulation_loop.world.context
+    context.state.lifecycle_service.spawn_agent(
+        "sample_agent",
+        (0, 0),
+        needs={"hunger": 0.5, "energy": 0.5},
+        wallet=5.0,
+        home_position=(0, 0),
+    )
     envelope = context.observe()
     assert envelope.tick == context.state.tick
+    assert envelope.agents

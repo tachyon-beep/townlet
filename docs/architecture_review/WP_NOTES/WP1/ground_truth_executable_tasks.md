@@ -116,3 +116,5 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - Completed **OBS-Prep3** – threaded optional observation service through `WorldState` and `WorldContext` construction (no behavioural changes).
 - Completed **OBS-Prep4** – added context-level snapshot helper methods (`export_queue_metrics`, `export_relationship_snapshot`, etc.) for DTO assembly.
 - Completed **OBS-Prep5** – implemented `WorldContext.observe` returning DTO envelopes, added helper exports (job snapshot, mapping conversion), and regression tests (`tests/world/test_world_context_observe.py`).
+- Completed **OBS-Prep6** – expanded observation tests covering per-agent DTO fields, agent filters, and global snapshot data (`tests/world/test_world_context_observe.py`).
+- Completed **OBS-Prep7** – simulation loop now attempts to consume `WorldContext.observe` (with fallback to legacy builder), observation service injected during component build, DTO parity tests refreshed.
