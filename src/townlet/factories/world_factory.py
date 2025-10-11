@@ -12,6 +12,7 @@ from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.world.core.context import WorldContext
 from townlet.world.grid import WorldState
+from townlet.world.rng import RngStreamManager
 
 from .registry import register, resolve
 
@@ -37,8 +38,6 @@ def _build_default_world(
     *,
     world: WorldState | None = None,
     config: Any | None = None,
-    lifecycle: LifecycleManager | None = None,
-    perturbations: PerturbationScheduler | None = None,
     ticks_per_day: int | None = None,
     world_kwargs: Mapping[str, Any] | None = None,
     observation_builder: ObservationBuilder | None = None,
@@ -55,24 +54,27 @@ def _build_default_world(
             raise TypeError("create_world requires 'config' when 'world' is not supplied")
         world_options = dict(world_kwargs or {})
         target_world = WorldState.from_config(config, **world_options)  # type: ignore[arg-type]
+    else:
+        if config is None:
+            config = getattr(target_world, "config", None)
+
+    if config is None:
+        raise TypeError("WorldState missing configuration; cannot build modular world runtime")
 
     context: WorldContext | None = getattr(target_world, "context", None)
     if context is None:
         raise TypeError("WorldState missing context; cannot build modular world runtime")
 
-    missing = [
-        name
-        for name, value in (
-            ("lifecycle", lifecycle),
-            ("perturbations", perturbations),
-        )
-        if value is None
-    ]
-    if missing:
-        raise TypeError("create_world requires lifecycle/perturbations when building modular world")
+    rng_manager = context.rng_manager
+    if rng_manager is None:
+        rng_manager = RngStreamManager.from_seed(getattr(target_world, "rng_seed", None))
+        context.rng_manager = rng_manager
+    perturbation_rng = rng_manager.stream("perturbations")
 
-    builder = observation_builder or ObservationBuilder(target_world.config)
-    ticks = _derive_ticks_per_day(target_world.config, ticks_per_day)
+    lifecycle = LifecycleManager(config=config)
+    perturbations = PerturbationScheduler(config=config, rng=perturbation_rng)
+    builder = observation_builder or ObservationBuilder(config=config)
+    ticks = _derive_ticks_per_day(config, ticks_per_day)
 
     return DefaultWorldAdapter(
         context=context,

@@ -162,6 +162,18 @@ class DefaultWorldAdapter(WorldRuntime):
     # ------------------------------------------------------------------
     # Transitional helpers
     # ------------------------------------------------------------------
+    @property
+    def lifecycle_manager(self) -> LifecycleManager:
+        if self._lifecycle is None:
+            raise RuntimeError("Lifecycle manager unavailable on default world adapter")
+        return self._lifecycle
+
+    @property
+    def perturbation_scheduler(self) -> PerturbationScheduler:
+        if self._perturbations is None:
+            raise RuntimeError("Perturbation scheduler unavailable on default world adapter")
+        return self._perturbations
+
     def bind_world_adapter(self, adapter: "WorldRuntimeAdapterProtocol") -> None:
         self._world_adapter = adapter
 

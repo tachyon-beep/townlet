@@ -317,11 +317,6 @@ class SimulationLoop:
         return self._build_default_telemetry_components()
 
     def _build_default_world_components(self) -> WorldComponents:
-        lifecycle = LifecycleManager(config=self.config)
-        perturbations = PerturbationScheduler(
-            config=self.config,
-            rng=self._rng_events,
-        )
         cfg = getattr(self.config, "observations_config", None)
         ticks_per_day = 1440
         if cfg is not None and getattr(cfg, "hybrid", None) is not None:
@@ -330,8 +325,6 @@ class SimulationLoop:
         world_port = create_world(
             provider=self._world_provider,
             config=self.config,
-            lifecycle=lifecycle,
-            perturbations=perturbations,
             ticks_per_day=ticks_per_day,
             world_kwargs=self._world_options,
         )
@@ -342,6 +335,12 @@ class SimulationLoop:
         if observation_service is None:
             raise RuntimeError("World context missing observation service")
         world = context.state
+        lifecycle = getattr(world_port, "lifecycle_manager", None)
+        if lifecycle is None:
+            raise RuntimeError("World provider did not expose lifecycle manager")
+        perturbations = getattr(world_port, "perturbation_scheduler", None)
+        if perturbations is None:
+            raise RuntimeError("World provider did not expose perturbation scheduler")
         self._world_context = context
         return WorldComponents(
             world=world,
