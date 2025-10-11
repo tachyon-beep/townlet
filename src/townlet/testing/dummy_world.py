@@ -16,11 +16,14 @@ class DummyWorldRuntime:
 
     agents_list: tuple[str, ...] = field(default_factory=tuple)
     config_id: str = "dummy-config"
+    _tick: int = field(default=0, init=False, repr=False)
+    _last_actions: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    _queued_console: list[ConsoleCommandEnvelope] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._tick = 0
-        self._last_actions: dict[str, Any] = {}
-        self._queued_console: list[ConsoleCommandEnvelope] = []
+        self._last_actions.clear()
+        self._queued_console.clear()
 
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - simple state reset
         self._tick = 0

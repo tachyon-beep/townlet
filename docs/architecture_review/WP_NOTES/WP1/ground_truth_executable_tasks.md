@@ -33,8 +33,8 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 
 ## 5. Missing dummy providers and promised tests
 - **T5.1** Create `src/townlet/testing/` with dummy world/policy/telemetry implementations satisfying the ports. *(Completed 2025-10-11 — see `townlet.testing` package for dummy world/policy/telemetry classes.)*
-- **T5.2** Register dummy providers in the factories under documented keys.
-- **T5.3** Write `tests/test_ports_surface.py` validating method presence/forbidden symbols on ports/adapters.
+- **T5.2** Register dummy providers in the factories under documented keys. *(Completed 2025-10-11 — `create_world/policy/telemetry(provider="dummy")` now returns the testing stubs.)*
+- **T5.3** Write `tests/test_ports_surface.py` validating method presence/forbidden symbols on ports/adapters. *(Completed 2025-10-11 — port contracts now covered by dedicated tests.)*
 - **T5.4** Add `tests/test_loop_with_dummies.py` (fast smoke) driving the loop through dummy providers.
 - **T5.5** Implement console router & health monitor smokes as per WP1 plan.
 
