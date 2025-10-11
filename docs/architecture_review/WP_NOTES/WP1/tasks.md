@@ -48,8 +48,8 @@
 Maintain this checklist during WP1 implementation.
 
 ## 7. Step 7 — Factory & Adapter Wiring (in progress)
-- [ ] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext`.
-- [ ] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context.
+- [x] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext` (legacy runtime still supported for callers passing `runtime`).
+- [x] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context (DefaultWorldAdapter now wraps `WorldContext`).
 - [ ] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap once the new path lands.
 
 ## 8. Step 8 — Composition Root Integration

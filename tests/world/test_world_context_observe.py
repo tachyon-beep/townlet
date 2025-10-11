@@ -22,7 +22,7 @@ def world_context() -> WorldContext:
 
 
 def _spawn_agents(context: WorldContext, count: int = 2) -> None:
-    world = world_context.state
+    world = context.state
     for idx in range(count):
         agent_id = f"agent_{idx}"
         world.lifecycle_service.spawn_agent(

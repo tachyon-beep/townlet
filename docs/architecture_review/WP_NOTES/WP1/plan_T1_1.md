@@ -31,3 +31,4 @@ Replace the legacy world construction path with a modular `WorldContext` pipelin
 - `SimulationLoop` still expects legacy attributes (`self.world` etc.); while migrating, maintain compatibility by exposing the underlying `WorldState` via adapter if required.
 - Dummy/stub world providers need equivalent builders; plan to add them immediately after the default path works.
 - Coordinate with WP3 tasks to ensure DTO schema updates remain aligned when the context becomes authoritative.
+\n- Status: Executed 2025-10-10. Factory returns modular context adapter with observation service; legacy runtime path retained for compatibility.
