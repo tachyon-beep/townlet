@@ -89,6 +89,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T1.1e** Implement `agents`/`observe` returning DTO envelopes via the existing DTO factory; unit test per-agent output and terminated flag handling.
 - **T1.1f** Implement `snapshot` returning world/global DTO-friendly payloads; add regression test comparing against legacy snapshot for baseline config.
 - **T1.1g** Run parity harness (`tests/core/test_sim_loop_dto_parity.py`) against new context and capture any deltas for follow-up fixes.
+- **T3.x Parity (2025-10-11)** Added targeted parity checks (`tests/world/test_world_context_parity.py`) ensuring `WorldContext` queue/economy/relationship exports mirror the underlying world services.
 
 ### T4.x – Refactor SimulationLoop onto modular ports
 - **T4.1a** Introduce seam in `_build_components` that accepts pre-built world/policy/telemetry objects (for test injection) to aid migration.

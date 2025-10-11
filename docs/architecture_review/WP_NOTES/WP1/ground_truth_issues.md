@@ -11,7 +11,7 @@ Direct code inspection shows WP1 Step 7 and related deliverables remain incomple
 ## 3. WorldContext is unimplemented
 - **Status (2025-10-10):** `WorldContext` now drives modular ticks, DTO observations, and snapshot exports; unit coverage exists. Remaining follow-ups focus on tightening deterministic RNG instrumentation and finishing parity tests called out under T3.x/T4.3.
 - **Remediation tasks:**
-  1. Close out T3.x parity checks to ensure DTO snapshots match legacy baselines under stress scenarios (queues, rivalries, perturbations).
+  1. T3.x parity checks covered (`tests/world/test_world_context_parity.py`) ensuring queue metrics, relationship snapshots, and economy exports match the underlying services.
   2. Audit remaining direct `WorldState` mutations in the loop/policy stack and replace them with context helpers.
 
 ## 4. SimulationLoop remains tied to legacy runtime

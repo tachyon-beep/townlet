@@ -308,12 +308,15 @@ class WorldContext:
 
     def export_relationship_snapshot(self) -> Mapping[str, Mapping[str, Mapping[str, float]]]:
         try:
-            return self.relationships.snapshot()
+            snapshot = self.relationships.relationships_snapshot()
+            if isinstance(snapshot, Mapping):
+                return snapshot
         except Exception:  # pragma: no cover - defensive
             return {}
+        return {}
 
     def export_relationship_metrics(self) -> Mapping[str, Any]:
-        getter = getattr(self.relationships, "metrics_snapshot", None)
+        getter = getattr(self.relationships, "relationship_metrics_snapshot", None)
         if callable(getter):
             try:
                 metrics = getter()
