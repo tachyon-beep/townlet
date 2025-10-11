@@ -40,6 +40,12 @@ def test_simulation_loop_failure_records_health(simulation_loop: SimulationLoop,
     latest_health = loop.telemetry.latest_health_status()
     assert latest_health.get("status") == "error"
     assert latest_health.get("snapshot_path") == str(snapshot_path)
+    assert "transport" in latest_health
+    assert isinstance(latest_health["transport"], dict)
+    assert latest_health["transport"]["queue_length"] == latest_health.get("telemetry_queue")
+    assert latest_health["transport"]["dropped_messages"] == latest_health.get("telemetry_dropped")
+    assert "aliases" in latest_health
+    assert latest_health["aliases"]["telemetry_queue"] == latest_health.get("telemetry_queue")
     assert snapshot_path.parent.parent.name == "failures"
     assert loop.tick == 0
     assert invoked and invoked[0][0] == 1

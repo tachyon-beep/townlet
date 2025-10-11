@@ -170,6 +170,8 @@ class SimulationLoop:
         self._last_policy_metadata_event: dict[str, object] | None = None
         self._last_policy_possession_agents: tuple[str, ...] | None = None
         self._last_policy_anneal_event: dict[str, object] | None = None
+        self._last_health_payload: dict[str, object] | None = None
+        self._last_global_context: dict[str, object] | None = None
         self._last_transport_status: dict[str, object] = {
             "provider": "port",
             "queue_length": 0,
@@ -844,21 +846,18 @@ class SimulationLoop:
                 snapshot_path = None
         self._health.last_snapshot_path = snapshot_path
         transport_status = self._last_transport_status
-        payload = {
-            "tick": tick,
-            "status": "error",
-            "tick_duration_ms": duration_ms,
-            "failure_count": self._health.failure_count,
-            "error": error_message,
-            "telemetry_queue": transport_status.get("queue_length", 0),
-            "telemetry_dropped": transport_status.get("dropped_messages", 0),
-        }
-        if snapshot_path:
-            payload["snapshot_path"] = snapshot_path
+        failure_payload = self._build_failure_payload(
+            tick=tick,
+            duration_ms=duration_ms,
+            error=error_message,
+            transport_status=transport_status,
+            snapshot_path=snapshot_path,
+            global_context=self._last_global_context,
+        )
         if self._telemetry_port is not None:
-            self._telemetry_port.emit_event("loop.failure", payload)
+            self._telemetry_port.emit_event("loop.failure", failure_payload)
         else:  # pragma: no cover - defensive
-            self.telemetry.emit_event("loop.failure", payload)
+            self.telemetry.emit_event("loop.failure", failure_payload)
         for handler in list(self._failure_handlers):
             try:
                 handler(self, tick, exc)
@@ -934,6 +933,7 @@ class SimulationLoop:
             if relationship_metrics:
                 global_context.setdefault("relationship_metrics", copy.deepcopy(dict(relationship_metrics)))
 
+        self._last_global_context = copy.deepcopy(global_context)
         return global_context
 
     def _build_health_payload(
@@ -1042,6 +1042,65 @@ class SimulationLoop:
             "transport": transport_payload,
             "global_context": context_payload,
         }
+        payload.update(aliases)
+        payload["aliases"] = dict(aliases)
+        self._last_health_payload = copy.deepcopy(payload)
+        return payload
+
+    def _build_failure_payload(
+        self,
+        *,
+        tick: int,
+        duration_ms: float,
+        error: str,
+        transport_status: Mapping[str, object],
+        snapshot_path: str | None,
+        global_context: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        """Compose the loop.failure payload with structured transport/context data."""
+
+        context_payload: dict[str, object] = {}
+        if isinstance(global_context, Mapping):
+            context_payload = copy.deepcopy(dict(global_context))
+        elif isinstance(self._last_global_context, Mapping):
+            context_payload = copy.deepcopy(dict(self._last_global_context))
+
+        transport_payload: dict[str, object] = {
+            "provider": transport_status.get("provider"),
+            "queue_length": int(transport_status.get("queue_length", 0) or 0),
+            "dropped_messages": int(transport_status.get("dropped_messages", 0) or 0),
+            "last_flush_duration_ms": transport_status.get("last_flush_duration_ms"),
+            "payloads_flushed_total": int(transport_status.get("payloads_flushed_total", 0) or 0),
+            "bytes_flushed_total": int(transport_status.get("bytes_flushed_total", 0) or 0),
+            "auth_enabled": bool(transport_status.get("auth_enabled", False)),
+            "worker": {
+                "alive": bool(transport_status.get("worker_alive", False)),
+                "error": transport_status.get("worker_error"),
+                "restart_count": int(transport_status.get("worker_restart_count", 0) or 0),
+            },
+        }
+
+        aliases: dict[str, object] = {
+            "tick_duration_ms": duration_ms,
+            "telemetry_queue": transport_payload["queue_length"],
+            "telemetry_dropped": transport_payload["dropped_messages"],
+        }
+
+        payload: dict[str, object] = {
+            "tick": int(tick),
+            "status": "error",
+            "duration_ms": duration_ms,
+            "failure_count": self._health.failure_count,
+            "error": error,
+            "snapshot_path": snapshot_path,
+            "transport": transport_payload,
+            "global_context": context_payload,
+        }
+
+        last_health = self._last_health_payload
+        if isinstance(last_health, Mapping):
+            payload["health"] = copy.deepcopy(dict(last_health))
+
         payload.update(aliases)
         payload["aliases"] = dict(aliases)
         return payload

@@ -280,7 +280,28 @@ def test_collect_tick_diff_enabled(builder: StreamPayloadBuilder) -> None:
 
 def test_record_loop_failure_emits_health_event(builder: StreamPayloadBuilder) -> None:
     aggregator = TelemetryAggregator(builder)
-    events = list(aggregator.record_loop_failure({"tick": 12, "error": "boom"}))
+    payload = {
+        "tick": 12,
+        "error": "boom",
+        "status": "error",
+        "duration_ms": 5.0,
+        "transport": {
+            "provider": "port",
+            "queue_length": 2,
+            "dropped_messages": 1,
+            "last_flush_duration_ms": None,
+            "payloads_flushed_total": 10,
+            "bytes_flushed_total": 1024,
+            "auth_enabled": False,
+            "worker": {"alive": True, "error": None, "restart_count": 0},
+        },
+        "aliases": {
+            "tick_duration_ms": 5.0,
+            "telemetry_queue": 2,
+            "telemetry_dropped": 1,
+        },
+    }
+    events = list(aggregator.record_loop_failure(payload))
     assert len(events) == 1
     event = events[0]
     assert event.kind == "health"

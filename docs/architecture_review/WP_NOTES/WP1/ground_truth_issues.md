@@ -27,7 +27,7 @@ Direct code inspection shows WP1 Step 7 and related deliverables remain incomple
      - `SimulationLoop._build_health_payload` derives metrics from `_build_transport_status` and DTO exports (scheduler counts only used as a fallback); alias values mirror the previous scalar fields.
      - `TelemetryPublisher` caches deep copies of the structured payload, `TelemetryEventDispatcher` prefers the embedded context for queue history, and UI/CLI helpers read the structured block before falling back to aliases. Regression suite covering health/telemetry surfaces passes.
      - Follow-up: document alias deprecation timeline and remove legacy keys after dashboards/CLI migrate (tracked under T4.4d/T4.4 cleanup).
-  3. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) once the loop emits failures purely via ports.
+  3. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) once the loop emits failures purely via ports. *(Structured payload shipped under T4.4d; doc refresh/alias deprecation remains outstanding.)*
   4. Keep loop/component overrides in place for testing, but ensure the default path never rebuilds legacy services.
 
 ## 5. Missing dummy providers and promised tests

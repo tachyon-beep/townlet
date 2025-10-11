@@ -771,6 +771,10 @@ class TelemetryPublisher:
     def _store_loop_failure(self, payload: Mapping[str, object]) -> None:
         failure_data = dict(payload)
         failure_data.setdefault("status", "error")
+        aliases = failure_data.get("aliases")
+        if isinstance(aliases, Mapping):
+            for key, value in aliases.items():
+                failure_data.setdefault(str(key), value)
         self._latest_health_status = failure_data
         event = {
             "kind": "loop_failure",
@@ -781,9 +785,12 @@ class TelemetryPublisher:
         if len(self._latest_events) > 128:
             self._latest_events = self._latest_events[-128:]
         logger.error(
-            "simulation_loop_failure tick=%s error=%s",
+            "simulation_loop_failure tick=%s error=%s queue=%s dropped=%s snapshot=%s",
             failure_data.get("tick"),
             failure_data.get("error"),
+            failure_data.get("telemetry_queue"),
+            failure_data.get("telemetry_dropped"),
+            failure_data.get("snapshot_path"),
         )
 
     def _ingest_health_metrics(self, metrics: Mapping[str, object]) -> None:

@@ -11,6 +11,32 @@ from townlet.core.sim_loop import SimulationLoop
 from townlet.telemetry.publisher import TelemetryPublisher
 
 
+def _failure_payload(tick: int, error: str = "boom") -> dict[str, object]:
+    return {
+        "tick": tick,
+        "status": "error",
+        "error": error,
+        "duration_ms": 0.0,
+        "snapshot_path": None,
+        "transport": {
+            "provider": "port",
+            "queue_length": 0,
+            "dropped_messages": 0,
+            "last_flush_duration_ms": None,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "auth_enabled": False,
+            "worker": {"alive": True, "error": None, "restart_count": 0},
+        },
+        "global_context": {},
+        "aliases": {
+            "tick_duration_ms": 0.0,
+            "telemetry_queue": 0,
+            "telemetry_dropped": 0,
+        },
+    }
+
+
 def _ensure_agents(loop: SimulationLoop) -> None:
     world = loop.world
     if world.agents:
@@ -134,7 +160,7 @@ def test_record_loop_failure_emits_pipeline_events(monkeypatch) -> None:
 
     monkeypatch.setattr(publisher, "_enqueue_stream_payload", capture)
     try:
-        publisher.emit_event("loop.failure", {"tick": 7, "error": "boom"})
+        publisher.emit_event("loop.failure", _failure_payload(7))
         assert emitted, "loop failure did not emit telemetry payload"
         payload, tick = emitted[0]
         assert tick == 7

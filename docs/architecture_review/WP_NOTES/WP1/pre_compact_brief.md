@@ -12,10 +12,10 @@ The broader intent is to finish the port-first composition root so the simulatio
 
 ## Outstanding Work
 - T5.x: add dummy world/policy/telemetry providers plus loop/console/health-monitor smokes.
-- T4.4: finish the remaining telemetry/failure cleanup (ports-only failure emission + doc refresh) after the context export refactor.
+- T4.4: telemetry flow now fully DTO-driven.
   - **T4.4b remainder:** documentation refresh + guard notes now that publisher/aggregator/UI/CLI tests are DTO-only.
   - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with alias fallbacks (see `T4_4c_health_schema.md` for schema details).
-  - **T4.4d:** reshape `loop.failure` payload after health event lands.
+  - **T4.4d:** completed 2025-10-11 — failure payload mirrors the health schema (structured transport/context, alias block, optional health snapshot); see `T4_4d_failure_schema.md`. Alias removal deferred until dashboards/CLI migrate.
 - Documentation & parity: expand DTO parity harness/tests for the context (T3.x), refresh ADRs, and capture the strategic changes in WP1/WP2/WP3 briefs once the remaining tasks converge.
 
 ## Dependences / Notes
