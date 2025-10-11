@@ -1,7 +1,7 @@
 ---
 title: DTO Migration Notes
 status: draft
-updated: 2025-10-10
+updated: 2025-10-11
 ---
 
 # DTO Migration Notes
@@ -28,6 +28,22 @@ policy observation flow introduced in WP3.
   parity between DTO and legacy feature tensors; exposed via `tox -e ml`.
 - Lightweight training config (`configs/training/dto_smoke.yaml`) supports fast
   rollout/ML experiments.
+
+### Parity Verification — 2025-10-11
+
+- Commands:
+  - `pytest tests/core/test_sim_loop_dto_parity.py -q`
+  - `pytest tests/policy/test_dto_ml_smoke.py -q`
+  - `pytest tests/world/test_world_context_parity.py -q`
+- All suites passed, confirming:
+  - DTO envelopes reproduce queue metrics, employment snapshots, reward totals,
+    and economy/anneal context for the first three ticks of the baseline config.
+  - Random-weight Torch logits match between DTO features and legacy builder
+    tensors (feature_dim=81, map_shape=(4, 11, 11)).
+  - WorldContext exports remain in parity with service snapshots for queues,
+    relationships, and economy metrics.
+- No schema drift detected; existing baselines in
+  `docs/architecture_review/WP_NOTES/WP3/dto_parity/` remain valid.
 
 ## Pending Work
 

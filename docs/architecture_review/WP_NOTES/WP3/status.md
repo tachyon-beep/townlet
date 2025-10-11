@@ -32,4 +32,4 @@
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).
 - Unblocks WP2 Step 7 (policy/world adapters still exposing legacy handles until observation-first DTOs are available).
 
-- Stage 6 lint sweep (ruff) deferred to final wrap due to 175 legacy import/style issues unrelated to DTO guardrails.
+- Stage 6 guardrail checks re-run 2025-10-11 (no new ObservationBuilder references; telemetry surface guard green). Full-suite pytest/ruff/mypy sweep still pending for the close-out checklist.

@@ -4,4 +4,10 @@ from __future__ import annotations
 
 from .builder import ObservationBuilder
 
-__all__ = ["ObservationBuilder"]
+__all__ = ["ObservationBuilder", "create_observation_builder"]
+
+
+def create_observation_builder(*, config: object) -> ObservationBuilder:
+    """Factory returning the legacy observation builder."""
+
+    return ObservationBuilder(config=config)

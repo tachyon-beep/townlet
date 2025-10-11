@@ -268,6 +268,29 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
    - Note schema bump & parity results in CHANGELOG.
    - Notify analytics/ML stakeholders about DTO-only changeover and sample payloads.
 
+### Stage 6 Execution Plan (2025-10-11)
+
+- [x] **S6.A – Guardrail verification**
+  - Re-run `tests/core/test_no_legacy_observation_usage.py` and `tests/test_telemetry_surface_guard.py` in isolation.
+  - Sweep `src/townlet` for any new ObservationBuilder/`artifacts.observations` references introduced after Stage 5; document none/mitigations in `stage5_cleanup_audit.md`.
+  - Extend guard allowlist (if required) and capture rationale in the audit document.
+- [x] **S6.B – Schema & parity confirmation**
+  - Re-execute DTO parity harness (`tests/core/test_sim_loop_dto_parity.py`, `tests/policy/test_dto_ml_smoke.py`, `tests/world/test_world_context_parity.py`) and append hash digests to `dto_parity/ml_dimensions.txt`.
+  - Capture summary of parity results in `dto_migration.md` (needs/wallet/reward deltas, ML logits parity).
+- [ ] **S6.C – Documentation refresh**
+  - Update WP1/WP2/WP3 `status.md`, `pre_compact_brief.md`, and `context_snapshot.md` with Stage 6 readiness, referencing the structured health/failure payloads.
+  - Revise ADR-001 (ports/telemetry) and ADR-002 (world modularisation) to point at DTO schema v0.2.0, summary metrics, and guardrails.
+  - Expand `docs/architecture_review/WP_NOTES/WP3/dto_migration.md` with downstream migration guidance (dashboard fields, training dataset ingestion, telemetry API changes).
+- [ ] **S6.D – Release artefacts**
+  - Update `CHANGELOG.md` with the DTO-only telemetry/policy milestone and link to migration notes.
+  - Produce operator/ML comms template in `docs/ops/TELEMETRY_RELEASE_CHECKLIST.md` or new note, highlighting schema bump, summary metrics, and validation commands.
+- [ ] **S6.E – Full regression & linters**
+  - Run full `pytest` (respecting slow markers if necessary), `ruff check src tests`, and `mypy src`.
+  - Capture command invocations and key outputs in `stage5_cleanup_audit.md` (or new Stage 6 log) and file issues for any failures.
+- [ ] **S6.F – Final cleanups**
+  - Delete legacy DTO shim utilities (if any remain) and ensure adapters no longer expose observation dicts.
+  - Confirm no outstanding TODOs block WP1/WP2 sign-off; update `WP3/status.md` with final checklist and mark Stage 6 complete.
+
 ---
 
 ## Exit Criteria

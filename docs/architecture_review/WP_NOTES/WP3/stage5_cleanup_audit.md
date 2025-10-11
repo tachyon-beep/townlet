@@ -131,3 +131,9 @@ Use this audit as the starting point for the Stage 5 cleanup implementation.
   bundles (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_events.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/orchestration/test_console_health_smokes.py tests/test_console_router.py tests/core/test_sim_loop_modular_smoke.py tests/core/test_sim_loop_with_dummies.py -q`
   and `pytest tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py tests/core/test_sim_loop_dto_parity.py -q`) and refreshed WP3 status/pre-brief to
   record the Stage 5 finish. Full-suite (`pytest`), `mypy`, and `ruff` runs are earmarked for Stage 6.
+- **2025-10-11 — S6.A guard sweep:** Removed the remaining `ObservationBuilder` imports from
+  `townlet.world` by renaming the wrapper to `WorldObservationService` and routing builder
+  construction through `townlet.observations.create_observation_builder`. Guard tests now pass
+  (`pytest tests/core/test_no_legacy_observation_usage.py tests/test_telemetry_surface_guard.py -q`).
+- **2025-10-11 — S6.B parity rerun:** DTO parity harness, world-context parity, and ML smoke tests
+  passed (`pytest tests/core/test_sim_loop_dto_parity.py tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py -q`), reaffirming schema v0.2.0 parity (feature_dim=81, map_shape=(4, 11, 11)).

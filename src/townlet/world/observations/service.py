@@ -5,18 +5,18 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from townlet.observations import ObservationBuilder
+from townlet import observations
 from townlet.world.observations.interfaces import (
     ObservationServiceProtocol,
     WorldRuntimeAdapterProtocol,
 )
 
 
-class ObservationBuilderService(ObservationServiceProtocol):
-    """Thin wrapper that exposes ``ObservationBuilder`` via the service protocol."""
+class WorldObservationService(ObservationServiceProtocol):
+    """Observation service backed by the legacy observation builder."""
 
     def __init__(self, *, config: Any) -> None:
-        self._builder = ObservationBuilder(config=config)
+        self._builder = observations.create_observation_builder(config=config)
 
     @property
     def variant(self) -> object:
@@ -60,4 +60,4 @@ class ObservationBuilderService(ObservationServiceProtocol):
         return payload
 
 
-__all__ = ["ObservationBuilderService"]
+__all__ = ["WorldObservationService"]
