@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.console.command import ConsoleCommandEnvelope
+    from townlet.core.interfaces import TelemetrySinkProtocol
     from townlet.snapshots.state import SnapshotState
     from townlet.world.grid import WorldState
     from townlet.world.runtime import RuntimeStepResult
@@ -18,6 +19,12 @@ class WorldRuntime(Protocol):
 
     def bind_world(self, world: "WorldState") -> None:
         """Rebind the runtime to a freshly constructed world instance."""
+
+    def agents(self) -> Iterable[str]:
+        """Return the list of agent identifiers."""
+
+    def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
+        """Return per-agent observation payloads."""
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         """Stage policy actions that should execute on the next tick."""

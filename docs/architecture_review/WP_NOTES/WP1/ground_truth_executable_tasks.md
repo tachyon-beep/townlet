@@ -142,9 +142,9 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **SL-H** Add new smoke `tests/core/test_sim_loop_modular_smoke.py` running two ticks and asserting DTO envelope + telemetry events (stdout adapter stub). *(Completed 2025-10-10.)*
 
 ### Port boundary tightening (supersedes T6.x)
-- **PB-A** Draft revised `WorldRuntime` protocol without `WorldState`/console references and circulate for sign-off; no code changes yet.
-- **PB-B** Introduce transitional methods on adapters (e.g., `queue_console_router`) to support new protocol while keeping tests passing.
-- **PB-C** Update `DefaultWorldAdapter` and dummy world to satisfy the revised protocol; unit test behaviour.
+- **PB-A** Draft revised `WorldRuntime` protocol without `WorldState`/console references and circulate for sign-off; no code changes yet. *(Completed 2025-10-11 — see `PB_port_contract.md` for the agreed surface.)*
+- **PB-B** Introduce transitional methods on adapters (e.g., `queue_console_router`) to support new protocol while keeping tests passing. *(Completed 2025-10-11 — console routing now flows entirely through `ConsoleRouter`; adapters/dummies no longer expose `queue_console`.)*
+- **PB-C** Update `DefaultWorldAdapter` and dummy world to satisfy the revised protocol; unit test behaviour. *(Completed 2025-10-11 — adapter/dummy runtime refitted, port surface tests (`tests/test_ports_surface.py`) and loop smokes updated.)*
 - **PB-D** Update `SimulationLoop` to import and use only `townlet.ports.world.WorldRuntime`; remove `core.interfaces.WorldRuntimeProtocol` usage.
 - **PB-E** Add guard test ensuring loop modules don’t import `core.interfaces`; enforce via CI.
 - **PB-F** Deprecate unused members in `core/interfaces.py`; schedule follow-up removal once call sites are gone.

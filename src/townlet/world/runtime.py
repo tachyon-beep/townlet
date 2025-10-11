@@ -88,16 +88,6 @@ class WorldRuntime:
     def world_adapter(self) -> WorldRuntimeAdapterProtocol | None:
         return self._world_adapter
 
-    def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
-        """Buffer console operations for the next tick.
-
-        The buffered operations are drained the next time :meth:`tick` executes.
-        Callers typically pass in commands drained from the telemetry layer.
-        """
-
-        # Deprecated compatibility shim: console routing now handled by ConsoleRouter.
-        _ = list(operations)
-
     def apply_actions(self, actions: ActionMapping) -> None:
         """Stage policy actions for the next tick."""
 

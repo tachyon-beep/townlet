@@ -19,7 +19,7 @@
 - T5.x coverage complete: dummy providers, loop smokes, and `tests/orchestration/test_console_health_smokes.py`
   now guard console routing and health monitor metrics via the dummy harness (regression: `pytest`
   `tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
-- Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the adapter/loop cleanup converges.
+- PB-A locked in the revised `WorldRuntime` port contract (`PB_port_contract.md`). PB-B/C executed on 2025-10-11: adapters/dummies no longer expose `queue_console`, `SimulationLoop` relies solely on DTO pathways, and port surface tests confirm the lean contract. Next PB steps (PB-D/E/F) will swap loop imports to `townlet.ports.world.WorldRuntime`, add guard tests, and prune the deprecated protocol alias. Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the port cleanup convergence.
 
 **Legacy caller inventory (updated 2025-10-10)**
 - Policy:

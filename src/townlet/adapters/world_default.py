@@ -69,10 +69,6 @@ class DefaultWorldAdapter(WorldRuntime):
         self._last_observations = None
         self._tick = getattr(self._context.state, "tick", 0)
 
-    def queue_console(self, operations: Iterable["ConsoleCommandEnvelope"]) -> None:
-        # Deprecated: router now routes commands directly to the context.
-        _ = list(operations)
-
     def tick(
         self,
         *,
