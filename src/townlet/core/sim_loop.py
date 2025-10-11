@@ -996,17 +996,16 @@ class SimulationLoop:
         try:
             return context.observe(
                 actions=actions,
-                terminated=terminated,
-                termination_reasons=termination_reasons,
-                rewards=rewards,
-                reward_breakdown=reward_breakdown,
-                perturbation_state=perturbations,
                 policy_snapshot=policy_snapshot,
                 policy_metadata=policy_metadata,
                 rivalry_events=rivalry_events,
                 stability_metrics=stability_metrics,
                 promotion_state=promotion_state,
                 anneal_context=anneal_context,
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+                rewards=rewards,
+                reward_breakdown=reward_breakdown,
             )
         except Exception:  # pragma: no cover - defensive fallback
             logger.debug("context_observe_failed", exc_info=True)

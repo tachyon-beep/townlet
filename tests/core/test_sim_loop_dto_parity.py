@@ -4,6 +4,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
@@ -12,6 +13,8 @@ from townlet.factories.registry import register as factory_register
 from townlet.policy.fallback import StubPolicyBackend
 from townlet.telemetry.fallback import StubTelemetrySink
 from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
+from townlet.world.core import WorldContext
+from townlet.observations import ObservationBuilder
 
 
 def _register_stub_ports() -> None:
@@ -47,6 +50,11 @@ def test_simulation_loop_dto_parity_across_ticks(tmp_path) -> None:
         policy_provider="dto_stub",
         telemetry_provider="dto_stub",
     )
+
+    bootstrap = loop._build_bootstrap_policy_envelope()
+    loop._set_policy_observation_envelope(bootstrap)
+
+    loop.world.context.observation_service = ObservationBuilder(config=config)
     steps = 3
     envelopes: list[object] = []
     queue_metrics_history: list[dict[str, int]] = []
@@ -117,3 +125,38 @@ def test_simulation_loop_dto_parity_across_ticks(tmp_path) -> None:
         assert dto_global.anneal_context == anneal_history[idx]
 
     loop.close()
+
+
+def test_simulation_loop_prefers_context_observe(monkeypatch: pytest.MonkeyPatch) -> None:
+    _register_stub_ports()
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    loop = SimulationLoop(
+        config,
+        policy_provider="dto_stub",
+        telemetry_provider="dto_stub",
+    )
+
+    loop._set_policy_observation_envelope(loop._build_bootstrap_policy_envelope())
+    loop.world.context.observation_service = ObservationBuilder(config=config)
+
+    call_count = {"value": 0}
+    original_observe = WorldContext.observe
+
+    def spy_observe(self: WorldContext, *args, **kwargs):
+        call_count["value"] += 1
+        return original_observe(self, *args, **kwargs)
+
+    monkeypatch.setattr(WorldContext, "observe", spy_observe, raising=False)
+
+    def fail_legacy_batch(*_args, **_kwargs):
+        raise AssertionError("legacy observation builder should not run")
+
+    monkeypatch.setattr(loop._observation_builder, "build_batch", fail_legacy_batch, raising=False)
+
+    try:
+        artifacts = loop.step()
+    finally:
+        loop.close()
+
+    assert call_count["value"] > 0
+    assert artifacts.envelope.tick == 1

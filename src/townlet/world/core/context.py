@@ -324,6 +324,14 @@ class WorldContext:
         return {}
 
     def export_employment_snapshot(self) -> Mapping[str, Any]:
+        state_getter = getattr(self.state, "employment_queue_snapshot", None)
+        if callable(state_getter):
+            try:
+                snapshot = state_getter()
+                if isinstance(snapshot, Mapping):
+                    return snapshot
+            except Exception:  # pragma: no cover - defensive
+                return {}
         getter = getattr(self.employment_service, "snapshot", None)
         if callable(getter):
             try:
@@ -352,6 +360,27 @@ class WorldContext:
         return snapshot
 
     def export_economy_snapshot(self) -> Mapping[str, Any]:
+        snapshot: dict[str, Any] = {}
+        settings_getter = getattr(self.state, "economy_settings", None)
+        if callable(settings_getter):
+            try:
+                snapshot["settings"] = settings_getter()
+            except Exception:  # pragma: no cover - defensive
+                pass
+        price_spikes_getter = getattr(self.state, "active_price_spikes", None)
+        if callable(price_spikes_getter):
+            try:
+                snapshot["active_price_spikes"] = price_spikes_getter()
+            except Exception:  # pragma: no cover - defensive
+                pass
+        utility_getter = getattr(self.state, "utility_snapshot", None)
+        if callable(utility_getter):
+            try:
+                snapshot["utility_snapshot"] = utility_getter()
+            except Exception:  # pragma: no cover - defensive
+                pass
+        if snapshot:
+            return snapshot
         getter = getattr(self.economy_service, "snapshot", None)
         if callable(getter):
             try:
