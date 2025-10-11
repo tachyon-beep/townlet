@@ -35,7 +35,17 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T5.1** Create `src/townlet/testing/` with dummy world/policy/telemetry implementations satisfying the ports. *(Completed 2025-10-11 — see `townlet.testing` package for dummy world/policy/telemetry classes.)*
 - **T5.2** Register dummy providers in the factories under documented keys. *(Completed 2025-10-11 — `create_world/policy/telemetry(provider="dummy")` now returns the testing stubs.)*
 - **T5.3** Write `tests/test_ports_surface.py` validating method presence/forbidden symbols on ports/adapters. *(Completed 2025-10-11 — port contracts now covered by dedicated tests.)*
-- **T5.4** Add `tests/test_loop_with_dummies.py` (fast smoke) driving the loop through dummy providers.
+- **T5.4** Add `tests/test_loop_with_dummies.py` (fast smoke) driving the loop through dummy providers. *(Completed 2025-10-11 — helper + smokes landed.)*
+  - Implemented `tests/helpers/dummy_loop.py`, which constructs a `SimulationLoop`
+    via the override seams and injects lightweight doubles for world/context,
+    lifecycle, perturbations, rewards, stability, promotion, and policy. The helper
+    reuses `TelemetryPublisher` while swapping in `DummyTelemetrySink` so console
+    routing, health monitoring, and DTO pipelines exercise the real orchestration
+    path.
+  - Added `tests/core/test_sim_loop_with_dummies.py` covering two tick increments,
+    DTO envelope integrity, console routing (`console.result` events), and
+    `loop.health` telemetry on the dummy providers.
+  - Regression command recorded under WP1 status: `pytest tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py -q`.
 - **T5.5** Implement console router & health monitor smokes as per WP1 plan.
 
 ## 6. Port boundaries still leak legacy types
