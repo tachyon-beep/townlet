@@ -77,7 +77,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "7.0"
 pythonpath = ["src"]
-addopts = "-ra --cov=src/townlet --cov-report=term-missing"
+addopts = "-ra --cov=src/townlet --cov-report=term-missing --cov-report=xml:coverage.xml"
 testpaths = ["tests"]
 
 [tool.interrogate]

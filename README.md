@@ -59,6 +59,10 @@ Townlet is a small-town life simulation that explores emergent behaviour in a po
    ```
    The runner now reports how many ticks completed and the effective tick rate. Telemetry is muted by default; add `--stream-telemetry` to mirror the live stream on stdout or `--telemetry-path` to write it to a file.
 
+### Test Coverage & SonarQube
+
+Running `pytest` (with the default options from `pyproject.toml`) now emits both terminal summaries and an XML coverage report at `coverage.xml`. SonarQube Cloud ingests this output via `sonar.python.coverage.reportPaths`; the `SonarCloud` GitHub workflow uploads the metrics automatically when the repository secret `SONAR_TOKEN` is configured.
+
 Implementation TODOs are captured with `# TODO(@townlet)` markers inside the package. Each module outlines its responsibilities, inputs, and integration points with the rest of the system.
 
 ## Contributing
