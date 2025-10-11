@@ -67,7 +67,6 @@ class WorldRuntime:
         self._lifecycle = lifecycle
         self._perturbations = perturbations
         self._ticks_per_day = max(0, int(ticks_per_day))
-        self._queued_console: list[ConsoleCommandEnvelope] = []
         self._world_adapter: WorldRuntimeAdapterProtocol | None = None
         self._pending_actions: dict[str, object] = {}
 
@@ -96,7 +95,8 @@ class WorldRuntime:
         Callers typically pass in commands drained from the telemetry layer.
         """
 
-        self._queued_console.extend(list(operations))
+        # Deprecated compatibility shim: console routing now handled by ConsoleRouter.
+        _ = list(operations)
 
     def apply_actions(self, actions: ActionMapping) -> None:
         """Stage policy actions for the next tick."""
@@ -163,12 +163,7 @@ class WorldRuntime:
         lifecycle = self._lifecycle
         perturbations = self._perturbations
 
-        queued_ops = (
-            list(console_operations)
-            if console_operations is not None
-            else list(self._queued_console)
-        )
-        self._queued_console.clear()
+        queued_ops = list(console_operations or ())
 
         prepared_actions: MutableMapping[str, object]
         if policy_actions is not None:

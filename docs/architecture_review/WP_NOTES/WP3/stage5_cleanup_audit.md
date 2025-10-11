@@ -123,3 +123,7 @@ Use this audit as the starting point for the Stage 5 cleanup implementation.
 - **2025-10-11 — S5.C completed:** Factory wiring no longer accepts
   `observation_builder`; it relies on the context-provided service, and tests
   now guard that passing the legacy kwarg raises a `TypeError`.
+- **2025-10-11 — S5.D completed:** Console routing no longer calls
+  `runtime.queue_console`; `SimulationLoop` passes authorised envelopes directly
+  into the runtime, adapters/runtimes treat `queue_console` as a no-op shim, and
+  smoke/port tests updated to reflect the event-only flow.

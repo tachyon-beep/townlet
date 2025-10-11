@@ -237,18 +237,18 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
      ingests dispatcher payloads with policy metadata/DTO envelopes; new caches expose
      `latest_policy_metadata_snapshot` and `latest_observation_envelope` for dashboards.)*
 
-3. **World adapters**
-   - Remove `LegacyWorldRuntime.tick` fallback paths relying on `WorldState.apply_actions`.
-   - Confirm `create_world` providers no longer return legacy handles needed solely for observations.
+3. **World adapters** *(completed 2025-10-11)*
+   - Remove `LegacyWorldRuntime.tick` fallback paths relying on `WorldState.apply_actions`. *(Context-backed adapter owns action staging; legacy runtime paths removed during S5.B/S5.D.)*
+   - Confirm `create_world` providers no longer return legacy handles needed solely for observations. *(Factory rejects `observation_builder` overrides; context service owns DTO envelopes.)*
 
 4. **External surfaces** *(completed 2025-10-10)*
    - Update CLI tools/training scripts relying on `loop.observations` (e.g., `policy/training_orchestrator.py`)
      to use DTO events or `loop._policy_observation_envelope`. *(Dashboards, adapter smoke, and conflict tests now drive DTO
      dispatcher data; legacy `_ingest_loop_tick` helper removed.)*
 
-5. **Regression sweep**
-   - Run full test suite (`pytest -q`), lint, and mypy to catch stragglers referencing removed
-     attributes. *(Targeted telemetry suites updated; schedule full sweep alongside Stage 6 sign-off.)*
+5. **Regression sweep** *(in progress — targeted subset run 2025-10-11)*
+   - Run focused DTO/console/telemetry regression bundles to confirm the Stage 5 cleanup (see status doc for commands).
+   - Schedule the full `pytest`/`mypy`/`ruff` sweep as part of Stage 6 sign-off.
 
 ---
 

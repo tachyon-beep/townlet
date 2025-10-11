@@ -19,9 +19,6 @@ class WorldRuntime(Protocol):
     def bind_world(self, world: "WorldState") -> None:
         """Rebind the runtime to a freshly constructed world instance."""
 
-    def queue_console(self, operations: Iterable["ConsoleCommandEnvelope"]) -> None:
-        """Buffer console operations for the next tick."""
-
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         """Stage policy actions that should execute on the next tick."""
 

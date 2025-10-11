@@ -41,7 +41,6 @@ class DefaultWorldAdapter(WorldRuntime):
         self._lifecycle = lifecycle
         self._perturbations = perturbations
         self._ticks_per_day = max(0, int(ticks_per_day))
-        self._queued_console: list["ConsoleCommandEnvelope"] = []
         self._last_result: RuntimeStepResult | None = None
         self._last_events: list[Mapping[str, Any]] = []
         self._last_snapshot: SnapshotState | None = None
@@ -64,7 +63,6 @@ class DefaultWorldAdapter(WorldRuntime):
     # ------------------------------------------------------------------
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - no-op bridge
         self._context.reset(seed=seed)
-        self._queued_console.clear()
         self._last_result = None
         self._last_events = []
         self._last_snapshot = None
@@ -72,7 +70,8 @@ class DefaultWorldAdapter(WorldRuntime):
         self._tick = getattr(self._context.state, "tick", 0)
 
     def queue_console(self, operations: Iterable["ConsoleCommandEnvelope"]) -> None:
-        self._queued_console.extend(list(operations))
+        # Deprecated: router now routes commands directly to the context.
+        _ = list(operations)
 
     def tick(
         self,
@@ -87,8 +86,7 @@ class DefaultWorldAdapter(WorldRuntime):
         if lifecycle is None or perturbations is None:
             raise RuntimeError("Context adapter missing lifecycle/perturbations services")
 
-        queued_ops = list(console_operations) if console_operations is not None else list(self._queued_console)
-        self._queued_console.clear()
+        queued_ops = list(console_operations or [])
 
         combined_actions: dict[str, Any] = {}
         if policy_actions is not None:

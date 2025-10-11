@@ -139,10 +139,10 @@ def test_default_world_adapter_tick_and_reset_clears_buffers(
 ) -> None:
     adapter = _make_adapter(stub_context)
 
-    adapter.queue_console([ConsoleCommandEnvelope(name="snapshot")])
     adapter.apply_actions({"alice": {"intent": "rest"}})
 
-    adapter.tick(tick=1, console_operations=None, action_provider=None, policy_actions=None)
+    ops = [ConsoleCommandEnvelope(name="snapshot")]
+    adapter.tick(tick=1, console_operations=ops, action_provider=None, policy_actions=None)
 
     first_call = stub_context.tick_calls[-1]
     assert first_call["console"], "queued console operations should be forwarded"
@@ -151,7 +151,7 @@ def test_default_world_adapter_tick_and_reset_clears_buffers(
     adapter.reset(seed=99)
     assert stub_context.reset_calls == [99]
 
-    adapter.tick(tick=2, console_operations=None, action_provider=None, policy_actions=None)
+    adapter.tick(tick=2, console_operations=(), action_provider=None, policy_actions=None)
 
     second_call = stub_context.tick_calls[-1]
     assert second_call["console"] == [], "reset should clear queued console commands"

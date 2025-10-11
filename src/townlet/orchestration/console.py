@@ -38,10 +38,6 @@ class ConsoleRouter:
     def enqueue(self, command: object) -> None:
         envelope = self._coerce_envelope(command)
         self._queue.append(envelope)
-        try:
-            self._world.queue_console([envelope])
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Failed to queue console command on world runtime")
 
     def run_pending(self, *, tick: int | None = None) -> None:
         while self._queue:

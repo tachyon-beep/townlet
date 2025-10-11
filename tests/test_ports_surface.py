@@ -21,7 +21,7 @@ def test_dummy_world_runtime_port_surface() -> None:
     runtime = create_world(provider="dummy", agents=("alice",))
     assert isinstance(runtime, DummyWorldRuntime)
 
-    for method in ("reset", "tick", "agents", "observe", "apply_actions", "snapshot", "queue_console"):
+    for method in ("reset", "tick", "agents", "observe", "apply_actions", "snapshot"):
         assert hasattr(runtime, method), f"WorldRuntime missing method {method}"
 
     unexpected = ("publish_tick", "record_console_results", "world_state")

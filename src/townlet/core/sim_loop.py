@@ -595,6 +595,7 @@ class SimulationLoop:
 
             runtime_result = runtime.tick(
                 tick=self.tick,
+                console_operations=console_ops,
                 action_provider=_action_provider,
             )
             console_results = runtime_result.console_results

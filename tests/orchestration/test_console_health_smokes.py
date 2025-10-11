@@ -34,7 +34,6 @@ def test_console_router_smoke(simulation_config: SimulationConfig) -> None:
     assert all(
         isinstance(payload["result"]["result"], dict) for payload in console_events if payload["result"]["status"] == "ok"
     )
-    assert not harness.runtime._queued_console, "Dummy runtime console queue should be drained"
 
 
 def test_health_monitor_emits_metrics(simulation_config: SimulationConfig) -> None:

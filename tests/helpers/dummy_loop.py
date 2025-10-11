@@ -340,7 +340,6 @@ class _LoopDummyWorldRuntime:
     def __init__(self, world: _DummyWorldState, context: _DummyWorldContext) -> None:
         self._world = world
         self.context = context
-        self._queued_console: list[ConsoleCommandEnvelope] = []
         self._last_actions: dict[str, Any] = {}
         self._adapter = _DummyWorldAdapter()
         self.config_id = world.config_id
@@ -351,12 +350,8 @@ class _LoopDummyWorldRuntime:
     def bind_world_adapter(self, adapter: _DummyWorldAdapter) -> None:
         self._adapter = adapter
 
-    def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
-        self._queued_console.extend(operations)
-
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - deterministic
         _ = seed
-        self._queued_console.clear()
         self._world.tick = 0
 
     def tick(
@@ -368,8 +363,7 @@ class _LoopDummyWorldRuntime:
         policy_actions: Mapping[str, Any] | None = None,
     ):
         self._world.tick = tick
-        queued = list(console_operations or self._queued_console)
-        self._queued_console.clear()
+        queued = list(console_operations or ())
         if action_provider is not None:
             actions = dict(action_provider(self._world, tick))
         else:

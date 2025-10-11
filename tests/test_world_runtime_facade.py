@@ -115,10 +115,9 @@ def test_runtime_handles_buffered_inputs_and_nightly_reset(tick: int) -> None:
     runtime, world, _lifecycle, _perturbations = _make_runtime(ticks_per_day=4)
 
     buffered_ops = [ConsoleCommandEnvelope(name="noop", metadata={"source": "buffer"})]
-    runtime.queue_console(buffered_ops)
     runtime.apply_actions({"bob": {"action": "move"}})
 
-    runtime.tick(tick=tick, action_provider=None)
+    runtime.tick(tick=tick, action_provider=None, console_operations=buffered_ops)
 
     console_call = next((args for name, args in world.calls if name == "apply_console"), None)
     assert console_call is not None
@@ -133,5 +132,5 @@ def test_runtime_handles_buffered_inputs_and_nightly_reset(tick: int) -> None:
     else:
         assert nightly_calls == []
 
-    # Buffers should be cleared after tick execution.
-    assert runtime.tick(tick=tick + 1, action_provider=lambda w, t: {})  # No exception
+    # Subsequent tick with empty console operations still succeeds.
+    assert runtime.tick(tick=tick + 1, action_provider=lambda w, t: {}, console_operations=())

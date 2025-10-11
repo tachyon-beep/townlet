@@ -18,17 +18,14 @@ class DummyWorldRuntime:
     config_id: str = "dummy-config"
     _tick: int = field(default=0, init=False, repr=False)
     _last_actions: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
-    _queued_console: list[ConsoleCommandEnvelope] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._tick = 0
         self._last_actions.clear()
-        self._queued_console.clear()
 
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - simple state reset
         self._tick = 0
         self._last_actions.clear()
-        self._queued_console.clear()
 
     def tick(
         self,
@@ -39,9 +36,6 @@ class DummyWorldRuntime:
         policy_actions: Mapping[str, Any] | None = None,
     ) -> RuntimeStepResult:
         commands = list(console_operations or ())
-        if self._queued_console:
-            commands.extend(self._queued_console)
-            self._queued_console.clear()
 
         actions: dict[str, Any] = {}
         if action_provider is not None:
@@ -80,8 +74,6 @@ class DummyWorldRuntime:
     ) -> SnapshotState:
         return SnapshotState(config_id=self.config_id, tick=self._tick)
 
-    def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
-        self._queued_console.extend(list(operations))
 
 
 @dataclass(slots=True)
