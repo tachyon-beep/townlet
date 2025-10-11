@@ -204,12 +204,13 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
 
 ## Stage 4 – ML Smoke Scenario
 
-1. **Test harness** *(completed 2025-10-10)*
-   - `tests/policy/test_dto_ml_smoke.py` runs a ≤5 tick SimulationLoop capture and feeds DTO vs legacy
-     feature tensors through a random-weight torch network, asserting logits/actions remain aligned.
-     Torch is imported lazily via `pytest.importorskip`.
+1. **Test harness** *(completed 2025-10-11)*
+   - `tests/policy/test_dto_ml_smoke.py -q` runs a ≤5 tick SimulationLoop capture and feeds DTO vs legacy
+     feature tensors (via `ObservationBuilder`) through a random-weight torch network, asserting
+     logits/actions remain aligned. Baseline feature/map dimensions from `dto_parity/ml_dimensions.txt`
+     are enforced when present. Torch is imported lazily via `pytest.importorskip`.
 
-2. **Metrics validation** *(completed 2025-10-10)*
+2. **Metrics validation** *(completed 2025-10-11)*
    - Smoke test verifies finite reward streams while DTO-derived policy events are active; failures
      surface via numpy assertions.
 
