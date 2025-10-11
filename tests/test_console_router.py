@@ -12,6 +12,7 @@ from townlet.ports.world import WorldRuntime
 class _StubWorld(WorldRuntime):
     def __init__(self) -> None:
         self.snapshots: list[dict[str, Any]] = []
+        self.console_operations: list[ConsoleCommandEnvelope] = []
 
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - unused
         _ = seed
@@ -33,6 +34,9 @@ class _StubWorld(WorldRuntime):
         payload = {"tick": len(self.snapshots)}
         self.snapshots.append(payload)
         return payload
+
+    def queue_console(self, operations):  # type: ignore[override]
+        self.console_operations.extend(list(operations))
 
 
 class _StubTelemetry(TelemetrySink):
@@ -60,6 +64,7 @@ def test_console_router_emits_snapshot_event() -> None:
 
     envelope = ConsoleCommandEnvelope(name="snapshot", args=[], kwargs={})
     router.enqueue(envelope)
+    assert world.console_operations and world.console_operations[0].name == "snapshot"
     router.run_pending(tick=7)
 
     assert telemetry.events, "router should emit telemetry event"
@@ -76,6 +81,7 @@ def test_console_router_handles_unknown_command() -> None:
     router = ConsoleRouter(world=world, telemetry=telemetry)
 
     router.enqueue(ConsoleCommandEnvelope(name="unknown"))
+    assert world.console_operations and world.console_operations[-1].name == "unknown"
     router.run_pending(tick=1)
 
     name, payload = telemetry.events[-1]

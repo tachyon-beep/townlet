@@ -6,7 +6,7 @@
 - Console routing and health monitoring continue to operate alongside the legacy queue-console path while we finish removing direct `runtime.queue_console` usage.
 - WC3 (telemetry/policy DTO work) unlocked the observation pipeline and telemetry guards (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`). Outstanding WP3C items (training adapters, DTO-only parity sweeps) still block the final removal of legacy world handles.
 
-- Continue the remaining T4.x cleanup (remove `runtime.queue_console`, rely solely on ports) and add the missing loop/console smokes.
+- Finish the remaining T4.x cleanup (telemetry-only command handling, console/loop smokes) now that command queueing is routed through `ConsoleRouter`.
 - Execute T5.x to introduce dummy world/policy/telemetry providers and associated surface tests.
 - Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after adapter/loop cleanup converges.
 

@@ -38,17 +38,22 @@ Use this as reorientation material if the working memory is compacted. It summar
 
 ## Simulation Loop Cleanup (WP3 Section 3)
 
-- Remaining direct legacy usage:
-  - `runtime.queue_console` still invoked by the loop (console commands forwarded via the adapter). Need router-driven apply path that emits events/DTO updates directly.
-  - World adapter still wraps `ObservationBuilder` for legacy observation batches; these shims remain until ML consumers migrate to DTO only.
-- Plan: finish ML parity work, remove `runtime.queue_console` usage, drop `ObservationBuilder` shims, and mark WP1 Step 8 / WP2 Step 7 complete.
+- Console commands now flow through `ConsoleRouter.enqueue`, which forwards them to the world runtime and records telemetry; `SimulationLoop.step` no longer calls `runtime.queue_console` directly (residual work: telemetry-only command handling and loop/console smokes under T4.2b/T4.5).
+- World factory + adapter always operate on `WorldContext.observe`; the legacy ObservationBuilder fallback is gone from the loop, and `DefaultWorldAdapter.observe` simply proxies the context. Remaining work is to migrate adapter-side observation helpers/tests to the DTO-native path (T2.4) and keep ML parity in sync.
+- Plan: finish ML parity work, remove the remaining telemetry command shims, add the promised loop/console smoke tests, and mark WP1 Step 8 / WP2 Step 7 complete.
 
 ## Cross-Package Dependencies
 
 - **WP1** waits on WP3 for: observation-first policy decisions and removal of `runtime.queue_console`.
 - **WP2** waits on WP3 for: observation DTO schema (done) and removal of legacy adapter shims; once DTO-only ML parity lands we can drop the ObservationBuilder/queue-console compatibility paths.
 - **WP3 telemetry cleanup** now focuses on transport parity and guard tests before WP1/WP2 closure.
-- Transitional bridge removal (legacy apply/resolves) is tracked under WP3B once modular systems
-  are fully operational.
+- Transitional bridge removal (legacy apply/resolves) is tracked under WP3B once modular systems are fully operational.
+
+## Immediate Next Steps
+
+1. **Telemetry**: Complete T4.2b by routing console result emissions entirely through the dispatcher (`TelemetryPublisher.emit_event`) and removing any lingering direct writer calls.
+2. **Loop Smokes**: Implement T4.5a integration tests (`tests/core/test_sim_loop_modular_smoke.py`) exercising default providers plus console routing.
+3. **Adapter Coverage**: Expand adapter tests (T2.4) to cover the DTO-only observe path and guard against regression.
+4. **Docs**: Update ADR-001 / console docs once telemetry + loop cleanup completes; sync WP1/WP2 briefs with the latest DTO-only architecture.
 
 Keep this snapshot updated if major structural decisions change.

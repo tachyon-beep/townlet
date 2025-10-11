@@ -543,20 +543,21 @@ class SimulationLoop:
         tick_start = time.perf_counter()
         next_tick = self.tick + 1
         console_ops = list(self.telemetry.drain_console_buffer())
+        runtime = self.runtime
+        if runtime is None:  # pragma: no cover - defensive guard
+            raise RuntimeError("WorldRuntime is not initialised")
         if self._console_router is not None:
             for command in console_ops:
                 try:
                     self._console_router.enqueue(command)
                 except ValueError:
                     logger.warning("Ignoring invalid console command payload: %r", command)
-        runtime = self.runtime
-        if runtime is None:  # pragma: no cover - defensive guard
-            raise RuntimeError("WorldRuntime is not initialised")
+        elif console_ops:
+            runtime.queue_console(console_ops)
 
         controller = self._policy_controller
         try:
             self.tick = next_tick
-            runtime.queue_console(console_ops)
 
             if self._policy_observation_envelope is None:
                 bootstrap_envelope = self._build_bootstrap_policy_envelope()

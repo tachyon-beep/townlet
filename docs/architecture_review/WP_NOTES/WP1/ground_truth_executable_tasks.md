@@ -25,7 +25,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.1a** Introduce seam in `_build_components` that accepts pre-built world/policy/telemetry objects (for test injection). *(Completed 2025-10-10 — see `override_world_components`/`override_policy_components`/`override_telemetry_components` helpers.)*
 - **T4.1b** Remove direct `WorldState` construction, instead call `create_world` and pull context/adapter details via the port; update tests depending on `loop.world` attribute. *(Completed 2025-10-10 — loop now derives world/lifecycle/perturbations from `create_world` and uses adapter context for state access.)*
 - **T4.1c** Replace `_observation_builder` usage with DTO envelope caching; ensure reward engine consumes the DTO data. *(Completed 2025-10-10 — legacy observation builder fallback removed; DTO envelopes supplied exclusively by `WorldContext.observe`.)*
-- **T4.2** Remove direct `runtime.queue_console` usage; pipe console input through `ConsoleRouter.enqueue`/`run_pending`.
+- **T4.2** Remove direct `runtime.queue_console` usage; pipe console input through `ConsoleRouter.enqueue`/`run_pending`. *(ConsoleRouter now forwards commands; remaining telemetry cleanup tracked under T4.2b.)*
 - **T4.3** Ensure policy decisions operate on cached DTO envelopes; drop observation dict caches.
 - **T4.4** Refresh loop tick flow to emit telemetry via ports only (no legacy writer calls).
 - **T4.5** Add loop smoke tests for modular providers and DTO parity.

@@ -6,7 +6,7 @@
 
 ## Outstanding Work
 - T5.x: add dummy world/policy/telemetry providers plus loop/console/health-monitor smokes.
-- Simulation loop cleanup: remove direct `runtime.queue_console` usage, lean exclusively on ports, and backfill integration smokes.
+- Simulation loop cleanup: finish telemetry-only routing (T4.2b) and add loop/console smokes (T4.5).
 - Documentation updates (ADR-001, console/monitor ADR, status) after the adapter/loop cleanup finalises.
 
 ## Dependences / Notes
