@@ -17,11 +17,8 @@ from townlet.core import (
     resolve_world,
     telemetry_registry,
 )
-from townlet.core.interfaces import (
-    PolicyBackendProtocol,
-    TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
-)
+from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
+from townlet.ports.world import WorldRuntime
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.factories.registry import register as factory_register
 from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
@@ -222,7 +219,7 @@ def test_registry_resolves_default_world(sample_config: Any) -> None:
         perturbations=_StubPerturbations(),
         ticks_per_day=1,
     )
-    assert isinstance(world, WorldRuntimeProtocol)
+    assert isinstance(world, WorldRuntime)
 
     policy = resolve_policy("scripted", config=sample_config)
     assert isinstance(policy, PolicyBackendProtocol)
@@ -257,7 +254,7 @@ def test_simulation_loop_uses_registered_providers(sample_config: Any) -> None:
     )
     try:
         assert isinstance(loop.policy, _StubPolicy)
-        assert isinstance(loop.telemetry, _StubTelemetry)
+        assert isinstance(loop._telemetry_port, _StubTelemetry)
     finally:
         loop.close()
 
@@ -277,7 +274,7 @@ def test_simulation_loop_reads_runtime_from_config(sample_config: Any) -> None:
     loop = SimulationLoop(config)
     try:
         assert isinstance(loop.policy, _StubPolicy)
-        assert isinstance(loop.telemetry, _StubTelemetry)
+        assert isinstance(loop._telemetry_port, _StubTelemetry)
     finally:
         loop.close()
 

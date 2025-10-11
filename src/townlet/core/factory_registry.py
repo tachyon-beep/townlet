@@ -7,11 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
-from townlet.core.interfaces import (
-    PolicyBackendProtocol,
-    TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
-)
+from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
+from townlet.ports.world import WorldRuntime
 
 ProviderFactory = Callable[..., object]
 T_concrete = TypeVar("T_concrete", bound=object)
@@ -67,9 +64,9 @@ def _ensure_protocol(instance: object, protocol: type[T_concrete], name: str) ->
     return instance
 
 
-def resolve_world(name: str, **kwargs: Any) -> WorldRuntimeProtocol:
+def resolve_world(name: str, **kwargs: Any) -> WorldRuntime:
     instance = _world_registry.resolve(name, **kwargs)
-    return _ensure_protocol(instance, WorldRuntimeProtocol, name)
+    return _ensure_protocol(instance, WorldRuntime, name)
 
 
 def resolve_policy(name: str, **kwargs: Any) -> PolicyBackendProtocol:

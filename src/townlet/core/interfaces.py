@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
 
+from townlet.ports.world import WorldRuntime as _WorldRuntimePort
 from townlet.world.runtime import ActionMapping, ActionProvider, RuntimeStepResult
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -23,41 +24,9 @@ ObservationBatch: TypeAlias = Mapping[str, object]
 RewardMapping: TypeAlias = Mapping[str, float]
 TerminationMapping: TypeAlias = Mapping[str, bool]
 
-
-@runtime_checkable
-class WorldRuntimeProtocol(Protocol):
-    """Interface for advancing world state and handling console/actions."""
-
-    def bind_world(self, world: WorldState) -> None:
-        """Rebind the runtime to a freshly constructed world instance."""
-
-    def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
-        """Buffer console operations for the next tick."""
-
-    def apply_actions(self, actions: ActionMapping) -> None:
-        """Stage policy actions that should execute on the next tick."""
-
-    def tick(
-        self,
-        *,
-        tick: int,
-        console_operations: Iterable[ConsoleCommandEnvelope] | None = None,
-        action_provider: ActionProvider | None = None,
-        policy_actions: ActionMapping | None = None,
-    ) -> RuntimeStepResult:
-        """Advance the world by one tick and return observable artefacts."""
-
-    def snapshot(
-        self,
-        *,
-        config: object | None = None,
-        telemetry: TelemetrySinkProtocol | None = None,
-        stability: object | None = None,
-        promotion: object | None = None,
-        rng_streams: Mapping[str, object] | None = None,
-        identity: Mapping[str, object] | None = None,
-    ) -> SnapshotState:
-        """Return a diagnostic snapshot of the underlying world state."""
+# Backwards compatibility alias — prefer importing `WorldRuntime` from
+# `townlet.ports.world`. This alias will be removed once all callers migrate.
+WorldRuntimeProtocol = _WorldRuntimePort
 
 
 @runtime_checkable

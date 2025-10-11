@@ -23,7 +23,6 @@ from townlet.config import AffordanceRuntimeConfig, SimulationConfig
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
 )
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
@@ -49,6 +48,7 @@ from townlet.world.observations.context import (
     agent_context as observation_agent_context,
 )
 from townlet.world.observations.interfaces import ObservationServiceProtocol
+from townlet.ports.world import WorldRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class WorldComponents:
     lifecycle: LifecycleManager
     perturbations: PerturbationScheduler
     observation_service: ObservationServiceProtocol
-    world_port: WorldRuntimeProtocol
+    world_port: WorldRuntime
     ticks_per_day: int
     provider: str
 
@@ -136,7 +136,7 @@ class SimulationLoop:
             self._affordance_runtime_factory = affordance_runtime_factory
         else:
             self._affordance_runtime_factory = self._load_affordance_runtime_factory(self._runtime_config)
-        self.runtime: WorldRuntimeProtocol | None = None
+        self.runtime: WorldRuntime | None = None
         self._world_provider = (world_provider or "default").strip()
         self._world_provider_locked = world_provider is not None
         self._world_options = dict(world_options or {})
@@ -193,7 +193,7 @@ class SimulationLoop:
             runtime = getattr(self, "runtime", None)
             if isinstance(value, WorldState):
                 super().__setattr__("_world_adapter", WorldRuntimeAdapter(value))
-                if isinstance(runtime, WorldRuntimeProtocol):
+                if isinstance(runtime, WorldRuntime):
                     runtime.bind_world(value)
                     bind_adapter = getattr(runtime, "bind_world_adapter", None)
                     if callable(bind_adapter):  # pragma: no cover - delegation glue

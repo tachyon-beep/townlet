@@ -12,19 +12,37 @@ The simulation loop currently instantiates concrete classes from `townlet.world`
 
 Implement the following shape, mirroring the WP1 requirements:
 
-1. **Minimal ports only.** Create `townlet/ports/` and define the exact protocols below. They represent the sole surface the loop sees.
+1. **Minimal ports only.** Create `townlet/ports/` and define the exact protocols below. They represent the sole surface the loop sees. World is exported via `townlet.ports.world.WorldRuntime` (runtime-checkable protocol); policy and telemetry remain under `townlet.core`.
 
    ```python
    # townlet/ports/world.py
    from typing import Protocol, Iterable, Mapping, Any
 
+   from collections.abc import Iterable, Mapping, Callable
+   from typing import Protocol, Any
+
    class WorldRuntime(Protocol):
-       def reset(self, seed: int | None = None) -> None: ...
-       def tick(self) -> None: ...
-       def agents(self) -> Iterable[str]: ...
-       def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]: ...
+       def bind_world(self, world: WorldState) -> None: ...
+       def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None: ...
        def apply_actions(self, actions: Mapping[str, Any]) -> None: ...
-       def snapshot(self) -> Mapping[str, Any]: ...
+       def tick(
+           self,
+           *,
+           tick: int,
+           console_operations: Iterable[ConsoleCommandEnvelope] | None = None,
+           action_provider: Callable[[WorldState, int], Mapping[str, Any]] | None = None,
+           policy_actions: Mapping[str, Any] | None = None,
+       ) -> RuntimeStepResult: ...
+       def snapshot(
+           self,
+           *,
+           config: Any | None = None,
+           telemetry: TelemetrySinkProtocol | None = None,
+           stability: Any | None = None,
+           promotion: Any | None = None,
+           rng_streams: Mapping[str, Any] | None = None,
+           identity: Mapping[str, Any] | None = None,
+       ) -> SnapshotState: ...
    ```
 
    ```python
@@ -50,7 +68,7 @@ Implement the following shape, mirroring the WP1 requirements:
 
    *No console buffering, training hooks, transport specifics, or loop instrumentation methods belong on these ports.*
 
-2. **World owns the tick.** `world.tick()` takes no tick argument; the loop reads the current tick from `world.snapshot()`. Maintain `world.apply_actions()` between `observe` and `tick` so policy decisions remain stateless.
+2. **World owns the tick.** `WorldRuntime.tick` accepts the loop tick and optional console/actions inputs. `ConsoleRouter` stages commands via `queue_console`; the loop forwards policy actions via `apply_actions` before invoking `tick`. DTO-only follow-up work (WP3) will replace the `WorldState` callback with prebuilt DTO action batches.
 
 3. **Telemetry lifecycle is explicit.** The loop calls `telemetry.start()` before the first tick and `telemetry.stop()` during shutdown. Every other telemetry concern (console output, batching, back-pressure) lives in adapters.
 
@@ -70,7 +88,7 @@ Implement the following shape, mirroring the WP1 requirements:
 
    Unknown keys raise `ConfigurationError(f"Unknown {kind} provider: {key}. Known: {sorted(REGISTRY[kind])}")`.
 
-6. **Composition root imports ports only.** Entry points resolve providers via factories; the simulation loop now drives DTO-first telemetry by emitting dispatcher events plus a `global_context` payload instead of mutating adapters directly. High-level structure:
+6. **Composition root imports ports only.** Entry points resolve providers via factories; the simulation loop emits dispatcher events plus a DTO `global_context` payload. High-level structure:
 
    ```python
    world = create_world(cfg)
@@ -80,12 +98,12 @@ Implement the following shape, mirroring the WP1 requirements:
    telemetry.start()
    agent_ids = list(world.agents())
    policy.on_episode_start(agent_ids)
-   for _ in range(cfg.runtime.max_ticks):
+   for tick in range(1, cfg.runtime.max_ticks + 1):
        envelope = world.observe()
        actions = policy.decide(envelope)
        world.apply_actions(actions)
-       world.tick()
-       # loop.tick emits dispatcher events with DTO global_context; telemetry sinks subscribe via the port.
+       result = world.tick(tick=tick)
+       telemetry.emit_event("loop.tick", {"tick": tick, "result": result})
    policy.on_episode_end()
    telemetry.stop()
    ```

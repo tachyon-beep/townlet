@@ -70,7 +70,10 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
     - Step 3: migrate test doubles (`DummyWorldRuntime`, `_LoopDummyWorldRuntime`, `tests/test_core_protocols.py` stubs) to the new methods and remove direct `WorldState` dependencies. Provide helper wrappers so existing tests can still instantiate the runtime without DTO knowledge during the transition.
     - Step 4: once adapters/tests align, delete the legacy methods and collapse the alias back into `WorldRuntime`. Document timeline in ADR-001 and mark the deprecation removal milestone in WP1 status.
   - **T6.1d – Documentation update (Pending)**: Once the new interface is ready, refresh ADR-001, CORE_PROTOCOLS.md, and WP1/WP3 status docs to describe the DTO-first contract, console-router ownership, and deprecation timeline for legacy methods. Include migration guidance for downstream providers/dummies.
-- **T6.2** Update adapters and loop to match the refined signatures; remove dependency on `core.interfaces` legacy protocols.
+- **T6.2** Update adapters and loop to match the refined signatures; remove dependency on `core.interfaces` legacy protocols. *(Completed 2025-10-11 — loop/factories now type against `townlet.ports.world.WorldRuntime`.)*
+  - Simulation loop, factory registry, and helper harnesses import the port directly; `core.interfaces.WorldRuntimeProtocol` is now a deprecated alias for backwards compatibility.
+  - Added `runtime_checkable` to the port protocol so provider factories can continue validating instances structurally.
+  - Updated regression tests (`tests/test_factory_registry.py`, `tests/test_core_protocols.py`) to assert against the port contract and check the telemetry/world overrides via the actual ports.
 - **T6.3** Provide guard tests ensuring the loop imports only `townlet.ports.*` interfaces.
 - **T6.4** Deprecate/remove unused members from `core.interfaces` once the loop migrates.
 

@@ -11,11 +11,11 @@ from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
 )
+from townlet.ports.world import WorldRuntime as WorldRuntimePort
 from townlet.policy.runner import PolicyRuntime
 from townlet.telemetry.publisher import TelemetryPublisher
-from townlet.world.runtime import WorldRuntime
+from townlet.world.runtime import WorldRuntime as ConcreteWorldRuntime
 
 
 class _StubWorld:
@@ -68,13 +68,13 @@ def sample_config() -> Any:
 
 
 def test_world_runtime_satisfies_protocol() -> None:
-    runtime = WorldRuntime(
+    runtime = ConcreteWorldRuntime(
         world=_StubWorld(),
         lifecycle=_StubLifecycle(),
         perturbations=_StubPerturbations(),
         ticks_per_day=1,
     )
-    assert isinstance(runtime, WorldRuntimeProtocol)
+    assert isinstance(runtime, WorldRuntimePort)
 
 
 def test_policy_runtime_satisfies_protocol(sample_config: Any) -> None:

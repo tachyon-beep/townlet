@@ -24,6 +24,7 @@ The broader intent is to finish the port-first composition root so the simulatio
 - **T1.4/T1.5:** completed 2025-10-11 — factory tests assert DTO observation envelopes/events and invalid providers raise `ConfigurationError`; missing config continues to raise `TypeError`.
 - **T5.1–T5.3:** completed 2025-10-11 — `townlet.testing` hosts dummy world/policy/telemetry providers, factories register them as `dummy`, and `tests/test_ports_surface.py` validates the port surfaces.
 - Documentation & parity: expand DTO parity harness/tests for the context (T3.x), refresh ADRs, and capture the strategic changes in WP1/WP2/WP3 briefs once the remaining tasks converge.
+- **T6.2:** completed 2025-10-11 — loop/factory/test helpers now type against `townlet.ports.world.WorldRuntime`; `WorldRuntimeProtocol` remains as a deprecated alias for compatibility. Regression guard: `pytest tests/test_factory_registry.py tests/test_core_protocols.py tests/test_ports_surface.py -q`.
 
 ## Dependences / Notes
 - Context wiring currently depends on the factory ensuring `observation_service` is configured; adapter.observe now proxies DTO envelopes directly from the context and adapter tests guard the behaviour.
