@@ -166,14 +166,17 @@ def test_default_world_adapter_observe_uses_context_and_filters_agents(
 
     adapter.tick(tick=2, console_operations=None, action_provider=None, policy_actions=None)
 
-    batch = adapter.observe()
-    assert set(batch.keys()) == {"alice", "bob"}
+    envelope = adapter.observe()
+    assert isinstance(envelope, ObservationEnvelope)
+    assert {agent.agent_id for agent in envelope.agents} == {"alice", "bob"}
     assert stub_context.observe_calls[-1]["kwargs"]["terminated"] == {"alice": True}
-    assert batch["alice"]["metadata"]["agent_id"] == "alice"
-    assert batch["alice"]["needs"]["hunger"] == 0.5
+    alice = next(agent for agent in envelope.agents if agent.agent_id == "alice")
+    assert alice.metadata["agent_id"] == "alice"
+    assert alice.needs["hunger"] == 0.5
 
     filtered = adapter.observe(["bob"])
-    assert set(filtered.keys()) == {"bob"}
+    assert isinstance(filtered, ObservationEnvelope)
+    assert [agent.agent_id for agent in filtered.agents] == ["bob"]
     assert stub_context.observe_calls[-1]["agent_ids"] == ("bob",)
 
 

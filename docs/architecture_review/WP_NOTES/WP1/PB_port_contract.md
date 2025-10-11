@@ -8,6 +8,9 @@ subsequent PB-B/C/D implementation tasks.
 ## Target Contract
 
 ```python
+from townlet.world.dto.observation import ObservationEnvelope
+
+
 @runtime_checkable
 class WorldRuntime(Protocol):
     """Minimal contract for advancing the modular world."""
@@ -34,7 +37,7 @@ class WorldRuntime(Protocol):
     def agents(self) -> Iterable[str]:
         ...
 
-    def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
+    def observe(self, agent_ids: Iterable[str] | None = None) -> ObservationEnvelope:
         ...
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
@@ -57,8 +60,8 @@ class WorldRuntime(Protocol):
 
 - `queue_console()` has been removed. Console ingestion is now routed purely
   through `ConsoleRouter.enqueue` → `SimulationLoop.runtime.tick(console_operations=...)`.
-- No direct observation-builder hooks remain; `observe()` is expected to return
-  the DTO-structured mapping created by `WorldContext.observe`.
+- `observe()` now returns the DTO `ObservationEnvelope` produced by
+  `WorldContext.observe`, aligning the port with Stage 6 DTO-only policy paths.
 - The contract still accepts an `action_provider` that references `WorldState`;
   PB-C/D will introduce the DTO-only alternative once policy adapters finish the
   migration in WP3 Stage 6.

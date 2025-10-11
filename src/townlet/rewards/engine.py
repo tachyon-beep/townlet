@@ -8,7 +8,7 @@ from typing import ClassVar
 from townlet.agents.models import PersonalityProfile, PersonalityProfiles
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
-from townlet.world.observation import agent_context as observation_agent_context
+from townlet.world.observations.context import agent_context as observation_agent_context
 
 
 class RewardEngine:

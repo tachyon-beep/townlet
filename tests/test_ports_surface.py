@@ -32,8 +32,9 @@ def test_dummy_world_runtime_port_surface() -> None:
     result = runtime.tick(tick=1)
     assert isinstance(result.events, list)
     assert list(runtime.agents()) == ["alice"]
-    observations = runtime.observe()
-    assert "alice" in observations
+    envelope = runtime.observe()
+    assert isinstance(envelope, ObservationEnvelope)
+    assert [agent.agent_id for agent in envelope.agents] == ["alice"]
     snapshot = runtime.snapshot()
     assert snapshot.config_id == runtime.config_id
 

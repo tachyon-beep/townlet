@@ -54,10 +54,10 @@ from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
 from townlet.world.hooks import load_modules as load_hook_modules
-from townlet.world.observation import (
+from townlet.world.observations.views import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )
-from townlet.world.observation import snapshot_precondition_context
+from townlet.world.observations.context import snapshot_precondition_context
 from townlet.world.observations.interfaces import ObservationServiceProtocol
 from townlet.world.observations.service import WorldObservationService
 from townlet.world.perturbations import PerturbationService

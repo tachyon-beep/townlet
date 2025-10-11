@@ -14,10 +14,10 @@
   - `tox -e docstrings` passes with module coverage at 100 % and callable coverage at 45.18 % (threshold 40 %).
 - Long-run smoke (`python scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 50 --telemetry-path tmp/wp-c/phase6_smoke_telemetry.jsonl`) shows telemetry payload parity; stdout captured in `tmp/wp-c/phase6_smoke_stdout.log`.
 
-## Consumer Inventory (`townlet.world.observation.*`)
+## Consumer Inventory (`townlet.world.observations.*`)
 | Module | Entry Points | Notes |
 | --- | --- | --- |
-| `src/townlet/world/grid.py` | `local_view`, `agent_context`, `build_local_cache`, `snapshot_precondition_context` | Legacy shims still re-export helpers; world tick loop calls these when prepping observations & snapshots. |
+| `src/townlet/world/grid.py` | `local_view`, `agent_context`, `build_local_cache`, `snapshot_precondition_context` | Helpers now live under `townlet.world.observations`; world tick loop calls these when prepping observations & snapshots. |
 | `src/townlet/observations/builder.py` | `_build_local_cache`, `_encode_path_hint`, `_encode_common_features` | Core observation runtime relies on helper outputs and metadata. |
 | `src/townlet/rewards/engine.py` | `observation_agent_context` import | Reward heuristics sample agent context scalars (needs, wallet). |
 | `tests/test_world_local_view.py` | `local_view`, `agent_context` | Regression coverage for helper behaviour. |
@@ -30,7 +30,7 @@ Additional downstream consumers referenced during earlier audits (see `audit/WOR
 ## Dependency Mapping (Phase 1)
 
 ```
-townlet.world.observation.* helpers
+townlet.world.observations.* helpers
         │
         ├─▶ ObservationBuilder (src/townlet/observations/builder.py:1)
         │       │
@@ -56,8 +56,8 @@ Key policy/telemetry entrypoints:
 2. **Map layout** — hybrid/full variants require 11×11 window with channel order `[self, agents, objects, reservations]`, full adds `path_dx`, `path_dy` (spec §2–3, lines 47-72). Compact window obeys map_window + object channel rules (§4, lines 74-116).
 3. **Social snippet contract** — must continue to populate slots/aggregates according to `audit/WP_OBSERVATION_VARIANTS_PHASE1.md:38-74` and spec §5 (lines 118-150).
 4. **Snapshot serialisability** — `snapshot_precondition_context` must deliver JSON-safe structures for telemetry/snapshot persistence (`tests/test_world_observation_helpers.py:55`).
-5. **Employment hooks** — `agent_context` calls `_employment_context_wages`/`_employment_context_punctuality` when available; adapters must preserve fallback behaviour (`src/townlet/world/observation.py:101-132`).
-6. **Path hint search** — `find_nearest_object_of_type` drives directional hints; relocation must not introduce O(n²) regressions (currently linear over `world.objects`, `src/townlet/world/observation.py:147-173`).
+5. **Employment hooks** — `agent_context` calls `_employment_context_wages`/`_employment_context_punctuality` when available; adapters must preserve fallback behaviour (`src/townlet/world/observations/context.py`).
+6. **Path hint search** — `find_nearest_object_of_type` drives directional hints; relocation must not introduce O(n²) regressions (currently linear over `world.objects`, `src/townlet/world/observations/views.py`).
 7. **Local cache performance** — `build_local_cache` constructs tile lookups without mutating `WorldState`; future adapter should keep pure dict/set outputs to satisfy tests `tests/test_world_observation_helpers.py:26`.
 
 ## Open Questions for Phase Planning
@@ -87,7 +87,7 @@ Key policy/telemetry entrypoints:
 
 ## Phase 2 Snapshot (Module Extraction)
 - Created dedicated modules under `src/townlet/world/observations/` (`cache.py`, `views.py`, `context.py`, `interfaces.py`) with docstrings referencing WP-C Phase 4.
-- Updated runtime imports (`src/townlet/observations/builder.py`, `src/townlet/world/__init__.py`) to target the new modules. Legacy paths (`townlet.world.observation`, `townlet.world.observations`) now proxy with `DeprecationWarning` guidance.
+- Updated runtime imports (`src/townlet/observations/builder.py`, `src/townlet/world/__init__.py`) to target the new modules. Legacy paths previously emitted `DeprecationWarning`; they have since been removed.
 - Observation helper tests have been repointed to the new modules, confirming parity without relying on the deprecated paths (`tests/test_world_observation_helpers.py`, `tests/test_world_local_view.py`).
 - Legacy shims now lazily import helper modules to avoid cyclic imports introduced by the runtime adapter.
 
@@ -117,6 +117,6 @@ Key policy/telemetry entrypoints:
 ## Migration Checklist for Downstream Consumers
 - Import `ensure_world_adapter` from `townlet.world.core` (lazy loader exports the helper) and wrap any direct `WorldState` references before accessing shared services.
 - Update telemetry or policy modules instantiating observation builders to pass `loop.world_adapter` (or the result of `ensure_world_adapter(world)`) instead of the mutable grid instance.
-- Replace imports from `townlet.world.observation` with `townlet.world.observations.{cache,context,views}`; legacy shims emit deprecation warnings during the transition.
+- Replace imports from `townlet.world.observations.{cache,context,views}` directly; the interim shims have been retired.
 - Snapshot or replay tooling relying on raw `world.agents` should switch to `adapter.agent_snapshots_view()` to avoid mutating live registries.
 - Validate integrations against the updated smoke tests (`tests/test_observation_builder_parity.py`, `tests/test_telemetry_adapter_smoke.py`); regenerate local baselines if observation schemas change.

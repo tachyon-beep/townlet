@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.core.context import WorldContext
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.grid import WorldState
@@ -44,7 +45,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self._last_result: RuntimeStepResult | None = None
         self._last_events: list[Mapping[str, Any]] = []
         self._last_snapshot: SnapshotState | None = None
-        self._last_observations: dict[str, Any] | None = None
+        self._last_envelope: ObservationEnvelope | None = None
 
         self._world_adapter = ensure_world_adapter(context.state)
         if observation_builder is not None:
@@ -66,7 +67,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self._last_result = None
         self._last_events = []
         self._last_snapshot = None
-        self._last_observations = None
+        self._last_envelope = None
         self._tick = getattr(self._context.state, "tick", 0)
 
     def tick(
@@ -100,7 +101,7 @@ class DefaultWorldAdapter(WorldRuntime):
             ticks_per_day=self._ticks_per_day,
         )
         self._last_result = result
-        self._last_observations = None
+        self._last_envelope = None
         self._tick = tick
         self._last_events = [dict(payload) for payload in result.events]
         self._world_adapter = ensure_world_adapter(self._context.state)
@@ -119,22 +120,8 @@ class DefaultWorldAdapter(WorldRuntime):
             terminated=terminated,
             termination_reasons=termination_reasons,
         )
-        observations: dict[str, Any] = {}
-        for agent in envelope.agents:
-            observations[agent.agent_id] = {
-                "map": agent.map,
-                "features": agent.features,
-                "metadata": agent.metadata,
-                "needs": agent.needs,
-                "wallet": agent.wallet,
-                "inventory": agent.inventory,
-                "job": agent.job,
-                "personality": agent.personality,
-                "queue_state": agent.queue_state,
-                "pending_intent": agent.pending_intent,
-            }
-        self._last_observations = observations
-        return observations
+        self._last_envelope = envelope
+        return envelope
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         self._context.apply_actions(actions)

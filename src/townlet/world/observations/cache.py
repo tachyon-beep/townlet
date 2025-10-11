@@ -1,7 +1,7 @@
 """Local cache helpers extracted during WP-C Phase 4.
 
-These utilities mirror the legacy functions previously hosted in
-``townlet.world.observation`` and are consumed by the observation builder to
+These utilities mirror the legacy functions previously hosted in the deprecated
+``townlet.world.observation`` module and are consumed by the observation builder to
 construct egocentric spatial views around each agent.
 """
 

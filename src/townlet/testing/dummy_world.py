@@ -6,6 +6,11 @@ from typing import Any, Callable, cast
 
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.snapshots.state import SnapshotState
+from townlet.world.dto.observation import (
+    AgentObservationDTO,
+    GlobalObservationDTO,
+    ObservationEnvelope,
+)
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
@@ -55,9 +60,33 @@ class DummyWorldRuntime:
     def agents(self) -> Iterable[str]:
         return self.agents_list
 
-    def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
-        selected = agent_ids if agent_ids is not None else self.agents_list
-        return {agent: {"tick": self._tick, "last_actions": self._last_actions.get(agent)} for agent in selected}
+    def observe(self, agent_ids: Iterable[str] | None = None) -> ObservationEnvelope:
+        selected = tuple(agent_ids) if agent_ids is not None else tuple(self.agents_list)
+        agents = [
+            AgentObservationDTO(
+                agent_id=agent,
+                metadata={"agent_id": agent},
+                needs={},
+                wallet=None,
+                inventory={},
+                job={},
+                personality=None,
+                queue_state=None,
+                pending_intent=None,
+                map=None,
+                features=None,
+                terminated=False,
+            )
+            for agent in selected
+        ]
+        return ObservationEnvelope(
+            tick=self._tick,
+            agents=agents,
+            global_context=GlobalObservationDTO(),
+            actions=dict(self._last_actions),
+            terminated={agent: False for agent in selected},
+            termination_reasons={agent: "" for agent in selected},
+        )
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         self._last_actions = dict(actions)

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
+from townlet.world.dto.observation import GlobalObservationDTO, ObservationEnvelope
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
@@ -32,8 +33,10 @@ def test_create_world_returns_context_adapter(base_config):
     assert isinstance(result, RuntimeStepResult)
     assert isinstance(result.events, list)
     assert all(isinstance(event, dict) for event in result.events)
-    observations = adapter.observe()
-    assert isinstance(observations, dict)
+    envelope = adapter.observe()
+    assert isinstance(envelope, ObservationEnvelope)
+    assert envelope.tick == 1
+    assert isinstance(envelope.global_context, GlobalObservationDTO)
     assert adapter.lifecycle_manager.config is base_config
     assert adapter.perturbation_scheduler.config is base_config
 

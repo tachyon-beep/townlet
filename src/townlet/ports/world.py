@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
 
+from townlet.world.dto.observation import ObservationEnvelope
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.console.command import ConsoleCommandEnvelope
     from townlet.core.interfaces import TelemetrySinkProtocol
@@ -23,8 +25,8 @@ class WorldRuntime(Protocol):
     def agents(self) -> Iterable[str]:
         """Return the list of agent identifiers."""
 
-    def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
-        """Return per-agent observation payloads."""
+    def observe(self, agent_ids: Iterable[str] | None = None) -> ObservationEnvelope:
+        """Return the DTO observation envelope for the requested agents."""
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         """Stage policy actions that should execute on the next tick."""
