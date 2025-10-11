@@ -71,11 +71,11 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
     - Step 4: once adapters/tests align, delete the legacy methods and collapse the alias back into `WorldRuntime`. Document timeline in ADR-001 and mark the deprecation removal milestone in WP1 status.
   - **T6.1d – Documentation update (Pending)**: Once the new interface is ready, refresh ADR-001, CORE_PROTOCOLS.md, and WP1/WP3 status docs to describe the DTO-first contract, console-router ownership, and deprecation timeline for legacy methods. Include migration guidance for downstream providers/dummies.
 - **T6.2** Update adapters and loop to match the refined signatures; remove dependency on `core.interfaces` legacy protocols. *(Completed 2025-10-11 — loop/factories now type against `townlet.ports.world.WorldRuntime`.)*
-  - Simulation loop, factory registry, and helper harnesses import the port directly; `core.interfaces.WorldRuntimeProtocol` is now a deprecated alias for backwards compatibility.
+  - Simulation loop, factory registry, and helper harnesses import the port directly; the legacy `core.interfaces.WorldRuntimeProtocol` alias has been removed.
   - Added `runtime_checkable` to the port protocol so provider factories can continue validating instances structurally.
   - Updated regression tests (`tests/test_factory_registry.py`, `tests/test_core_protocols.py`) to assert against the port contract and check the telemetry/world overrides via the actual ports.
 - **T6.3** Provide guard tests ensuring the loop imports only `townlet.ports.*` interfaces. *(Completed 2025-10-11 — see `tests/core/test_world_port_imports.py`)*.
-  - Added a static guard that fails if any core/factory/orchestration/testing/telemetry file imports `WorldRuntimeProtocol` from `townlet.core.interfaces`.
+  - Added a static guard that fails if any core/factory/orchestration/testing/telemetry file reintroduces the old alias.
   - Regression command: `pytest tests/core/test_world_port_imports.py -q`.
 - **T6.4** Deprecate/remove unused members from `core.interfaces` once the loop migrates.
 
@@ -116,7 +116,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 ### T6.x – Tighten port boundaries
 - **T6.1a** Draft revised `WorldRuntime` protocol without `WorldState` references; circulate with WP2 owner for sign-off.
 - **T6.1b** Update adapters (`world_default`, dummy world) to satisfy new signatures; ensure type check passes.
-- **T6.2a** Update `SimulationLoop` to import only `townlet.ports.world.WorldRuntime`; remove use of `core.interfaces.WorldRuntimeProtocol`.
+- **T6.2a** Update `SimulationLoop` to import only `townlet.ports.world.WorldRuntime`; remove use of `core.interfaces.WorldRuntimeProtocol`. *(Completed; alias removed 2025-10-11.)*
 - **T6.3a** Add guard test `tests/core/test_loop_port_imports.py` ensuring the loop cannot import legacy protocols.
 - **T6.4a** Deprecate unused members in `core/interfaces.py` and document removal timeline; follow up with final deletion once callers migrate.
 
@@ -145,9 +145,9 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **PB-A** Draft revised `WorldRuntime` protocol without `WorldState`/console references and circulate for sign-off; no code changes yet. *(Completed 2025-10-11 — see `PB_port_contract.md` for the agreed surface.)*
 - **PB-B** Introduce transitional methods on adapters (e.g., `queue_console_router`) to support new protocol while keeping tests passing. *(Completed 2025-10-11 — console routing now flows entirely through `ConsoleRouter`; adapters/dummies no longer expose `queue_console`.)*
 - **PB-C** Update `DefaultWorldAdapter` and dummy world to satisfy the revised protocol; unit test behaviour. *(Completed 2025-10-11 — adapter/dummy runtime refitted, port surface tests (`tests/test_ports_surface.py`) and loop smokes updated.)*
-- **PB-D** Update `SimulationLoop` to import and use only `townlet.ports.world.WorldRuntime`; remove `core.interfaces.WorldRuntimeProtocol` usage.
-- **PB-E** Add guard test ensuring loop modules don’t import `core.interfaces`; enforce via CI.
-- **PB-F** Deprecate unused members in `core/interfaces.py`; schedule follow-up removal once call sites are gone.
+- **PB-D** Update `SimulationLoop` to import and use only `townlet.ports.world.WorldRuntime`; remove `core.interfaces.WorldRuntimeProtocol` usage. *(Completed 2025-10-11 — alias removed, guard updated.)*
+- **PB-E** Add guard test ensuring loop modules don’t import `core.interfaces`; enforce via CI. *(Completed — `tests/core/test_world_port_imports.py` now fails on any reintroduced alias.)*
+- **PB-F** Deprecate unused members in `core/interfaces.py`; schedule follow-up removal once call sites are gone. *(Completed — legacy alias removed from `core.interfaces`/`core.__init__` on 2025-10-11.)*
 
 ---
 ## Progress Log (2025-10-10)

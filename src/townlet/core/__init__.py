@@ -13,7 +13,6 @@ from .factory_registry import (
 from .interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
 )
 from .utils import (
     is_stub_policy,
@@ -26,7 +25,6 @@ __all__ = [
     "PolicyBackendProtocol",
     "SimulationLoop",
     "TelemetrySinkProtocol",
-    "WorldRuntimeProtocol",
     "is_stub_policy",
     "is_stub_telemetry",
     "policy_provider_name",

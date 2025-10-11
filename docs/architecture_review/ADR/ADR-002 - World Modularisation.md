@@ -9,7 +9,8 @@ Accepted
 Townlet's world logic currently lives inside a single god-module (`world/grid.py`) that mixes grid
 state, agent bookkeeping, action handling, per-tick systems, telemetry hooks, and randomness.
 WP1 created the `WorldRuntime` port so the simulation loop can depend on behaviour contracts. The
-port now lives in `townlet.ports.world` (with `WorldRuntimeProtocol` in `townlet.core.interfaces`
+port now lives in `townlet.ports.world`; the legacy `WorldRuntimeProtocol` alias in
+`townlet.core.interfaces` has been removed.
 acting as a deprecated alias during migration), but the concrete world implementation still exposes
 sprawling concerns that are hard to test and evolve.
 the concrete world implementation still exposes sprawling concerns that are hard to test and evolve.

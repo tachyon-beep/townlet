@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
 
-from townlet.ports.world import WorldRuntime as _WorldRuntimePort
 from townlet.world.runtime import ActionMapping, ActionProvider, RuntimeStepResult
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -23,11 +22,6 @@ if TYPE_CHECKING:  # pragma: no cover
 ObservationBatch: TypeAlias = Mapping[str, object]
 RewardMapping: TypeAlias = Mapping[str, float]
 TerminationMapping: TypeAlias = Mapping[str, bool]
-
-# Backwards compatibility alias — prefer importing `WorldRuntime` from
-# `townlet.ports.world`. This alias will be removed once all callers migrate.
-WorldRuntimeProtocol = _WorldRuntimePort
-
 
 @runtime_checkable
 class PolicyBackendProtocol(Protocol):

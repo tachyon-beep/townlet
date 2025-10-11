@@ -22,8 +22,8 @@ The broader intent is to finish the port-first composition root so the simulatio
 - **T1.4/T1.5:** completed 2025-10-11 — factory tests assert DTO observation envelopes/events and invalid providers raise `ConfigurationError`; missing config continues to raise `TypeError`.
 - **T5.1–T5.3:** completed 2025-10-11 — `townlet.testing` hosts dummy world/policy/telemetry providers, factories register them as `dummy`, and `tests/test_ports_surface.py` validates the port surfaces.
 - Documentation & parity: DTO parity harness expanded (`tests/core/test_sim_loop_dto_parity.py`) and new world-context parity checks (`tests/world/test_world_context_parity.py`) verify queue/economy/relationship exports; ADR/briefs refreshed accordingly.
-- **T6.2:** completed 2025-10-11 — loop/factory/test helpers now type against `townlet.ports.world.WorldRuntime`; `WorldRuntimeProtocol` remains as a deprecated alias for compatibility. Regression guard: `pytest tests/test_factory_registry.py tests/test_core_protocols.py tests/test_ports_surface.py -q`.
-- **T6.3:** completed 2025-10-11 — static guard (`tests/core/test_world_port_imports.py`) prevents reintroducing `WorldRuntimeProtocol` imports outside the alias file.
+- **T6.2:** completed 2025-10-11 — loop/factory/test helpers now type against `townlet.ports.world.WorldRuntime`; the legacy alias has been removed. Regression guard: `pytest tests/test_factory_registry.py tests/test_core_protocols.py tests/test_ports_surface.py -q`.
+- **T6.3:** completed 2025-10-11 — static guard (`tests/core/test_world_port_imports.py`) prevents reintroducing the old alias anywhere under core/factories/orchestration/testing/telemetry.
 
 ## Dependences / Notes
 - Context wiring currently depends on the factory ensuring `observation_service` is configured; adapter.observe now proxies DTO envelopes directly from the context and adapter tests guard the behaviour.
