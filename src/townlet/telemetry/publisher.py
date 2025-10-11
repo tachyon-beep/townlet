@@ -917,8 +917,8 @@ class TelemetryPublisher:
         if runtime_variant is not None:
             self._runtime_variant = runtime_variant
         self._current_tick = tick
-        if world is None:
-            raise ValueError("loop.tick ingestion requires a world snapshot")
+        if world is None and not isinstance(extra.get("global_context"), Mapping):
+            raise ValueError("loop.tick ingestion requires a world snapshot or global_context payload")
         if policy_metadata is not None:
             self._latest_policy_metadata_snapshot = copy.deepcopy(dict(policy_metadata))
         else:
@@ -927,31 +927,37 @@ class TelemetryPublisher:
             self._latest_observation_envelope = copy.deepcopy(dict(observations_dto))
         else:
             self._latest_observation_envelope = None
-        adapter = ensure_world_adapter(world)
-        raw_world = getattr(adapter, "_world", world)
+        global_payload_raw = extra.get("global_context")
+        global_payload = (
+            copy.deepcopy(dict(global_payload_raw))
+            if isinstance(global_payload_raw, Mapping)
+            else {}
+        )
+        adapter: WorldRuntimeAdapterProtocol | None = None
+        raw_world = None
+        if world is not None:
+            adapter = ensure_world_adapter(world)
+            raw_world = getattr(adapter, "_world", world)
         self._narration_limiter.begin_tick(tick)
         manual_narrations = self._consume_manual_narrations()
         self._latest_narrations = manual_narrations
         previous_queue_metrics = dict(self._latest_queue_metrics or {})
-        try:
-            queue_metrics = adapter.queue_manager.metrics() if adapter is not None else None
-        except Exception:  # pragma: no cover - defensive guard for stubs
-            logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+        queue_metrics: dict[str, int] | None = None
+        queue_metrics_payload = global_payload.get("queue_metrics")
+        if isinstance(queue_metrics_payload, Mapping):
             queue_metrics = {
-                "cooldown_events": 0,
-                "ghost_step_events": 0,
-                "rotation_events": 0,
+                str(key): int(value)
+                for key, value in queue_metrics_payload.items()
             }
-        if queue_metrics is None and isinstance(observations_dto, Mapping):
-            global_payload = observations_dto.get("global")
-            if isinstance(global_payload, Mapping):
-                queue_metrics_payload = global_payload.get("queue_metrics")
-                if isinstance(queue_metrics_payload, Mapping):
-                    queue_metrics = {
-                        "cooldown_events": int(queue_metrics_payload.get("cooldown_events", 0)),
-                        "ghost_step_events": int(queue_metrics_payload.get("ghost_step_events", 0)),
-                        "rotation_events": int(queue_metrics_payload.get("rotation_events", 0)),
-                    }
+        if queue_metrics is None and adapter is not None:
+            try:
+                queue_metrics = {
+                    str(key): int(value)
+                    for key, value in adapter.queue_manager.metrics().items()
+                }
+            except Exception:  # pragma: no cover - defensive guard for stubs
+                logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+                queue_metrics = None
         if queue_metrics is None:
             queue_metrics = {
                 "cooldown_events": 0,
@@ -977,25 +983,21 @@ class TelemetryPublisher:
             ),
         }
         rivalry_snapshot = {}
-        if adapter is not None:
+        rivalry_snapshot_payload = global_payload.get("relationship_snapshot")
+        if isinstance(rivalry_snapshot_payload, Mapping):
+            rivalry_snapshot = {
+                str(agent): {
+                    str(other_agent): dict(metrics)
+                    for other_agent, metrics in compatibility.items()
+                    if isinstance(metrics, Mapping)
+                }
+                for agent, compatibility in rivalry_snapshot_payload.items()
+            }
+        elif adapter is not None:
             try:
                 rivalry_snapshot = dict(adapter.rivalry_snapshot())
             except Exception:  # pragma: no cover - defensive guard for stubs
                 logger.debug("Telemetry rivalry snapshot unavailable", exc_info=True)
-        if not rivalry_snapshot and isinstance(observations_dto, Mapping):
-            global_payload = observations_dto.get("global")
-            rivalry_snapshot_payload = (
-                global_payload.get("relationship_snapshot") if isinstance(global_payload, Mapping) else None
-            )
-            if isinstance(rivalry_snapshot_payload, Mapping):
-                rivalry_snapshot = {
-                    str(agent): {
-                        str(other_agent): dict(metrics)
-                        for other_agent, metrics in compatibility.items()
-                        if isinstance(metrics, Mapping)
-                    }
-                    for agent, compatibility in rivalry_snapshot_payload.items()
-                }
         self._queue_fairness_history.append(
             {
                 "tick": int(tick),
@@ -1027,14 +1029,31 @@ class TelemetryPublisher:
             "rivalry": rivalry_snapshot,
             "rivalry_events": list(self._rivalry_event_history[-20:]),
         }
-        metrics_snapshot = adapter.relationship_metrics_snapshot()
-        if metrics_snapshot:
-            self._latest_relationship_metrics = dict(metrics_snapshot)
+        metrics_snapshot = global_payload.get("relationship_metrics")
+        if isinstance(metrics_snapshot, Mapping) and metrics_snapshot:
+            self._latest_relationship_metrics = {
+                str(key): value for key, value in metrics_snapshot.items()
+            }
+        elif adapter is not None:
+            snapshot_metrics = adapter.relationship_metrics_snapshot()
+            if snapshot_metrics:
+                self._latest_relationship_metrics = dict(snapshot_metrics)
+            else:
+                logger.debug(
+                    "Telemetry relationship metrics unavailable; retaining previous snapshot",
+                )
+        relationship_snapshot_payload = global_payload.get("relationship_snapshot")
+        if isinstance(relationship_snapshot_payload, Mapping) and relationship_snapshot_payload:
+            relationship_snapshot = {
+                str(agent): {
+                    str(other_agent): dict(metrics)
+                    for other_agent, metrics in entries.items()
+                    if isinstance(metrics, Mapping)
+                }
+                for agent, entries in relationship_snapshot_payload.items()
+            }
         else:
-            logger.debug(
-                "Telemetry relationship metrics unavailable; retaining previous snapshot",
-            )
-        relationship_snapshot = self._capture_relationship_snapshot(adapter)
+            relationship_snapshot = self._capture_relationship_snapshot(adapter)
         self._latest_relationship_updates = self._compute_relationship_updates(
             self._previous_relationship_snapshot,
             relationship_snapshot,
@@ -1044,11 +1063,16 @@ class TelemetryPublisher:
             relationship_snapshot
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
-        self._latest_relationship_summary = self._build_relationship_summary(
-            relationship_snapshot, adapter
-        )
+        if adapter is not None:
+            self._latest_relationship_summary = self._build_relationship_summary(
+                relationship_snapshot, adapter
+            )
+        else:
+            self._latest_relationship_summary = {}
         try:
-            raw_embedding_metrics = adapter.embedding_allocator.metrics()
+            raw_embedding_metrics = (
+                adapter.embedding_allocator.metrics() if adapter is not None else {}
+            )
         except Exception:  # pragma: no cover - defensive guard for stub adapters
             logger.debug(
                 "Telemetry embedding metrics unavailable; defaulting to empty metrics",
@@ -1111,52 +1135,96 @@ class TelemetryPublisher:
             self._latest_policy_snapshot = {}
         if possessed_agents is not None:
             self._ingest_possessed_agents(possessed_agents)
-        self._latest_job_snapshot = {
-            agent_id: {
-                "job_id": snapshot.job_id,
-                "on_shift": snapshot.on_shift,
-                "wallet": snapshot.wallet,
-                "lateness_counter": snapshot.lateness_counter,
-                "wages_earned": snapshot.inventory.get("wages_earned", 0),
-                "meals_cooked": snapshot.inventory.get("meals_cooked", 0),
-                "meals_consumed": snapshot.inventory.get("meals_consumed", 0),
-                "basket_cost": snapshot.inventory.get("basket_cost", 0.0),
-                "shift_state": snapshot.shift_state,
-                "attendance_ratio": snapshot.attendance_ratio,
-                "late_ticks_today": snapshot.late_ticks_today,
-                "absent_shifts_7d": snapshot.absent_shifts_7d,
-                "wages_withheld": snapshot.wages_withheld,
-                "exit_pending": snapshot.exit_pending,
-                "needs": {
-                    str(need): float(value)
-                    for need, value in snapshot.needs.items()
-                },
+        job_snapshot_payload = global_payload.get("job_snapshot")
+        if isinstance(job_snapshot_payload, Mapping) and job_snapshot_payload:
+            self._latest_job_snapshot = {
+                str(agent_id): dict(snapshot)
+                for agent_id, snapshot in job_snapshot_payload.items()
+                if isinstance(snapshot, Mapping)
             }
-            for agent_id, snapshot in adapter.agent_snapshots_view().items()
-        }
-        self._latest_economy_snapshot = {
-            object_id: {
-                "type": obj.object_type,
-                "stock": dict(obj.stock),
+        elif adapter is not None:
+            self._latest_job_snapshot = {
+                agent_id: {
+                    "job_id": snapshot.job_id,
+                    "on_shift": snapshot.on_shift,
+                    "wallet": snapshot.wallet,
+                    "lateness_counter": snapshot.lateness_counter,
+                    "wages_earned": snapshot.inventory.get("wages_earned", 0),
+                    "meals_cooked": snapshot.inventory.get("meals_cooked", 0),
+                    "meals_consumed": snapshot.inventory.get("meals_consumed", 0),
+                    "basket_cost": snapshot.inventory.get("basket_cost", 0.0),
+                    "shift_state": snapshot.shift_state,
+                    "attendance_ratio": snapshot.attendance_ratio,
+                    "late_ticks_today": snapshot.late_ticks_today,
+                    "absent_shifts_7d": snapshot.absent_shifts_7d,
+                    "wages_withheld": snapshot.wages_withheld,
+                    "exit_pending": snapshot.exit_pending,
+                    "needs": {
+                        str(need): float(value)
+                        for need, value in snapshot.needs.items()
+                    },
+                }
+                for agent_id, snapshot in adapter.agent_snapshots_view().items()
             }
-            for object_id, obj in raw_world.objects.items()
-        }
-        if hasattr(raw_world, "economy_settings"):
+
+        economy_snapshot_payload = global_payload.get("economy_snapshot")
+        if isinstance(economy_snapshot_payload, Mapping) and economy_snapshot_payload:
+            self._latest_economy_snapshot = {
+                str(object_id): dict(entry)
+                for object_id, entry in economy_snapshot_payload.items()
+                if isinstance(entry, Mapping)
+            }
+        elif raw_world is not None:
+            self._latest_economy_snapshot = {
+                object_id: {
+                    "type": obj.object_type,
+                    "stock": dict(obj.stock),
+                }
+                for object_id, obj in raw_world.objects.items()
+            }
+        economy_settings_payload = global_payload.get("economy_settings")
+        if isinstance(economy_settings_payload, Mapping):
+            self._latest_economy_settings = {
+                str(key): float(value)
+                for key, value in economy_settings_payload.items()
+            }
+        elif raw_world is not None and hasattr(raw_world, "economy_settings"):
             self._latest_economy_settings = raw_world.economy_settings()
         else:
             self._latest_economy_settings = {
                 str(key): float(value) for key, value in self.config.economy.items()
             }
-        if hasattr(raw_world, "active_price_spikes"):
+
+        price_spikes_payload = global_payload.get("price_spikes")
+        if isinstance(price_spikes_payload, Mapping):
+            self._latest_price_spikes = {
+                str(event_id): dict(data)
+                for event_id, data in price_spikes_payload.items()
+                if isinstance(data, Mapping)
+            }
+        elif raw_world is not None and hasattr(raw_world, "active_price_spikes"):
             self._latest_price_spikes = raw_world.active_price_spikes()
         else:
             self._latest_price_spikes = {}
-        if hasattr(raw_world, "utility_snapshot"):
+
+        utilities_payload = global_payload.get("utilities")
+        if isinstance(utilities_payload, Mapping):
+            self._latest_utilities = {
+                str(key): bool(value)
+                for key, value in utilities_payload.items()
+            }
+        elif raw_world is not None and hasattr(raw_world, "utility_snapshot"):
             self._latest_utilities = raw_world.utility_snapshot()
         else:
             self._latest_utilities = {"power": True, "water": True}
-        if hasattr(raw_world, "employment_queue_snapshot"):
-            self._latest_employment_metrics = raw_world.employment_queue_snapshot()
+
+        employment_metrics_payload = global_payload.get("employment_snapshot")
+        if isinstance(employment_metrics_payload, Mapping):
+            self._latest_employment_metrics = {
+                str(key): value for key, value in employment_metrics_payload.items()
+            }
+        elif raw_world is not None and hasattr(raw_world, "employment_queue_snapshot"):
+            self._latest_employment_metrics = raw_world.employment_queue_snapshot() or {}
         else:
             self._latest_employment_metrics = {}
         if reward_breakdown is not None:
@@ -1491,6 +1559,11 @@ class TelemetryPublisher:
 
     def latest_snapshot_migrations(self) -> list[str]:
         return list(self._latest_snapshot_migrations)
+
+    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
+        """Public hook for console commands to persist migration history."""
+
+        self._ingest_snapshot_migrations(applied)
 
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
         return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}

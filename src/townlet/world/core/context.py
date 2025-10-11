@@ -350,12 +350,22 @@ class WorldContext:
                 "on_shift": bool(getattr(agent, "on_shift", False)),
                 "shift_state": getattr(agent, "shift_state", None),
                 "lateness_counter": int(getattr(agent, "lateness_counter", 0)),
+                "wallet": float(getattr(agent, "wallet", 0.0)),
                 "attendance_ratio": float(getattr(agent, "attendance_ratio", 0.0)),
                 "exit_pending": bool(getattr(agent, "exit_pending", False)),
+                "late_ticks_today": int(getattr(agent, "late_ticks_today", 0)),
+                "absent_shifts_7d": int(getattr(agent, "absent_shifts_7d", 0)),
+                "wages_withheld": float(getattr(agent, "wages_withheld", 0.0)),
             }
             inventory = getattr(agent, "inventory", None)
             if isinstance(inventory, Mapping):
                 job_payload["inventory"] = dict(inventory)
+            needs = getattr(agent, "needs", None)
+            if isinstance(needs, Mapping):
+                job_payload["needs"] = {
+                    str(need): float(value)
+                    for need, value in needs.items()
+                }
             snapshot[str(agent_id)] = job_payload
         return snapshot
 

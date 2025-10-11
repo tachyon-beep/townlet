@@ -63,7 +63,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.3** *(Completed 2025-10-10)* Ensure policy decisions operate on cached DTO envelopes; drop observation dict/collector caches (loop now pulls queue/employment/job metrics directly from `WorldContext.export_*`).
 - **T4.4** Refresh loop tick/health/failure telemetry so payloads flow entirely through the telemetry port (no raw publisher/world references).
   - **T4.4a** *(Completed 2025-10-10)* Expose `transport_status()` on the telemetry port and update the loop to prefer it over publisher helpers.
-  - **T4.4b** Reshape `loop.tick` payloads to remove raw `world` references, surface DTO/global context data, and embed transport snapshots; update aggregation, dispatcher, UI parsers, and tests accordingly.
+  - **T4.4b** *(Completed 2025-10-10)* Reshape `loop.tick` payloads to remove raw `world` references, surface DTO/global context data, and embed transport snapshots; update aggregation, dispatcher, UI parsers, and tests accordingly.
   - **T4.4c** Rebuild `loop.health` payloads using the new transport snapshot + context exports; adjust `HealthMonitor`, publisher caches, CLI/console helpers, and automated tests.
   - **T4.4d** Align `loop.failure` payloads with the health schema (transport block, snapshot path, error info) and ensure failure handling emits via the telemetry port only; update tests/CLI consumers.
 - **T4.5a** Add new smoke test `tests/core/test_sim_loop_modular_smoke.py` covering two ticks with default providers, asserting DTO envelope + telemetry events. *(Completed 2025-10-10 — smoke verifies DTO envelopes and console telemetry on default providers.)*

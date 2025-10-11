@@ -63,6 +63,9 @@ def test_loop_tick_payload_is_dto_only(tmp_path: Path) -> None:
 
         assert "observations_dto" in latest_tick, "DTO envelope missing from loop.tick payload"
         assert "policy_metadata" in latest_tick, "Policy metadata missing from loop.tick payload"
+        global_context = latest_tick.get("global_context")
+        assert isinstance(global_context, dict), "Global context missing from loop.tick payload"
+        assert "queue_metrics" in global_context, "Queue metrics missing from global context"
         dto_envelope = latest_tick["observations_dto"]
         assert isinstance(dto_envelope, dict), "DTO envelope should be a dictionary"
         assert dto_envelope.get("tick") == loop.tick

@@ -122,6 +122,10 @@ class TelemetryEventDispatcher:
     def _append_queue_history(self, payload: Mapping[str, Any]) -> None:
         queue_metrics = payload.get("queue_metrics")
         if not isinstance(queue_metrics, Mapping):
+            global_context = payload.get("global_context")
+            if isinstance(global_context, Mapping):
+                queue_metrics = global_context.get("queue_metrics")
+        if not isinstance(queue_metrics, Mapping):
             return
         entry = {
             "tick": int(payload.get("tick", -1)),
