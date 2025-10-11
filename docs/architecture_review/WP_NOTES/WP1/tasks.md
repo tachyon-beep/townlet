@@ -48,12 +48,12 @@
 Maintain this checklist during WP1 implementation.
 
 ## 7. Step 7 — Factory & Adapter Wiring (in progress)
-- [x] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext`.
-- [x] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context.
-- [x] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap.
+- [ ] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext`.
+- [ ] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context.
+- [ ] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap once the new path lands.
 
 ## 8. Step 8 — Composition Root Integration
-- [x] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers.
+- [ ] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers. *(Guarded pathway in place for `observe`, but world construction still instantiates legacy runtime directly.)*
 - [~] Introduce `ConsoleRouter` and `HealthMonitor` orchestration services; emit telemetry exclusively via events/metrics. *(Router/monitor instantiated each tick; legacy `runtime.queue_console` remains until the action routing migration lands.)*
 - [x] Remove telemetry `latest_*` pulls from the loop and helper utilities. *(Loop now computes queue/employment metrics directly and emits `loop.tick/health/failure`, `console.result`, and `stability.metrics` via the telemetry port; guard tests ensure writer APIs stay retired.)*
 

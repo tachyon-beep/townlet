@@ -6,7 +6,7 @@ This plan enumerates the concrete steps for implementing Work Package 1. Keep it
 - Ensure plan prerequisites documented in `tasks.md` are complete (✔ done).
 - Keep ADR-001 and WP1 tasking open for reference.
 
-**Status snapshot (2025-10-09).** Steps 1–3, 5, and 6 are complete; unit coverage exists for ports, registry, and the new modular world context (`pytest tests/world -q`, `pytest tests/test_world_context.py -q`). The remaining effort is the composition refactor (Step 7 / Step 8 below).
+**Status snapshot (2025-10-10).** Steps 1–3, 5, and 6 are complete; DTO observation plumbing is in place and `SimulationLoop` can consume `WorldContext.observe` when available. The outstanding work now centres on Step 7 (factory/adapter wiring) and the remaining Step 8 clean-up tasks documented below.
 
 ## 1. Define Port Protocols (✔ done)
 1.1. Create `src/townlet/ports/` package (`__init__.py`, `world.py`, `policy.py`, `telemetry.py`).
@@ -100,11 +100,10 @@ Use this plan to track implementation progress. Update checkboxes or add subsect
 **Phase 0 – Baseline**
 - Capture current behaviour/tests: `pytest tests/test_sim_loop.py` (if present), loop smokes (run a few ticks via `scripts/run_simulation.py` with stdout telemetry). Document key metrics/console behaviour to compare after each phase.
 
-**Phase 1 – Factory swap (complete 2025-10-09)**
-1. `SimulationLoop._build_components()` now resolves dependencies exclusively via `create_world/create_policy/create_telemetry`, keeping the legacy instances behind adapters for parity.
-2. Legacy `resolve_*` helpers remain for callers outside the loop but are no longer used during loop construction; plan removal once downstream scripts adopt the factories.
-3. `provider_info` reflects the registry providers and existing loop tests (`tests/test_simulation_loop_runtime.py`) continue to pass.
-4. Follow-up: capture a lightweight smoke test exercising the new factory path once telemetry/policy migrations settle.
+**Phase 1 – Factory swap (pending)**
+1. TODO: update `create_world` and the default adapter so the loop receives a `WorldContext` instance rather than `LegacyWorldRuntime`. Until this lands, `_build_components()` still instantiates `WorldState`/`LegacyWorldRuntime` directly.
+2. Once the factory swap is in place, legacy `resolve_*` helpers can be retired after downstream scripts adopt the new factories.
+3. When the swap is complete, ensure `provider_info` reflects the registry providers and add a lightweight smoke exercising the modular path.
 
 **Phase 2 – Integrate ConsoleRouter & HealthMonitor without removing legacy behaviour**
 1. `ConsoleRouter` and `HealthMonitor` are now instantiated by the loop and fed every tick. Console commands drain from telemetry into the router (still mirrored into `runtime.queue_console` for parity) and health metrics are emitted via the telemetry port.

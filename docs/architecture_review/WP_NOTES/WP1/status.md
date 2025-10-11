@@ -1,16 +1,15 @@
 # WP1 Status
 
 **Current state (2025-10-10)**
-- Port protocols, registry wiring, and adapter surfaces remain stable; Step 7 factory work is complete (`create_world` now returns `WorldContext`, dummy/stub providers and registry metadata are in sync, and `WorldRuntimeAdapter` bridges both modular and legacy paths for remaining callers).
-- WP2 Step 6/7 continue to supply modular tick orchestration; the simulation loop already instantiates `ConsoleRouter` and `HealthMonitor`, emits telemetry via the WP3 dispatcher, and defers console execution through the router while keeping legacy fallbacks available.
-- WP3B (modular systems) is complete and WP3C is deep in Stage 3: policy runtime/controller, scripted behaviours, trajectory service, and replay tooling all consume DTO envelopes. Recent work added DTO-rich metadata to rollout frames and manifests (`*_dto.json`) so training/replay consumers can transition away from the legacy observation blobs.
-- Stage 5/6 safeguards are now active: `tests/core/test_no_legacy_observation_usage.py` locks ObservationBuilder/legacy payload usage out of runtime code, and the telemetry surface guard verifies dispatcher payloads ship DTO envelopes plus cached metadata snapshots each tick.
-- Outstanding WP3C items (training adapters, DTO-only ML parity, Stage 6 documentation/world-adapter cleanup) remain the blockers for Step 8; until those land the loop must keep `runtime.queue_console` and legacy world handles for policy/training.
+- Port protocols and registry scaffolding remain in place, and `WorldContext` now supports DTO observation envelopes; however, the default world factory still builds `LegacyWorldRuntime` + `ObservationBuilder`. Step 7 is therefore **not** complete—`create_world`/`DefaultWorldAdapter` must be rewired to construct the modular context.
+- `SimulationLoop` has a guarded integration with `WorldContext.observe`: when the context exposes an observation service, the loop consumes its DTO envelope; otherwise it falls back to the legacy builder. Console routing and health monitoring continue to operate alongside the legacy queue-console path.
+- WC3 (telemetry/policy DTO work) unlocked the observation pipeline and telemetry guards (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`). Outstanding WP3C items (training adapters, DTO-only parity sweeps) still block the final removal of legacy world handles.
 
-**Focus areas (Step 8 execution once unblocked)**
-- Finish the simulation loop refactor by removing `runtime.queue_console`, enforcing DTO-only policy decisions, and delegating world mutations through the modular context. Telemetry surface work is largely done; remaining effort is tied to the policy/world detach.
-- Add the pending loop/console/health-monitor smoke tests plus factory/port regression coverage. The telemetry guard suite and DTO parity harness are already in place; console and router tests remain on the to-do list.
-- Document the composition-root changes in ADR-001, draft the console/router ADR, and refresh the WP1 README once Step 8 completes.
+**Focus areas (next remediation steps)**
+- Execute **T1.1/T3.x**: provide a `WorldContext` builder and swap the world factory to return the modular runtime (with tests). This unblocks the remaining adapter work and Step 7 tasks.
+- Replace `DefaultWorldAdapter` with a lightweight facade over `WorldContext`, dropping legacy observation builder usage and the `.world_state` escape hatch (T2.x).
+- Once the factory/adapter swap lands, finish the simulation loop cleanup (remove `runtime.queue_console`, rely solely on ports) and add the missing loop/console smokes.
+- Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the factory swap and loop refactor converge.
 
 **Legacy caller inventory (updated 2025-10-10)**
 - Policy:
