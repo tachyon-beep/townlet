@@ -753,6 +753,11 @@ class TelemetryPublisher:
 
         return dict(self._transport_status)
 
+    def transport_status(self) -> Mapping[str, object]:
+        """TelemetrySink compatibility helper returning the latest transport snapshot."""
+
+        return dict(self._transport_status)
+
 
     def _ingest_loop_failure(self, payload: Mapping[str, object]) -> None:
         """Persist loop failure telemetry and append a failure event."""

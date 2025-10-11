@@ -9,18 +9,17 @@ Direct code inspection shows WP1 Step 7 and related deliverables remain incomple
 - **Status (2025-10-10):** Resolved. `DefaultWorldAdapter` is now context-only, and the `.world_state` escape hatch plus legacy runtime delegation have been removed (tests cover the context path).
 
 ## 3. WorldContext is unimplemented
-- **Issue:** `WorldContext` methods still raise `NotImplementedError` (`src/townlet/world/context.py:11-38`), leaving no modular runtime for the factory to return.
+- **Status (2025-10-10):** `WorldContext` now drives modular ticks, DTO observations, and snapshot exports; unit coverage exists. Remaining follow-ups focus on tightening deterministic RNG instrumentation and finishing parity tests called out under T3.x/T4.3.
 - **Remediation tasks:**
-  1. Port the WP2 tick orchestration into `WorldContext`, exposing `reset/tick/agents/observe/apply_actions/snapshot` with DTO outputs.
-  2. Wire modular systems/services inside the context and ensure deterministic RNG handling.
-  3. Provide unit/system tests that exercise the new context and compare against legacy behaviour for parity.
+  1. Close out T3.x parity checks to ensure DTO snapshots match legacy baselines under stress scenarios (queues, rivalries, perturbations).
+  2. Audit remaining direct `WorldState` mutations in the loop/policy stack and replace them with context helpers.
 
 ## 4. SimulationLoop remains tied to legacy runtime
-- **Issue:** Loop builds `WorldState`, `LifecycleManager`, `PerturbationScheduler`, and an `ObservationBuilder` itself, then calls `runtime.queue_console` (`src/townlet/core/sim_loop.py:215-319`, `src/townlet/core/sim_loop.py:450`). Step 8 factory/composition refactor never happened.
+- **Issue:** Factory/adapter wiring now supply modular components, and `runtime.queue_console` is gone, but the loop still holds legacy collectors (queue/economy snapshots, reward helpers) and documents failure handling via inline code.
 - **Remediation tasks:**
-  1. Refactor `_build_components` to resolve world/policy/telemetry exclusively via the port factories and operate through their minimal surfaces.
-  2. Route console commands strictly via `ConsoleRouter`/event emission and remove direct `queue_console` usage.
-  3. Ensure policy decisions consume cached DTO envelopes and backfill loop smoke tests covering the modular pipeline.
+  1. T4.3 closed (2025-10-10): simulation loop now relies on `WorldContext.export_*` for queue/employment/job data; remaining work under this issue is T4.4 (telemetry/failure docs).
+  2. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) once the loop emits failures purely via ports.
+  3. Keep loop/component overrides in place for testing, but ensure the default path never rebuilds legacy services.
 
 ## 5. Missing dummy providers and promised tests
 - **Issue:** There is no `townlet/testing` package or dummy provider suite; none of the WP1 Step 6/8 tests exist (`tests/test_ports_surface.py`, `tests/test_loop_with_dummies.py`, etc.).

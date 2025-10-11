@@ -158,6 +158,7 @@ class SimulationLoop:
         self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
         self._health = SimulationLoopHealth()
         self._world_adapter: WorldRuntimeAdapter | None = None
+        self._world_context: WorldContext | None = None
         self._world_port = None
         self._policy_port = None
         self._telemetry_port = None
@@ -221,6 +222,9 @@ class SimulationLoop:
         self._observation_service = world_components.observation_service
         self._ticks_per_day = world_components.ticks_per_day
         self._world_port = world_components.world_port
+        context = getattr(self._world_port, "context", None)
+        if context is not None:
+            self._world_context = context
         self.runtime = self._world_port
         self._resolved_providers["world"] = world_components.provider
 
@@ -336,6 +340,7 @@ class SimulationLoop:
         if observation_service is None:
             raise RuntimeError("World context missing observation service")
         world = context.state
+        self._world_context = context
         return WorldComponents(
             world=world,
             lifecycle=lifecycle,
@@ -391,7 +396,7 @@ class SimulationLoop:
     def world_context(self) -> WorldContext:
         """Return a façade over the active world services."""
 
-        return self.world.context
+        return self._require_world_context()
 
     @property
     def world_adapter(self) -> WorldRuntimeAdapter:
@@ -408,6 +413,17 @@ class SimulationLoop:
         """Expose the policy controller facade (transitional)."""
 
         return self._policy_controller
+
+    def _require_world_context(self) -> WorldContext:
+        """Return the active world context or raise if unavailable."""
+
+        context = self._world_context
+        if context is None and self._world_port is not None:
+            context = getattr(self._world_port, "context", None)
+        if context is None:
+            raise RuntimeError("World context is not initialised")
+        self._world_context = context
+        return context
 
     def register_failure_handler(self, handler: Callable[[SimulationLoop, int, BaseException], None]) -> None:
         """Register a callback that runs whenever the loop records a failure."""
@@ -612,11 +628,30 @@ class SimulationLoop:
                 policy_snapshot = self.policy.latest_policy_snapshot()
                 possessed_agents = self.policy.possessed_agents()
                 option_switch_counts = self.policy.consume_option_switch_counts()
-            hunger_levels = {agent_id: float(snapshot.needs.get("hunger", 1.0)) for agent_id, snapshot in self.world.agents.items()}
+            hunger_levels = {
+                agent_id: float(snapshot.needs.get("hunger", 1.0))
+                for agent_id, snapshot in self.world.agents.items()
+            }
+            context = self._require_world_context()
+            queue_metrics = dict(context.export_queue_metrics())
+            job_snapshot = copy.deepcopy(context.export_job_snapshot())
+            employment_metrics = copy.deepcopy(context.export_employment_snapshot())
+            queue_state_export = context.export_queue_state()
+            queues_snapshot: dict[str, object] = {}
+            queue_length = 0.0
+            if isinstance(queue_state_export, Mapping):
+                queues_snapshot = copy.deepcopy(queue_state_export)
+                queues_payload = queues_snapshot.get("queues", {})
+                if isinstance(queues_payload, Mapping):
+                    queue_length = float(
+                        sum(len(entries or []) for entries in queues_payload.values())
+                    )
             stability_inputs = {
                 "hunger_levels": hunger_levels,
                 "option_switch_counts": option_switch_counts,
                 "reward_samples": dict(rewards),
+                "queue_metrics": queue_metrics,
+                "employment_snapshot": employment_metrics,
             }
             perturbation_state = self.perturbations.latest_state()
             policy_hash = controller.active_policy_hash() if controller is not None else self.policy.active_policy_hash()
@@ -637,32 +672,12 @@ class SimulationLoop:
                 "anneal_ratio": anneal_ratio,
             }
             adapter = self.world_adapter
-            queue_metrics = self._collect_queue_metrics()
             embedding_metrics = self._collect_embedding_metrics(adapter)
-            job_snapshot = self._collect_job_snapshot(adapter)
-            employment_metrics = self._collect_employment_metrics()
             rivalry_events = self._collect_rivalry_events(adapter)
             snapshot_for_health: dict[str, Any] = {
                 "tick": self.tick,
                 "events": list(events),
             }
-            queues_snapshot: dict[str, object] = {}
-            try:
-                queue_export = self.world.queue_manager.export_state()
-                if isinstance(queue_export, dict):
-                    queues_snapshot = queue_export
-                    queues_payload = queue_export.get("queues", {})
-                    if isinstance(queues_payload, dict):
-                        queue_length = float(
-                            sum(len(entries or []) for entries in queues_payload.values())
-                        )
-                    else:
-                        queue_length = 0.0
-                else:  # pragma: no cover - defensive
-                    queue_length = 0.0
-            except Exception:  # pragma: no cover - defensive
-                queue_length = 0.0
-                queues_snapshot = {}
             snapshot_for_health["metrics"] = {"queue_length": queue_length}
             if self._health_monitor is not None and self._telemetry_port is not None:
                 self._health_monitor.on_tick(snapshot_for_health, self._telemetry_port)
@@ -729,6 +744,17 @@ class SimulationLoop:
                         meta.update(metadata_copy)
             self._set_policy_observation_envelope(dto_envelope)
             if self._telemetry_port is not None:
+                global_context = self._build_tick_global_context(
+                    queue_metrics=queue_metrics,
+                    queue_state=queues_snapshot,
+                    employment_snapshot=employment_metrics,
+                    job_snapshot=job_snapshot,
+                    dto_envelope=dto_envelope,
+                    stability_metrics=stability_metrics,
+                    perturbations=perturbation_state,
+                    promotion_state=promotion_state,
+                    anneal_context=anneal_context,
+                )
                 tick_event_payload = {
                     "tick": self.tick,
                     "world": self.world,
@@ -745,6 +771,7 @@ class SimulationLoop:
                     "social_events": self.rewards.latest_social_events(),
                     "runtime_variant": self._runtime_variant,
                     "observations_dto": dto_envelope.model_dump(by_alias=True),
+                    "global_context": global_context,
                 }
                 self._telemetry_port.emit_event("loop.tick", tick_event_payload)
             if self._telemetry_port is not None:
@@ -862,6 +889,66 @@ class SimulationLoop:
         logger.debug("policy_envelope_bootstrap", extra={"tick": self.tick})
         return bootstrap
 
+    def _build_tick_global_context(
+        self,
+        *,
+        queue_metrics: Mapping[str, int],
+        queue_state: Mapping[str, object],
+        employment_snapshot: Mapping[str, object],
+        job_snapshot: Mapping[str, Mapping[str, object]],
+        dto_envelope: ObservationEnvelope,
+        stability_metrics: Mapping[str, object],
+        perturbations: Mapping[str, object],
+        promotion_state: Mapping[str, object],
+        anneal_context: Mapping[str, object],
+    ) -> dict[str, object]:
+        """Assemble the DTO-first global context payload for telemetry."""
+
+        try:
+            base_context = dto_envelope.global_context.model_dump(by_alias=True)
+        except Exception:  # pragma: no cover - defensive safeguard
+            base_context = {}
+
+        global_context: dict[str, object] = copy.deepcopy(base_context)
+
+        if "queue_metrics" not in global_context:
+            global_context["queue_metrics"] = dict(queue_metrics)
+        if queue_state:
+            global_context["queues"] = copy.deepcopy(queue_state)
+        if "employment_snapshot" not in global_context:
+            global_context["employment_snapshot"] = copy.deepcopy(employment_snapshot)
+        if "job_snapshot" not in global_context:
+            global_context["job_snapshot"] = copy.deepcopy(job_snapshot)
+
+        if "stability_metrics" not in global_context:
+            global_context["stability_metrics"] = copy.deepcopy(dict(stability_metrics))
+        if perturbations:
+            global_context.setdefault("perturbations", copy.deepcopy(dict(perturbations)))
+        if promotion_state:
+            global_context.setdefault("promotion_state", copy.deepcopy(dict(promotion_state)))
+        if anneal_context:
+            global_context.setdefault("anneal_context", copy.deepcopy(dict(anneal_context)))
+
+        context = self._world_context
+        if context is not None:
+            queue_affinity = context.export_queue_affinity_metrics()
+            if queue_affinity:
+                global_context.setdefault("queue_affinity_metrics", dict(queue_affinity))
+            running_affordances = context.export_running_affordances()
+            if running_affordances:
+                global_context.setdefault("running_affordances", copy.deepcopy(dict(running_affordances)))
+            economy_snapshot = context.export_economy_snapshot()
+            if economy_snapshot:
+                global_context.setdefault("economy_snapshot", copy.deepcopy(dict(economy_snapshot)))
+            relationship_snapshot = context.export_relationship_snapshot()
+            if relationship_snapshot:
+                global_context.setdefault("relationship_snapshot", copy.deepcopy(dict(relationship_snapshot)))
+            relationship_metrics = context.export_relationship_metrics()
+            if relationship_metrics:
+                global_context.setdefault("relationship_metrics", copy.deepcopy(dict(relationship_metrics)))
+
+        return global_context
+
     def _set_policy_observation_envelope(self, envelope: "ObservationEnvelope") -> None:
         """Persist the current observation envelope and notify the backend."""
 
@@ -929,8 +1016,8 @@ class SimulationLoop:
     def _build_bootstrap_policy_envelope(self) -> "ObservationEnvelope":
         """Build a DTO envelope from the current world when none has been recorded."""
 
-        context = getattr(self.world, "context", None)
-        if context is None or getattr(context, "observation_service", None) is None:
+        context = self._require_world_context()
+        if getattr(context, "observation_service", None) is None:
             raise RuntimeError("World context is not configured for observation DTOs")
         terminated: dict[str, bool] = {}
         rewards: dict[str, float] = {}
@@ -983,23 +1070,6 @@ class SimulationLoop:
             anneal_context=anneal_context,
         )
 
-    def _collect_queue_metrics(self) -> dict[str, int]:
-        metrics: dict[str, int] = {}
-        try:
-            raw = self.world.queue_manager.metrics()
-            metrics = {str(key): int(value) for key, value in raw.items()}
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("queue_metrics_unavailable", exc_info=True)
-        return metrics
-
-    def _collect_queue_affinity_metrics(self) -> dict[str, int]:
-        try:
-            raw = self.world.queue_manager.performance_metrics()
-            return {str(key): int(value) for key, value in raw.items()}
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("queue_affinity_metrics_unavailable", exc_info=True)
-            return {}
-
     def _try_context_observe(
         self,
         *,
@@ -1016,9 +1086,10 @@ class SimulationLoop:
         promotion_state: Mapping[str, Any] | None,
         anneal_context: Mapping[str, Any],
     ) -> ObservationEnvelope | None:
-        context = getattr(self.world, "context", None)
+        context = self._world_context or getattr(self._world_port, "context", None)
         if context is None:
             return None
+        self._world_context = context
         if getattr(context, "observation_service", None) is None:
             return None
         try:
@@ -1047,41 +1118,6 @@ class SimulationLoop:
             logger.debug("embedding_metrics_unavailable", exc_info=True)
             return {}
 
-    def _collect_job_snapshot(self, adapter: WorldRuntimeAdapter) -> dict[str, dict[str, object]]:
-        snapshot: dict[str, dict[str, object]] = {}
-        for agent_id, agent in adapter.agent_snapshots_view().items():
-            inventory = agent.inventory or {}
-            snapshot[str(agent_id)] = {
-                "job_id": agent.job_id,
-                "on_shift": bool(agent.on_shift),
-                "wallet": float(agent.wallet),
-                "lateness_counter": int(agent.lateness_counter),
-                "wages_earned": int(inventory.get("wages_earned", 0) or 0),
-                "meals_cooked": int(inventory.get("meals_cooked", 0) or 0),
-                "meals_consumed": int(inventory.get("meals_consumed", 0) or 0),
-                "basket_cost": float(inventory.get("basket_cost", 0.0) or 0.0),
-                "shift_state": agent.shift_state,
-                "attendance_ratio": float(agent.attendance_ratio),
-                "late_ticks_today": int(agent.late_ticks_today),
-                "absent_shifts_7d": int(agent.absent_shifts_7d),
-                "wages_withheld": float(agent.wages_withheld),
-                "exit_pending": bool(agent.exit_pending),
-                "needs": {
-                    str(need): float(value)
-                    for need, value in agent.needs.items()
-                },
-            }
-        return snapshot
-
-    def _collect_employment_metrics(self) -> dict[str, object]:
-        try:
-            metrics = self.world.employment_queue_snapshot()
-            if isinstance(metrics, Mapping):
-                return {str(key): value for key, value in metrics.items()}
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("employment_metrics_unavailable", exc_info=True)
-        return {}
-
     def _collect_rivalry_events(self, adapter: WorldRuntimeAdapter) -> list[dict[str, object]]:
         try:
             raw_events = adapter.consume_rivalry_events()
@@ -1107,32 +1143,24 @@ class SimulationLoop:
                 self._rivalry_history = self._rivalry_history[-120:]
         return list(self._rivalry_history)
 
-    def _collect_economy_snapshot(self) -> dict[str, object]:
-        snapshot: dict[str, object] = {}
-        try:
-            snapshot["settings"] = self.world.economy_settings()
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("economy_settings_unavailable", exc_info=True)
-        try:
-            snapshot["active_price_spikes"] = self.world.active_price_spikes()
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("economy_price_spikes_unavailable", exc_info=True)
-        try:
-            snapshot["utility_snapshot"] = self.world.utility_snapshot()
-        except Exception:  # pragma: no cover - defensive
-            logger.debug("economy_utility_snapshot_unavailable", exc_info=True)
-        return snapshot
-
     def _build_transport_status(self, *, queue_length: int) -> dict[str, object]:
         status = dict(self._last_transport_status)
         telemetry_status: Mapping[str, object] | None = None
-        publisher = getattr(self, "telemetry", None)
-        getter = getattr(publisher, "latest_transport_status", None)
+        port = self._telemetry_port
+        getter = getattr(port, "transport_status", None)
         if callable(getter):
             try:
                 telemetry_status = dict(getter())
             except Exception:  # pragma: no cover - telemetry may be stubbed
                 telemetry_status = None
+        elif port is None:
+            publisher = getattr(self, "telemetry", None)
+            legacy_getter = getattr(publisher, "latest_transport_status", None)
+            if callable(legacy_getter):
+                try:
+                    telemetry_status = dict(legacy_getter())
+                except Exception:  # pragma: no cover - telemetry may be stubbed
+                    telemetry_status = None
         if telemetry_status:
             status.update(telemetry_status)
         status.update(

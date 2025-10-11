@@ -21,5 +21,8 @@ class TelemetrySink(Protocol):
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         """Record a telemetry metric with optional tag values."""
 
+    def transport_status(self) -> Mapping[str, Any]:
+        """Return the latest transport health/backlog measurements."""
+
 
 __all__ = ["TelemetrySink"]

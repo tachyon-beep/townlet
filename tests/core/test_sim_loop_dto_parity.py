@@ -72,14 +72,15 @@ def test_simulation_loop_dto_parity_across_ticks(tmp_path) -> None:
         envelope = artifacts.envelope
         envelopes.append(envelope)
         reward_history.append(dict(artifacts.rewards))
-        job_snapshot = loop._collect_job_snapshot(loop.world_adapter)
-        employment_metrics = loop._collect_employment_metrics()
-        queue_metrics_history.append(loop._collect_queue_metrics())
+        context = loop.world_context
+        job_snapshot = _to_builtin(context.export_job_snapshot())
+        employment_metrics = _to_builtin(context.export_employment_snapshot())
+        queue_metrics_history.append(_to_builtin(context.export_queue_metrics()))
         job_snapshot_history.append(job_snapshot)
         employment_queue_history.append(employment_metrics)
         stability_history.append(loop.stability.latest_metrics())
-        queue_affinity_history.append(loop._collect_queue_affinity_metrics())
-        economy_history.append(loop._collect_economy_snapshot())
+        queue_affinity_history.append(_to_builtin(context.export_queue_affinity_metrics()))
+        economy_history.append(_to_builtin(context.export_economy_snapshot()))
         anneal_history.append(loop.policy.anneal_context())
         state_snapshot: dict[str, dict[str, object]] = {}
         for agent_id, snapshot in loop.world.agents.items():

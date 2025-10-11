@@ -7,21 +7,13 @@ All event payloads are JSON-serialisable mappings. Timestamps are expressed as i
 ## 1. Loop Lifecycle Events
 
 ### 1.1 `loop.tick`
-Emitted once per simulation tick after world advancement and reward computation.
+Emitted once per simulation tick after world advancement and reward computation. Payloads are DTO-native and **must not** reference mutable `WorldState` objects.
 
 ```json
 {
   "tick": 123,
   "runtime_variant": "facade",
-  "world": {
-    "snapshot_ref": "memory://world/123",          // reference or inline snapshot (implementation detail)
-    "agents_active": 42,
-    "objects_active": 128
-  },
-  "observations": {
-    "agents": [...],                               // list/dict of observation DTOs (see §2)
-    "terminated": { "alice": false, "bob": true }
-  },
+  "observations_dto": { ... },                     // ObservationEnvelope (see §2)
   "rewards": { "alice": 1.25, "bob": -0.5 },
   "reward_breakdown": { ... },                     // optional per-agent breakdown
   "stability_inputs": {
@@ -29,16 +21,37 @@ Emitted once per simulation tick after world advancement and reward computation.
     "option_switch_counts": { "alice": 0, "bob": 2 },
     "reward_samples": { "alice": 12.0 }
   },
-  "policy_snapshot": { ... },                      // latest policy metadata (per-agent)
+  "policy_snapshot": { ... },
   "policy_identity": {
     "hash": "abc123",
     "anneal_ratio": 0.4,
     "provider": "scripted"
   },
+  "policy_metadata": { ... },                      // optional shadow of metadata event
   "possessed_agents": ["spectator_1"],
-  "events": [ { "type": "affordance.fail", ... } ],
-  "perturbations": { ... },                        // normalised perturbation payload
-  "social_events": [ ... ]                         // optional
+  "events": [ { "event": "affordance.fail", ... } ],
+  "perturbations": { ... },
+  "social_events": [ ... ],
+  "global_context": {
+    "queue_metrics": { "ghost_step_events": 1, ... },
+    "queue_affinity_metrics": { ... },
+    "employment_snapshot": { ... },
+    "job_snapshot": { ... },
+    "economy_snapshot": { ... },
+    "relationship_snapshot": { ... },
+    "relationship_metrics": { ... },
+    "running_affordances": { ... },
+    "promotion_state": { ... },
+    "anneal_context": { ... }
+  },
+  "transport": {
+    "queue_length": 3,
+    "dropped_messages": 0,
+    "last_flush_duration_ms": 1.2,
+    "worker_alive": true,
+    "worker_restart_count": 0,
+    "auth_enabled": false
+  }
 }
 ```
 
@@ -82,7 +95,8 @@ Emitted when a tick raises an unrecoverable error.
   "duration_ms": 5.1,
   "failure_count": 3,
   "snapshot_path": "s3://snapshots/failure_124",
-  "transport": { ... }                             // same shape as loop.health.transport
+  "transport": { ... },                            // same shape as loop.health.transport
+  "health": { ... }                                // optional copy of latest health payload
 }
 ```
 
@@ -143,4 +157,3 @@ Metrics carry a numerical value and optional tags. Standard tags include `tick`,
 - WP2 Step 7 will supply observation DTOs and rivalry metrics via the modular world context, feeding directly into the event payloads above.
 
 Future updates to this schema should be versioned and documented here before implementation.
-

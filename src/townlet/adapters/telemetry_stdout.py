@@ -38,6 +38,17 @@ class StdoutTelemetryAdapter(TelemetrySink):
             "tags": dict(tags),
         }
 
+    def transport_status(self) -> Mapping[str, Any]:
+        """Expose the publisher transport status snapshot."""
+
+        getter = getattr(self._publisher, "latest_transport_status", None)
+        if callable(getter):
+            try:
+                return dict(getter())
+            except Exception:  # pragma: no cover - defensive
+                return {}
+        return {}
+
     @property
     def publisher(self) -> TelemetryPublisher:
         """Expose the wrapped telemetry publisher for transitional call sites."""

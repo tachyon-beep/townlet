@@ -26,8 +26,8 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.1b** Remove direct `WorldState` construction, instead call `create_world` and pull context/adapter details via the port; update tests depending on `loop.world` attribute. *(Completed 2025-10-10 — loop now derives world/lifecycle/perturbations from `create_world` and uses adapter context for state access.)*
 - **T4.1c** Replace `_observation_builder` usage with DTO envelope caching; ensure reward engine consumes the DTO data. *(Completed 2025-10-10 — legacy observation builder fallback removed; DTO envelopes supplied exclusively by `WorldContext.observe`.)*
 - **T4.2** Remove direct `runtime.queue_console` usage; pipe console input through `ConsoleRouter.enqueue`/`run_pending`. *(ConsoleRouter now forwards commands; remaining telemetry cleanup tracked under T4.2b.)*
-- **T4.3** Ensure policy decisions operate on cached DTO envelopes; drop observation dict caches.
-- **T4.4** Refresh loop tick flow to emit telemetry via ports only (no legacy writer calls).
+- **T4.3** *(Completed 2025-10-10)* Ensure policy decisions operate on cached DTO envelopes; drop observation dict/collector caches (loop now pulls queue/employment/job metrics directly from `WorldContext.export_*`).
+- **T4.4** Refresh loop tick flow to emit telemetry via ports only (no legacy writer calls). *(In progress — runtime snapshot path uses the adapter; remaining work covers failure telemetry/doc updates.)*
 - **T4.5** Add loop smoke tests for modular providers and DTO parity.
 
 ## 5. Missing dummy providers and promised tests
@@ -60,7 +60,12 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.1c** Replace `_observation_builder` usage with DTO envelope caching; ensure reward engine consumes the DTO data.
 - **T4.2a** Move console queueing into `ConsoleRouter.enqueue` during input ingestion; delete `runtime.queue_console` calls.
 - **T4.2b** Update telemetry emission to rely solely on port methods (`emit_event/emit_metric`), removing legacy writer fallbacks. *(Completed 2025-10-10 — console results now emit via dispatcher events with router-aware payloads; regression covered by `tests/test_console_events.py`.)*
-- **T4.4a** Update failure handling and snapshotting to use modular runtime outputs; adjust `SnapshotManager` helpers accordingly.
+- **T4.3** *(Completed 2025-10-10)* Ensure policy decisions operate on cached DTO envelopes; drop observation dict/collector caches (loop now pulls queue/employment/job metrics directly from `WorldContext.export_*`).
+- **T4.4** Refresh loop tick/health/failure telemetry so payloads flow entirely through the telemetry port (no raw publisher/world references).
+  - **T4.4a** *(Completed 2025-10-10)* Expose `transport_status()` on the telemetry port and update the loop to prefer it over publisher helpers.
+  - **T4.4b** Reshape `loop.tick` payloads to remove raw `world` references, surface DTO/global context data, and embed transport snapshots; update aggregation, dispatcher, UI parsers, and tests accordingly.
+  - **T4.4c** Rebuild `loop.health` payloads using the new transport snapshot + context exports; adjust `HealthMonitor`, publisher caches, CLI/console helpers, and automated tests.
+  - **T4.4d** Align `loop.failure` payloads with the health schema (transport block, snapshot path, error info) and ensure failure handling emits via the telemetry port only; update tests/CLI consumers.
 - **T4.5a** Add new smoke test `tests/core/test_sim_loop_modular_smoke.py` covering two ticks with default providers, asserting DTO envelope + telemetry events. *(Completed 2025-10-10 — smoke verifies DTO envelopes and console telemetry on default providers.)*
 
 ### T6.x – Tighten port boundaries

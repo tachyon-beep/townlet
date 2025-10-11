@@ -136,6 +136,9 @@ class StubTelemetrySink(TelemetrySinkProtocol):
     def latest_transport_status(self) -> Mapping[str, object]:
         return {"provider": "stub", "status": "inactive"}
 
+    def transport_status(self) -> Mapping[str, object]:
+        return {"provider": "stub", "status": "inactive"}
+
     def latest_health_status(self) -> Mapping[str, object]:
         return {}
 

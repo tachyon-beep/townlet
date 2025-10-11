@@ -14,9 +14,9 @@
 1. **Seam for DTO envelopes**
    - Add an internal helper `_get_observation_envelope` that checks whether the world port exposes `observe` and an observation service; fall back to legacy builder when not available.
    - Thread in action/reward/metadata inputs required by `WorldContext.observe` so both paths produce equivalent envelopes.
-2. **Loop refactor**
-   - Replace direct `build_observation_envelope` call with `_get_observation_envelope`.
-   - Drop redundant helper collectors (`_collect_queue_metrics`, `_collect_queue_affinity_metrics`, `_collect_job_snapshot`, `_collect_economy_snapshot`) once the context path supplies them. Guard with TODO so we can remove them entirely after factory swap.
+2. **Loop refactor** *(Completed 2025-10-10)*
+   - Replaced direct `build_observation_envelope` usage with context-backed DTO envelopes.
+   - Removed the redundant helper collectors (`_collect_queue_metrics`, `_collect_queue_affinity_metrics`, `_collect_job_snapshot`, `_collect_economy_snapshot`) now that `WorldContext.export_*` feeds the loop.
 3. **Factory bridging**
    - Insert temporary hook in `SimulationLoop._build_components` to install an observation service on legacy world contexts when available (e.g., `if hasattr(self.world, "context")`).
    - Until WP1 Step 7 rewires `create_world`, keep the legacy adapter path intact.
