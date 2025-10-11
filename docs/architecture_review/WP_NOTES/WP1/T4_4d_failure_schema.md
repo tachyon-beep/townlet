@@ -4,29 +4,45 @@ This note captures the current state of `loop.failure` payloads, the dependent
 surfaces, and the plan for migrating them to the DTO-first schema introduced by
 T4.4c. Follow this as the implementation checklist for T4.4d.
 
-## 1. Current Payload (pre-refactor)
+## 1. Current Payload (post-refactor)
 
-Emitted from `SimulationLoop._handle_step_failure`:
+`SimulationLoop._build_failure_payload` now mirrors the DTO-first health schema:
 
 ```jsonc
 {
   "tick": <int>,
   "status": "error",
-  "tick_duration_ms": <float>,
+  "duration_ms": <float>,
   "failure_count": <int>,
   "error": "<ExceptionName>: <message>",
-  "telemetry_queue": <int>,
-  "telemetry_dropped": <int>,
-  "snapshot_path": "<path>"      // optional
+  "snapshot_path": "<path>|null",
+  "transport": {
+    "provider": <str|null>,
+    "queue_length": <int>,
+    "dropped_messages": <int>,
+    "last_flush_duration_ms": <float|null>,
+    "payloads_flushed_total": <int>,
+    "bytes_flushed_total": <int>,
+    "auth_enabled": <bool>,
+    "worker": {
+      "alive": <bool>,
+      "error": <str|null>,
+      "restart_count": <int>
+    }
+  },
+  "global_context": { ... },
+  "health": { ... },             // optional copy of last loop.health payload
+  "summary": {
+    "duration_ms": <float>,
+    "queue_length": <int>,
+    "dropped_messages": <int>
+  }
 }
 ```
 
-- Transport data is flattened (`telemetry_queue` / `telemetry_dropped`) with no
-  worker status or auth metadata.
-- No DTO context is attached, so consumers cannot reason about the world state
-  at the time of failure.
-- Logging (`simulation_loop_failure` in `SimulationLoop` and `TelemetryPublisher`)
-  still emits legacy key/value pairs.
+Legacy payloads containing `tick_duration_ms` / `telemetry_queue` /
+`telemetry_dropped` are still accepted; the publisher synthesises the `summary`
+block from those aliases when necessary.
 
 ## 2. Consumer Inventory
 

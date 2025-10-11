@@ -16,8 +16,8 @@ The broader intent is to finish the port-first composition root so the simulatio
   `tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
 - T4.4: telemetry flow now fully DTO-driven.
   - **T4.4b remainder:** documentation refresh + guard notes now that publisher/aggregator/UI/CLI tests are DTO-only.
-  - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with alias fallbacks (see `T4_4c_health_schema.md` for schema details).
-  - **T4.4d:** completed 2025-10-11 — failure payload mirrors the health schema (structured transport/context, alias block, optional health snapshot); see `T4_4d_failure_schema.md`. Alias removal deferred until dashboards/CLI migrate.
+  - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with a `summary` block replacing legacy aliases (see `T4_4c_health_schema.md` for schema details).
+  - **T4.4d:** completed 2025-10-11 — failure payload mirrors the health schema (structured transport/context + summary, optional health snapshot); see `T4_4d_failure_schema.md`. Alias data is synthesised only when ingesting historical payloads.
 - **T1.3:** completed 2025-10-11 — world factory no longer accepts legacy service kwargs; lifecycle/perturbation wiring is owned by the provider and loop callers rely on adapter accessors.
 - **T1.4/T1.5:** completed 2025-10-11 — factory tests assert DTO observation envelopes/events and invalid providers raise `ConfigurationError`; missing config continues to raise `TypeError`.
 - **T5.1–T5.3:** completed 2025-10-11 — `townlet.testing` hosts dummy world/policy/telemetry providers, factories register them as `dummy`, and `tests/test_ports_surface.py` validates the port surfaces.

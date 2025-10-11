@@ -154,7 +154,9 @@ def test_telemetry_worker_metrics_and_stop(monkeypatch: pytest.MonkeyPatch) -> N
 
     health = loop.telemetry.latest_health_status()
     assert health.get("tick") == loop.tick
-    assert "tick_duration_ms" in health
+    summary = health.get("summary")
+    assert isinstance(summary, dict)
+    assert "duration_ms" in summary
 
     loop.telemetry.stop_worker(wait=True)
     loop.telemetry.stop_worker(wait=True)

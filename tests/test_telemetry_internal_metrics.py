@@ -25,10 +25,10 @@ def _failure_payload(tick: int, error: str = "simulated") -> dict[str, object]:
             "worker": {"alive": True, "error": None, "restart_count": 0},
         },
         "global_context": {},
-        "aliases": {
-            "tick_duration_ms": 0.0,
-            "telemetry_queue": 0,
-            "telemetry_dropped": 0,
+        "summary": {
+            "duration_ms": 0.0,
+            "queue_length": 0,
+            "dropped_messages": 0,
         },
     }
 

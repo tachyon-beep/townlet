@@ -63,24 +63,49 @@ Emitted after each tick summarising health metrics and transport status.
   "tick": 123,
   "status": "ok",
   "duration_ms": 7.5,
-  "queue_metrics": {
-    "cooldown_events": 1,
-    "ghost_step_events": 0,
-    "rotation_events": 0
-  },
+  "failure_count": 0,
   "transport": {
     "provider": "stdout",
     "queue_length": 3,
     "dropped_messages": 0,
     "last_flush_duration_ms": 1.2,
-    "worker_alive": true,
-    "worker_restart_count": 0,
-    "auth_enabled": false
+    "payloads_flushed_total": 42,
+    "bytes_flushed_total": 8192,
+    "auth_enabled": false,
+    "worker": {
+      "alive": true,
+      "error": null,
+      "restart_count": 0
+    }
+  },
+  "global_context": {
+    "queue_metrics": {
+      "cooldown_events": 1,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "employment_snapshot": { ... },
+    "perturbations": { ... }
   },
   "promotion": { ... },                            // promotion snapshot
   "stability": {
     "latest_metrics": { ... },
     "alerts": ["queue_fairness_pressure"]
+  },
+  "summary": {
+    "duration_ms": 7.5,
+    "queue_length": 3,
+    "dropped_messages": 0,
+    "last_flush_duration_ms": 1.2,
+    "payloads_flushed_total": 42,
+    "bytes_flushed_total": 8192,
+    "auth_enabled": false,
+    "worker_alive": true,
+    "worker_error": null,
+    "worker_restart_count": 0,
+    "perturbations_pending": 0,
+    "perturbations_active": 0,
+    "employment_exit_queue": 0
   }
 }
 ```
@@ -96,7 +121,13 @@ Emitted when a tick raises an unrecoverable error.
   "failure_count": 3,
   "snapshot_path": "s3://snapshots/failure_124",
   "transport": { ... },                            // same shape as loop.health.transport
-  "health": { ... }                                // optional copy of latest health payload
+  "global_context": { ... },                       // reuses last known DTO context when available
+  "health": { ... },                               // optional copy of latest health payload
+  "summary": {
+    "duration_ms": 5.1,
+    "queue_length": 2,
+    "dropped_messages": 1
+  }
 }
 ```
 

@@ -50,9 +50,9 @@ Tokens are stripped before commands reach the simulation world; audit logs recor
 
 ## Simulation Loop Health
 
-- The simulation loop now records a `loop_failure` telemetry event whenever a tick raises an exception. Operators can inspect `telemetry.latest_health_status()` or subscribe to the event stream to capture failure details (tick, error summary, failure count). Enable automatic failure snapshots with `snapshot.capture_on_failure: true`; the failure payload and telemetry health status include the saved snapshot path.
+- The simulation loop now records a `loop_failure` telemetry event whenever a tick raises an exception. Operators can inspect `telemetry.latest_health_status()` or subscribe to the event stream to capture failure details (tick, error summary, failure count). Enable automatic failure snapshots with `snapshot.capture_on_failure: true`; the failure payload and telemetry health status include the saved snapshot path. The health cache exposes the structured `transport` snapshot and a `summary` block (queue length, dropped messages, worker status, perturbations, employment exit backlog) that replaces the older `telemetry_*` scalars.
 - CLI or automation clients may register a failure handler via `SimulationLoop.register_failure_handler` to perform cleanup or trigger graceful shutdowns before exiting with a non-zero status. The default `scripts/run_simulation.py` entry point now surfaces the failure summary and exits with status 1 when a tick fails.
-- Health payloads include the last tick duration, transporter queue depth, and whether telemetry workers are still alive, enabling dashboards to surface anomalies quickly.
+- Health payloads include the last tick duration, transport queue depth, and worker status via the `summary` block; dashboards should read from `summary` and fall back to alias fields only when parsing archived payloads captured before WP1 T4.4.
 
 ## Operational Guidance
 

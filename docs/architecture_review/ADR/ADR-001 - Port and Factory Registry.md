@@ -125,6 +125,7 @@ Implement the following shape, mirroring the WP1 requirements:
 - Keep provider keys stable; document additions in both the ADR and the WP1 tasking file.
 - When removing legacy factories, ensure configs use the new registry-backed paths and update docs alongside the code.
 - As DTO-only telemetry rolls out (WP3 Stage 5/6), keep guard tests (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`, `tests/test_console_commands.py`, `tests/test_conflict_telemetry.py`, `tests/test_observer_ui_dashboard.py`) green—any reintroduction of legacy observation builders or payloads must be confined to adapters/factories explicitly listed in the whitelist.
+- Health/failure telemetry now exposes a structured payload with `transport`, DTO `global_context`, and a `summary` block replacing prior `telemetry_*` aliases. Adapters that ingest historical payloads must convert aliases into the summary before handing data to dashboards; new integrations should rely on the structured fields exclusively.
 
 ## Related Documents
 

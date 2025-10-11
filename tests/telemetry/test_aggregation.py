@@ -295,10 +295,10 @@ def test_record_loop_failure_emits_health_event(builder: StreamPayloadBuilder) -
             "auth_enabled": False,
             "worker": {"alive": True, "error": None, "restart_count": 0},
         },
-        "aliases": {
-            "tick_duration_ms": 5.0,
-            "telemetry_queue": 2,
-            "telemetry_dropped": 1,
+        "summary": {
+            "duration_ms": 5.0,
+            "queue_length": 2,
+            "dropped_messages": 1,
         },
     }
     events = list(aggregator.record_loop_failure(payload))

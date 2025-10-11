@@ -19,11 +19,11 @@ Direct code inspection shows WP1 Step 7 and related deliverables remain incomple
 - **Remediation tasks:**
   1. T4.3 closed (2025-10-10): simulation loop now relies on `WorldContext.export_*` for queue/employment/job data; `loop.tick` emits a DTO `global_context` snapshot consumed end-to-end.
   2. T4.4b closed (2025-10-11): publisher/aggregator/UI/CLI consumers rely exclusively on DTO `global_context`, documentation reflects the flow (ADR-001, WP1 status/pre-brief), and regression bundle (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py -q`) is recorded.
-  3. T4.4c status (2025-10-11): loop health events now emit the structured DTO payload (transport snapshot + embedded `global_context`) with alias fields retained for compatibility.
-     - `SimulationLoop._build_health_payload` derives metrics from `_build_transport_status` and DTO exports (scheduler counts only used as a fallback); alias values mirror the previous scalar fields.
-     - `TelemetryPublisher` caches deep copies of the structured payload, `TelemetryEventDispatcher` prefers the embedded context for queue history, and UI/CLI helpers read the structured block before falling back to aliases. Regression suite covering health/telemetry surfaces passes.
-     - Follow-up: document alias deprecation timeline and remove legacy keys after dashboards/CLI migrate (tracked under T4.4d/T4.4 cleanup).
-  3. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) once the loop emits failures purely via ports. *(Structured payload shipped under T4.4d; doc refresh/alias deprecation remains outstanding.)*
+  3. T4.4c status (2025-10-11): loop health events now emit the structured DTO payload (transport snapshot + embedded `global_context`) with a `summary` block replacing the legacy alias fields.
+     - `SimulationLoop._build_health_payload` derives metrics from `_build_transport_status` and DTO exports (scheduler counts only used as a fallback); the telemetry publisher synthesises the summary when ingesting historical alias-only payloads.
+     - UI/CLI helpers read from `summary` first and fall back to aliases only when parsing archived data. Regression suite covering health/telemetry surfaces passes.
+     - Follow-up: document the new schema (ADR-001, console/monitor guides) and record the alias fallback behaviour for operators.
+  3. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) to mention the structured `summary` payload and ensure dashboards reference it. *(Structured payload shipped under T4.4d; doc refresh remains outstanding.)*
   4. Keep loop/component overrides in place for testing, but ensure the default path never rebuilds legacy services.
 
 ## 5. Missing dummy providers and promised tests

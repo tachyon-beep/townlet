@@ -6,41 +6,50 @@ as the single source of truth while implementing the refactor.
 
 ## 1. Current Event Shape (SimulationLoop `health_payload`)
 
-Emitted from `src/townlet/core/sim_loop.py` lines ~780–820:
+As of 2025-10-11 the loop emits the structured schema implemented in T4.4c:
 
 ```jsonc
 {
   "tick": <int>,
-  "status": "ok" | "error",
-  "tick_duration_ms": <float>,
+  "status": "ok" | "warn" | "error",
+  "duration_ms": <float>,
   "failure_count": <int>,
-  "telemetry_queue": <int>,
-  "telemetry_dropped": <int>,
-  "telemetry_flush_ms": <float|null>,
-  "telemetry_worker_alive": <bool>,
-  "telemetry_worker_error": <str|null>,
-  "telemetry_worker_restart_count": <int>,
-  "telemetry_console_auth_enabled": <bool>,
-  "telemetry_payloads_total": <int>,
-  "telemetry_bytes_total": <int>,
-  "perturbations_pending": <int>,
-  "perturbations_active": <int>,
-  "employment_exit_queue": <int>
+  "transport": {
+    "provider": <str|null>,
+    "queue_length": <int>,
+    "dropped_messages": <int>,
+    "last_flush_duration_ms": <float|null>,
+    "payloads_flushed_total": <int>,
+    "bytes_flushed_total": <int>,
+    "auth_enabled": <bool>,
+    "worker": {
+      "alive": <bool>,
+      "error": <str|null>,
+      "restart_count": <int>
+    }
+  },
+  "global_context": { ... },
+  "summary": {
+    "duration_ms": <float>,
+    "queue_length": <int>,
+    "dropped_messages": <int>,
+    "last_flush_duration_ms": <float|null>,
+    "payloads_flushed_total": <int>,
+    "bytes_flushed_total": <int>,
+    "auth_enabled": <bool>,
+    "worker_alive": <bool>,
+    "worker_error": <str|null>,
+    "worker_restart_count": <int>,
+    "perturbations_pending": <int>,
+    "perturbations_active": <int>,
+    "employment_exit_queue": <int>
+  }
 }
 ```
 
-### Data Sources (current)
-
-| Field                               | Source                                                                                  | Notes                                             |
-|-------------------------------------|-----------------------------------------------------------------------------------------|---------------------------------------------------|
-| `tick`, `status`, `tick_duration_ms`| Loop-local state                                                                        |                                                   |
-| `failure_count`                     | `SimulationLoopHealth.failure_count`                                                    |                                                   |
-| `telemetry_*` metrics               | `self._build_transport_status()` snapshot (`self._last_transport_status`)               | Already DTO safe                                  |
-| `perturbations_*`                   | `self.perturbations.pending_count()` / `.active_count()`                                | DTO export available via `global_context["perturbations"]` but unused |
-| `employment_exit_queue`             | `self.world.employment.exit_queue_length()`                                             | **Legacy world dependency**                       |
-
-The event does **not** currently embed the DTO `global_context`, forcing
-downstream consumers to rely on these scalar aliases.
+Historical payloads may still contain the deprecated alias block
+(`telemetry_queue`, `perturbations_pending`, …); the telemetry publisher now
+converts those aliases into the `summary` structure on ingest.
 
 ## 2. Consumer Inventory
 

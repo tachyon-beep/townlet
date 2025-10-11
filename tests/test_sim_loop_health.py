@@ -40,12 +40,14 @@ def test_simulation_loop_failure_records_health(simulation_loop: SimulationLoop,
     latest_health = loop.telemetry.latest_health_status()
     assert latest_health.get("status") == "error"
     assert latest_health.get("snapshot_path") == str(snapshot_path)
-    assert "transport" in latest_health
-    assert isinstance(latest_health["transport"], dict)
-    assert latest_health["transport"]["queue_length"] == latest_health.get("telemetry_queue")
-    assert latest_health["transport"]["dropped_messages"] == latest_health.get("telemetry_dropped")
-    assert "aliases" in latest_health
-    assert latest_health["aliases"]["telemetry_queue"] == latest_health.get("telemetry_queue")
+    transport = latest_health.get("transport")
+    assert isinstance(transport, dict)
+    summary = latest_health.get("summary")
+    assert isinstance(summary, dict)
+    assert transport.get("queue_length") == summary.get("queue_length")
+    assert transport.get("dropped_messages") == summary.get("dropped_messages")
+    assert "telemetry_queue" not in latest_health
+    assert "aliases" not in latest_health
     assert snapshot_path.parent.parent.name == "failures"
     assert loop.tick == 0
     assert invoked and invoked[0][0] == 1
@@ -61,16 +63,16 @@ def test_simulation_loop_success_clears_error(simulation_loop: SimulationLoop) -
     assert health.last_snapshot_path is None
     latest_health = loop.telemetry.latest_health_status()
     assert latest_health.get("status") == "ok"
-    assert "transport" in latest_health
-    transport = latest_health["transport"]
+    transport = latest_health.get("transport")
     assert isinstance(transport, dict)
-    assert transport.get("queue_length") == latest_health.get("telemetry_queue")
-    assert transport.get("dropped_messages") == latest_health.get("telemetry_dropped")
+    summary = latest_health.get("summary")
+    assert isinstance(summary, dict)
+    assert transport.get("queue_length") == summary.get("queue_length")
+    assert transport.get("dropped_messages") == summary.get("dropped_messages")
     assert "global_context" in latest_health
     assert isinstance(latest_health["global_context"], dict)
-    aliases = latest_health.get("aliases")
-    assert isinstance(aliases, dict)
-    assert aliases["telemetry_queue"] == latest_health.get("telemetry_queue")
+    assert "telemetry_queue" not in latest_health
+    assert "aliases" not in latest_health
     duration_ms = latest_health.get("duration_ms")
     assert duration_ms is not None
-    assert pytest.approx(duration_ms, rel=1e-6) == latest_health.get("tick_duration_ms")
+    assert pytest.approx(duration_ms, rel=1e-6) == summary.get("duration_ms")

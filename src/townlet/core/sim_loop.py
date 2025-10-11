@@ -790,6 +790,7 @@ class SimulationLoop:
             else:  # pragma: no cover - defensive
                 self.telemetry.emit_event("loop.health", health_payload)
             if logger.isEnabledFor(logging.INFO):
+                summary = health_payload.get("summary", {})
                 logger.info(
                     (
                         "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
@@ -798,14 +799,14 @@ class SimulationLoop:
                     ),
                     self.tick,
                     duration_ms,
-                    health_payload["telemetry_queue"],
-                    health_payload["telemetry_dropped"],
-                    health_payload["telemetry_flush_ms"],
-                    health_payload["telemetry_payloads_total"],
-                    health_payload["telemetry_bytes_total"],
-                    health_payload["perturbations_pending"],
-                    health_payload["perturbations_active"],
-                    health_payload["employment_exit_queue"],
+                    summary.get("queue_length"),
+                    summary.get("dropped_messages"),
+                    summary.get("last_flush_duration_ms"),
+                    summary.get("payloads_flushed_total"),
+                    summary.get("bytes_flushed_total"),
+                    summary.get("perturbations_pending"),
+                    summary.get("perturbations_active"),
+                    summary.get("employment_exit_queue"),
                 )
             self._record_step_success(duration_ms)
             return TickArtifacts(envelope=dto_envelope, rewards=rewards)
@@ -1015,22 +1016,6 @@ class SimulationLoop:
                 except Exception:  # pragma: no cover - defensive
                     employment_exit_queue = 0
 
-        aliases: dict[str, object] = {
-            "tick_duration_ms": duration_ms,
-            "telemetry_queue": queue_length,
-            "telemetry_dropped": dropped_messages,
-            "telemetry_flush_ms": transport_payload["last_flush_duration_ms"],
-            "telemetry_worker_alive": transport_payload["worker"]["alive"],
-            "telemetry_worker_error": transport_payload["worker"]["error"],
-            "telemetry_worker_restart_count": transport_payload["worker"]["restart_count"],
-            "telemetry_console_auth_enabled": transport_payload["auth_enabled"],
-            "telemetry_payloads_total": transport_payload["payloads_flushed_total"],
-            "telemetry_bytes_total": transport_payload["bytes_flushed_total"],
-            "perturbations_pending": perturbations_pending,
-            "perturbations_active": perturbations_active,
-            "employment_exit_queue": employment_exit_queue,
-        }
-
         payload: dict[str, object] = {
             "tick": self.tick,
             "status": "ok",
@@ -1039,8 +1024,21 @@ class SimulationLoop:
             "transport": transport_payload,
             "global_context": context_payload,
         }
-        payload.update(aliases)
-        payload["aliases"] = dict(aliases)
+        payload["summary"] = {
+            "duration_ms": duration_ms,
+            "queue_length": queue_length,
+            "dropped_messages": dropped_messages,
+            "last_flush_duration_ms": transport_payload["last_flush_duration_ms"],
+            "payloads_flushed_total": transport_payload["payloads_flushed_total"],
+            "bytes_flushed_total": transport_payload["bytes_flushed_total"],
+            "auth_enabled": transport_payload["auth_enabled"],
+            "worker_alive": transport_payload["worker"]["alive"],
+            "worker_error": transport_payload["worker"]["error"],
+            "worker_restart_count": transport_payload["worker"]["restart_count"],
+            "perturbations_pending": perturbations_pending,
+            "perturbations_active": perturbations_active,
+            "employment_exit_queue": employment_exit_queue,
+        }
         self._last_health_payload = copy.deepcopy(payload)
         return payload
 
@@ -1077,12 +1075,6 @@ class SimulationLoop:
             },
         }
 
-        aliases: dict[str, object] = {
-            "tick_duration_ms": duration_ms,
-            "telemetry_queue": transport_payload["queue_length"],
-            "telemetry_dropped": transport_payload["dropped_messages"],
-        }
-
         payload: dict[str, object] = {
             "tick": int(tick),
             "status": "error",
@@ -1097,9 +1089,11 @@ class SimulationLoop:
         last_health = self._last_health_payload
         if isinstance(last_health, Mapping):
             payload["health"] = copy.deepcopy(dict(last_health))
-
-        payload.update(aliases)
-        payload["aliases"] = dict(aliases)
+        payload["summary"] = {
+            "duration_ms": duration_ms,
+            "queue_length": transport_payload["queue_length"],
+            "dropped_messages": transport_payload["dropped_messages"],
+        }
         return payload
 
     def _set_policy_observation_envelope(self, envelope: "ObservationEnvelope") -> None:

@@ -914,8 +914,19 @@ class TelemetryClient:
             context_payload = health_payload.get("global_context")
             if not isinstance(context_payload, Mapping):
                 context_payload = {}
-            perturbations_alias = int(_maybe_int(health_payload.get("perturbations_pending")) or 0)
-            perturbations_active_alias = int(_maybe_int(health_payload.get("perturbations_active")) or 0)
+            summary_payload = health_payload.get("summary")
+            if not isinstance(summary_payload, Mapping):
+                summary_payload = {}
+            perturbations_alias = int(
+                _maybe_int(summary_payload.get("perturbations_pending"))
+                or _maybe_int(health_payload.get("perturbations_pending"))
+                or 0
+            )
+            perturbations_active_alias = int(
+                _maybe_int(summary_payload.get("perturbations_active"))
+                or _maybe_int(health_payload.get("perturbations_active"))
+                or 0
+            )
             perturbations_payload = context_payload.get("perturbations")
             if isinstance(perturbations_payload, Mapping):
                 pending_section = perturbations_payload.get("pending")
@@ -929,8 +940,14 @@ class TelemetryClient:
                     return fallback
 
                 perturbations_alias = _len_or_default(pending_section, perturbations_alias)
-                perturbations_active_alias = _len_or_default(active_section, perturbations_active_alias)
-            employment_exit_alias = int(_maybe_int(health_payload.get("employment_exit_queue")) or 0)
+                perturbations_active_alias = _len_or_default(
+                    active_section, perturbations_active_alias
+                )
+            employment_exit_alias = int(
+                _maybe_int(summary_payload.get("employment_exit_queue"))
+                or _maybe_int(health_payload.get("employment_exit_queue"))
+                or 0
+            )
             employment_payload = context_payload.get("employment_snapshot")
             if isinstance(employment_payload, Mapping):
                 pending_count = employment_payload.get("pending_count")
@@ -940,16 +957,27 @@ class TelemetryClient:
                     pending_section = employment_payload.get("pending")
                     if isinstance(pending_section, (list, tuple, set)):
                         employment_exit_alias = len(pending_section)
+            summary_queue = int(
+                _maybe_int(summary_payload.get("queue_length"))
+                or _maybe_int(health_payload.get("telemetry_queue"))
+                or 0
+            )
+            summary_dropped = int(
+                _maybe_int(summary_payload.get("dropped_messages"))
+                or _maybe_int(health_payload.get("telemetry_dropped"))
+                or 0
+            )
             health_snapshot = HealthStatus(
                 tick=_coerce_int(health_payload.get("tick")),
                 tick_duration_ms=_coerce_float(health_payload.get("duration_ms"))
+                or _coerce_float(summary_payload.get("duration_ms"))
                 or _coerce_float(health_payload.get("tick_duration_ms")),
                 telemetry_queue=transport_queue
                 if transport_queue
-                else int(_maybe_int(health_payload.get("telemetry_queue")) or 0),
+                else summary_queue,
                 telemetry_dropped=transport_dropped
                 if transport_dropped
-                else int(_maybe_int(health_payload.get("telemetry_dropped")) or 0),
+                else summary_dropped,
                 perturbations_pending=perturbations_alias,
                 perturbations_active=perturbations_active_alias,
                 employment_exit_queue=employment_exit_alias,

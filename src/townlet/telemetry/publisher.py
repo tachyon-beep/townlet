@@ -771,10 +771,6 @@ class TelemetryPublisher:
     def _store_loop_failure(self, payload: Mapping[str, object]) -> None:
         failure_data = dict(payload)
         failure_data.setdefault("status", "error")
-        aliases = failure_data.get("aliases")
-        if isinstance(aliases, Mapping):
-            for key, value in aliases.items():
-                failure_data.setdefault(str(key), value)
         self._latest_health_status = failure_data
         event = {
             "kind": "loop_failure",
@@ -784,12 +780,38 @@ class TelemetryPublisher:
         self._latest_events.append(event)
         if len(self._latest_events) > 128:
             self._latest_events = self._latest_events[-128:]
+        transport_snapshot = failure_data.get("transport")
+        queue_length: object | None = None
+        dropped_messages: object | None = None
+        if isinstance(transport_snapshot, Mapping):
+            queue_length = transport_snapshot.get("queue_length")
+            dropped_messages = transport_snapshot.get("dropped_messages")
+        summary_payload = failure_data.get("summary")
+        if isinstance(summary_payload, Mapping):
+            queue_length = summary_payload.get("queue_length", queue_length)
+            dropped_messages = summary_payload.get("dropped_messages", dropped_messages)
+        else:
+            summary_payload = {}
+            if queue_length is not None:
+                summary_payload["queue_length"] = queue_length
+            if dropped_messages is not None:
+                summary_payload["dropped_messages"] = dropped_messages
+            aliases = failure_data.get("aliases")
+            if isinstance(aliases, Mapping):
+                if "queue_length" not in summary_payload and "telemetry_queue" in aliases:
+                    summary_payload["queue_length"] = aliases.get("telemetry_queue")
+                if "dropped_messages" not in summary_payload and "telemetry_dropped" in aliases:
+                    summary_payload["dropped_messages"] = aliases.get("telemetry_dropped")
+                if "duration_ms" not in summary_payload and "tick_duration_ms" in aliases:
+                    summary_payload["duration_ms"] = aliases.get("tick_duration_ms")
+            if summary_payload:
+                failure_data.setdefault("summary", summary_payload)
         logger.error(
             "simulation_loop_failure tick=%s error=%s queue=%s dropped=%s snapshot=%s",
             failure_data.get("tick"),
             failure_data.get("error"),
-            failure_data.get("telemetry_queue"),
-            failure_data.get("telemetry_dropped"),
+            queue_length,
+            dropped_messages,
             failure_data.get("snapshot_path"),
         )
 
@@ -828,9 +850,39 @@ class TelemetryPublisher:
         context_payload = payload.get("global_context")
         if isinstance(context_payload, Mapping):
             payload["global_context"] = copy.deepcopy(dict(context_payload))
-        aliases_payload = payload.get("aliases")
-        if isinstance(aliases_payload, Mapping):
-            payload["aliases"] = dict(aliases_payload)
+        summary_payload = payload.get("summary")
+        if isinstance(summary_payload, Mapping):
+            payload["summary"] = dict(summary_payload)
+        else:
+            summary: dict[str, object] = {}
+            aliases = payload.get("aliases")
+            if isinstance(aliases, Mapping):
+                if "telemetry_queue" in aliases:
+                    summary["queue_length"] = aliases["telemetry_queue"]
+                if "telemetry_dropped" in aliases:
+                    summary["dropped_messages"] = aliases["telemetry_dropped"]
+                if "telemetry_console_auth_enabled" in aliases:
+                    summary["auth_enabled"] = aliases["telemetry_console_auth_enabled"]
+                if "telemetry_worker_alive" in aliases:
+                    summary["worker_alive"] = aliases["telemetry_worker_alive"]
+                if "telemetry_worker_error" in aliases:
+                    summary["worker_error"] = aliases["telemetry_worker_error"]
+                if "telemetry_worker_restart_count" in aliases:
+                    summary["worker_restart_count"] = aliases["telemetry_worker_restart_count"]
+                if "telemetry_payloads_total" in aliases:
+                    summary["payloads_flushed_total"] = aliases["telemetry_payloads_total"]
+                if "telemetry_bytes_total" in aliases:
+                    summary["bytes_flushed_total"] = aliases["telemetry_bytes_total"]
+                if "perturbations_pending" in aliases:
+                    summary["perturbations_pending"] = aliases["perturbations_pending"]
+                if "perturbations_active" in aliases:
+                    summary["perturbations_active"] = aliases["perturbations_active"]
+                if "employment_exit_queue" in aliases:
+                    summary["employment_exit_queue"] = aliases["employment_exit_queue"]
+                if "tick_duration_ms" in aliases:
+                    summary["duration_ms"] = aliases["tick_duration_ms"]
+            if summary:
+                payload["summary"] = summary
         self._latest_health_status = payload
 
     def latest_health_status(self) -> dict[str, object]:

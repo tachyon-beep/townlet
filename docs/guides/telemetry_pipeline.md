@@ -44,7 +44,7 @@ telemetry:
 ## Protocol Surface (common read‑only accessors)
 
 - `emit_event("loop.tick", payload)` – main emission entrypoint (tick lifecycle).
-- `emit_event("loop.health", payload)` / `emit_event("loop.failure", payload)` – health & failure reporting.
+- `emit_event("loop.health", payload)` / `emit_event("loop.failure", payload)` – health & failure reporting. Payloads include structured `transport`, DTO `global_context`, and a `summary` block that replaces the legacy `telemetry_*` scalars.
 - `emit_event("console.result", payload)` – console ingress/egress (results include metadata + payload).
 - Read‑only getters used by dashboards and scripts:
   - state snapshots (`latest_*`): economy, utilities, relationships, employment, conflicts, social events, narrations, policy snapshot/identity, affordances, reward breakdown, stability, health.
@@ -64,6 +64,8 @@ Worker/population metrics are exposed via `latest_transport_status()`:
 - `worker_restart_count`, `worker_alive`, `worker_error`
 
 Loop health logs include these counters per tick (`tick_health ...`).
+
+`latest_health_status()` now mirrors the structured event: consumers should read transport metrics from `payload["transport"]` and queue/perturbation/employment summaries from `payload["summary"]`. When ingesting historical logs that still expose `telemetry_queue` or related aliases, normalise them into the `summary` block before forwarding to dashboards.
 
 ## Benchmarking
 
