@@ -1,4 +1,4 @@
-"""Default world adapter wiring legacy runtime to the world port."""
+"""Default world adapter wiring the modular world context to the port."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
-from townlet.observations import ObservationBuilder
 from townlet.world.core.context import WorldContext
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.grid import WorldState
@@ -33,7 +32,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self,
         *,
         context: WorldContext,
-        observation_builder: ObservationBuilder | None = None,
+        observation_builder: object | None = None,
         lifecycle: LifecycleManager | None = None,
         perturbations: PerturbationScheduler | None = None,
         ticks_per_day: int = 0,
@@ -42,17 +41,18 @@ class DefaultWorldAdapter(WorldRuntime):
         self._lifecycle = lifecycle
         self._perturbations = perturbations
         self._ticks_per_day = max(0, int(ticks_per_day))
-        self._pending_actions: dict[str, Any] = {}
         self._queued_console: list["ConsoleCommandEnvelope"] = []
         self._last_result: RuntimeStepResult | None = None
         self._last_events: list[Mapping[str, Any]] = []
         self._last_snapshot: SnapshotState | None = None
+        self._last_observations: dict[str, Any] | None = None
 
-        builder = observation_builder or ObservationBuilder(context.config)
-        self._obs_builder = builder
         self._world_adapter = ensure_world_adapter(context.state)
+        if observation_builder is not None:
+            # Transitional: the adapter no longer owns builders; parameter retained for compatibility.
+            _ = observation_builder
         if getattr(context, "observation_service", None) is None:
-            context.observation_service = builder
+            raise RuntimeError("WorldContext observation service not configured")
         if lifecycle is None or perturbations is None:
             raise TypeError(
                 "DefaultWorldAdapter requires lifecycle and perturbations when using WorldContext"
@@ -64,11 +64,11 @@ class DefaultWorldAdapter(WorldRuntime):
     # ------------------------------------------------------------------
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - no-op bridge
         self._context.reset(seed=seed)
-        self._pending_actions.clear()
         self._queued_console.clear()
         self._last_result = None
         self._last_events = []
         self._last_snapshot = None
+        self._last_observations = None
         self._tick = getattr(self._context.state, "tick", 0)
 
     def queue_console(self, operations: Iterable["ConsoleCommandEnvelope"]) -> None:
@@ -91,9 +91,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self._queued_console.clear()
 
         combined_actions: dict[str, Any] = {}
-        if self._pending_actions:
-            combined_actions.update(self._pending_actions)
-        if policy_actions:
+        if policy_actions is not None:
             combined_actions.update(policy_actions)
         elif action_provider is not None:
             supplied = action_provider(self._context.state, tick)
@@ -107,8 +105,8 @@ class DefaultWorldAdapter(WorldRuntime):
             perturbations=perturbations,
             ticks_per_day=self._ticks_per_day,
         )
-        self._pending_actions.clear()
         self._last_result = result
+        self._last_observations = None
         self._tick = tick
         self._last_events = [dict(payload) for payload in result.events]
         self._world_adapter = ensure_world_adapter(self._context.state)
@@ -119,16 +117,33 @@ class DefaultWorldAdapter(WorldRuntime):
 
     def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
         terminated = self._last_result.terminated if self._last_result else {}
-        builder = self._obs_builder
-        if builder is None:
-            raise RuntimeError("Observation builder not configured")
-        observation_batch = builder.build_batch(self._world_adapter, terminated)
-        if agent_ids is None:
-            return observation_batch
-        return {agent_id: observation_batch[agent_id] for agent_id in agent_ids if agent_id in observation_batch}
+        termination_reasons = self._last_result.termination_reasons if self._last_result else {}
+        actions = self._last_result.actions if self._last_result else {}
+        envelope = self._context.observe(
+            agent_ids=agent_ids,
+            actions=actions,
+            terminated=terminated,
+            termination_reasons=termination_reasons,
+        )
+        observations: dict[str, Any] = {}
+        for agent in envelope.agents:
+            observations[agent.agent_id] = {
+                "map": agent.map,
+                "features": agent.features,
+                "metadata": agent.metadata,
+                "needs": agent.needs,
+                "wallet": agent.wallet,
+                "inventory": agent.inventory,
+                "job": agent.job,
+                "personality": agent.personality,
+                "queue_state": agent.queue_state,
+                "pending_intent": agent.pending_intent,
+            }
+        self._last_observations = observations
+        return observations
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
-        self._pending_actions = dict(actions)
+        self._context.apply_actions(actions)
 
     def snapshot(
         self,

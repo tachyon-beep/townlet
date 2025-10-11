@@ -111,3 +111,12 @@ sed -n '139,220p' src/townlet/world/core/context.py
   directly; confirm no out-of-tree users remain before deleting the method.
 
 Use this audit as the starting point for the Stage 5 cleanup implementation.
+
+---
+
+## Progress Log
+
+- **2025-10-11 — S5.B completed:** `DefaultWorldAdapter` no longer owns an
+  `ObservationBuilder`; it delegates observations to `WorldContext.observe`,
+  stages policy actions via the context, and converts DTO agents back to the
+  legacy mapping for callers. Adapter unit tests were updated accordingly.
