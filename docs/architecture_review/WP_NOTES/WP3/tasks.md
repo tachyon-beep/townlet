@@ -21,11 +21,11 @@
 - [x] Execute WP3B_plan: reattach modular systems (queues/affordances/employment/economy) and drop the legacy bridge.
 - [ ] Execute WP3C_plan: expand DTO parity harness, run ML smoke, and remove legacy observation payloads. *(Stage 5 complete: loop/telemetry emit DTO-only payloads; Stage 6 guardrails/docs landed. Remaining work: ML parity + world adapter cleanup.)*
 - [ ] Migrate ML adapters & training orchestrator to DTO flow; update replay/export tooling and run behavioural parity checks.
-- [ ] Cleanup loop/console interactions (drop `runtime.queue_console`, remove direct `WorldState` mutation, rely on DTO/event caches).
+- [~] Cleanup loop/console interactions (drop `runtime.queue_console`, remove direct `WorldState` mutation, rely on DTO/event caches). *(Console routing now event-only; remaining work is removing direct `WorldState` mutations during guardrail updates.)*
 - [x] Document DTO schema, add guard tests, and refresh WP1/WP2 status once DTO rollout completes. *(WP status files + ADR-001/dto_migration updated; guard tests in place.)*
 
 ## 3. Simulation Loop Cleanup
-- [ ] Replace `runtime.queue_console` usage with router-driven action application; ensure no direct `WorldState` mutation.
+- [~] Replace `runtime.queue_console` usage with router-driven action application; ensure no direct `WorldState` mutation. *(Router-only path active; finalize once world mutation cleanup lands.)*
 - [x] Emit telemetry via events only (`loop.tick`, `loop.health`, `loop.failure`); remove `record_console_results`, `record_health_metrics`, `record_loop_failure` calls.
 - [x] Delete transitional adapter handles (`legacy_runtime`, world provider shims) once WP1/WP2 confirm parity. *(Default world adapter now fronts the runtime; simulation loop no longer reaches through `legacy_runtime`.)*
 

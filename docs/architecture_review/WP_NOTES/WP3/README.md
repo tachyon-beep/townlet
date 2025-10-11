@@ -4,7 +4,7 @@ Purpose: capture the design intent, decisions, and progress for Work Package 3. 
 
 ## Context
 
-- WP1 introduced minimal ports/factories and now emits loop state via `ConsoleRouter`, `HealthMonitor`, and telemetry events. Telemetry writer methods have been removed; remaining work is to route console commands without touching `runtime.queue_console`.
+- WP1 introduced minimal ports/factories and now emits loop state via `ConsoleRouter`, `HealthMonitor`, and telemetry events. Telemetry writer methods are removed and console commands now flow purely through the router/dispatcher path.
 - WP2 modularised the world context and systems. Adapters expose transitional handles, but the loop still feeds the scripted backend raw `WorldState` objects. Observation-first policy decisions and DTO streaming depend on WP3.
 - WP3 therefore owns the remaining substrate changes required to retire legacy getters, writers, and world references.
 
@@ -27,7 +27,7 @@ Purpose: capture the design intent, decisions, and progress for Work Package 3. 
 
 ## Dependencies & Blockers
 
-- **Blocks WP1 Step 8 completion:** loop still calls `record_console_results`, `record_health_metrics`, `record_loop_failure`, and delegates world actions via `runtime.queue_console`. WP3 must ship replacement events/port helpers before WP1 can delete the old path.
+- **Blocks WP1 Step 8 completion:** loop still needs failure/snapshot refactors and health-monitor parity; console routing is now event-only with no `runtime.queue_console` usage.
 - **Blocks WP2 adapter finalisation:** policy still consumes `WorldState` directly; observation-driven DTOs planned in WP3 remove that dependency.
 - The telemetry transport refactor must keep stdout/HTTP compatibility so downstream tooling (dashboards, promotion pipeline) continue functioning during rollout.
 -
@@ -44,7 +44,7 @@ WP1 / WP2 progress trackers should cross-link to the matching WP3 tasks (see `ta
 
 1. **Telemetry cleanup** – update any remaining transports (e.g., HTTP) to consume dispatcher events and add guard tests to prevent regression.
 2. **Policy DTO rollout** – provide observation DTOs and policy metadata events so WP1/WP2 can drop `WorldState` access.
-3. **Loop finalisation** – remove `runtime.queue_console`, ensure all telemetry/policy interactions flow through ports, and close out WP1 Step 8 / WP2 Step 7 with parity tests and docs.
+3. **Loop finalisation** – finish failure/snapshot refactors and ensure all telemetry/policy interactions flow through ports, closing out WP1 Step 8 / WP2 Step 7 with parity tests and docs.
 
 ## Open Questions
 

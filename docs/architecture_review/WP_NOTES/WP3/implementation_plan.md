@@ -81,9 +81,9 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
 ## 3. Simulation Loop Finalisation
 
 ### 3.1 Console & world interactions
-- [ ] Replace `runtime.queue_console` usage with a router-driven flow:
+- [x] Replace `runtime.queue_console` usage with a router-driven flow:
   - Router translates incoming commands to world actions.
-  - Loop applies actions via `world_port.apply_actions` and `world_port.tick`.
+  - Loop applies actions via `world_port.apply_actions` and `world_port.tick` (buffered commands dropped with warning if router unavailable).
 - [ ] Remove direct mutation of `WorldState` (`world.agents` iteration should happen through views/DTOs).
 
 ### 3.2 Telemetry cleanup

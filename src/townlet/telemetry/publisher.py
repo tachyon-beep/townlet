@@ -1670,15 +1670,44 @@ class TelemetryPublisher:
             return
         if name == "console.result":
             result_payload = dict(payload)
+            raw_result = result_payload.get("result")
+            console_payload: dict[str, Any]
+            status_source = result_payload
+            if isinstance(raw_result, Mapping) and (
+                "status" in raw_result or "name" in raw_result or "cmd_id" in raw_result
+            ):
+                console_payload = dict(raw_result)
+                status_source = console_payload
+            else:
+                console_payload = dict(result_payload)
+
+            name_value = status_source.get("name")
+            if not isinstance(name_value, str):
+                name_value = ""
+            status_value = status_source.get("status")
+            if not isinstance(status_value, str):
+                status_value = "ok"
+            result_payload_inner: Mapping[str, Any] | None
+            if status_source is console_payload:
+                result_payload_inner = console_payload.get("result")
+            else:
+                result_payload_inner = raw_result if isinstance(raw_result, Mapping) else None
+            result_value = dict(result_payload_inner) if result_payload_inner is not None else None
+            error_payload_inner: Mapping[str, Any] | None
+            if status_source is console_payload:
+                error_payload_inner = console_payload.get("error")
+            else:
+                error_payload_inner = result_payload.get("error") if isinstance(result_payload.get("error"), Mapping) else None
+            error_value = dict(error_payload_inner) if error_payload_inner is not None else None
             result_kwargs = {
-                "name": str(result_payload.get("name", "")),
-                "status": str(result_payload.get("status", "ok")),
-                "result": dict(result_payload.get("result", {})) if isinstance(result_payload.get("result"), Mapping) else None,
-                "error": dict(result_payload.get("error", {})) if isinstance(result_payload.get("error"), Mapping) else None,
-                "cmd_id": result_payload.get("cmd_id"),
-                "issuer": result_payload.get("issuer"),
-                "tick": result_payload.get("tick"),
-                "latency_ms": result_payload.get("latency_ms"),
+                "name": name_value,
+                "status": status_value,
+                "result": result_value,
+                "error": error_value,
+                "cmd_id": status_source.get("cmd_id", result_payload.get("cmd_id")),
+                "issuer": status_source.get("issuer", result_payload.get("issuer")),
+                "tick": status_source.get("tick", result_payload.get("tick")),
+                "latency_ms": status_source.get("latency_ms", result_payload.get("latency_ms")),
             }
             console_result = ConsoleCommandResult(**result_kwargs)
             self._ingest_console_results([console_result])

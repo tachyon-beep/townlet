@@ -1,4 +1,4 @@
-# WP3 Context Snapshot (2025-10-09)
+# WP3 Context Snapshot (2025-10-10)
 
 Use this as reorientation material if the working memory is compacted. It summarises current state, blockers, and the next concrete actions across WP1–WP3.
 
@@ -38,13 +38,13 @@ Use this as reorientation material if the working memory is compacted. It summar
 
 ## Simulation Loop Cleanup (WP3 Section 3)
 
-- Console commands now flow through `ConsoleRouter.enqueue`, which forwards them to the world runtime and records telemetry; `SimulationLoop.step` no longer calls `runtime.queue_console` directly (residual work: telemetry-only command handling and loop/console smokes under T4.2b/T4.5).
-- World factory + adapter always operate on `WorldContext.observe`; the legacy ObservationBuilder fallback is gone from the loop, and `DefaultWorldAdapter.observe` simply proxies the context. Remaining work is to migrate adapter-side observation helpers/tests to the DTO-native path (T2.4) and keep ML parity in sync.
-- Plan: finish ML parity work, remove the remaining telemetry command shims, add the promised loop/console smoke tests, and mark WP1 Step 8 / WP2 Step 7 complete.
+- Console commands now flow through `ConsoleRouter.enqueue`, which forwards them to the world runtime and records telemetry; if the router is absent the loop drops buffered commands with a warning. `SimulationLoop.step` no longer calls `runtime.queue_console` and the new smoke (`tests/core/test_sim_loop_modular_smoke.py`) covers DTO envelopes plus console telemetry.
+- World factory + adapter always operate on `WorldContext.observe`; the legacy ObservationBuilder fallback is gone from the loop, and `DefaultWorldAdapter.observe` simply proxies the context with fresh unit coverage in `tests/adapters/test_default_world_adapter.py`. Remaining work is to migrate adapter-side observation helpers/tests to the DTO-native path (T2.4) and keep ML parity in sync.
+- Plan: finish ML parity work, complete failure/snapshot refactors, add the promised health-monitor smokes, and mark WP1 Step 8 / WP2 Step 7 complete.
 
 ## Cross-Package Dependencies
 
-- **WP1** waits on WP3 for: observation-first policy decisions and removal of `runtime.queue_console`.
+- **WP1** waits on WP3 for: observation-first policy decisions (ML parity) and failure/snapshot refactors.
 - **WP2** waits on WP3 for: observation DTO schema (done) and removal of legacy adapter shims; once DTO-only ML parity lands we can drop the ObservationBuilder/queue-console compatibility paths.
 - **WP3 telemetry cleanup** now focuses on transport parity and guard tests before WP1/WP2 closure.
 - Transitional bridge removal (legacy apply/resolves) is tracked under WP3B once modular systems are fully operational.

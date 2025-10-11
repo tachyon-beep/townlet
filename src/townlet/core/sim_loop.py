@@ -553,7 +553,7 @@ class SimulationLoop:
                 except ValueError:
                     logger.warning("Ignoring invalid console command payload: %r", command)
         elif console_ops:
-            runtime.queue_console(console_ops)
+            logger.warning("ConsoleRouter unavailable; dropping %d buffered commands", len(console_ops))
 
         controller = self._policy_controller
         try:
@@ -588,12 +588,14 @@ class SimulationLoop:
             if self._console_router is not None:
                 self._console_router.run_pending(tick=self.tick)
 
-            if self._telemetry_port is not None:
+            if console_results and self._console_router is None:
+                emitter = (
+                    self._telemetry_port.emit_event
+                    if self._telemetry_port is not None
+                    else self.telemetry.emit_event  # pragma: no cover - defensive
+                )
                 for result in console_results:
-                    self._telemetry_port.emit_event("console.result", result.to_dict())
-            else:  # pragma: no cover - defensive
-                for result in console_results:
-                    self.telemetry.emit_event("console.result", result.to_dict())
+                    emitter("console.result", {"result": result.to_dict()})
             episode_span = self._ticks_per_day
             for snapshot in self.world.agents.values():
                 snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span

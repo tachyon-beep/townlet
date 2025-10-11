@@ -13,7 +13,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T2.1** Replace `DefaultWorldAdapter` implementation with a wrapper around the modular `WorldContext` and DTO helpers. *(Completed 2025-10-10 — adapter now depends solely on `WorldContext`.)*
 - **T2.2** Remove `.world_state` and any direct `LegacyWorldRuntime` dependencies; expose only the `WorldRuntime` port. *(Completed 2025-10-10 — property removed, legacy runtime branch deleted.)*
 - **T2.3** Ensure observation building is handled by DTO pipeline; drop `ObservationBuilder` usage. *(Completed 2025-10-10 — adapter.observe now proxies `WorldContext.observe` and no longer references the legacy builder.)*
-- **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour. *(Pending — expand coverage once DTO-only flow lands.)*
+- **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour. *(Completed 2025-10-10 — see `tests/adapters/test_default_world_adapter.py` for the new unit coverage.)*
 
 ## 3. WorldContext is unimplemented
 - **T3.1** Port tick orchestration into `WorldContext` (`reset`, `tick`, `agents`, `observe`, `apply_actions`, `snapshot`).
@@ -59,9 +59,9 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.1b** Remove direct `WorldState` construction, instead call `create_world` and pull context/adapter details via the port; update tests depending on `loop.world` attribute.
 - **T4.1c** Replace `_observation_builder` usage with DTO envelope caching; ensure reward engine consumes the DTO data.
 - **T4.2a** Move console queueing into `ConsoleRouter.enqueue` during input ingestion; delete `runtime.queue_console` calls.
-- **T4.2b** Update telemetry emission to rely solely on port methods (`emit_event/emit_metric`), removing legacy writer fallbacks.
+- **T4.2b** Update telemetry emission to rely solely on port methods (`emit_event/emit_metric`), removing legacy writer fallbacks. *(Completed 2025-10-10 — console results now emit via dispatcher events with router-aware payloads; regression covered by `tests/test_console_events.py`.)*
 - **T4.4a** Update failure handling and snapshotting to use modular runtime outputs; adjust `SnapshotManager` helpers accordingly.
-- **T4.5a** Add new smoke test `tests/core/test_sim_loop_modular_smoke.py` covering two ticks with default providers, asserting DTO envelope + telemetry events.
+- **T4.5a** Add new smoke test `tests/core/test_sim_loop_modular_smoke.py` covering two ticks with default providers, asserting DTO envelope + telemetry events. *(Completed 2025-10-10 — smoke verifies DTO envelopes and console telemetry on default providers.)*
 
 ### T6.x – Tighten port boundaries
 - **T6.1a** Draft revised `WorldRuntime` protocol without `WorldState` references; circulate with WP2 owner for sign-off.
@@ -82,14 +82,14 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **WC-G** Run parity harness against the new context and capture delta report; open follow-up tasks for any discrepancies.
 
 ### SimulationLoop migration (supersedes T4.1a–T4.5a)
-- **SL-A** Introduce constructor seams (dependency injection hooks) for world/policy/telemetry to ease staged migration; add tests ensuring defaults still work.
-- **SL-B** Replace direct `WorldState` creation with `create_world` call; adjust loop attributes and tests that relied on `self.world` being the legacy object.
-- **SL-C** Swap policy setup to use `create_policy` output directly, ensuring controller binding works; add regression test for pending intent handling.
-- **SL-D** Swap telemetry setup to use `create_telemetry`, removing direct `TelemetryPublisher` mutation; verify telemetry events via existing tests.
-- **SL-E** Remove `_observation_builder` cache; update reward engine and policy decision path to consume the DTO envelope; add unit test ensuring policy sees matching agent IDs.
-- **SL-F** Route console commands via `ConsoleRouter` exclusively and delete `runtime.queue_console`; extend console smoke test to assert router usage.
-- **SL-G** Update failure/snapshot handling to pull data from modular runtime (`runtime.snapshot`), adjusting `SnapshotManager` tests as needed.
-- **SL-H** Add new smoke `tests/core/test_sim_loop_modular_smoke.py` running two ticks and asserting DTO envelope + telemetry events (stdout adapter stub).
+- **SL-A** Introduce constructor seams (dependency injection hooks) for world/policy/telemetry to ease staged migration; add tests ensuring defaults still work. *(Completed 2025-10-10 — `SimulationLoop` now exposes override hooks for all component bundles.)*
+- **SL-B** Replace direct `WorldState` creation with `create_world` call; adjust loop attributes and tests that relied on `self.world` being the legacy object. *(Completed 2025-10-10 — loop builds world components via `create_world`, enforcing context-backed adapters.)*
+- **SL-C** Swap policy setup to use `create_policy` output directly, ensuring controller binding works; add regression test for pending intent handling. *(Completed 2025-10-10 — policy components come from factory, controller wiring validated by DTO parity tests.)*
+- **SL-D** Swap telemetry setup to use `create_telemetry`, removing direct `TelemetryPublisher` mutation; verify telemetry events via existing tests. *(Completed 2025-10-10 — telemetry components now resolved via factory.)*
+- **SL-E** Remove `_observation_builder` cache; update reward engine and policy decision path to consume the DTO envelope; add unit test ensuring policy sees matching agent IDs. *(Completed 2025-10-10 — loop consumes DTO envelopes through `WorldContext.observe`, legacy builder removed.)*
+- **SL-F** Route console commands via `ConsoleRouter` exclusively and delete `runtime.queue_console`; extend console smoke test to assert router usage. *(Completed 2025-10-10 — loop drops buffered commands if the router is absent and no longer calls `runtime.queue_console`; smoke test covers router-based telemetry.)*
+- **SL-G** Update failure/snapshot handling to pull data from modular runtime (`runtime.snapshot`), adjusting `SnapshotManager` tests as needed. *(Pending.)*
+- **SL-H** Add new smoke `tests/core/test_sim_loop_modular_smoke.py` running two ticks and asserting DTO envelope + telemetry events (stdout adapter stub). *(Completed 2025-10-10.)*
 
 ### Port boundary tightening (supersedes T6.x)
 - **PB-A** Draft revised `WorldRuntime` protocol without `WorldState`/console references and circulate for sign-off; no code changes yet.
