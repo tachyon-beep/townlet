@@ -127,3 +127,7 @@ Use this audit as the starting point for the Stage 5 cleanup implementation.
   `runtime.queue_console`; `SimulationLoop` passes authorised envelopes directly
   into the runtime, adapters/runtimes treat `queue_console` as a no-op shim, and
   smoke/port tests updated to reflect the event-only flow.
+- **2025-10-11 — S5.E completed:** Ran targeted DTO/console/telemetry regression
+  bundles (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_events.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/orchestration/test_console_health_smokes.py tests/test_console_router.py tests/core/test_sim_loop_modular_smoke.py tests/core/test_sim_loop_with_dummies.py -q`
+  and `pytest tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py tests/core/test_sim_loop_dto_parity.py -q`) and refreshed WP3 status/pre-brief to
+  record the Stage 5 finish. Full-suite (`pytest`), `mypy`, and `ruff` runs are earmarked for Stage 6.
