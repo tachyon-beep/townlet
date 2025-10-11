@@ -61,7 +61,13 @@ Townlet is a small-town life simulation that explores emergent behaviour in a po
 
 ### Test Coverage & SonarQube
 
-Running `pytest` (with the default options from `pyproject.toml`) now emits both terminal summaries and an XML coverage report at `coverage.xml`. SonarQube Cloud ingests this output via `sonar.python.coverage.reportPaths`; the `SonarCloud` GitHub workflow uploads the metrics automatically when the repository secret `SONAR_TOKEN` is configured.
+Running `pytest` (with the default options from `pyproject.toml`) now emits both terminal summaries and an XML coverage report at `coverage.xml`. SonarQube Cloud ingests this output via `sonar.python.coverage.reportPaths`; the `SonarCloud` GitHub workflow uploads the metrics automatically when the required GitHub secrets are present:
+
+- `SONAR_TOKEN` – personal access token generated from SonarCloud.
+- `SONAR_PROJECT_KEY` – set to `tachyon-beep_townlet`.
+- `SONAR_ORGANIZATION` – set to `tachyon-beep`.
+
+Make sure automatic analysis is disabled in SonarCloud and that the CI pipeline runs `pytest` before invoking the scanner so the coverage file is available.
 
 Implementation TODOs are captured with `# TODO(@townlet)` markers inside the package. Each module outlines its responsibilities, inputs, and integration points with the rest of the system.
 
