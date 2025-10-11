@@ -70,7 +70,7 @@ Implement the following shape, mirroring the WP1 requirements:
 
    Unknown keys raise `ConfigurationError(f"Unknown {kind} provider: {key}. Known: {sorted(REGISTRY[kind])}")`.
 
-6. **Composition root imports ports only.** Entry points resolve providers via factories:
+6. **Composition root imports ports only.** Entry points resolve providers via factories; the simulation loop now drives DTO-first telemetry by emitting dispatcher events plus a `global_context` payload instead of mutating adapters directly. High-level structure:
 
    ```python
    world = create_world(cfg)
@@ -81,11 +81,11 @@ Implement the following shape, mirroring the WP1 requirements:
    agent_ids = list(world.agents())
    policy.on_episode_start(agent_ids)
    for _ in range(cfg.runtime.max_ticks):
-       observations = world.observe()
-       actions = policy.decide(observations)
+       envelope = world.observe()
+       actions = policy.decide(envelope)
        world.apply_actions(actions)
        world.tick()
-       telemetry.emit_event("tick", world.snapshot())
+       # loop.tick emits dispatcher events with DTO global_context; telemetry sinks subscribe via the port.
    policy.on_episode_end()
    telemetry.stop()
    ```
@@ -106,7 +106,7 @@ Implement the following shape, mirroring the WP1 requirements:
 - Relocate any extra behaviour (`queue_console`, `flush_transitions`, `active_policy_hash`, etc.) into adapters or specialised backends. Expanding the ports requires a fresh ADR.
 - Keep provider keys stable; document additions in both the ADR and the WP1 tasking file.
 - When removing legacy factories, ensure configs use the new registry-backed paths and update docs alongside the code.
-- As DTO-only telemetry rolls out (WP3 Stage 5/6), keep guard tests (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`) green—any reintroduction of legacy observation builders or payloads must be confined to adapters/factories explicitly listed in the whitelist.
+- As DTO-only telemetry rolls out (WP3 Stage 5/6), keep guard tests (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`, `tests/test_console_commands.py`, `tests/test_conflict_telemetry.py`, `tests/test_observer_ui_dashboard.py`) green—any reintroduction of legacy observation builders or payloads must be confined to adapters/factories explicitly listed in the whitelist.
 
 ## Related Documents
 

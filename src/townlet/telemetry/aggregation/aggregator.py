@@ -43,8 +43,10 @@ class TelemetryAggregator:
         possessed_agents: Iterable[str] | None = None,
         social_events: Iterable[Mapping[str, Any]] | None = None,
         runtime_variant: str | None = None,
+        global_context: Mapping[str, Any] | None = None,
         **extra: Any,
     ) -> Iterable["TelemetryEvent"]:
+        context_payload = global_context if isinstance(global_context, Mapping) else None
         payload: Mapping[str, Any] | None = extra.get("snapshot_payload")
         if payload is None:
             stability_alerts = extra.get("stability_alerts", ())
@@ -52,32 +54,33 @@ class TelemetryAggregator:
             payload = self._builder.build(
                 tick=tick,
                 runtime_variant=runtime_variant,
-                queue_metrics=extra.get("queue_metrics", {}),
-                embedding_metrics=extra.get("embedding_metrics", {}),
-                employment_metrics=extra.get("employment_metrics", {}),
+                queue_metrics=extra.get("queue_metrics"),
+                embedding_metrics=extra.get("embedding_metrics"),
+                employment_metrics=extra.get("employment_metrics"),
                 conflict_snapshot=extra.get("conflict_snapshot", {}),
-                relationship_metrics=extra.get("relationship_metrics", {}),
-                relationship_snapshot=extra.get("relationship_snapshot", {}),
+                relationship_metrics=extra.get("relationship_metrics"),
+                relationship_snapshot=extra.get("relationship_snapshot"),
                 relationship_updates=extra.get("relationship_updates", ()),
                 relationship_overlay=extra.get("relationship_overlay", {}),
                 events=events or (),
                 narrations=extra.get("narrations", ()),
-                job_snapshot=extra.get("job_snapshot", {}),
-                economy_snapshot=extra.get("economy_snapshot", {}),
-                economy_settings=extra.get("economy_settings", {}),
-                price_spikes=extra.get("price_spikes", {}),
-                utilities=extra.get("utilities", {}),
+                job_snapshot=extra.get("job_snapshot"),
+                economy_snapshot=extra.get("economy_snapshot"),
+                economy_settings=extra.get("economy_settings"),
+                price_spikes=extra.get("price_spikes"),
+                utilities=extra.get("utilities"),
                 affordance_manifest=extra.get("affordance_manifest", {}),
                 reward_breakdown=reward_breakdown or {},
-                stability_metrics=extra.get("stability_metrics", {}),
+                stability_metrics=extra.get("stability_metrics"),
                 stability_alerts=stability_alerts,
                 stability_inputs=stability_inputs or {},
                 promotion=extra.get("promotion"),
-                perturbations=perturbations or {},
+                perturbations=perturbations,
                 policy_identity=policy_identity or {},
                 policy_snapshot=policy_snapshot or {},
                 anneal_status=extra.get("anneal_status"),
                 kpi_history=kpi_history_payload if kpi_history else {},
+                global_context=context_payload,
             )
         kind = payload.get("payload_type", "snapshot")
         metadata = {

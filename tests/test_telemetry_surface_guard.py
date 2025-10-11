@@ -83,3 +83,104 @@ def test_loop_tick_payload_is_dto_only(tmp_path: Path) -> None:
         assert envelope_snapshot == dto_envelope
     finally:
         loop.close()
+
+
+def test_publisher_prefers_global_context(tmp_path: Path) -> None:
+    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
+    publisher = TelemetryPublisher(config)
+    publisher.config.personality_channels_enabled = lambda: False
+    publisher.config.personality_profiles_enabled = lambda: False
+
+    global_context = {
+        "queue_metrics": {
+            "cooldown_events": 2,
+            "ghost_step_events": 1,
+            "rotation_events": 0,
+        },
+        "relationship_snapshot": {
+            "alice": {
+                "bob": {"trust": 0.6, "familiarity": 0.4, "rivalry": 0.1},
+            }
+        },
+        "relationship_metrics": {"total": 3},
+        "job_snapshot": {
+            "alice": {
+                "job_id": "cook",
+                "on_shift": True,
+                "wallet": 12.0,
+                "lateness_counter": 0,
+                "wages_earned": 1.5,
+                "meals_cooked": 2,
+                "meals_consumed": 1,
+                "basket_cost": 0.5,
+                "shift_state": "active",
+                "attendance_ratio": 0.9,
+                "late_ticks_today": 0,
+                "absent_shifts_7d": 0,
+                "wages_withheld": 0.0,
+                "exit_pending": False,
+                "needs": {"energy": 0.8},
+            }
+        },
+        "economy_snapshot": {
+            "fridge_1": {
+                "type": "fridge",
+                "stock": {"meals": 3},
+            }
+        },
+        "economy_settings": {"wage_income": 0.25},
+        "price_spikes": {},
+        "utilities": {"power": True, "water": False},
+        "employment_snapshot": {"pending_count": 0, "review_window": 1440},
+        "running_affordances": {
+            "bed_1": {
+                "agent_id": "alice",
+                "affordance_id": "sleep",
+                "tick_started": 1,
+                "duration_remaining": 3,
+                "elapsed_ticks": 5,
+            }
+        },
+        "queues": {
+            "active_reservations": {
+                "alice": {"bed_1": {"tick": 1}},
+            }
+        },
+        "queue_affinity_metrics": {"assign_calls": 1},
+        "stability_metrics": {"queue_totals": {"cooldown_events": 2}},
+        "promotion_state": {"state": "monitoring"},
+        "anneal_context": {"anneal_ratio": None},
+    }
+    observations_dto = {
+        "tick": 1,
+        "dto_schema_version": "0.2.0",
+        "agents": [],
+        "global": {"queue_metrics": global_context["queue_metrics"]},
+    }
+
+    publisher._ingest_loop_tick(
+        tick=1,
+        world=None,
+        rewards={},
+        events=[],
+        policy_snapshot={},
+        policy_metadata={
+            "identity": {"config_id": "test", "observation_variant": "dto"},
+            "anneal_ratio": None,
+            "option_switch_counts": {},
+            "possessed_agents": [],
+        },
+        runtime_variant="dto",
+        observations_dto=observations_dto,
+        global_context=global_context,
+    )
+
+    assert publisher._global_context_warning_fields == set()
+    assert publisher.latest_economy_snapshot() == {
+        "fridge_1": {"type": "fridge", "stock": {"meals": 3}}
+    }
+    assert publisher.latest_job_snapshot()["alice"]["job_id"] == "cook"
+    runtime_snapshot = publisher.latest_affordance_runtime()
+    assert runtime_snapshot["running_count"] == 1
+    assert runtime_snapshot["active_reservations"]["alice"]["bed_1"]["tick"] == 1
+    assert publisher.latest_utilities()["water"] is False

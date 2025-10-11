@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
@@ -65,12 +66,58 @@ class _SnapshotInputs:
         self.stability_metrics = self.stability_metrics or {}
         self.stability_alerts = self.stability_alerts or ()
         self.stability_inputs = self.stability_inputs or {}
-        self.promotion = self.promotion or None
         self.perturbations = self.perturbations or {"active": {}}
         self.policy_identity = self.policy_identity or {}
         self.policy_snapshot = self.policy_snapshot or {}
-        self.anneal_status = self.anneal_status or None
         self.kpi_history = self.kpi_history or {}
+
+    def to_global_context(self) -> dict[str, Any]:
+        ctx: dict[str, Any] = {}
+        if self.queue_metrics is not None:
+            ctx["queue_metrics"] = dict(self.queue_metrics)
+        if self.relationship_metrics is not None:
+            ctx["relationship_metrics"] = dict(self.relationship_metrics)
+        if self.relationship_snapshot is not None:
+            ctx["relationship_snapshot"] = {
+                owner: {
+                    other: dict(metrics) for other, metrics in ties.items() if isinstance(metrics, Mapping)
+                }
+                for owner, ties in self.relationship_snapshot.items()
+                if isinstance(ties, Mapping)
+            }
+        if self.job_snapshot is not None:
+            ctx["job_snapshot"] = {
+                agent: dict(snapshot)
+                for agent, snapshot in self.job_snapshot.items()
+                if isinstance(snapshot, Mapping)
+            }
+        if self.economy_snapshot is not None:
+            ctx["economy_snapshot"] = {
+                key: dict(snapshot)
+                for key, snapshot in self.economy_snapshot.items()
+                if isinstance(snapshot, Mapping)
+            }
+        if self.economy_settings is not None:
+            ctx["economy_settings"] = dict(self.economy_settings)
+        if self.price_spikes is not None:
+            ctx["price_spikes"] = {
+                key: dict(snapshot)
+                for key, snapshot in self.price_spikes.items()
+                if isinstance(snapshot, Mapping)
+            }
+        if self.utilities is not None:
+            ctx["utilities"] = dict(self.utilities)
+        if self.employment_metrics is not None:
+            ctx["employment_snapshot"] = dict(self.employment_metrics)
+        if self.stability_metrics is not None:
+            ctx["stability_metrics"] = dict(self.stability_metrics)
+        if self.perturbations is not None:
+            ctx["perturbations"] = dict(self.perturbations)
+        if self.promotion is not None:
+            ctx["promotion_state"] = dict(self.promotion)
+        if self.anneal_status is not None:
+            ctx["anneal_context"] = dict(self.anneal_status)
+        return ctx
 
 
 class _RecordingAggregator(TelemetryAggregator):
@@ -97,40 +144,35 @@ def aggregator(builder: StreamPayloadBuilder) -> _RecordingAggregator:
 def test_collect_tick_builds_snapshot(aggregator: _RecordingAggregator) -> None:
     inputs = _SnapshotInputs()
     inputs.apply_defaults()
+    global_context = inputs.to_global_context()
 
     list(
         aggregator.collect_tick(
             tick=inputs.tick,
             world=None,
-            observations={},
             rewards={},
-            runtime_variant=inputs.runtime_variant,
-            queue_metrics=inputs.queue_metrics,
-            embedding_metrics=inputs.embedding_metrics,
-            employment_metrics=inputs.employment_metrics,
-            conflict_snapshot=inputs.conflict_snapshot,
-            relationship_metrics=inputs.relationship_metrics,
-            relationship_snapshot=inputs.relationship_snapshot,
-            relationship_updates=inputs.relationship_updates,
-            relationship_overlay=inputs.relationship_overlay,
             events=inputs.events,
-            narrations=inputs.narrations,
-            job_snapshot=inputs.job_snapshot,
-            economy_snapshot=inputs.economy_snapshot,
-            economy_settings=inputs.economy_settings,
-            price_spikes=inputs.price_spikes,
-            utilities=inputs.utilities,
-            affordance_manifest=inputs.affordance_manifest,
+            policy_snapshot=inputs.policy_snapshot,
+            kpi_history=True,
             reward_breakdown=inputs.reward_breakdown,
-            stability_metrics=inputs.stability_metrics,
-            stability_alerts=inputs.stability_alerts,
             stability_inputs=inputs.stability_inputs,
-            promotion=inputs.promotion,
             perturbations=inputs.perturbations,
             policy_identity=inputs.policy_identity,
-            policy_snapshot=inputs.policy_snapshot,
+            possessed_agents=(),
+            social_events=inputs.events,
+            runtime_variant=inputs.runtime_variant,
+            conflict_snapshot=inputs.conflict_snapshot,
+            relationship_updates=inputs.relationship_updates,
+            relationship_overlay=inputs.relationship_overlay,
+            narrations=inputs.narrations,
+            affordance_manifest=inputs.affordance_manifest,
+            stability_metrics=inputs.stability_metrics,
+            stability_alerts=inputs.stability_alerts,
+            promotion=inputs.promotion,
             anneal_status=inputs.anneal_status,
             kpi_history_payload=inputs.kpi_history,
+            embedding_metrics=inputs.embedding_metrics,
+            global_context=global_context,
         )
     )
 
@@ -138,86 +180,94 @@ def test_collect_tick_builds_snapshot(aggregator: _RecordingAggregator) -> None:
     payload = aggregator.events[0]
     assert payload["tick"] == inputs.tick
     assert payload["schema_version"] == "1.0.0"
-    assert payload["queue_metrics"] == inputs.queue_metrics
+    assert payload["queue_metrics"] == dict(inputs.queue_metrics)
     assert payload["relationship_updates"] == []
-    assert payload["kpi_history"] == {}
+    assert payload["kpi_history"] == inputs.kpi_history
 
 
 def test_collect_tick_diff_enabled(builder: StreamPayloadBuilder) -> None:
     builder.diff_enabled = True
     aggregator = _RecordingAggregator(builder)
-    inputs = _SnapshotInputs()
-    inputs.apply_defaults()
+
+    base_inputs = _SnapshotInputs()
+    base_inputs.apply_defaults()
+    base_context = base_inputs.to_global_context()
 
     list(
         aggregator.collect_tick(
             tick=1,
             world=None,
-            observations={},
             rewards={},
+            events=(),
+            policy_snapshot={},
+            kpi_history=False,
+            reward_breakdown={},
+            stability_inputs={},
+            perturbations={"active": {}},
+            policy_identity={},
+            possessed_agents=(),
+            social_events=(),
             runtime_variant="facade",
-            queue_metrics={"cooldown_events": 0},
-            embedding_metrics={"allocations_total": 0.0},
-            employment_metrics={"pending_count": 0},
-            conflict_snapshot={"queues": {"cooldown_events": 0}, "queue_history": [], "rivalry": {}, "rivalry_events": []},
-            relationship_metrics={"total": 0},
-            relationship_snapshot={},
+            conflict_snapshot=base_inputs.conflict_snapshot,
             relationship_updates=(),
             relationship_overlay={},
-            events=(),
             narrations=(),
-            job_snapshot={},
-            economy_snapshot={},
-            economy_settings={"wage_income": 0.1},
-            price_spikes={},
-            utilities={"power": True},
             affordance_manifest={},
-            reward_breakdown={},
             stability_metrics={},
             stability_alerts=(),
-            stability_inputs={},
             promotion=None,
-            perturbations={},
-            policy_identity={},
-            policy_snapshot={},
             anneal_status=None,
             kpi_history_payload={},
+            embedding_metrics=base_inputs.embedding_metrics,
+            global_context=base_context,
         )
     )
 
+    updated_inputs = _SnapshotInputs(
+        tick=2,
+        queue_metrics={"cooldown_events": 1},
+        embedding_metrics={"allocations_total": 1.0},
+        employment_metrics={"pending_count": 2},
+        conflict_snapshot={
+            "queues": {"cooldown_events": 1},
+            "queue_history": [],
+            "rivalry": {},
+            "rivalry_events": [],
+        },
+        relationship_metrics={"total": 1},
+        relationship_snapshot={},
+        perturbations={"active": {"event": "storm"}},
+    )
+    updated_inputs.apply_defaults()
+    updated_context = updated_inputs.to_global_context()
+
     list(
         aggregator.collect_tick(
-            tick=2,
+            tick=updated_inputs.tick,
             world=None,
-            observations={},
             rewards={},
+            events=(),
+            policy_snapshot={},
+            kpi_history=False,
+            reward_breakdown={},
+            stability_inputs={},
+            perturbations=updated_inputs.perturbations,
+            policy_identity={},
+            possessed_agents=(),
+            social_events=(),
             runtime_variant="facade",
-            queue_metrics={"cooldown_events": 1},
-            embedding_metrics={"allocations_total": 1.0},
-            employment_metrics={"pending_count": 2},
-            conflict_snapshot={"queues": {"cooldown_events": 1}, "queue_history": [], "rivalry": {}, "rivalry_events": []},
-            relationship_metrics={"total": 1},
-            relationship_snapshot={},
+            conflict_snapshot=updated_inputs.conflict_snapshot,
             relationship_updates=(),
             relationship_overlay={},
-            events=(),
             narrations=(),
-            job_snapshot={},
-            economy_snapshot={},
-            economy_settings={"wage_income": 0.1},
-            price_spikes={},
-            utilities={"power": True},
             affordance_manifest={},
-            reward_breakdown={},
-            stability_metrics={},
+            stability_metrics=updated_inputs.stability_metrics,
             stability_alerts=(),
-            stability_inputs={},
             promotion=None,
-            perturbations={},
-            policy_identity={},
-            policy_snapshot={},
             anneal_status=None,
             kpi_history_payload={},
+            embedding_metrics=updated_inputs.embedding_metrics,
+            global_context=updated_context,
         )
     )
 
@@ -240,9 +290,7 @@ def test_record_loop_failure_emits_health_event(builder: StreamPayloadBuilder) -
 
 def test_record_console_results_no_sink(builder: StreamPayloadBuilder) -> None:
     aggregator = TelemetryAggregator(builder)
-    aggregator.record_console_results([
-        {"status": "ok"},
-    ])
+    aggregator.record_console_results([{"status": "ok"}])
 
 
 def test_record_console_results_invokes_sink(builder: StreamPayloadBuilder) -> None:

@@ -24,6 +24,7 @@ from townlet_ui.commands import (
     ConsoleCommandExecutor,
     PaletteCommandRequest,
 )
+from tests.helpers.telemetry import build_global_context
 
 
 def _load_palette_fixture(name: str) -> dict[str, object]:
@@ -207,6 +208,7 @@ def test_announce_story_command_enqueues_narration() -> None:
             "policy_identity": {},
             "possessed_agents": [],
             "social_events": [],
+            "global_context": build_global_context(),
         },
     )
     narrations_next = loop.telemetry.latest_narrations()

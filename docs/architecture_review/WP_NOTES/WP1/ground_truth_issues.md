@@ -17,9 +17,14 @@ Direct code inspection shows WP1 Step 7 and related deliverables remain incomple
 ## 4. SimulationLoop remains tied to legacy runtime
 - **Issue:** Factory/adapter wiring now supply modular components, and `runtime.queue_console` is gone, but the loop still holds legacy collectors (queue/economy snapshots, reward helpers) and documents failure handling via inline code.
 - **Remediation tasks:**
-  1. T4.3 closed (2025-10-10): simulation loop now relies on `WorldContext.export_*` for queue/employment/job data; remaining work under this issue is T4.4 (telemetry/failure docs).
-  2. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) once the loop emits failures purely via ports.
-  3. Keep loop/component overrides in place for testing, but ensure the default path never rebuilds legacy services.
+  1. T4.3 closed (2025-10-10): simulation loop now relies on `WorldContext.export_*` for queue/employment/job data; `loop.tick` emits a DTO `global_context`, but the telemetry aggregator/UI/CLI surfaces still need to migrate before we can drop legacy world references (remaining T4.4b work).
+  2. T4.4b status (2025-10-10): publisher + aggregator ingest DTO `global_context`, console/CLI/observer pipelines are migrated, and regression suites cover the DTO path. Remaining items focus on documentation and the follow-on health/failure payload cleanup.
+     - `TelemetryPublisher._ingest_loop_tick` populates queue/employment/job/economy/utilities directly from `global_context`, logging once when mandatory fields are missing; `_capture_affordance_runtime` accepts DTO running/reservation payloads. Once downstream consumers stabilise, retire the adapter fallbacks.
+     - `TelemetryAggregator.collect_tick` defers to `StreamPayloadBuilder` with `global_context` data; internal callers no longer supply duplicated kwargs.
+     - Console router snapshot, `TelemetryClient.from_console`, observer dashboard panels, CLI helpers, and conflict telemetry tests all rely on DTO fixtures (`tests/helpers/telemetry.build_global_context`). Regression bundle (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py`) exercises the migrated surfaces.
+     - Documentation/ADR refresh still pending to describe the DTO-first telemetry flow once the remaining failure/snapshot work lands.
+  3. Update failure telemetry/doc pathways (ADR-001, console/monitor ADR) once the loop emits failures purely via ports.
+  4. Keep loop/component overrides in place for testing, but ensure the default path never rebuilds legacy services.
 
 ## 5. Missing dummy providers and promised tests
 - **Issue:** There is no `townlet/testing` package or dummy provider suite; none of the WP1 Step 6/8 tests exist (`tests/test_ports_surface.py`, `tests/test_loop_with_dummies.py`, etc.).

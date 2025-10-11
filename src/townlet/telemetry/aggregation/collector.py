@@ -51,8 +51,48 @@ class StreamPayloadBuilder:
         policy_snapshot: Mapping[str, Mapping[str, Any]],
         anneal_status: Mapping[str, Any] | None,
         kpi_history: Mapping[str, Iterable[Any]],
+        global_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Return the payload for the given tick, applying diffs when enabled."""
+
+        context_source = (
+            copy.deepcopy(dict(global_context))
+            if isinstance(global_context, Mapping)
+            else None
+        )
+
+        def _prefer_required(value: Mapping[str, Any] | None, key: str) -> dict[str, Any]:
+            if isinstance(value, Mapping):
+                return copy.deepcopy(value)
+            if context_source is not None:
+                candidate = context_source.get(key)
+                if isinstance(candidate, Mapping):
+                    return copy.deepcopy(candidate)
+            return {}
+
+        def _prefer_optional(value: Mapping[str, Any] | None, key: str) -> dict[str, Any] | None:
+            if isinstance(value, Mapping):
+                return copy.deepcopy(value)
+            if context_source is not None:
+                candidate = context_source.get(key)
+                if isinstance(candidate, Mapping):
+                    return copy.deepcopy(candidate)
+            return None
+
+        queue_metrics = _prefer_required(queue_metrics, "queue_metrics")
+        embedding_metrics = _prefer_required(embedding_metrics, "embedding_metrics")
+        employment_metrics = _prefer_required(employment_metrics, "employment_snapshot")
+        relationship_metrics = _prefer_required(relationship_metrics, "relationship_metrics")
+        relationship_snapshot = _prefer_required(relationship_snapshot, "relationship_snapshot")
+        job_snapshot = _prefer_required(job_snapshot, "job_snapshot")
+        economy_snapshot = _prefer_required(economy_snapshot, "economy_snapshot")
+        economy_settings = _prefer_required(economy_settings, "economy_settings")
+        price_spikes = _prefer_required(price_spikes, "price_spikes")
+        utilities = _prefer_required(utilities, "utilities")
+        stability_metrics = _prefer_required(stability_metrics, "stability_metrics")
+        perturbations = _prefer_required(perturbations, "perturbations")
+        promotion = _prefer_optional(promotion, "promotion_state")
+        anneal_status = _prefer_optional(anneal_status, "anneal_context")
 
         snapshot = normalize_snapshot_payload(
             schema_version=self.schema_version,

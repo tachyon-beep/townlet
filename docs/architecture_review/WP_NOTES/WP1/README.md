@@ -109,10 +109,10 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
 - Created `src/townlet/adapters/` package with initial adapters:
   - `DefaultWorldAdapter` wraps legacy `WorldRuntime`, hosts `ObservationBuilder`, emits per-tick events via snapshot.
   - `ScriptedPolicyAdapter` bridges the current scripted policy backend to the minimal port (temporary world-provider dependency; will align with new observation flow during loop refactor).
-  - `StdoutTelemetryAdapter` wraps `TelemetryPublisher` as a sink; currently stores emitted events/metrics in publisher state pending new pipeline wiring.
+  - `StdoutTelemetryAdapter` wraps `TelemetryPublisher` as a sink; dispatcher events now carry DTO `global_context`, so console/observer tooling reads snapshots without touching legacy getters (see `tests/helpers/telemetry.build_global_context` for curated fixtures).
 - `ConsoleRouter` and `HealthMonitor` are now instantiated by `SimulationLoop`; console commands drain through the router (while still forwarding to the legacy runtime for now) and the health monitor emits baseline queue/event metrics via the telemetry port.
 - Added a transitional `PolicyController` facade so the loop can gradually move off `PolicyRuntime` while the scripted backend continues to supply anneal/metadata hooks.
-- Further work: finish migrating telemetry consumers away from publisher getters, move policy-side callbacks into adapters, and remove the remaining legacy world touch points during the ongoing composition refactor.
+- Further work: complete the failure/health telemetry cleanup (T4.4c/d), move policy-side callbacks into adapters, and remove the remaining legacy world touch points during the ongoing composition refactor.
 
 ### Step 3 Progress (Factories)
 - Added `townlet.factories` package with shared registry utilities and domain-specific factory helpers (`create_world`, `create_policy`, `create_telemetry`).
@@ -122,7 +122,7 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
 - Adapters tweaked after review:
   - `DefaultWorldAdapter.snapshot()` clears cached events post-exposure to avoid double counting.
   - `ScriptedPolicyAdapter` still exposes `attach_world()` for transition (docstring updated to reflect temporary use); upcoming loop refactor will remove the world dependency entirely.
-- `StdoutTelemetryAdapter` now forwards `loop.*` events through `TelemetryPublisher`'s event dispatcher (temporary shim); remaining legacy writer calls will disappear once WP3 completes the sink refactor.
+- `StdoutTelemetryAdapter` now forwards `loop.*` events through `TelemetryPublisher`'s event dispatcher; remaining legacy writer calls are exercised only for stub transports and will disappear once WP3 completes the sink refactor.
 - `StubTelemetrySink` emits logging-only events via the same dispatcher, ensuring tests rely solely on `emit_event` / `emit_metric` behaviour.
 
 ### External “Fix Pack” Review (2024-XX-XX)

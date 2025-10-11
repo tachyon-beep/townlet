@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from collections.abc import Mapping
@@ -93,6 +94,7 @@ class TelemetryBridge:
     ) -> None:
         self._publisher = publisher
         self._provider_name = provider_name or ("stub" if is_stub_telemetry(publisher) else "unknown")
+        self._dispatcher = getattr(publisher, "event_dispatcher", None)
 
     def _call_or_default(self, name: str, default: T) -> T:
         """Call a telemetry method if present; otherwise return default.
@@ -108,8 +110,23 @@ class TelemetryBridge:
                 return default
         return default
 
+    def _global_context(self) -> dict[str, object]:
+        """Return the latest DTO-backed global context emitted by the loop."""
+
+        dispatcher = self._dispatcher
+        if dispatcher is None:
+            return {}
+        latest_tick = dispatcher.latest_tick
+        if not isinstance(latest_tick, Mapping):
+            return {}
+        payload = latest_tick.get("global_context")
+        if not isinstance(payload, Mapping):
+            return {}
+        return {str(key): copy.deepcopy(value) for key, value in payload.items()}
+
     def snapshot(self) -> dict[str, dict[str, object]]:
         version, warning = _schema_metadata(self._publisher)
+        global_context = self._global_context()
         command_metadata = {
             "relationship_summary": {
                 "mode": "viewer",
@@ -132,26 +149,40 @@ class TelemetryBridge:
                 "description": "Push an operator narration entry to observers",
             },
         }
+        jobs_payload = copy.deepcopy(global_context.get("job_snapshot", {}))
+        economy_payload = copy.deepcopy(global_context.get("economy_snapshot", {}))
+        economy_settings_payload = copy.deepcopy(global_context.get("economy_settings", {}))
+        price_spikes_payload = copy.deepcopy(global_context.get("price_spikes", {}))
+        utilities_payload = copy.deepcopy(global_context.get("utilities", {}))
+        employment_payload = copy.deepcopy(global_context.get("employment_snapshot", {}))
+        relationship_metrics_payload = copy.deepcopy(global_context.get("relationship_metrics", {}))
+        relationship_snapshot_payload = copy.deepcopy(global_context.get("relationship_snapshot", {}))
+        promotion_payload = copy.deepcopy(global_context.get("promotion_state", {}))
+        anneal_payload = copy.deepcopy(global_context.get("anneal_context", {}))
+        queue_metrics_payload = copy.deepcopy(global_context.get("queue_metrics", {}))
+        stability_metrics_payload = copy.deepcopy(global_context.get("stability_metrics", {}))
+        perturbations_payload = copy.deepcopy(global_context.get("perturbations", {}))
         payload = {
             "schema_version": version,
             "schema_warning": warning,
             "console_commands": command_metadata,
-            "jobs": self._call_or_default("latest_job_snapshot", {}),
-            "economy": self._call_or_default("latest_economy_snapshot", {}),
-            "economy_settings": self._call_or_default("latest_economy_settings", {}),
-            "price_spikes": self._call_or_default("latest_price_spikes", {}),
-            "utilities": self._call_or_default("latest_utilities", {}),
-            "employment": self._call_or_default("latest_employment_metrics", {}),
+            "jobs": jobs_payload or self._call_or_default("latest_job_snapshot", {}),
+            "economy": economy_payload or self._call_or_default("latest_economy_snapshot", {}),
+            "economy_settings": economy_settings_payload or self._call_or_default("latest_economy_settings", {}),
+            "price_spikes": price_spikes_payload or self._call_or_default("latest_price_spikes", {}),
+            "utilities": utilities_payload or self._call_or_default("latest_utilities", {}),
+            "employment": employment_payload or self._call_or_default("latest_employment_metrics", {}),
+            "queue_metrics": queue_metrics_payload or self._call_or_default("latest_queue_metrics", {}),
             "conflict": self._call_or_default("latest_conflict_snapshot", {}),
-            "relationships": self._call_or_default("latest_relationship_metrics", {}) or {},
-            "relationship_snapshot": self._call_or_default("latest_relationship_snapshot", {}),
+            "relationships": relationship_metrics_payload or self._call_or_default("latest_relationship_metrics", {}) or {},
+            "relationship_snapshot": relationship_snapshot_payload or self._call_or_default("latest_relationship_snapshot", {}),
             "relationship_updates": self._call_or_default("latest_relationship_updates", []),
             "relationship_summary": self._call_or_default("latest_relationship_summary", {}),
             "social_events": self._call_or_default("latest_social_events", []),
             "events": list(self._call_or_default("latest_events", [])),
             "narrations": self._call_or_default("latest_narrations", []),
             "narration_state": self._call_or_default("latest_narration_state", {}),
-            "anneal_status": self._call_or_default("latest_anneal_status", None),
+            "anneal_status": anneal_payload or self._call_or_default("latest_anneal_status", None),
             "policy_snapshot": self._call_or_default("latest_policy_snapshot", {}),
             "policy_identity": self._call_or_default("latest_policy_identity", {}) or {},
             "snapshot_migrations": self._call_or_default("latest_snapshot_migrations", []),
@@ -161,10 +192,10 @@ class TelemetryBridge:
             "personalities": self._call_or_default("latest_personality_snapshot", {}),
             "stability": {
                 "alerts": self._call_or_default("latest_stability_alerts", []),
-                "metrics": self._call_or_default("latest_stability_metrics", {}),
-                "promotion_state": getattr(self._publisher, "latest_promotion_state", lambda: None)(),
+                "metrics": stability_metrics_payload or self._call_or_default("latest_stability_metrics", {}),
+                "promotion_state": promotion_payload or getattr(self._publisher, "latest_promotion_state", lambda: None)(),
             },
-            "perturbations": self._call_or_default("latest_perturbations", {}),
+            "perturbations": perturbations_payload or self._call_or_default("latest_perturbations", {}),
             "transport": self._call_or_default("latest_transport_status", {}),
             "health": self._call_or_default("latest_health_status", {}),
             "console_results": self._call_or_default("latest_console_results", []),

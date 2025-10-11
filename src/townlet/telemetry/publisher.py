@@ -138,6 +138,7 @@ class TelemetryPublisher:
         self._latest_observation_envelope: dict[str, Any] | None = None
         self._event_dispatcher = TelemetryEventDispatcher()
         self._event_dispatcher.register_subscriber(self._handle_event)
+        self._global_context_warning_fields: set[str] = set()
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -851,19 +852,64 @@ class TelemetryPublisher:
         except Exception:  # pragma: no cover - shutdown cleanup
             logger.debug("Closing telemetry transport failed", exc_info=True)
 
+    def _warn_missing_global_field(self, field: str) -> None:
+        """Log a one-time warning when DTO global context omits required data."""
+
+        if field in self._global_context_warning_fields:
+            return
+        self._global_context_warning_fields.add(field)
+        logger.warning(
+            "Telemetry global_context missing '%s'; falling back to adapter snapshot",
+            field,
+        )
+
     def _capture_affordance_runtime(
         self,
         *,
-        world: WorldState | WorldRuntimeAdapterProtocol,
+        world: WorldState | WorldRuntimeAdapterProtocol | None,
         events: Iterable[Mapping[str, object]] | None,
         tick: int,
+        global_payload: Mapping[str, Any] | None = None,
     ) -> None:
-        adapter = ensure_world_adapter(world)
-        runtime_snapshot = adapter.running_affordances_snapshot()
-        running_payload = {
-            str(object_id): asdict(state)
-            for object_id, state in runtime_snapshot.items()
-        }
+        running_payload: dict[str, dict[str, object]] = {}
+        active_reservations: dict[str, object] = {}
+
+        if isinstance(global_payload, Mapping):
+            runtime_section = global_payload.get("running_affordances")
+            if isinstance(runtime_section, Mapping) and runtime_section:
+                for object_id, entry in runtime_section.items():
+                    if isinstance(entry, Mapping):
+                        running_payload[str(object_id)] = {
+                            str(key): value for key, value in entry.items()
+                        }
+                    else:
+                        try:
+                            running_payload[str(object_id)] = asdict(entry)
+                        except Exception:  # pragma: no cover - defensive
+                            running_payload[str(object_id)] = {"raw": entry}
+            queues_section = global_payload.get("queues")
+            if isinstance(queues_section, Mapping):
+                reservations_payload = queues_section.get("active_reservations")
+                if isinstance(reservations_payload, Mapping):
+                    active_reservations = {
+                        str(agent): dict(value)
+                        for agent, value in reservations_payload.items()
+                        if isinstance(value, Mapping)
+                    }
+
+        adapter = ensure_world_adapter(world) if world is not None else None
+        if not running_payload and adapter is not None:
+            self._warn_missing_global_field("running_affordances")
+            runtime_snapshot = adapter.running_affordances_snapshot()
+            running_payload = {
+                str(object_id): asdict(state)
+                for object_id, state in runtime_snapshot.items()
+            }
+        if not active_reservations and adapter is not None:
+            try:
+                active_reservations = dict(adapter.active_reservations)
+            except Exception:  # pragma: no cover - defensive
+                active_reservations = {}
         event_counts = {
             "start": 0,
             "finish": 0,
@@ -886,7 +932,7 @@ class TelemetryPublisher:
             "tick": int(tick),
             "running": running_payload,
             "running_count": len(running_payload),
-            "active_reservations": dict(adapter.active_reservations),
+            "active_reservations": active_reservations,
             "event_counts": event_counts,
         }
 
@@ -955,10 +1001,12 @@ class TelemetryPublisher:
                     str(key): int(value)
                     for key, value in adapter.queue_manager.metrics().items()
                 }
+                self._warn_missing_global_field("queue_metrics")
             except Exception:  # pragma: no cover - defensive guard for stubs
                 logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
                 queue_metrics = None
         if queue_metrics is None:
+            self._warn_missing_global_field("queue_metrics")
             queue_metrics = {
                 "cooldown_events": 0,
                 "ghost_step_events": 0,
@@ -996,8 +1044,11 @@ class TelemetryPublisher:
         elif adapter is not None:
             try:
                 rivalry_snapshot = dict(adapter.rivalry_snapshot())
+                self._warn_missing_global_field("relationship_snapshot")
             except Exception:  # pragma: no cover - defensive guard for stubs
                 logger.debug("Telemetry rivalry snapshot unavailable", exc_info=True)
+        else:
+            self._warn_missing_global_field("relationship_snapshot")
         self._queue_fairness_history.append(
             {
                 "tick": int(tick),
@@ -1008,7 +1059,7 @@ class TelemetryPublisher:
         if len(self._queue_fairness_history) > 120:
             self._queue_fairness_history.pop(0)
 
-        new_events = adapter.consume_rivalry_events()
+        new_events = adapter.consume_rivalry_events() if adapter is not None else ()
         for event in new_events:
             if not isinstance(event, Mapping):
                 continue
@@ -1037,11 +1088,14 @@ class TelemetryPublisher:
         elif adapter is not None:
             snapshot_metrics = adapter.relationship_metrics_snapshot()
             if snapshot_metrics:
+                self._warn_missing_global_field("relationship_metrics")
                 self._latest_relationship_metrics = dict(snapshot_metrics)
             else:
                 logger.debug(
                     "Telemetry relationship metrics unavailable; retaining previous snapshot",
                 )
+        else:
+            self._warn_missing_global_field("relationship_metrics")
         relationship_snapshot_payload = global_payload.get("relationship_snapshot")
         if isinstance(relationship_snapshot_payload, Mapping) and relationship_snapshot_payload:
             relationship_snapshot = {
@@ -1053,6 +1107,7 @@ class TelemetryPublisher:
                 for agent, entries in relationship_snapshot_payload.items()
             }
         else:
+            self._warn_missing_global_field("relationship_snapshot")
             relationship_snapshot = self._capture_relationship_snapshot(adapter)
         self._latest_relationship_updates = self._compute_relationship_updates(
             self._previous_relationship_snapshot,
@@ -1110,6 +1165,7 @@ class TelemetryPublisher:
             world=world,
             events=self._latest_events,
             tick=tick,
+            global_payload=global_payload,
         )
         self._latest_precondition_failures = [
             dict(event)
@@ -1143,6 +1199,7 @@ class TelemetryPublisher:
                 if isinstance(snapshot, Mapping)
             }
         elif adapter is not None:
+            self._warn_missing_global_field("job_snapshot")
             self._latest_job_snapshot = {
                 agent_id: {
                     "job_id": snapshot.job_id,
@@ -1166,6 +1223,8 @@ class TelemetryPublisher:
                 }
                 for agent_id, snapshot in adapter.agent_snapshots_view().items()
             }
+        else:
+            self._warn_missing_global_field("job_snapshot")
 
         economy_snapshot_payload = global_payload.get("economy_snapshot")
         if isinstance(economy_snapshot_payload, Mapping) and economy_snapshot_payload:
@@ -1175,6 +1234,7 @@ class TelemetryPublisher:
                 if isinstance(entry, Mapping)
             }
         elif raw_world is not None:
+            self._warn_missing_global_field("economy_snapshot")
             self._latest_economy_snapshot = {
                 object_id: {
                     "type": obj.object_type,
@@ -1182,6 +1242,8 @@ class TelemetryPublisher:
                 }
                 for object_id, obj in raw_world.objects.items()
             }
+        else:
+            self._warn_missing_global_field("economy_snapshot")
         economy_settings_payload = global_payload.get("economy_settings")
         if isinstance(economy_settings_payload, Mapping):
             self._latest_economy_settings = {
@@ -1189,8 +1251,10 @@ class TelemetryPublisher:
                 for key, value in economy_settings_payload.items()
             }
         elif raw_world is not None and hasattr(raw_world, "economy_settings"):
+            self._warn_missing_global_field("economy_settings")
             self._latest_economy_settings = raw_world.economy_settings()
         else:
+            self._warn_missing_global_field("economy_settings")
             self._latest_economy_settings = {
                 str(key): float(value) for key, value in self.config.economy.items()
             }
@@ -1203,8 +1267,10 @@ class TelemetryPublisher:
                 if isinstance(data, Mapping)
             }
         elif raw_world is not None and hasattr(raw_world, "active_price_spikes"):
+            self._warn_missing_global_field("price_spikes")
             self._latest_price_spikes = raw_world.active_price_spikes()
         else:
+            self._warn_missing_global_field("price_spikes")
             self._latest_price_spikes = {}
 
         utilities_payload = global_payload.get("utilities")
@@ -1214,8 +1280,10 @@ class TelemetryPublisher:
                 for key, value in utilities_payload.items()
             }
         elif raw_world is not None and hasattr(raw_world, "utility_snapshot"):
+            self._warn_missing_global_field("utilities")
             self._latest_utilities = raw_world.utility_snapshot()
         else:
+            self._warn_missing_global_field("utilities")
             self._latest_utilities = {"power": True, "water": True}
 
         employment_metrics_payload = global_payload.get("employment_snapshot")
@@ -1224,8 +1292,10 @@ class TelemetryPublisher:
                 str(key): value for key, value in employment_metrics_payload.items()
             }
         elif raw_world is not None and hasattr(raw_world, "employment_queue_snapshot"):
+            self._warn_missing_global_field("employment_snapshot")
             self._latest_employment_metrics = raw_world.employment_queue_snapshot() or {}
         else:
+            self._warn_missing_global_field("employment_snapshot")
             self._latest_employment_metrics = {}
         if reward_breakdown is not None:
             self._latest_reward_breakdown = {
@@ -1279,7 +1349,7 @@ class TelemetryPublisher:
         aggregated_events = list(
             self._aggregator.collect_tick(
                 tick=tick,
-                world=world,
+                world=None,
                 rewards=rewards,
                 events=self._latest_events,
                 policy_snapshot=self._latest_policy_snapshot,
@@ -1291,26 +1361,18 @@ class TelemetryPublisher:
                 possessed_agents=possessed_agents or (),
                 social_events=self._latest_events,
                 runtime_variant=self._runtime_variant,
-                queue_metrics=self._latest_queue_metrics or {},
                 embedding_metrics=self._latest_embedding_metrics or {},
-                employment_metrics=self._latest_employment_metrics or {},
                 conflict_snapshot=self.latest_conflict_snapshot(),
-                relationship_metrics=self._latest_relationship_metrics or {},
-                relationship_snapshot=self._latest_relationship_snapshot,
                 relationship_updates=self._latest_relationship_updates,
                 relationship_overlay=self._latest_relationship_overlay,
                 narrations=self._latest_narrations,
-                job_snapshot=self._latest_job_snapshot,
-                economy_snapshot=self._latest_economy_snapshot,
-                economy_settings=self._latest_economy_settings,
-                price_spikes=self._latest_price_spikes,
-                utilities=self._latest_utilities,
                 affordance_manifest=self._latest_affordance_manifest,
                 stability_metrics=latest_stability_metrics,
                 stability_alerts=latest_stability_alerts,
                 promotion=latest_promotion_state,
                 anneal_status=latest_anneal_status,
                 kpi_history_payload=latest_kpi_history,
+                global_context=global_payload,
             )
         )
         transformed_events = self._transform_pipeline.process(aggregated_events)
