@@ -15,6 +15,7 @@ from townlet.world.runtime import ActionMapping, ActionProvider, RuntimeStepResu
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.console.command import ConsoleCommandEnvelope
+    from townlet.snapshots.state import SnapshotState
     from townlet.world.grid import WorldState
     from townlet.world.dto.observation import ObservationEnvelope
 
@@ -46,7 +47,16 @@ class WorldRuntimeProtocol(Protocol):
     ) -> RuntimeStepResult:
         """Advance the world by one tick and return observable artefacts."""
 
-    def snapshot(self) -> Mapping[str, object]:
+    def snapshot(
+        self,
+        *,
+        config: object | None = None,
+        telemetry: TelemetrySinkProtocol | None = None,
+        stability: object | None = None,
+        promotion: object | None = None,
+        rng_streams: Mapping[str, object] | None = None,
+        identity: Mapping[str, object] | None = None,
+    ) -> SnapshotState:
         """Return a diagnostic snapshot of the underlying world state."""
 
 

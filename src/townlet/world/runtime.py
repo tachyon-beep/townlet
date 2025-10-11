@@ -16,6 +16,11 @@ from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.scheduler.perturbations import PerturbationScheduler
 
 if TYPE_CHECKING:  # pragma: no cover
+    from townlet.config import SimulationConfig
+    from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.snapshots.state import SnapshotState
+    from townlet.stability.monitor import StabilityMonitor
+    from townlet.stability.promotion import PromotionManager
     from townlet.lifecycle.manager import LifecycleManager
     from townlet.world.grid import WorldState
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
@@ -102,13 +107,35 @@ class WorldRuntime:
         else:
             self._pending_actions = dict(actions)
 
-    def snapshot(self) -> dict[str, object]:  # pragma: no cover - thin pass-through
+    def snapshot(
+        self,
+        *,
+        config: "SimulationConfig" | None = None,
+        telemetry: "TelemetrySinkProtocol" | None = None,
+        stability: "StabilityMonitor" | None = None,
+        promotion: "PromotionManager" | None = None,
+        rng_streams: Mapping[str, object] | None = None,
+        identity: Mapping[str, object] | None = None,
+    ) -> "SnapshotState":  # pragma: no cover - thin pass-through
         """Expose the underlying world snapshot for diagnostics/tests."""
 
-        snapshot_getter = getattr(self._world, "snapshot", None)
-        if callable(snapshot_getter):
-            return snapshot_getter()
-        raise AttributeError("WorldState does not expose a snapshot() method")
+        target_config = config or getattr(self._world, "config", None)
+        if target_config is None:
+            raise RuntimeError("World runtime requires configuration for snapshot export")
+
+        from townlet.snapshots import snapshot_from_world
+
+        return snapshot_from_world(
+            target_config,
+            self._world,
+            lifecycle=self._lifecycle,
+            telemetry=telemetry,
+            perturbations=self._perturbations,
+            stability=stability,
+            promotion=promotion,
+            rng_streams=rng_streams,
+            identity=identity,
+        )
 
     def tick(
         self,

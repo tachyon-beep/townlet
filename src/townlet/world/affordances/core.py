@@ -539,6 +539,52 @@ class DefaultAffordanceRuntime:
             for object_id, running in self.running_affordances.items()
         }
 
+    def clear(self) -> None:
+        self.running_affordances.clear()
+
+    def export_state(self) -> dict[str, object]:
+        state: dict[str, object] = {}
+        for object_id, running in self.running_affordances.items():
+            state[object_id] = {
+                "agent_id": running.agent_id,
+                "affordance_id": running.affordance_id,
+                "duration_remaining": int(running.duration_remaining),
+                "effects": {
+                    key: float(value) for key, value in running.effects.items()
+                },
+            }
+        return state
+
+    def import_state(self, payload: Mapping[str, Mapping[str, object]]) -> None:
+        ctx = self._ctx
+        objects = ctx.objects
+        queue_manager = ctx.queue_manager
+        self.clear()
+        for object_id, entry in payload.items():
+            agent_id = str(entry.get("agent_id", ""))
+            affordance_id = str(entry.get("affordance_id", ""))
+            if not agent_id or not affordance_id:
+                continue
+            duration = int(entry.get("duration_remaining", 0))
+            effects_payload = entry.get("effects", {})
+            if isinstance(effects_payload, Mapping):
+                effects = {str(k): float(v) for k, v in effects_payload.items()}
+            else:
+                effects = {}
+            running = self._running_cls(
+                agent_id=agent_id,
+                affordance_id=affordance_id,
+                duration_remaining=max(0, duration),
+                effects=effects,
+            )
+            self.running_affordances[object_id] = running
+            obj = objects.get(object_id)
+            if obj is not None:
+                obj.occupied_by = agent_id
+            if queue_manager.active_agent(object_id) != agent_id and agent_id:
+                ctx.active_reservations[object_id] = agent_id
+
+
 
 def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int) -> None:
     ctx = runtime._ctx  # type: ignore[attr-defined]

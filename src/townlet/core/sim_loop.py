@@ -33,7 +33,6 @@ from townlet.snapshots import (
     SnapshotManager,
     apply_snapshot_to_telemetry,
     apply_snapshot_to_world,
-    snapshot_from_world,
 )
 from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
@@ -447,12 +446,9 @@ class SimulationLoop:
             runtime_anneal_ratio=anneal_ratio,
         )
         self.telemetry.update_policy_identity(identity_payload)
-        state = snapshot_from_world(
-            self.config,
-            self.world,
-            lifecycle=self.lifecycle,
+        state = self.runtime.snapshot(
+            config=self.config,
             telemetry=self.telemetry,
-            perturbations=self.perturbations,
             stability=self.stability,
             promotion=self.promotion,
             rng_streams={
@@ -504,14 +500,17 @@ class SimulationLoop:
             self.telemetry.emit_event("stability.metrics", stability_metrics)
         self.tick = state.tick
         rng_streams = dict(state.rng_streams)
+        rng_streams.pop("context_seed", None)
         if state.rng_state and "world" not in rng_streams:
             rng_streams["world"] = state.rng_state
         if world_rng_str := rng_streams.get("world"):
             world_state = decode_rng_state(world_rng_str)
             self.world.set_rng_state(world_state)
+            self._rng_world.setstate(world_state)
         if events_rng_str := rng_streams.get("events"):
             events_state = decode_rng_state(events_rng_str)
             self.perturbations.set_rng_state(events_state)
+            self._rng_events.setstate(events_state)
         if policy_rng_str := rng_streams.get("policy"):
             policy_state = decode_rng_state(policy_rng_str)
             self._rng_policy.setstate(policy_state)

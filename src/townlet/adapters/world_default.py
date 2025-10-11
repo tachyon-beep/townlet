@@ -8,14 +8,22 @@ from typing import TYPE_CHECKING, Any, Callable
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.observations import ObservationBuilder
 from townlet.world.core.context import WorldContext
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
+from townlet.snapshots.state import SnapshotState
+from townlet.snapshots import snapshot_from_world
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.console.command import ConsoleCommandEnvelope
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
+    from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.stability.monitor import StabilityMonitor
+    from townlet.stability.promotion import PromotionManager
+    from townlet.config import SimulationConfig
 
 
 class DefaultWorldAdapter(WorldRuntime):
@@ -38,7 +46,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self._queued_console: list["ConsoleCommandEnvelope"] = []
         self._last_result: RuntimeStepResult | None = None
         self._last_events: list[Mapping[str, Any]] = []
-        self._last_snapshot: Mapping[str, Any] | None = None
+        self._last_snapshot: SnapshotState | None = None
 
         builder = observation_builder or ObservationBuilder(context.config)
         self._obs_builder = builder
@@ -122,19 +130,34 @@ class DefaultWorldAdapter(WorldRuntime):
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         self._pending_actions = dict(actions)
 
-    def snapshot(self) -> Mapping[str, Any]:
-        world_snapshot_getter = getattr(self._context, "snapshot", None)
-        if callable(world_snapshot_getter):
-            snapshot = world_snapshot_getter()
-        else:  # pragma: no cover - defensive
-            snapshot = {}
-        payload = dict(snapshot)
-        payload.setdefault("tick", self._tick)
-        payload.setdefault("events", list(self._last_events))
-        self._last_snapshot = payload
+    def snapshot(
+        self,
+        *,
+        config: SimulationConfig | None = None,
+        telemetry: "TelemetrySinkProtocol" | None = None,
+        stability: "StabilityMonitor" | None = None,
+        promotion: "PromotionManager" | None = None,
+        rng_streams: Mapping[str, Any] | None = None,
+        identity: Mapping[str, Any] | None = None,
+    ) -> SnapshotState:
+        world_config = config or getattr(self._context, "config", None)
+        if world_config is None:
+            raise RuntimeError("WorldContext missing configuration for snapshot export")
+        state = snapshot_from_world(
+            world_config,
+            self._context.state,
+            lifecycle=self._lifecycle,
+            telemetry=telemetry,
+            perturbations=self._perturbations,
+            stability=stability,
+            promotion=promotion,
+            rng_streams=rng_streams,
+            identity=identity,
+        )
+        self._last_snapshot = state
         # Clear cached events now that they have been exposed.
         self._last_events = []
-        return payload
+        return state
 
     # ------------------------------------------------------------------
     # Transitional helpers

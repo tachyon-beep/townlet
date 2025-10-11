@@ -213,6 +213,5 @@ def _normalise_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
         "employment",
         "lifecycle",
         "identity",
-        "rng_streams",
     }
     return {key: snapshot[key] for key in keys if key in snapshot}

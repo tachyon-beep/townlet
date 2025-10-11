@@ -7,6 +7,7 @@ import pytest
 from townlet.adapters.world_default import DefaultWorldAdapter
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.world.runtime import RuntimeStepResult
+from townlet.snapshots.state import SnapshotState
 
 
 class _StubObservationBuilder:
@@ -89,6 +90,12 @@ def stub_world_adapter(monkeypatch):
         return sentinel
 
     monkeypatch.setattr("townlet.adapters.world_default.ensure_world_adapter", _ensure)
+    monkeypatch.setattr("townlet.snapshots.state.ensure_world_adapter", _ensure)
+    def _snapshot_from_world(config, world, **kwargs):  # type: ignore[override]
+        tick = getattr(world, "tick", 0)
+        return SnapshotState(config_id="test", tick=tick)
+
+    monkeypatch.setattr("townlet.adapters.world_default.snapshot_from_world", _snapshot_from_world)
     return sentinel
 
 
@@ -155,9 +162,12 @@ def test_default_world_adapter_snapshot_includes_tick_and_events(
     adapter.tick(tick=3, console_operations=None, action_provider=None, policy_actions=None)
 
     snapshot = adapter.snapshot()
-    assert snapshot["tick"] == 3
-    assert snapshot["events"] == [{"tick": 3}]
+    assert isinstance(snapshot, SnapshotState)
+    assert snapshot.tick == 3
+    assert snapshot.promotion == {}
+    assert adapter._last_events == []  # type: ignore[attr-defined]
 
-    # Subsequent snapshot clears cached events
+    # Subsequent snapshot should not alter cached events
     follow_up = adapter.snapshot()
-    assert follow_up["events"] == []
+    assert isinstance(follow_up, SnapshotState)
+    assert adapter._last_events == []  # type: ignore[attr-defined]

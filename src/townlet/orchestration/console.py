@@ -12,6 +12,7 @@ from townlet.console.command import (
     ConsoleCommandResult,
 )
 from townlet.ports.telemetry import TelemetrySink
+from townlet.snapshots.state import SnapshotState
 from townlet.ports.world import WorldRuntime
 
 ConsoleHandler = Callable[[ConsoleCommandEnvelope], Mapping[str, Any]]
@@ -108,6 +109,8 @@ class ConsoleRouter:
                 message=str(exc),
                 tick=tick,
             )
+        if isinstance(payload, SnapshotState):
+            payload = payload.as_dict()
         return ConsoleCommandResult.ok(envelope, payload, tick=tick)
 
 

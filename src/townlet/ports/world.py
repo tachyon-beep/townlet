@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.console.command import ConsoleCommandEnvelope
+    from townlet.snapshots.state import SnapshotState
     from townlet.world.grid import WorldState
     from townlet.world.runtime import RuntimeStepResult
 
@@ -36,7 +37,16 @@ class WorldRuntime(Protocol):
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         """Apply a mapping of agent actions prior to advancing the tick."""
 
-    def snapshot(self) -> Mapping[str, Any]:
+    def snapshot(
+        self,
+        *,
+        config: Any | None = None,
+        telemetry: "TelemetrySinkProtocol" | None = None,
+        stability: Any | None = None,
+        promotion: Any | None = None,
+        rng_streams: Mapping[str, Any] | None = None,
+        identity: Mapping[str, Any] | None = None,
+    ) -> "SnapshotState":
         """Expose a serialisable snapshot of the current world state."""
 
     def queue_console(self, operations: Iterable["ConsoleCommandEnvelope"]) -> None:

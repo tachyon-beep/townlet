@@ -3,10 +3,10 @@
 **Current state (2025-10-10)**
 - Port protocols and registry scaffolding remain in place, and `WorldContext` now supports DTO observation envelopes. The default world factory rejects the legacy `runtime=` shortcut and always returns a context-backed adapter; `DefaultWorldAdapter` is context-only (legacy `.world_state`/runtime handles removed) with dedicated tests in `tests/adapters/test_default_world_adapter.py`.
 - `SimulationLoop` resolves world/policy/telemetry components exclusively through the factories (with injectable overrides for tests), consumes DTO envelopes directly from `WorldContext.observe`, and now routes console telemetry via dispatcher events (T4.2b). The modular smoke in `tests/core/test_sim_loop_modular_smoke.py` covers DTO envelopes plus console routing on default providers.
-- Console routing always flows through `ConsoleRouter`, with buffered commands dropped (and logged) if the router is unavailable; telemetry ingestion happens through `console.result` events, and legacy `record_console_results` shims stay unused.
+- Console routing always flows through `ConsoleRouter`, with buffered commands dropped (and logged) if the router is unavailable; telemetry ingestion happens through `console.result` events, and legacy `record_console_results` shims stay unused. Snapshot commands now return structured results derived from `SnapshotState`.
 - WC3 (telemetry/policy DTO work) unlocked the observation pipeline and telemetry guards (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`). Outstanding WP3C items (training adapters, DTO-only parity sweeps) still block the final removal of remaining legacy world handles.
 
-- Execute T4.4/T4.4a to refresh loop failure handling and snapshot wiring once DTO parity work lands.
+- Execute T4.4/T4.4a to refresh loop failure handling and snapshot wiring once DTO parity work lands. *(Console/loop snapshot path already uses runtime snapshots; remaining cleanup focuses on failure telemetry wiring.)*
 - Deliver T5.x dummy world/policy/telemetry providers and associated loop/console/health-monitor smokes.
 - Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the adapter/loop cleanup converges.
 

@@ -24,6 +24,7 @@ from townlet.snapshots.migrations import (
 from townlet.utils import decode_rng_state, encode_rng, encode_rng_state
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.grid import AgentSnapshot, InteractiveObject, WorldState
+from townlet.world.rng import RngStreamManager
 
 if TYPE_CHECKING:
     from townlet.stability.monitor import StabilityMonitor
@@ -367,7 +368,15 @@ def snapshot_from_world(
 
     migrations_payload = {"applied": [], "required": []}
 
-    return SnapshotState(
+    context_seed = None
+    world_context = getattr(world, "context", None)
+    if world_context is not None:
+        rng_manager = getattr(world_context, "rng_manager", None)
+        base_seed = getattr(rng_manager, "base_seed", None)
+        if base_seed is not None:
+            context_seed = str(int(base_seed))
+
+    snapshot = SnapshotState(
         config_id=config.config_id,
         tick=world.tick,
         agents=agents_payload,
@@ -389,6 +398,9 @@ def snapshot_from_world(
         identity=identity_payload,
         migrations=migrations_payload,
     )
+    if context_seed is not None:
+        snapshot.rng_streams["context_seed"] = context_seed
+    return snapshot
 
 
 def apply_snapshot_to_world(
@@ -485,6 +497,7 @@ def apply_snapshot_to_world(
     if lifecycle is not None:
         lifecycle.import_state(snapshot.lifecycle)
 
+    context_seed_raw = snapshot.rng_streams.get("context_seed")
     rng_payload = snapshot.rng_streams.get("world") or snapshot.rng_state
     if rng_payload:
         state_tuple = decode_rng_state(rng_payload)
@@ -492,6 +505,15 @@ def apply_snapshot_to_world(
             world.set_rng_state(state_tuple)
         else:
             random.setstate(state_tuple)
+    if context_seed_raw is not None:
+        try:
+            seed_value = int(context_seed_raw)
+        except (TypeError, ValueError):
+            seed_value = None
+        if seed_value is not None:
+            context = getattr(world, "context", None)
+            if context is not None:
+                context.rng_manager = RngStreamManager.from_seed(seed_value)
 
     world.load_relationship_snapshot(snapshot.relationships)
     world.load_relationship_metrics(snapshot.relationship_metrics)

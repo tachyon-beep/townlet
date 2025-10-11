@@ -88,7 +88,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **SL-D** Swap telemetry setup to use `create_telemetry`, removing direct `TelemetryPublisher` mutation; verify telemetry events via existing tests. *(Completed 2025-10-10 — telemetry components now resolved via factory.)*
 - **SL-E** Remove `_observation_builder` cache; update reward engine and policy decision path to consume the DTO envelope; add unit test ensuring policy sees matching agent IDs. *(Completed 2025-10-10 — loop consumes DTO envelopes through `WorldContext.observe`, legacy builder removed.)*
 - **SL-F** Route console commands via `ConsoleRouter` exclusively and delete `runtime.queue_console`; extend console smoke test to assert router usage. *(Completed 2025-10-10 — loop drops buffered commands if the router is absent and no longer calls `runtime.queue_console`; smoke test covers router-based telemetry.)*
-- **SL-G** Update failure/snapshot handling to pull data from modular runtime (`runtime.snapshot`), adjusting `SnapshotManager` tests as needed. *(Pending.)*
+- **SL-G** Update failure/snapshot handling to pull data from modular runtime (`runtime.snapshot`), adjusting `SnapshotManager` tests as needed. *(Completed 2025-10-10 — loop delegates to runtime snapshot, SnapshotManager tests updated, and console router normalises SnapshotState payloads.)*
 - **SL-H** Add new smoke `tests/core/test_sim_loop_modular_smoke.py` running two ticks and asserting DTO envelope + telemetry events (stdout adapter stub). *(Completed 2025-10-10.)*
 
 ### Port boundary tightening (supersedes T6.x)

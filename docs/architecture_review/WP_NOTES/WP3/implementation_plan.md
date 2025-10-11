@@ -85,10 +85,12 @@ This plan enumerates the concrete steps required to deliver Work Package 3. Upda
   - Router translates incoming commands to world actions.
   - Loop applies actions via `world_port.apply_actions` and `world_port.tick` (buffered commands dropped with warning if router unavailable).
 - [ ] Remove direct mutation of `WorldState` (`world.agents` iteration should happen through views/DTOs).
+- [x] Ensure snapshot commands emit serialisable payloads (SnapshotState → dict) so console router remains event-driven.
 
 ### 3.2 Telemetry cleanup
 - [x] Swap remaining `telemetry.record_*` invocations for event emissions (`loop.health`, `loop.failure`).
 - [ ] Remove the fallback transport status cache once the sink provides a live feed.
+- [x] Persist context RNG seed in snapshots so resumed runs continue deterministically.
 
 ### 3.3 Closure steps
 - [ ] Update WP1/WP2 docs to mark Step 8 complete.

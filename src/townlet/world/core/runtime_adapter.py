@@ -143,10 +143,14 @@ def ensure_world_adapter(
     if isinstance(world, WorldRuntimeAdapterProtocol):
         return world
     from townlet.world.grid import WorldState  # local import to avoid cycles
+    try:
+        from townlet.world.core.context import WorldContext  # type: ignore
+    except ImportError:  # pragma: no cover - fallback during partial initialisation
+        WorldContext = None  # type: ignore
 
     if isinstance(world, WorldState):
         return WorldRuntimeAdapter(world)
-    if isinstance(world, WorldContext):
+    if WorldContext is not None and isinstance(world, WorldContext):
         return WorldRuntimeAdapter(world.state)
     raise TypeError(
         "world must be a WorldRuntimeAdapterProtocol or WorldState; got" f" {type(world)!r}"

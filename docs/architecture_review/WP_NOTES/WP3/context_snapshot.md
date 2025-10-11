@@ -40,7 +40,7 @@ Use this as reorientation material if the working memory is compacted. It summar
 
 - Console commands now flow through `ConsoleRouter.enqueue`, which forwards them to the world runtime and records telemetry; if the router is absent the loop drops buffered commands with a warning. `SimulationLoop.step` no longer calls `runtime.queue_console` and the new smoke (`tests/core/test_sim_loop_modular_smoke.py`) covers DTO envelopes plus console telemetry.
 - World factory + adapter always operate on `WorldContext.observe`; the legacy ObservationBuilder fallback is gone from the loop, and `DefaultWorldAdapter.observe` simply proxies the context with fresh unit coverage in `tests/adapters/test_default_world_adapter.py`. Remaining work is to migrate adapter-side observation helpers/tests to the DTO-native path (T2.4) and keep ML parity in sync.
-- Plan: finish ML parity work, complete failure/snapshot refactors, add the promised health-monitor smokes, and mark WP1 Step 8 / WP2 Step 7 complete.
+- Plan: finish ML parity work, complete failure/snapshot refactors, add the promised health-monitor smokes, and mark WP1 Step 8 / WP2 Step 7 complete. Snapshot exports now capture the context RNG seed so resumed runs stay deterministic.
 
 ## Cross-Package Dependencies
 
