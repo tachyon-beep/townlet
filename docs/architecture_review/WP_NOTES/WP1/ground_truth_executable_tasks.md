@@ -6,7 +6,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T1.1** Implement `WorldContext.from_config` (or equivalent builder) that wires `WorldState`, lifecycle, perturbations, modular systems, and returns an object satisfying `WorldRuntime`. *(Completed 2025-10-09.)*
 - **T1.2** Update `_build_default_world` so it constructs and returns the modular `WorldContext`; remove all `LegacyWorldRuntime`/`ObservationBuilder` references. *(Completed 2025-10-10 — factory now rejects `runtime=` and always wraps the context; see tests/factories/test_world_factory.py).*
 - **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly. *(Completed 2025-10-11 — factory constructs services internally; loop/tests updated, legacy kwargs now raise `TypeError`.)*
-- **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events. *(Partially covered by existing tests; extend to assert DTO envelope content.)*
+- **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events. *(Completed 2025-10-11 — integration tests now assert DTO observation envelopes and event payloads.)*
 - **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config). *(Pending.)*
 
 ## 2. DefaultWorldAdapter is a legacy bridge

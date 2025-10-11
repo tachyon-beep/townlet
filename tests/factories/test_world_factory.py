@@ -30,6 +30,8 @@ def test_create_world_returns_context_adapter(base_config):
         policy_actions={},
     )
     assert isinstance(result, RuntimeStepResult)
+    assert isinstance(result.events, list)
+    assert all(isinstance(event, dict) for event in result.events)
     observations = adapter.observe()
     assert isinstance(observations, dict)
     assert adapter.lifecycle_manager.config is base_config
