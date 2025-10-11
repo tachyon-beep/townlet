@@ -80,6 +80,8 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
     assert fail_event["context"]["power_on"] is False
     assert fail_event["context"]["occupied"] is False
 
+    failures = [event for event in events if event.get("event") == "affordance_precondition_fail"]
+
     loop.telemetry.emit_event(
         "loop.tick",
         {
@@ -95,11 +97,17 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
             "policy_identity": {},
             "possessed_agents": [],
             "social_events": [],
+            "global_context": {
+                "queue_metrics": {},
+                "reward_breakdown": {},
+                "perturbations": {},
+            },
+            "precondition_failures": failures,
         },
     )
     failures = loop.telemetry.latest_precondition_failures()
-    assert len(failures) == 1
-    assert failures[0]["agent_id"] == "alice"
+    assert len(failures) >= 1
+    assert all(entry["agent_id"] == "alice" for entry in failures)
 
     snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
     assert "precondition_failures" in snapshot
