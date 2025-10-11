@@ -108,20 +108,6 @@ compatibility aliases for one release cycle.
     "perturbations": {...},
     "stability_metrics": {...},
     "...": "reuse from loop.tick global_context"
-  },
-  "aliases": {
-    "telemetry_queue": <int>,
-    "telemetry_dropped": <int>,
-    "telemetry_flush_ms": <float|null>,
-    "telemetry_worker_alive": <bool>,
-    "telemetry_worker_error": <str|null>,
-    "telemetry_worker_restart_count": <int>,
-    "telemetry_console_auth_enabled": <bool>,
-    "telemetry_payloads_total": <int>,
-    "telemetry_bytes_total": <int>,
-    "perturbations_pending": <int>,
-    "perturbations_active": <int>,
-    "employment_exit_queue": <int>
   }
 }
 ```
@@ -130,10 +116,11 @@ Implementation notes:
 
 - `transport` is populated directly from `_last_transport_status`.
 - `global_context` is copied from the DTO tick builder to guarantee parity.
-- Alias block mirrors existing field names to keep dashboards/CLI/tests stable
-  during migration; aliases can be removed once downstream consumers migrate.
-- `duration_ms` supersedes `tick_duration_ms`; retain `tick_duration_ms` inside
-  `aliases` for compatibility.
+- `duration_ms` supersedes the legacy `tick_duration_ms` metric; downstream
+  consumers should rely on the structured summary/transport sections.
+- Summary fields (`queue_length`, `dropped_messages`, `perturbations_pending`,
+  `employment_exit_queue`, etc.) are derived directly from the DTO
+  `global_context` and transport snapshots—no compatibility aliases remain.
 
 ## 5. Data Derivation Mapping
 

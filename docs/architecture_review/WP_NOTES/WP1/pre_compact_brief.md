@@ -9,25 +9,12 @@
 The broader intent is to finish the port-first composition root so the simulation loop, factories, and telemetry stack behave as a thin orchestration shell. Every remaining task should move us toward deterministic, DTO-native ports: no legacy `WorldState` reach-ins, deterministic RNG management owned by the context, and console/telemetry flows expressed purely as events. Keep the end goal in mind—when WP1 closes, downstream packages must be able to plug into world/policy/telemetry ports without encountering legacy shims or hidden state.
 
 ## Outstanding Work
-- T5.x: dummy providers and smokes completed (T5.1–T5.5). The dummy harness in
-  `tests/helpers/dummy_loop.py` powers `tests/core/test_sim_loop_with_dummies.py`
-  and `tests/orchestration/test_console_health_smokes.py`, covering DTO artefacts,
-  console routing, and health metrics (regression: `pytest tests/test_ports_surface.py`
-  `tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
-- T4.4: telemetry flow now fully DTO-driven.
-  - **T4.4b remainder:** documentation refresh + guard notes now that publisher/aggregator/UI/CLI tests are DTO-only.
-  - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with a `summary` block replacing legacy aliases (see `T4_4c_health_schema.md` for schema details).
-  - **T4.4d:** completed 2025-10-11 — failure payload mirrors the health schema (structured transport/context + summary, optional health snapshot); see `T4_4d_failure_schema.md`. Alias data is synthesised only when ingesting historical payloads.
-  - **Stage 6 touchpoint (2025-10-11):** guardrails re-run after removing the last
-    `ObservationBuilder` imports from the world package; telemetry docs updated to
-    reference the summary payload. Remaining closure items are the full regression
-    sweep and release notes once WP3 Stage 6 finishes.
-- **T1.3:** completed 2025-10-11 — world factory no longer accepts legacy service kwargs; lifecycle/perturbation wiring is owned by the provider and loop callers rely on adapter accessors.
-- **T1.4/T1.5:** completed 2025-10-11 — factory tests assert DTO observation envelopes/events and invalid providers raise `ConfigurationError`; missing config continues to raise `TypeError`.
-- **T5.1–T5.3:** completed 2025-10-11 — `townlet.testing` hosts dummy world/policy/telemetry providers, factories register them as `dummy`, and `tests/test_ports_surface.py` validates the port surfaces.
-- Documentation & parity: DTO parity harness expanded (`tests/core/test_sim_loop_dto_parity.py`) and new world-context parity checks (`tests/world/test_world_context_parity.py`) verify queue/economy/relationship exports; ADR/briefs refreshed accordingly.
-- **T6.2:** completed 2025-10-11 — loop/factory/test helpers now type against `townlet.ports.world.WorldRuntime`; the legacy alias has been removed. Regression guard: `pytest tests/test_factory_registry.py tests/test_core_protocols.py tests/test_ports_surface.py -q`.
-- **T6.3:** completed 2025-10-11 — static guard (`tests/core/test_world_port_imports.py`) prevents reintroducing the old alias anywhere under core/factories/orchestration/testing/telemetry.
+- Immediate focus: unblock WP3 Stage 6 so its regression sweep can run clean.
+  The unfinished WP1/WP2 refactor fallout currently breaks the full suite; fix or
+  finish those changes so `pytest` passes.
+- Once WP3 Stage 6 is complete (full suite + ruff + mypy + docs), return here to
+  finish Step 8 (documentation refresh, dispatcher-based policy identity events,
+  full regression sweep, release notes).
 
 ## WorldContext Summary
 - Modular tick orchestration, observation envelopes, and snapshot exports now live entirely inside `WorldContext`. Tests (`tests/test_world_context.py`, `tests/world/test_world_context_parity.py`) verify action staging, nightly reset cadence, and per-agent `episode_tick` updates.

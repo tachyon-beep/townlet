@@ -20,7 +20,6 @@ def test_parse_health_line() -> None:
     assert record["tick"] == 12
     assert record["duration_ms"] == pytest.approx(6.5)
     assert record["queue"] == 2
-    assert record["telemetry_queue"] == 2
     assert record["exit_queue"] == 3
 
 
@@ -41,9 +40,7 @@ def test_health_thresholds_raise() -> None:
         "tick": 7,
         "duration_ms": 12.0,
         "queue": 3.0,
-        "telemetry_queue": 3.0,
         "dropped": 0.0,
-        "telemetry_dropped": 0.0,
         "perturbations_pending": 1.0,
         "perturbations_active": 0.0,
         "exit_queue": 0.0,

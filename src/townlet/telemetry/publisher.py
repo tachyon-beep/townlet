@@ -796,16 +796,12 @@ class TelemetryPublisher:
                 summary_payload["queue_length"] = queue_length
             if dropped_messages is not None:
                 summary_payload["dropped_messages"] = dropped_messages
-            aliases = failure_data.get("aliases")
-            if isinstance(aliases, Mapping):
-                if "queue_length" not in summary_payload and "telemetry_queue" in aliases:
-                    summary_payload["queue_length"] = aliases.get("telemetry_queue")
-                if "dropped_messages" not in summary_payload and "telemetry_dropped" in aliases:
-                    summary_payload["dropped_messages"] = aliases.get("telemetry_dropped")
-                if "duration_ms" not in summary_payload and "tick_duration_ms" in aliases:
-                    summary_payload["duration_ms"] = aliases.get("tick_duration_ms")
+            duration = failure_data.get("duration_ms") or failure_data.get("tick_duration_ms")
+            if duration is not None:
+                summary_payload["duration_ms"] = duration
             if summary_payload:
                 failure_data.setdefault("summary", summary_payload)
+        failure_data.pop("aliases", None)
         logger.error(
             "simulation_loop_failure tick=%s error=%s queue=%s dropped=%s snapshot=%s",
             failure_data.get("tick"),
@@ -850,37 +846,58 @@ class TelemetryPublisher:
         context_payload = payload.get("global_context")
         if isinstance(context_payload, Mapping):
             payload["global_context"] = copy.deepcopy(dict(context_payload))
+        payload.pop("aliases", None)
         summary_payload = payload.get("summary")
         if isinstance(summary_payload, Mapping):
             payload["summary"] = dict(summary_payload)
         else:
             summary: dict[str, object] = {}
-            aliases = payload.get("aliases")
-            if isinstance(aliases, Mapping):
-                if "telemetry_queue" in aliases:
-                    summary["queue_length"] = aliases["telemetry_queue"]
-                if "telemetry_dropped" in aliases:
-                    summary["dropped_messages"] = aliases["telemetry_dropped"]
-                if "telemetry_console_auth_enabled" in aliases:
-                    summary["auth_enabled"] = aliases["telemetry_console_auth_enabled"]
-                if "telemetry_worker_alive" in aliases:
-                    summary["worker_alive"] = aliases["telemetry_worker_alive"]
-                if "telemetry_worker_error" in aliases:
-                    summary["worker_error"] = aliases["telemetry_worker_error"]
-                if "telemetry_worker_restart_count" in aliases:
-                    summary["worker_restart_count"] = aliases["telemetry_worker_restart_count"]
-                if "telemetry_payloads_total" in aliases:
-                    summary["payloads_flushed_total"] = aliases["telemetry_payloads_total"]
-                if "telemetry_bytes_total" in aliases:
-                    summary["bytes_flushed_total"] = aliases["telemetry_bytes_total"]
-                if "perturbations_pending" in aliases:
-                    summary["perturbations_pending"] = aliases["perturbations_pending"]
-                if "perturbations_active" in aliases:
-                    summary["perturbations_active"] = aliases["perturbations_active"]
-                if "employment_exit_queue" in aliases:
-                    summary["employment_exit_queue"] = aliases["employment_exit_queue"]
-                if "tick_duration_ms" in aliases:
-                    summary["duration_ms"] = aliases["tick_duration_ms"]
+            transport_snapshot = payload.get("transport")
+            if isinstance(transport_snapshot, Mapping):
+                summary["queue_length"] = transport_snapshot.get("queue_length", 0)
+                summary["dropped_messages"] = transport_snapshot.get("dropped_messages", 0)
+                summary["last_flush_duration_ms"] = transport_snapshot.get("last_flush_duration_ms")
+                summary["payloads_flushed_total"] = transport_snapshot.get("payloads_flushed_total", 0)
+                summary["bytes_flushed_total"] = transport_snapshot.get("bytes_flushed_total", 0)
+                summary["auth_enabled"] = transport_snapshot.get("auth_enabled", False)
+                worker_payload = transport_snapshot.get("worker")
+                if isinstance(worker_payload, Mapping):
+                    summary["worker_alive"] = worker_payload.get("alive")
+                    summary["worker_error"] = worker_payload.get("error")
+                    summary["worker_restart_count"] = worker_payload.get("restart_count", 0)
+            context_payload = payload.get("global_context")
+            if isinstance(context_payload, Mapping):
+                perturbations_payload = context_payload.get("perturbations")
+                if isinstance(perturbations_payload, Mapping):
+                    pending_section = perturbations_payload.get("pending")
+                    active_section = perturbations_payload.get("active")
+
+                    def _count_entries(value: object) -> int:
+                        if value is None:
+                            return 0
+                        if isinstance(value, Mapping):
+                            return len(value)
+                        if isinstance(value, (list, tuple, set)):
+                            return len(value)
+                        try:
+                            return int(value)  # type: ignore[arg-type]
+                        except (TypeError, ValueError):
+                            return 0
+
+                    summary["perturbations_pending"] = _count_entries(pending_section)
+                    summary["perturbations_active"] = _count_entries(active_section)
+                employment_payload = context_payload.get("employment_snapshot")
+                if isinstance(employment_payload, Mapping):
+                    pending_count = employment_payload.get("pending_count")
+                    if isinstance(pending_count, (int, float)):
+                        summary["employment_exit_queue"] = int(pending_count)
+                    else:
+                        pending_section = employment_payload.get("pending")
+                        if isinstance(pending_section, (list, tuple, set)):
+                            summary["employment_exit_queue"] = len(pending_section)
+            duration_value = payload.get("duration_ms")
+            if duration_value is not None:
+                summary["duration_ms"] = duration_value
             if summary:
                 payload["summary"] = summary
         self._latest_health_status = payload

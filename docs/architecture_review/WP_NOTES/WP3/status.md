@@ -23,10 +23,13 @@
   Snapshot handling now records the context RNG seed so resumed runs stay deterministic; the full-suite + lint/type sweep is scheduled for Stage 6.
 - **Stage 6 (guardrails & docs)**: guard tests were re-run after removing the
   last `ObservationBuilder` references; telemetry surface checks remain green.
-  Replay exporter now consumes DTO trajectory frames directly, and the legacy
-  world factory registry has been removed. Remaining closure tasks are the
-  documentation refresh, full regression sweep (pytest/ruff/mypy), release
-  comms, and retirement of non-DT0 telemetry shims.
+  Replay exporter now consumes DTO trajectory frames directly, the legacy world
+  factory registry has been removed, and the telemetry pipeline no longer emits
+  alias fields (dashboards read from structured DTO data). Remaining closure
+  tasks are the documentation refresh, full regression sweep (pytest/ruff/mypy),
+  release comms, and retirement of any remaining non-DTO telemetry shims. This
+  full regression run currently fails because in-progress WP1/WP2 refactor work
+  broke the suite—finish or stabilise those changes before the Stage 6 sweep.
 - **WP3B complete:** queue/affordance/employment/economy/relationship systems now run entirely through modular services. `WorldContext.tick` no longer calls legacy apply/resolve helpers, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and targeted system tests (`tests/world/test_systems_*.py`) lock the behaviour. World-level smokes (`pytest tests/world -q`) pass with the bridge removed.
 - Behaviour parity smokes (`tests/test_behavior_personality_bias.py`) remain green; DTO parity harness awaits reward/ML scenarios under WP3C.
 - Remaining work packages:

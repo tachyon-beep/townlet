@@ -7,6 +7,7 @@ from typing import Any
 
 from townlet.core.sim_loop import SimulationLoop
 from townlet.policy.behavior import AgentIntent
+from townlet.policy.dto_view import DTOWorldView
 from townlet.world.grid import AgentSnapshot
 
 logger = logging.getLogger(__name__)
@@ -141,10 +142,16 @@ class ScenarioBehavior:
         self._schedules = schedules
         self._indices: dict[str, int] = dict.fromkeys(schedules, 0)
 
-    def decide(self, world, agent_id):  # type: ignore[override]
+    def decide(
+        self,
+        world,
+        agent_id,
+        *,
+        dto_world: DTOWorldView | None = None,
+    ):  # type: ignore[override]
         seq = self._schedules.get(agent_id)
         if not seq:
-            return self.base.decide(world, agent_id)
+            return self.base.decide(world, agent_id, dto_world=dto_world)
         idx = self._indices.setdefault(agent_id, 0)
         intent = seq[idx % len(seq)]
         self._indices[agent_id] = idx + 1

@@ -84,12 +84,7 @@ the transition:
     }
   },
   "global_context": { ... },          // reuse last known DTO context when available
-  "health": { ... },                  // optional structured copy of last loop.health payload
-  "aliases": {
-    "tick_duration_ms": <float>,
-    "telemetry_queue": <int>,
-    "telemetry_dropped": <int>
-  }
+  "health": { ... }                   // optional structured copy of last loop.health payload
 }
 ```
 
@@ -98,8 +93,8 @@ Notes:
   available observation envelope/global context (if present).
 - The `health` section can reuse the most recent structured health payload (from
   `_build_health_payload`) if one exists.
-- Alias block preserves legacy keys for CLI/automation that still parse the old
-  shape; remove in a future clean-up once downstream surfaces migrate.
+- Legacy alias keys have been removed; downstream consumers should rely on the
+  structured transport/summary data.
 
 ## 4. Implementation Plan
 

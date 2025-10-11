@@ -21,6 +21,11 @@
   `tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
 - PB-A locked in the revised `WorldRuntime` port contract (`PB_port_contract.md`). PB-B/C executed on 2025-10-11: adapters/dummies no longer expose `queue_console`, `SimulationLoop` relies solely on DTO pathways, and port surface tests confirm the lean contract. Next PB steps (PB-D/E/F) will swap loop imports to `townlet.ports.world.WorldRuntime`, add guard tests, and prune the deprecated protocol alias. Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the port cleanup convergence.
 
+**Blocking dependency (2025-10-11 insight)**
+- WP1 finalisation (Step 8 and telemetry docs/ADR refresh) is waiting on WP3
+  Stage 6 to finish (full regression, ruff, mypy, and documentation updates).
+  Until WP3 is green, keep the suite stabilisation work focused there.
+
 **Legacy caller inventory (updated 2025-10-10)**
 - Policy:
   - `PolicyController` owns ctx-reset/anneal hooks; decision path still hands the legacy `WorldState` into scripted backends. Switch to DTO-only requests once WP3C Stage 3D/Stage 5 land.

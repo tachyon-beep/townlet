@@ -20,7 +20,7 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Stage 3D progressing: `PolicyBackend` ports/backends now advertise DTO support, `resolve_policy_backend` validates the capability, the stub backend raises a `DeprecationWarning` if legacy observation batches are provided without a DTO envelope, and `SimulationLoop` streams `policy.metadata` / `policy.possession` / `policy.anneal.update` events via the dispatcher.
 - Stage 3E safeguards added: DTO parity harness re-run, policy controllers guard against missing envelopes, telemetry policy-event smokes land, and rollout capture tests continue to validate DTO trajectory plumbing.
 - Stage 4 complete: ML smoke test (`tests/policy/test_dto_ml_smoke.py -q`) compares DTO vs ObservationBuilder features, enforces baseline dimensions, and validates logits/actions under a random-weight Torch network.
-- Stage 5 update: `SimulationLoop` now emits DTO-only payloads, `TelemetryPublisher` ingests dispatcher events with policy metadata and DTO envelopes, and observer/conflict telemetry tests drive the dispatcher directly (legacy `_ingest_loop_tick` shim removed). DTO dashboards pull from the new caches (`latest_policy_metadata_snapshot`, `latest_observation_envelope`). Console commands flow solely through the router with no `runtime.queue_console` fallback. Replay capture (`frames_to_replay_sample`, `scripts/capture_rollout.py`) consumes DTO frames, and the legacy world factory registry has been deleted. Targeted regression bundles ran on 2025-10-11 (see `stage5_cleanup_audit.md` for commands); full-suite, lint, and type checks remain scheduled for Stage 6.
+- Stage 5 update: `SimulationLoop` now emits DTO-only payloads, `TelemetryPublisher` ingests dispatcher events with policy metadata and DTO envelopes, and observer/conflict telemetry tests drive the dispatcher directly (legacy `_ingest_loop_tick` shim removed). DTO dashboards pull from the new caches (`latest_policy_metadata_snapshot`, `latest_observation_envelope`). Console commands flow solely through the router with no `runtime.queue_console` fallback. Replay capture (`frames_to_replay_sample`, `scripts/capture_rollout.py`) consumes DTO frames, the legacy world factory registry has been deleted, and telemetry alias fields have been removed in favour of structured DTO data. Targeted regression bundles ran on 2025-10-11 (see `stage5_cleanup_audit.md` for commands); full-suite, lint, and type checks remain scheduled for Stage 6.
 - Stage 6 guardrails underway: `tests/core/test_no_legacy_observation_usage.py` and
   `tests/test_telemetry_surface_guard.py` were re-run after removing the last
   `ObservationBuilder` imports from the world package (now uses
@@ -30,11 +30,13 @@ Latest context snapshot so we can resume quickly after memory compaction.
   full-suite pytest/ruff/mypy sweep, and release notes.
 
 ## Outstanding Work (DTO Rollout)
-1. Documentation refresh (ADR-001/002, WP1/WP2/WP3 briefs) and release comms for
+1. Stabilise the suite by finishing the WP1/WP2 refactor fallout so `pytest`
+   completes without legacy failures.
+2. Once green, run the full Stage 6 regression sweep (`pytest`, `ruff`, `mypy`)
+   and capture results in the Stage 6 audit log.
+3. Documentation refresh (ADR-001/002, WP1/WP2/WP3 briefs) and release comms for
    the DTO-only telemetry/policy milestone.
-2. Full Stage 6 regression sweep: run `pytest`, `ruff check`, and `mypy`, then
-   capture results in the Stage 6 audit log.
-3. Final removal of any adapter shims or TODOs blocking WP1/WP2 sign-off once the
+4. Final removal of any adapter shims or TODOs blocking WP1/WP2 sign-off once the
    above work is green.
 
 ## Notes / Reminders

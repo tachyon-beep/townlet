@@ -17,7 +17,8 @@ remain for other programmes.
   updated to match.
 - **Telemetry & console** – simulation loop emits DTO-first payloads, the
   console router queues commands without touching `runtime.queue_console`, and
-  downstream consumers read metrics from `global_context`. Guard suites covering
+  downstream consumers read metrics from `global_context`. Legacy alias fields
+  have been removed from loop health/failure payloads. Guard suites covering
   these paths continue to pass:
   `pytest tests/test_console_events.py tests/test_telemetry_surface_guard.py \
           tests/orchestration/test_console_health_smokes.py -q`.
@@ -42,7 +43,6 @@ pytest \
 | Location | Purpose | Notes |
 | --- | --- | --- |
 | `src/townlet/policy/bc.py` | Optional BC helper shim when Torch is absent | Intentional; owned by ML tooling programme. |
-| `src/townlet/telemetry/aggregation/metrics.py` | Re-export bridge for legacy dashboard imports | Remove once downstream dashboards depend on the new normalisers. |
 
 No other legacy observation dependencies remain; DTO envelopes and the derived
 trajectory frames are the authoritative data path.
