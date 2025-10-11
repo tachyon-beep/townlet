@@ -7,6 +7,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T1.2** Update `_build_default_world` so it constructs and returns the modular `WorldContext`; remove all `LegacyWorldRuntime`/`ObservationBuilder` references. *(Completed 2025-10-10 — factory now rejects `runtime=` and always wraps the context; see tests/factories/test_world_factory.py).*
 - **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly. *(Completed 2025-10-11 — factory constructs services internally; loop/tests updated, legacy kwargs now raise `TypeError`.)*
 - **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events. *(Completed 2025-10-11 — integration tests now assert DTO observation envelopes and event payloads.)*
+- **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config). *(Completed 2025-10-11 — invalid provider now raises `ConfigurationError`; missing config still raises `TypeError`.)*
 - **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config). *(Pending.)*
 
 ## 2. DefaultWorldAdapter is a legacy bridge
@@ -31,7 +32,7 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.5** Add loop smoke tests for modular providers and DTO parity.
 
 ## 5. Missing dummy providers and promised tests
-- **T5.1** Create `src/townlet/testing/` with dummy world/policy/telemetry implementations satisfying the ports.
+- **T5.1** Create `src/townlet/testing/` with dummy world/policy/telemetry implementations satisfying the ports. *(Completed 2025-10-11 — see `townlet.testing` package for dummy world/policy/telemetry classes.)*
 - **T5.2** Register dummy providers in the factories under documented keys.
 - **T5.3** Write `tests/test_ports_surface.py` validating method presence/forbidden symbols on ports/adapters.
 - **T5.4** Add `tests/test_loop_with_dummies.py` (fast smoke) driving the loop through dummy providers.

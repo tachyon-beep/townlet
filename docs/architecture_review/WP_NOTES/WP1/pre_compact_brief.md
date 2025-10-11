@@ -17,6 +17,7 @@ The broader intent is to finish the port-first composition root so the simulatio
   - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with alias fallbacks (see `T4_4c_health_schema.md` for schema details).
   - **T4.4d:** completed 2025-10-11 — failure payload mirrors the health schema (structured transport/context, alias block, optional health snapshot); see `T4_4d_failure_schema.md`. Alias removal deferred until dashboards/CLI migrate.
 - **T1.3:** completed 2025-10-11 — world factory no longer accepts legacy service kwargs; lifecycle/perturbation wiring is owned by the provider and loop callers rely on adapter accessors.
+- **T1.4/T1.5:** completed 2025-10-11 — factory tests assert DTO observation envelopes/events and invalid providers raise `ConfigurationError`; missing config continues to raise `TypeError`.
 - Documentation & parity: expand DTO parity harness/tests for the context (T3.x), refresh ADRs, and capture the strategic changes in WP1/WP2/WP3 briefs once the remaining tasks converge.
 
 ## Dependences / Notes

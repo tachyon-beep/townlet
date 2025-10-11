@@ -59,3 +59,10 @@ def test_create_world_rejects_legacy_service_overrides(base_config):
 def test_create_world_rejects_legacy_runtime_argument():
     with pytest.raises(TypeError):
         create_world(provider="default", runtime=object())
+
+
+def test_create_world_requires_valid_provider(base_config):
+    from townlet.factories.registry import ConfigurationError
+
+    with pytest.raises(ConfigurationError):
+        create_world(provider="does_not_exist", config=base_config)
