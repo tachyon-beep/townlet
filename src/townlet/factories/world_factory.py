@@ -12,7 +12,6 @@ from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.world.core.context import WorldContext
 from townlet.world.grid import WorldState
-from townlet.world.runtime import WorldRuntime as LegacyWorldRuntime
 
 from .registry import register, resolve
 
@@ -36,7 +35,6 @@ def _derive_ticks_per_day(config: Any, explicit: int | None) -> int:
 @register("world", "facade")
 def _build_default_world(
     *,
-    runtime: LegacyWorldRuntime | None = None,
     world: WorldState | None = None,
     config: Any | None = None,
     lifecycle: LifecycleManager | None = None,
@@ -44,20 +42,11 @@ def _build_default_world(
     ticks_per_day: int | None = None,
     world_kwargs: Mapping[str, Any] | None = None,
     observation_builder: ObservationBuilder | None = None,
-    **legacy_kwargs: Any,
+    **unexpected_kwargs: Any,
 ) -> WorldRuntime:
-    # Legacy pathway for callers providing a pre-built runtime.
-    if runtime is not None:
-        if legacy_kwargs:
-            raise TypeError(
-                "Unexpected arguments for pre-built runtime: {}".format(", ".join(legacy_kwargs))
-            )
-        builder = observation_builder or ObservationBuilder(runtime.world.config)
-        return DefaultWorldAdapter(runtime=runtime, observation_builder=builder)
-
-    if legacy_kwargs:
+    if unexpected_kwargs:
         raise TypeError(
-            "Unsupported arguments for modular world builder: {}".format(", ".join(legacy_kwargs))
+            "Unsupported arguments for modular world builder: {}".format(", ".join(unexpected_kwargs))
         )
 
     target_world: WorldState | None = world

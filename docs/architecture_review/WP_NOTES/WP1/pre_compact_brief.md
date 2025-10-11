@@ -1,19 +1,18 @@
 # WP1 Pre-Compact Brief — 2025-10-10
 
 ## Current Focus
-- WP1 remediation underway; WC-E observation pipeline complete (WorldContext.observe + loop integration).
-- T1.1 (modular world builder) executed: `create_world` returns context-backed adapters by default, `DefaultWorldAdapter` handles modular and legacy runtimes, and factory tests cover the path.
+- WP1 remediation continues; world factory and adapter now operate solely on `WorldContext`, with the legacy `runtime=` pathway removed and tests updated to enforce the new contract.
+- Observation pipeline (WC-E) remains stable: the simulation loop consumes `WorldContext.observe` DTO envelopes with a guarded fallback while we finish the remaining loop refactors.
 
 ## Outstanding Work
-- T1.2/T2.x: remove `LegacyWorldRuntime` usage entirely (DefaultWorldAdapter cleanup, drop `.world_state`, rely on context-only APIs).
-- T5.x: add dummy world/policy/telemetry providers + smoke tests.
-- Simulation loop cleanup: remove `runtime.queue_console`, rely solely on ports; add missing loop/console smokes.
-- Documentation updates (ADR-001, console/monitor ADR, statuses) after factory/adapter cleanup.
+- T2.3+: retire the observation-builder fallback once loop/policy paths prove DTO-only stability; this will allow us to drop the builder from the adapter entirely.
+- T5.x: add dummy world/policy/telemetry providers plus loop/console/health-monitor smokes.
+- Simulation loop cleanup: remove direct `runtime.queue_console` usage, lean exclusively on ports, and backfill integration smokes.
+- Documentation updates (ADR-001, console/monitor ADR, status) after the adapter/loop cleanup finalises.
 
 ## Dependences / Notes
-- Legacy path still available in `DefaultWorldAdapter` for callers passing `runtime`; plan removal once consumers migrate.
-- Loop currently seeds observation service on context; once factory wires service directly, remove loop bootstrap.
-- Telemetry/policy DTO work (WP3) remains active; ensure schema stays aligned while refactoring adapters.
+- Loop still seeds the observation service on the context; we can remove that bootstrap once factory wiring guarantees an injected service.
+- Telemetry/policy DTO work (WP3) remains active—keep schema alignment in mind while removing residual legacy helpers.
 
 ## Helpful Paths
 - Factory tests: `tests/factories/test_world_factory.py`

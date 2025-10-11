@@ -3,18 +3,10 @@
 Direct code inspection shows WP1 Step 7 and related deliverables remain incomplete. Each item below lists the issue and decomposes remediation tasks required to finish the work.
 
 ## 1. Legacy world factory path still active
-- **Issue:** `create_world` continues to build `LegacyWorldRuntime` + `ObservationBuilder` before wrapping with `DefaultWorldAdapter` (`src/townlet/factories/world_factory.py:21-66`). No `WorldContext` construction occurs.
-- **Remediation tasks:**
-  1. Implement `WorldContext.from_config(...)` (or equivalent) that wires modular services and returns a `WorldRuntime` port implementation.
-  2. Rewrite `_build_default_world` to construct the modular context directly and remove all `LegacyWorldRuntime`/`ObservationBuilder` dependencies.
-  3. Add factory-level tests validating DTO observations/events from the modular path and guarding against regressions.
+- **Status (2025-10-10):** Resolved. `_build_default_world` now requires a `WorldContext` and rejects the legacy `runtime=` shortcut; factory tests enforce the contract.
 
 ## 2. DefaultWorldAdapter is a legacy bridge
-- **Issue:** Adapter simply delegates to `LegacyWorldRuntime`, rebuilds dict observations, and re-exposes the legacy world via `.world_state` (`src/townlet/adapters/world_default.py:22-114`).
-- **Remediation tasks:**
-  1. Replace the adapter with a facade that only speaks the port/DTO surface—no direct access to legacy `WorldState` or observation builder.
-  2. Move console/action staging onto modular services, keeping policy decisions and telemetry on DTO flows.
-  3. Extend integration tests to cover the new adapter contracts (actions, snapshots, event emission).
+- **Status (2025-10-10):** Resolved. `DefaultWorldAdapter` is now context-only, and the `.world_state` escape hatch plus legacy runtime delegation have been removed (tests cover the context path).
 
 ## 3. WorldContext is unimplemented
 - **Issue:** `WorldContext` methods still raise `NotImplementedError` (`src/townlet/world/context.py:11-38`), leaving no modular runtime for the factory to return.

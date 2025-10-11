@@ -74,3 +74,8 @@ def test_create_world_requires_lifecycle_when_modular(base_config):
             ticks_per_day=1440,
             observation_builder=builder,
         )
+
+
+def test_create_world_rejects_legacy_runtime_argument():
+    with pytest.raises(TypeError):
+        create_world(provider="default", runtime=object())

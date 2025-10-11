@@ -5,6 +5,8 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 ## 1. Legacy world factory path still active
 - **T1.1** Implement `WorldContext.from_config` (or equivalent builder) that wires `WorldState`, lifecycle, perturbations, modular systems, and returns an object satisfying `WorldRuntime`.
 - **T1.2** Update `_build_default_world` so it constructs and returns the modular `WorldContext`; remove all `LegacyWorldRuntime`/`ObservationBuilder` references.
+- *2025-10-10 inventory:* No in-repo callers pass `runtime=` to `create_world`; the only instantiation of `DefaultWorldAdapter(runtime=...)` lives in the factory branch. `SimulationLoop._build_components` still supplies `world=WorldState(...)`, so the modular path stays exercised. This means we can delete the legacy runtime branch without stranding callers.
+- *2025-10-10 update:* Factory no longer accepts `runtime=`; tests assert the new contract. The modular path now covers all usages.
 - **T1.3** Delete the fallback kwargs (`lifecycle`, `perturbations`, etc.) once the modular context owns that configuration; adjust callers accordingly.
 - **T1.4** Add factory unit tests verifying `create_world` returns the modular runtime and emits DTO observations/events.
 - **T1.5** Add regression test ensuring legacy inputs trigger clear errors (provider key, missing config).
@@ -12,7 +14,10 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 ## 2. DefaultWorldAdapter is a legacy bridge
 - **T2.1** Replace `DefaultWorldAdapter` implementation with a wrapper around the modular `WorldContext` and DTO helpers.
 - **T2.2** Remove `.world_state` and any direct `LegacyWorldRuntime` dependencies; expose only the `WorldRuntime` port.
+- *2025-10-10 inventory:* `DefaultWorldAdapter.world_state` is no longer referenced anywhere in `src/` or `tests/`. All runtime interactions (`queue_console`, `tick`, `observe`) are invoked through the port. Removing the property/legacy handles only requires making the adapter context-only and updating its tests.
+- *2025-10-10 update:* Adapter now requires `WorldContext` and exposes only the port surface; `.world_state` and the legacy runtime branch have been removed.
 - **T2.3** Ensure observation building is handled by DTO pipeline; drop `ObservationBuilder` usage.
+- *2025-10-10 inventory:* `SimulationLoop` still bootstraps an `ObservationBuilder` and retains the legacy fallback when `WorldContext.observe` errors. Adapter cleanup must preserve the builder hook until the DTO path is proven resilient (ties into T4.1/T4.3).
 - **T2.4** Add adapter tests covering `reset`, `tick`, `observe`, `apply_actions`, `snapshot` behaviour.
 
 ## 3. WorldContext is unimplemented
