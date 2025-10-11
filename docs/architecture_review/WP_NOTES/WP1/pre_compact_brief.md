@@ -11,10 +11,11 @@
 The broader intent is to finish the port-first composition root so the simulation loop, factories, and telemetry stack behave as a thin orchestration shell. Every remaining task should move us toward deterministic, DTO-native ports: no legacy `WorldState` reach-ins, deterministic RNG management owned by the context, and console/telemetry flows expressed purely as events. Keep the end goal in mind—when WP1 closes, downstream packages must be able to plug into world/policy/telemetry ports without encountering legacy shims or hidden state.
 
 ## Outstanding Work
-- T5.x: dummy providers (T5.1–T5.4) are in place; the new harness in `tests/helpers/dummy_loop.py`
-  drives the modular loop smokes in `tests/core/test_sim_loop_with_dummies.py`
-  (regression: `pytest tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py -q`).
-  Remaining work is T5.5 (console router & health monitor smokes leveraging the dummy harness).
+- T5.x: dummy providers and smokes completed (T5.1–T5.5). The dummy harness in
+  `tests/helpers/dummy_loop.py` powers `tests/core/test_sim_loop_with_dummies.py`
+  and `tests/orchestration/test_console_health_smokes.py`, covering DTO artefacts,
+  console routing, and health metrics (regression: `pytest tests/test_ports_surface.py`
+  `tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
 - T4.4: telemetry flow now fully DTO-driven.
   - **T4.4b remainder:** documentation refresh + guard notes now that publisher/aggregator/UI/CLI tests are DTO-only.
   - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with alias fallbacks (see `T4_4c_health_schema.md` for schema details).

@@ -13,7 +13,9 @@
 - WC3 (telemetry/policy DTO work) unlocked the observation pipeline and telemetry guards (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`). Outstanding WP3C items (training adapters, DTO-only parity sweeps) still block the final removal of remaining legacy world handles.
 
 - Execute T4.4d to reshape loop failure payloads (structured transport/context + doc refresh) now that health events are DTO-first.
-- Deliver remaining T5.x coverage (`tests/test_loop_with_dummies.py` in place; next up T5.5 console/health-monitor smokes built on the dummy harness).
+- T5.x coverage complete: dummy providers, loop smokes, and `tests/orchestration/test_console_health_smokes.py`
+  now guard console routing and health monitor metrics via the dummy harness (regression: `pytest`
+  `tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
 - Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the adapter/loop cleanup converges.
 
 **Legacy caller inventory (updated 2025-10-10)**

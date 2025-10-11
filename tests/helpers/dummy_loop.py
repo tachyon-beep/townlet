@@ -411,6 +411,8 @@ class DummyLoopHarness:
     context: _DummyWorldContext
     world: _DummyWorldState
     policy: _DummyPolicyHarness
+    console_router: Any
+    health_monitor: Any
 
 
 def build_dummy_loop(
@@ -478,6 +480,8 @@ def build_dummy_loop(
         context=context,
         world=world_state,
         policy=policy_harness,
+        console_router=getattr(loop, "_console_router", None),
+        health_monitor=getattr(loop, "_health_monitor", None),
     )
 
 

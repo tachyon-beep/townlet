@@ -46,10 +46,30 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
     DTO envelope integrity, console routing (`console.result` events), and
     `loop.health` telemetry on the dummy providers.
   - Regression command recorded under WP1 status: `pytest tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py -q`.
-- **T5.5** Implement console router & health monitor smokes as per WP1 plan.
+- **T5.5** Implement console router & health monitor smokes as per WP1 plan. *(Completed 2025-10-11 — see orchestration smokes.)*
+  - Added `tests/orchestration/test_console_health_smokes.py` using the dummy loop harness to
+    verify console routing end-to-end (snapshot + unknown command) and health monitor metric
+    emission. Harness now exposes the live `ConsoleRouter`/`HealthMonitor` instances through
+    `DummyLoopHarness` for assertions.
+  - Regression command: `pytest tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`.
 
 ## 6. Port boundaries still leak legacy types
 - **T6.1** Revise `WorldRuntime` port signatures to remove `WorldState`/console coupling; document DTO expectation.
+  - **T6.1a – Usage inventory** *(Completed 2025-10-11)*: Logged port consumers, required methods, and coupling hotspots (see Ground Truth Issues §6 note). Key dependencies: loop + console router depend on `queue_console`; `tick` still passes `WorldState`; runtime binding hooks used during world reset; tests enforce current signature.
+  - **T6.1b – Port schema proposal (In progress)**: Define the target DTO-first contract eliminating `WorldState` arguments and console coupling.
+    - Proposed surface:
+      * `tick(*, tick: int, actions: Mapping[str, object], events: Iterable[dict[str, object]] | None = None) -> RuntimeStepResult` — loop supplies already normalised action payloads and optional external events (e.g., console outcomes) rather than a callback.
+      * `stage_actions(actions)` becomes optional; loop can call `apply_actions` prior to `tick` for staged inputs (kept for backwards compatibility but slated for removal).
+      * Console routing moves entirely into `ConsoleRouter`, which will call a new `world_context.process_console(envelope)` instead of invoking `WorldRuntime.queue_console`. The port drops `queue_console` altogether.
+      * Snapshot method keeps the same shape but documents DTO expectations (world implementations should embed DTO-friendly data so telemetry/policy exporters stay aligned).
+      * Add explicit `agents()` + `agent_view()` helpers returning DTO snapshot proxies so scripted behaviours have a read-only path without direct `WorldState` access.
+    - Migration notes: introduce transitional methods (`queue_console` calling `process_console`) marked deprecated; update `DefaultWorldAdapter`, dummy runtime, and tests to satisfy the new signature before enforcing removal.
+  - **T6.1c – Transitional adapter plan** *(Completed 2025-10-11)*:
+    - Step 1: introduce interface aliases (`WorldRuntimeVNext`) exporting the new DTO-first methods while keeping legacy names deprecated. `DefaultWorldAdapter` implements both for a deprecation window by adapting the DTO inputs back into current world-context calls.
+    - Step 2: update factories and the loop to consume the new interface: `SimulationLoop` prepares an action batch via the controller and calls `runtime.tick_dto(tick, actions, console_events)`; console router streams results directly to telemetry and optionally passes commands to the world via `context.process_console`. Legacy `queue_console` stays available but emits a deprecation warning and delegates to the router hook.
+    - Step 3: migrate test doubles (`DummyWorldRuntime`, `_LoopDummyWorldRuntime`, `tests/test_core_protocols.py` stubs) to the new methods and remove direct `WorldState` dependencies. Provide helper wrappers so existing tests can still instantiate the runtime without DTO knowledge during the transition.
+    - Step 4: once adapters/tests align, delete the legacy methods and collapse the alias back into `WorldRuntime`. Document timeline in ADR-001 and mark the deprecation removal milestone in WP1 status.
+  - **T6.1d – Documentation update (Pending)**: Once the new interface is ready, refresh ADR-001, CORE_PROTOCOLS.md, and WP1/WP3 status docs to describe the DTO-first contract, console-router ownership, and deprecation timeline for legacy methods. Include migration guidance for downstream providers/dummies.
 - **T6.2** Update adapters and loop to match the refined signatures; remove dependency on `core.interfaces` legacy protocols.
 - **T6.3** Provide guard tests ensuring the loop imports only `townlet.ports.*` interfaces.
 - **T6.4** Deprecate/remove unused members from `core.interfaces` once the loop migrates.
