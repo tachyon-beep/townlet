@@ -789,7 +789,42 @@ class TelemetryPublisher:
     def _ingest_health_metrics(self, metrics: Mapping[str, object]) -> None:
         """Update health telemetry derived from the simulation loop."""
 
-        self._latest_health_status = dict(metrics)
+        payload = dict(metrics)
+        transport_payload = payload.get("transport")
+        if isinstance(transport_payload, Mapping):
+            payload["transport"] = {
+                "provider": transport_payload.get("provider"),
+                "queue_length": int(transport_payload.get("queue_length", 0) or 0),
+                "dropped_messages": int(transport_payload.get("dropped_messages", 0) or 0),
+                "last_flush_duration_ms": transport_payload.get("last_flush_duration_ms"),
+                "payloads_flushed_total": int(transport_payload.get("payloads_flushed_total", 0) or 0),
+                "bytes_flushed_total": int(transport_payload.get("bytes_flushed_total", 0) or 0),
+                "auth_enabled": bool(transport_payload.get("auth_enabled", False)),
+                "worker": {
+                    "alive": bool(
+                        transport_payload.get("worker", {}).get("alive")  # type: ignore[call-arg]
+                        if isinstance(transport_payload.get("worker"), Mapping)
+                        else transport_payload.get("worker_alive", False)
+                    ),
+                    "error": (
+                        transport_payload.get("worker", {}).get("error")  # type: ignore[call-arg]
+                        if isinstance(transport_payload.get("worker"), Mapping)
+                        else transport_payload.get("worker_error")
+                    ),
+                    "restart_count": int(
+                        transport_payload.get("worker", {}).get("restart_count", 0)  # type: ignore[call-arg]
+                        if isinstance(transport_payload.get("worker"), Mapping)
+                        else transport_payload.get("worker_restart_count", 0) or 0
+                    ),
+                },
+            }
+        context_payload = payload.get("global_context")
+        if isinstance(context_payload, Mapping):
+            payload["global_context"] = copy.deepcopy(dict(context_payload))
+        aliases_payload = payload.get("aliases")
+        if isinstance(aliases_payload, Mapping):
+            payload["aliases"] = dict(aliases_payload)
+        self._latest_health_status = payload
 
     def latest_health_status(self) -> dict[str, object]:
         """Return the most recently recorded health payload."""

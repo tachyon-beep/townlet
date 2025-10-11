@@ -14,7 +14,8 @@ The broader intent is to finish the port-first composition root so the simulatio
 - T5.x: add dummy world/policy/telemetry providers plus loop/console/health-monitor smokes.
 - T4.4: finish the remaining telemetry/failure cleanup (ports-only failure emission + doc refresh) after the context export refactor.
   - **T4.4b remainder:** documentation refresh + guard notes now that publisher/aggregator/UI/CLI tests are DTO-only.
-  - **T4.4c/d:** reshape `loop.health`/`loop.failure` payloads once the aggregator/UI paths are clean.
+  - **T4.4c:** completed 2025-10-11 — health payload now includes structured `transport`/`global_context` data with alias fallbacks (see `T4_4c_health_schema.md` for schema details).
+  - **T4.4d:** reshape `loop.failure` payload after health event lands.
 - Documentation & parity: expand DTO parity harness/tests for the context (T3.x), refresh ADRs, and capture the strategic changes in WP1/WP2/WP3 briefs once the remaining tasks converge.
 
 ## Dependences / Notes
@@ -28,3 +29,9 @@ The broader intent is to finish the port-first composition root so the simulatio
 - Modular smoke: `tests/core/test_sim_loop_modular_smoke.py`
 
 Use this as reorientation after compaction.
+
+## Telemetry Health Inventory Update (2025-10-11 23:45)
+- Health payloads now emit the structured schema: top-level `duration_ms`, nested `transport` (queue/backlog/workers), and embedded DTO `global_context` snapshots, while retaining alias fields (`telemetry_*`, `perturbations_*`, `employment_exit_queue`, `tick_duration_ms`) for backward compatibility.
+- Metrics derive exclusively from `_build_transport_status` and DTO exports, removing the legacy `self.world.employment.exit_queue_length()` call. Scheduler counts serve only as defensive fallback when context data is missing.
+- Telemetry publisher caches deep copies of the structured payload (`latest_health_status` exposes transport/global context), dispatcher queue history prefers the embedded context, and UI/CLI helpers pull queue/perturbation metrics from the structured fields before falling back to aliases.
+- Regression bundle (`pytest tests/test_sim_loop_health.py tests/telemetry/test_event_dispatcher.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/test_telemetry_watch.py -q`) passes on the new schema; alias removal is deferred until downstream dashboards migrate.

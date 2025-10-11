@@ -53,3 +53,18 @@ def test_simulation_loop_success_clears_error(simulation_loop: SimulationLoop) -
     health = loop.health
     assert health.last_error is None
     assert health.last_snapshot_path is None
+    latest_health = loop.telemetry.latest_health_status()
+    assert latest_health.get("status") == "ok"
+    assert "transport" in latest_health
+    transport = latest_health["transport"]
+    assert isinstance(transport, dict)
+    assert transport.get("queue_length") == latest_health.get("telemetry_queue")
+    assert transport.get("dropped_messages") == latest_health.get("telemetry_dropped")
+    assert "global_context" in latest_health
+    assert isinstance(latest_health["global_context"], dict)
+    aliases = latest_health.get("aliases")
+    assert isinstance(aliases, dict)
+    assert aliases["telemetry_queue"] == latest_health.get("telemetry_queue")
+    duration_ms = latest_health.get("duration_ms")
+    assert duration_ms is not None
+    assert pytest.approx(duration_ms, rel=1e-6) == latest_health.get("tick_duration_ms")

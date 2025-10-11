@@ -40,6 +40,8 @@ def test_simulation_loop_emits_events_via_dispatcher(tmp_path: Path) -> None:
         latest_health = dispatcher.latest_health
         assert latest_health is not None, "loop.health event was not captured by dispatcher"
         assert latest_health.get("tick") == loop.tick
+        assert "transport" in latest_health, "Health payload missing transport block"
+        assert "global_context" in latest_health, "Health payload missing global context snapshot"
 
         latest_failure = dispatcher.latest_failure
         assert latest_failure is None, "Failure event should not be recorded during healthy tick"

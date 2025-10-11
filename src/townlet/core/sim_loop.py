@@ -743,18 +743,18 @@ class SimulationLoop:
                     if isinstance(meta, dict):
                         meta.update(metadata_copy)
             self._set_policy_observation_envelope(dto_envelope)
+            global_context = self._build_tick_global_context(
+                queue_metrics=queue_metrics,
+                queue_state=queues_snapshot,
+                employment_snapshot=employment_metrics,
+                job_snapshot=job_snapshot,
+                dto_envelope=dto_envelope,
+                stability_metrics=stability_metrics,
+                perturbations=perturbation_state,
+                promotion_state=promotion_state,
+                anneal_context=anneal_context,
+            )
             if self._telemetry_port is not None:
-                global_context = self._build_tick_global_context(
-                    queue_metrics=queue_metrics,
-                    queue_state=queues_snapshot,
-                    employment_snapshot=employment_metrics,
-                    job_snapshot=job_snapshot,
-                    dto_envelope=dto_envelope,
-                    stability_metrics=stability_metrics,
-                    perturbations=perturbation_state,
-                    promotion_state=promotion_state,
-                    anneal_context=anneal_context,
-                )
                 tick_event_payload = {
                     "tick": self.tick,
                     "world": self.world,
@@ -781,24 +781,11 @@ class SimulationLoop:
             self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
             transport_status = self._build_transport_status(queue_length=len(console_results))
-            health_payload = {
-                "tick": self.tick,
-                "status": "ok",
-                "tick_duration_ms": duration_ms,
-                "failure_count": self._health.failure_count,
-                "telemetry_queue": transport_status.get("queue_length", 0),
-                "telemetry_dropped": transport_status.get("dropped_messages", 0),
-                "telemetry_flush_ms": transport_status.get("last_flush_duration_ms"),
-                "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
-                "telemetry_worker_error": transport_status.get("worker_error"),
-                "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
-                "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
-                "telemetry_payloads_total": transport_status.get("payloads_flushed_total", 0),
-                "telemetry_bytes_total": transport_status.get("bytes_flushed_total", 0),
-                "perturbations_pending": self.perturbations.pending_count(),
-                "perturbations_active": self.perturbations.active_count(),
-                "employment_exit_queue": self.world.employment.exit_queue_length(),
-            }
+            health_payload = self._build_health_payload(
+                duration_ms=duration_ms,
+                transport_status=transport_status,
+                global_context=global_context,
+            )
             if self._telemetry_port is not None:
                 self._telemetry_port.emit_event("loop.health", health_payload)
             else:  # pragma: no cover - defensive
@@ -948,6 +935,116 @@ class SimulationLoop:
                 global_context.setdefault("relationship_metrics", copy.deepcopy(dict(relationship_metrics)))
 
         return global_context
+
+    def _build_health_payload(
+        self,
+        *,
+        duration_ms: float,
+        transport_status: Mapping[str, object],
+        global_context: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        """Compose the loop.health payload using DTO context data."""
+
+        context_payload: dict[str, object] = {}
+        if isinstance(global_context, Mapping):
+            context_payload = copy.deepcopy(dict(global_context))
+
+        queue_length = int(transport_status.get("queue_length", 0) or 0)
+        dropped_messages = int(transport_status.get("dropped_messages", 0) or 0)
+        transport_payload: dict[str, object] = {
+            "provider": transport_status.get("provider"),
+            "queue_length": queue_length,
+            "dropped_messages": dropped_messages,
+            "last_flush_duration_ms": transport_status.get("last_flush_duration_ms"),
+            "payloads_flushed_total": int(transport_status.get("payloads_flushed_total", 0) or 0),
+            "bytes_flushed_total": int(transport_status.get("bytes_flushed_total", 0) or 0),
+            "auth_enabled": bool(transport_status.get("auth_enabled", False)),
+            "worker": {
+                "alive": bool(transport_status.get("worker_alive", False)),
+                "error": transport_status.get("worker_error"),
+                "restart_count": int(transport_status.get("worker_restart_count", 0) or 0),
+            },
+        }
+
+        perturbations_pending = 0
+        perturbations_active = 0
+        perturbations_payload = context_payload.get("perturbations")
+        if isinstance(perturbations_payload, Mapping):
+            pending_section = perturbations_payload.get("pending")
+            active_section = perturbations_payload.get("active")
+
+            def _coerce_count(value: object) -> int:
+                if value is None:
+                    return 0
+                if isinstance(value, Mapping):
+                    return len(value)
+                if isinstance(value, (list, tuple, set)):
+                    return len(value)
+                try:
+                    return int(value)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    return 0
+
+            perturbations_pending = _coerce_count(pending_section)
+            perturbations_active = _coerce_count(active_section)
+        else:  # Fallback to scheduler counts when context data is absent.
+            try:
+                perturbations_pending = int(self.perturbations.pending_count())
+                perturbations_active = int(self.perturbations.active_count())
+            except Exception:  # pragma: no cover - defensive
+                perturbations_pending = 0
+                perturbations_active = 0
+
+        employment_exit_queue = 0
+        employment_snapshot = context_payload.get("employment_snapshot")
+        if isinstance(employment_snapshot, Mapping):
+            pending_count = employment_snapshot.get("pending_count")
+            if isinstance(pending_count, (int, float)):
+                employment_exit_queue = int(pending_count)
+            else:
+                pending_section = employment_snapshot.get("pending")
+                if isinstance(pending_section, (list, tuple, set)):
+                    employment_exit_queue = len(pending_section)
+        else:  # Leverage context export if available.
+            context = self._world_context
+            snapshot_getter = getattr(context, "export_employment_snapshot", None)
+            if callable(snapshot_getter):
+                try:
+                    snapshot = snapshot_getter()
+                    if isinstance(snapshot, Mapping):
+                        pending_count = snapshot.get("pending_count")
+                        if isinstance(pending_count, (int, float)):
+                            employment_exit_queue = int(pending_count)
+                except Exception:  # pragma: no cover - defensive
+                    employment_exit_queue = 0
+
+        aliases: dict[str, object] = {
+            "tick_duration_ms": duration_ms,
+            "telemetry_queue": queue_length,
+            "telemetry_dropped": dropped_messages,
+            "telemetry_flush_ms": transport_payload["last_flush_duration_ms"],
+            "telemetry_worker_alive": transport_payload["worker"]["alive"],
+            "telemetry_worker_error": transport_payload["worker"]["error"],
+            "telemetry_worker_restart_count": transport_payload["worker"]["restart_count"],
+            "telemetry_console_auth_enabled": transport_payload["auth_enabled"],
+            "telemetry_payloads_total": transport_payload["payloads_flushed_total"],
+            "telemetry_bytes_total": transport_payload["bytes_flushed_total"],
+            "perturbations_pending": perturbations_pending,
+            "perturbations_active": perturbations_active,
+            "employment_exit_queue": employment_exit_queue,
+        }
+
+        payload: dict[str, object] = {
+            "tick": self.tick,
+            "status": "ok",
+            "duration_ms": duration_ms,
+            "failure_count": self._health.failure_count,
+            "transport": transport_payload,
+            "global_context": context_payload,
+        }
+        payload.update(aliases)
+        payload["aliases"] = dict(aliases)
+        return payload
 
     def _set_policy_observation_envelope(self, envelope: "ObservationEnvelope") -> None:
         """Persist the current observation envelope and notify the backend."""

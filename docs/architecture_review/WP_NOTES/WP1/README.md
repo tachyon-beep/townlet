@@ -112,7 +112,7 @@ Implication: new WP1 dummies should integrate cleanly with existing stub tests, 
   - `StdoutTelemetryAdapter` wraps `TelemetryPublisher` as a sink; dispatcher events now carry DTO `global_context`, so console/observer tooling reads snapshots without touching legacy getters (see `tests/helpers/telemetry.build_global_context` for curated fixtures).
 - `ConsoleRouter` and `HealthMonitor` are now instantiated by `SimulationLoop`; console commands drain through the router (while still forwarding to the legacy runtime for now) and the health monitor emits baseline queue/event metrics via the telemetry port.
 - Added a transitional `PolicyController` facade so the loop can gradually move off `PolicyRuntime` while the scripted backend continues to supply anneal/metadata hooks.
-- Further work: complete the failure/health telemetry cleanup (T4.4c/d), move policy-side callbacks into adapters, and remove the remaining legacy world touch points during the ongoing composition refactor.
+- Further work: finish the failure telemetry cleanup (T4.4d), move policy-side callbacks into adapters, and remove the remaining legacy world touch points during the ongoing composition refactor. *(Health payloads (T4.4c) now expose structured transport/context data with alias fallbacks; retire the aliases once dashboards/CLI migrate.)*
 
 ### Step 3 Progress (Factories)
 - Added `townlet.factories` package with shared registry utilities and domain-specific factory helpers (`create_world`, `create_policy`, `create_telemetry`).
