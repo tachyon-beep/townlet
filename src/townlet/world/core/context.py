@@ -10,6 +10,12 @@ from typing import Any, TYPE_CHECKING
 
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.world.actions import Action, apply_actions
+from townlet.world.core.runtime_adapter import WorldRuntimeAdapter, ensure_world_adapter
+from townlet.world.dto import build_observation_envelope
+from townlet.world.dto.observation import ObservationEnvelope
+from townlet.world.observations.context import (
+    agent_context as observation_agent_context,
+)
 from townlet.world.rng import RngStreamManager
 from townlet.world.systems import default_systems
 from townlet.world.systems.base import SystemContext, SystemStep
@@ -130,6 +136,85 @@ class WorldContext:
                 f"Unsupported action payload for agent '{agent_id}': {type(payload)!r}"
             )
 
+    def observe(
+        self,
+        agent_ids: Iterable[str] | None = None,
+        *,
+        actions: Mapping[str, object] | None = None,
+        terminated: Mapping[str, bool] | None = None,
+        termination_reasons: Mapping[str, str] | None = None,
+        rewards: Mapping[str, float] | None = None,
+        reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
+        policy_snapshot: Mapping[str, object] | None = None,
+        policy_metadata: Mapping[str, object] | None = None,
+        rivalry_events: Iterable[Mapping[str, object]] | None = None,
+        stability_metrics: Mapping[str, object] | None = None,
+        promotion_state: Mapping[str, object] | None = None,
+        anneal_context: Mapping[str, object] | None = None,
+    ) -> ObservationEnvelope:
+        if self.observation_service is None:
+            raise RuntimeError("WorldContext observation service not configured")
+
+        adapter = ensure_world_adapter(self.state)
+        terminated_map = dict(terminated or {})
+        raw_batch = self.observation_service.build_batch(adapter, terminated_map)
+        contexts = {
+            agent_id: observation_agent_context(adapter, agent_id)
+            for agent_id in raw_batch.keys()
+        }
+
+        target_ids = set(agent_ids) if agent_ids is not None else raw_batch.keys()
+        filtered_batch = {
+            agent_id: raw_batch[agent_id]
+            for agent_id in target_ids
+            if agent_id in raw_batch
+        }
+        filtered_contexts = {
+            agent_id: contexts.get(agent_id, {})
+            for agent_id in filtered_batch.keys()
+        }
+
+        filtered_actions = {}
+        if actions:
+            for agent in filtered_batch.keys():
+                if agent in actions:
+                    filtered_actions[str(agent)] = _to_mapping(actions[agent])
+
+        return build_observation_envelope(
+            tick=self.state.tick,
+            observations=filtered_batch,
+            actions=filtered_actions,
+            terminated={str(agent): bool(terminated_map.get(agent, False)) for agent in filtered_batch.keys()},
+            termination_reasons={str(agent): str((termination_reasons or {}).get(agent, "")) for agent in filtered_batch.keys()},
+            queue_metrics=self.export_queue_metrics(),
+            rewards={str(agent): float((rewards or {}).get(agent, 0.0)) for agent in filtered_batch.keys()},
+            reward_breakdown={
+                str(agent): {
+                    str(component): float(value)
+                    for component, value in ((reward_breakdown or {}).get(agent, {})).items()
+                }
+                for agent in filtered_batch.keys()
+            },
+            perturbations=self.export_perturbation_state(),
+            policy_snapshot=_to_mapping(policy_snapshot),
+            policy_metadata=_to_mapping(policy_metadata),
+            rivalry_events=list(rivalry_events or []),
+            stability_metrics=_to_mapping(stability_metrics),
+            promotion_state=_to_mapping(promotion_state) or None,
+            rng_seed=getattr(self.state, "rng_seed", None),
+            queues=self.export_queue_state(),
+            running_affordances=self.export_running_affordances(),
+            relationship_snapshot=self.export_relationship_snapshot(),
+            relationship_metrics=self.export_relationship_metrics(),
+            agent_snapshots=self.state.agent_snapshots_view(),
+            job_snapshot=self.export_job_snapshot(),
+            queue_affinity_metrics=self.export_queue_affinity_metrics(),
+            employment_snapshot=self.export_employment_snapshot(),
+            economy_snapshot=self.export_economy_snapshot(),
+            anneal_context=_to_mapping(anneal_context),
+            agent_contexts=filtered_contexts,
+        )
+
     def tick(
         self,
         *,
@@ -192,6 +277,103 @@ class WorldContext:
         return RuntimeStepResult(**result_payload)
 
     # ------------------------------------------------------------------
+    # Snapshot helpers used for observation/telemetry assembly
+    # ------------------------------------------------------------------
+    def export_queue_metrics(self) -> Mapping[str, int]:
+        try:
+            raw = self.queue_manager.metrics()
+            return {str(key): int(value) for key, value in raw.items()}
+        except Exception:  # pragma: no cover - defensive
+            return {}
+
+    def export_queue_affinity_metrics(self) -> Mapping[str, int]:
+        try:
+            raw = self.queue_manager.performance_metrics()
+            return {str(key): int(value) for key, value in raw.items()}
+        except Exception:  # pragma: no cover - defensive
+            return {}
+
+    def export_queue_state(self) -> Mapping[str, Any]:
+        try:
+            snapshot = self.queue_manager.export_state()
+            return snapshot if isinstance(snapshot, Mapping) else {}
+        except Exception:  # pragma: no cover - defensive
+            return {}
+
+    def export_running_affordances(self) -> Mapping[str, Any]:
+        try:
+            return self.affordance_service.runtime_snapshot()
+        except Exception:  # pragma: no cover - defensive
+            return {}
+
+    def export_relationship_snapshot(self) -> Mapping[str, Mapping[str, Mapping[str, float]]]:
+        try:
+            return self.relationships.snapshot()
+        except Exception:  # pragma: no cover - defensive
+            return {}
+
+    def export_relationship_metrics(self) -> Mapping[str, Any]:
+        getter = getattr(self.relationships, "metrics_snapshot", None)
+        if callable(getter):
+            try:
+                metrics = getter()
+                if isinstance(metrics, Mapping):
+                    return metrics
+            except Exception:  # pragma: no cover - defensive
+                return {}
+        return {}
+
+    def export_employment_snapshot(self) -> Mapping[str, Any]:
+        getter = getattr(self.employment_service, "snapshot", None)
+        if callable(getter):
+            try:
+                snapshot = getter()
+                if isinstance(snapshot, Mapping):
+                    return snapshot
+            except Exception:  # pragma: no cover - defensive
+                return {}
+        return {}
+
+    def export_job_snapshot(self) -> Mapping[str, Mapping[str, object]]:
+        snapshot: dict[str, dict[str, object]] = {}
+        for agent_id, agent in self.state.agent_snapshots_view().items():
+            job_payload: dict[str, object] = {
+                "job_id": getattr(agent, "job_id", None),
+                "on_shift": bool(getattr(agent, "on_shift", False)),
+                "shift_state": getattr(agent, "shift_state", None),
+                "lateness_counter": int(getattr(agent, "lateness_counter", 0)),
+                "attendance_ratio": float(getattr(agent, "attendance_ratio", 0.0)),
+                "exit_pending": bool(getattr(agent, "exit_pending", False)),
+            }
+            inventory = getattr(agent, "inventory", None)
+            if isinstance(inventory, Mapping):
+                job_payload["inventory"] = dict(inventory)
+            snapshot[str(agent_id)] = job_payload
+        return snapshot
+
+    def export_economy_snapshot(self) -> Mapping[str, Any]:
+        getter = getattr(self.economy_service, "snapshot", None)
+        if callable(getter):
+            try:
+                snapshot = getter()
+                if isinstance(snapshot, Mapping):
+                    return snapshot
+            except Exception:  # pragma: no cover - defensive
+                return {}
+        return {}
+
+    def export_perturbation_state(self) -> Mapping[str, Any]:
+        getter = getattr(self.perturbation_service, "latest_state", None)
+        if callable(getter):
+            try:
+                state = getter()
+                if isinstance(state, Mapping):
+                    return state
+            except Exception:  # pragma: no cover - defensive
+                return {}
+        return {}
+
+    # ------------------------------------------------------------------
     # Diagnostics
     # ------------------------------------------------------------------
     def snapshot(self) -> Mapping[str, object]:
@@ -227,3 +409,9 @@ class WorldContext:
 
 
 __all__ = ["WorldContext"]
+def _to_mapping(value: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}

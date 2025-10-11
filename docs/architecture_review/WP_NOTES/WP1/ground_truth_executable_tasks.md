@@ -114,3 +114,5 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **OBS-Prep6** Write unit/integration tests covering: (a) per-agent DTO fields (needs, wallet, queue state, pending intent), (b) terminated flag propagation, (c) global context snapshots. Use fixture worlds to ensure determinism.
 - **OBS-Prep7** Update `SimulationLoop` to consume the new `WorldContext.observe` method instead of rebuilding envelopes manually; adjust policy/telemetry emission code accordingly and run DTO parity harness to confirm no regressions.
 - Completed **OBS-Prep3** – threaded optional observation service through `WorldState` and `WorldContext` construction (no behavioural changes).
+- Completed **OBS-Prep4** – added context-level snapshot helper methods (`export_queue_metrics`, `export_relationship_snapshot`, etc.) for DTO assembly.
+- Completed **OBS-Prep5** – implemented `WorldContext.observe` returning DTO envelopes, added helper exports (job snapshot, mapping conversion), and regression tests (`tests/world/test_world_context_observe.py`).

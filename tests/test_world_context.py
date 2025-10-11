@@ -6,6 +6,7 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.observations import ObservationBuilder
 from townlet.world import AgentSnapshot
 from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.core import WorldContext
@@ -17,6 +18,7 @@ def simulation_loop() -> SimulationLoop:
     loop = SimulationLoop(config)
     loop.world.agents.clear()
     loop.world.objects.clear()
+    loop.world.context.observation_service = ObservationBuilder(config=config)
     return loop
 
 
@@ -218,3 +220,9 @@ def test_world_context_tick_triggers_nightly_reset(
     assert isinstance(result.termination_reasons, dict)
     expected_tick = loop._ticks_per_day or 1
     assert captured == [expected_tick]
+
+
+def test_world_context_observe_uses_configured_service(simulation_loop: SimulationLoop) -> None:
+    context = simulation_loop.world.context
+    envelope = context.observe()
+    assert envelope.tick == context.state.tick
