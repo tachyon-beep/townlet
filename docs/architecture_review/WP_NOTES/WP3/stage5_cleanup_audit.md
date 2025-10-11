@@ -137,3 +137,9 @@ Use this audit as the starting point for the Stage 5 cleanup implementation.
   (`pytest tests/core/test_no_legacy_observation_usage.py tests/test_telemetry_surface_guard.py -q`).
 - **2025-10-11 — S6.B parity rerun:** DTO parity harness, world-context parity, and ML smoke tests
   passed (`pytest tests/core/test_sim_loop_dto_parity.py tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py -q`), reaffirming schema v0.2.0 parity (feature_dim=81, map_shape=(4, 11, 11)).
+
+- **2025-10-11 — S6.E regression sweep:** Commands executed (failures expected):
+  - `pytest -q` (69 failed, 686 passed, 1 skipped)
+  - `ruff check src tests` (234 findings)
+  - `mypy src` (600 errors)
+  Results noted for future remediation during Stage 6 closure.

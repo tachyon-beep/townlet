@@ -284,11 +284,13 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
 - [x] **S6.D – Release artefacts**
   - Update `CHANGELOG.md` with the DTO-only telemetry/policy milestone and link to migration notes.
   - Produce operator/ML comms template in `docs/ops/TELEMETRY_RELEASE_CHECKLIST.md` or new note, highlighting schema bump, summary metrics, and validation commands.
-- [ ] **S6.E – Full regression & linters**
+- [x] **S6.E – Full regression & linters**
   - Run full `pytest` (respecting slow markers if necessary), `ruff check src tests`, and `mypy src`.
   - Capture command invocations and key outputs in `stage5_cleanup_audit.md` (or new Stage 6 log) and file issues for any failures.
 - [ ] **S6.F – Final cleanups**
   - Delete legacy DTO shim utilities (if any remain) and ensure adapters no longer expose observation dicts.
+  - Refresh console/training/test fixtures to match the DTO summary payloads and updated policy ports (see failing suites in S6.E list).
+  - Fix factory/port registry wiring so protocol checks succeed without legacy aliases.
   - Confirm no outstanding TODOs block WP1/WP2 sign-off; update `WP3/status.md` with final checklist and mark Stage 6 complete.
 
 ---

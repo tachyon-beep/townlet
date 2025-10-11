@@ -214,10 +214,7 @@ def sample_config() -> Any:
 def test_registry_resolves_default_world(sample_config: Any) -> None:
     world = resolve_world(
         "default",
-        world=_StubWorld(),
-        lifecycle=_StubLifecycle(),
-        perturbations=_StubPerturbations(),
-        ticks_per_day=1,
+        config=sample_config,
     )
     assert isinstance(world, WorldRuntime)
 

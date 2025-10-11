@@ -41,13 +41,15 @@ class FactoryRegistry:
         return factory(**kwargs)
 
 
-_world_registry = FactoryRegistry("world")
+_legacy_world_registry = FactoryRegistry("world")
 _policy_registry = FactoryRegistry("policy")
 _telemetry_registry = FactoryRegistry("telemetry")
 
 
 def world_registry() -> FactoryRegistry:
-    return _world_registry
+    # Deprecated: retained for backward compatibility while callers migrate to
+    # ``townlet.factories.world_factory`` provider registration.
+    return _legacy_world_registry
 
 
 def policy_registry() -> FactoryRegistry:
@@ -65,7 +67,16 @@ def _ensure_protocol(instance: object, protocol: type[T_concrete], name: str) ->
 
 
 def resolve_world(name: str, **kwargs: Any) -> WorldRuntime:
-    instance = _world_registry.resolve(name, **kwargs)
+    try:
+        from townlet.factories.registry import ConfigurationError as FactoryConfigurationError  # local import to avoid cycles
+        from townlet.factories.world_factory import create_world as _create_world  # local import to avoid cycles
+
+        instance = _create_world(provider=name, **kwargs)
+    except FactoryConfigurationError:
+        # Fallback for legacy registrations that still rely on the old
+        # registry API. This path is temporary and can be removed once all
+        # callers migrate to ``townlet.factories``.
+        instance = _legacy_world_registry.resolve(name, **kwargs)
     return _ensure_protocol(instance, WorldRuntime, name)
 
 
@@ -85,10 +96,6 @@ from townlet.policy.models import torch_available  # noqa: E402  pylint: disable
 from townlet.policy.runner import PolicyRuntime  # noqa: E402  pylint: disable=wrong-import-position
 from townlet.telemetry.fallback import StubTelemetrySink  # noqa: E402  pylint: disable=wrong-import-position
 from townlet.telemetry.publisher import TelemetryPublisher  # noqa: E402  pylint: disable=wrong-import-position
-from townlet.world.runtime import WorldRuntime  # noqa: E402  pylint: disable=wrong-import-position
-
-_world_registry.register("default", lambda **kwargs: WorldRuntime(**kwargs))
-_world_registry.register("facade", lambda **kwargs: WorldRuntime(**kwargs))
 _policy_registry.register("scripted", lambda **kwargs: PolicyRuntime(**kwargs))
 _policy_registry.register("default", lambda **kwargs: PolicyRuntime(**kwargs))
 _policy_registry.register("stub", lambda **kwargs: StubPolicyBackend(**kwargs))
