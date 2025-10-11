@@ -99,16 +99,15 @@ Each section expands the issues from `ground_truth_issues.md` into concrete task
 - **T4.3** *(Completed 2025-10-10)* Ensure policy decisions operate on cached DTO envelopes; drop observation dict/collector caches (loop now pulls queue/employment/job metrics directly from `WorldContext.export_*`).
 - **T4.4** Refresh loop tick/health/failure telemetry so payloads flow entirely through the telemetry port (no raw publisher/world references).
   - **T4.4a** *(Completed 2025-10-10)* Expose `transport_status()` on the telemetry port and update the loop to prefer it over publisher helpers.
-  - **T4.4b** In progress — remaining work:
+  - **T4.4b** *(Completed 2025-10-11)*:
     - **T4.4b-A – Publisher ingestion cleanup** *(Completed 2025-10-10)*  
       DTO `global_context` now seeds queue/relationship/job/economy/employment/utilities snapshots; `_capture_affordance_runtime` consumes DTO running/reservation payloads and emits single-shot warnings when fields are missing. Regression coverage lives in `tests/test_telemetry_surface_guard.py`.
     - **T4.4b-B – Aggregator/builders** *(Completed 2025-10-10)*  
       `TelemetryAggregator.collect_tick` takes `global_context`, `StreamPayloadBuilder` prefers DTO data when explicit kwargs are absent, and aggregation tests validate the DTO-only path.
     - **T4.4b-C – Consumer migration** *(Completed 2025-10-10)*  
       Console, CLI, observer dashboard, and conflict telemetry consumers now rely on dispatcher DTO `global_context` payloads; `tests/helpers/telemetry.build_global_context` seeds DTO fixtures for console/telemetry suites, and regression tests (`tests/test_console_commands.py`, `tests/test_conflict_telemetry.py`, `tests/test_observer_ui_dashboard.py`) cover the DTO path.
-    - **T4.4b-D – Documentation & regression**
-      1. Refresh telemetry docs/ADR sections to reference `global_context` as the canonical queue/economy/relationship source.
-      2. Run the telemetry/console regression subset (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_conflict_telemetry.py tests/test_console_commands.py tests/test_observer_ui_dashboard.py`) and record outcomes in WP1 status/pre-brief notes. *(Executed 2025-10-10; see WP1 status for command log.)*
+    - **T4.4b-D – Documentation & regression** *(Completed 2025-10-11)*
+      - ADR-001, WP1 status/pre-brief, and parity notes now describe the DTO-first telemetry path and reference the regression bundle (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py -q`).
   - **T4.4c** Rebuild `loop.health` payloads using the new transport snapshot + context exports; adjust `HealthMonitor`, publisher caches, CLI/console helpers, and automated tests. *(Completed 2025-10-11 — structured payload + alias fallback implemented; see `T4_4c_health_schema.md` for schema notes.)*
   - **T4.4d** Align `loop.failure` payloads with the health schema (transport block, snapshot path, error info) and ensure failure handling emits via the telemetry port only; update tests/CLI consumers. *(Completed 2025-10-11 — structured failure payload + regression bundle; see `T4_4d_failure_schema.md`.)*
 - **T4.5a** Add new smoke test `tests/core/test_sim_loop_modular_smoke.py` covering two ticks with default providers, asserting DTO envelope + telemetry events. *(Completed 2025-10-10 — smoke verifies DTO envelopes and console telemetry on default providers.)*
