@@ -1,4 +1,4 @@
-# WP2 Pre-Compact Brief (2025-10-10)
+# WP2 Pre-Compact Brief (2025-10-11)
 
 Snapshot of WP2 so the next session can resume without re-auditing prior work.
 
@@ -14,6 +14,8 @@ Snapshot of WP2 so the next session can resume without re-auditing prior work.
 3. Prepare regression coverage for the default provider swap (factory tests, loop smokes) when WP1 Step 8 resumes.
 
 ## Key notes
-- `ObservationBuilder` remains the interim source for observation tensors; swap to DTO-native observers after WP3 Stage 5.
+- Observation building now lives inside the world context (via
+  `WorldObservationService`); adapters no longer own the builder directly, but
+  final DTO-only observers will replace the wrapper once WP3 Stage 6 closes.
 - Console/telemetry orchestration is owned by WP1; WP2’s responsibility is to expose port-friendly world services and drop legacy shims when DTO parity is confirmed.
 - Track dependencies in `WP3C_plan.md` and WP1 status so we remove the legacy world handles immediately after DTO-only consumers ship.

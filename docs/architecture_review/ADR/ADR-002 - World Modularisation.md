@@ -61,6 +61,10 @@ observers such as telemetry, and drives all mutation through a deterministic tic
 
 - Provide dummy/test helpers in `townlet/testing/dummies.py` so loop-level tests can exercise the
   modular world without heavy dependencies.
+- Observation services now live inside the context (`WorldObservationService`) and wrap
+  the legacy builder during migration; adapters should depend on the context API
+  rather than constructing `ObservationBuilder` instances directly.
+
 
 - Register `WorldContext` as the default provider in the world factory (`create_world`). Legacy
   world modules are retired once references are migrated.

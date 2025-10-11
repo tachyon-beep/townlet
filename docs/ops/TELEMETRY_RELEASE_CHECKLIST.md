@@ -37,3 +37,8 @@ Use this checklist whenever enabling or modifying the telemetry transport in sta
 - Console snapshot JSON (with transport block)
 - Observer dashboard screenshot (transport panel)
 - `docs/samples/telemetry_stream_sample.jsonl` refresh (if schema fields changed)
+
+### DTO-Only Telemetry Rollout Notes (2025-10-11)
+- DTO schema v0.2.0 parity confirmed (`pytest tests/core/test_sim_loop_dto_parity.py tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py -q`).
+- Health/failure payloads include `summary` metrics; ensure dashboards parse the new structure (see docs/design/WEB_TELEMETRY_SCHEMA.md).
+- Notify analytics/ML teams with `docs/architecture_review/WP_NOTES/WP3/dto_migration.md` summary and sample payloads.

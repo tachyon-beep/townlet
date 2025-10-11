@@ -1,4 +1,4 @@
-# WP3 Pre-Compact Brief — 2025-10-10
+# WP3 Pre-Compact Brief — 2025-10-11
 
 Latest context snapshot so we can resume quickly after memory compaction.
 
@@ -21,13 +21,21 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Stage 3E safeguards added: DTO parity harness re-run, policy controllers guard against missing envelopes, telemetry policy-event smokes land, and rollout capture tests continue to validate DTO trajectory plumbing.
 - Stage 4 complete: ML smoke test (`tests/policy/test_dto_ml_smoke.py -q`) compares DTO vs ObservationBuilder features, enforces baseline dimensions, and validates logits/actions under a random-weight Torch network.
 - Stage 5 update: `SimulationLoop` now emits DTO-only payloads, `TelemetryPublisher` ingests dispatcher events with policy metadata and DTO envelopes, and observer/conflict telemetry tests drive the dispatcher directly (legacy `_ingest_loop_tick` shim removed). DTO dashboards pull from the new caches (`latest_policy_metadata_snapshot`, `latest_observation_envelope`). Console commands flow solely through the router with no `runtime.queue_console` fallback. Targeted regression bundles ran on 2025-10-11 (see `stage5_cleanup_audit.md` for commands); full-suite, lint, and type checks remain scheduled for Stage 6.
-- Stage 6 guardrails kicking off: `tests/core/test_no_legacy_observation_usage.py` blocks new ObservationBuilder/legacy payload references in runtime code, and the telemetry surface guard asserts DTO envelopes/metadata on each tick. Adapter cleanup + full regression sweep remain before sign-off.
+- Stage 6 guardrails underway: `tests/core/test_no_legacy_observation_usage.py` and
+  `tests/test_telemetry_surface_guard.py` were re-run after removing the last
+  `ObservationBuilder` imports from the world package (now uses
+  `WorldObservationService`). Parity harness + ML smoke tests were re-executed on
+  2025-10-11 confirming DTO schema v0.2.0 outputs (feature_dim=81,
+  map_shape=(4, 11, 11)). Remaining Stage 6 items are the documentation refresh,
+  full-suite pytest/ruff/mypy sweep, and release notes.
 
 ## Outstanding Work (DTO Rollout)
-1. Schedule Stage 6 regression sweep: run full `pytest`, `ruff check`, and `mypy`, then drop remaining world adapter shims once DTO-only consumers are confirmed.
-2. Extend parity harness to cover reward breakdown comparisons and run at least
-   one ML-backed scenario (short PPO/BC run) to prove DTO-only parity.
-3. Document schema & parity results in WP1/WP2 once DTO rollout completes; broadcast release notes/CHANGELOG for DTO-only telemetry.
+1. Documentation refresh (ADR-001/002, WP1/WP2/WP3 briefs) and release comms for
+   the DTO-only telemetry/policy milestone.
+2. Full Stage 6 regression sweep: run `pytest`, `ruff check`, and `mypy`, then
+   capture results in the Stage 6 audit log.
+3. Final removal of any adapter shims or TODOs blocking WP1/WP2 sign-off once the
+   above work is green.
 
 ## Notes / Reminders
 - Use sorted agent IDs + shared action vocab from `BehaviorBridge` when

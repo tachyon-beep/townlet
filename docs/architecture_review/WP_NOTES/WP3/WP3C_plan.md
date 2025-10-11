@@ -277,11 +277,11 @@ preserving telemetry output until Stage 5 retires the legacy payloads.
 - [x] **S6.B – Schema & parity confirmation**
   - Re-execute DTO parity harness (`tests/core/test_sim_loop_dto_parity.py`, `tests/policy/test_dto_ml_smoke.py`, `tests/world/test_world_context_parity.py`) and append hash digests to `dto_parity/ml_dimensions.txt`.
   - Capture summary of parity results in `dto_migration.md` (needs/wallet/reward deltas, ML logits parity).
-- [ ] **S6.C – Documentation refresh**
+- [x] **S6.C – Documentation refresh**
   - Update WP1/WP2/WP3 `status.md`, `pre_compact_brief.md`, and `context_snapshot.md` with Stage 6 readiness, referencing the structured health/failure payloads.
   - Revise ADR-001 (ports/telemetry) and ADR-002 (world modularisation) to point at DTO schema v0.2.0, summary metrics, and guardrails.
   - Expand `docs/architecture_review/WP_NOTES/WP3/dto_migration.md` with downstream migration guidance (dashboard fields, training dataset ingestion, telemetry API changes).
-- [ ] **S6.D – Release artefacts**
+- [x] **S6.D – Release artefacts**
   - Update `CHANGELOG.md` with the DTO-only telemetry/policy milestone and link to migration notes.
   - Produce operator/ML comms template in `docs/ops/TELEMETRY_RELEASE_CHECKLIST.md` or new note, highlighting schema bump, summary metrics, and validation commands.
 - [ ] **S6.E – Full regression & linters**

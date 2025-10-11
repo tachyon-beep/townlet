@@ -1,4 +1,4 @@
-# WP3 Context Snapshot (2025-10-10)
+# WP3 Context Snapshot (2025-10-11)
 
 Use this as reorientation material if the working memory is compacted. It summarises current state, blockers, and the next concrete actions across WP1–WP3.
 
@@ -10,7 +10,9 @@ Use this as reorientation material if the working memory is compacted. It summar
   - `StdoutTelemetryAdapter` and `StubTelemetrySink` emit events through the dispatcher; publisher shims have been removed.
   - HTTP transport now posts dispatcher events; streaming/WebSocket transports remain inactive until downstream consumers need them.
 - **Loop Emission**: `SimulationLoop` emits events exclusively for console results, stability metrics, loop health/failure, and loop tick; it no longer calls `record_*` directly.
-- **Next steps**: Expand transport coverage to streaming/WebSocket once required and keep parity checks running while the DTO rollout proceeds.
+- **Next steps**: Documentation/release updates and the Stage 6 regression sweep are the
+  remaining blockers; streaming/WebSocket transport work stays queued until a consumer
+  requests it.
 
 ## Policy DTOs (WP3 Section 2)
 
@@ -28,19 +30,18 @@ Use this as reorientation material if the working memory is compacted. It summar
 - `TrajectoryService.flush_transitions` accepts DTO envelopes (with anneal context preserved) and the
   training orchestrator consumes DTO-backed trajectory frames (`tests/policy/test_trajectory_service_dto.py`,
   `tests/policy/test_training_orchestrator_capture.py`).
-- Scripted parity smokes (`tests/test_behavior_personality_bias.py`) now pass; reward/ML parity
-  remains outstanding for DTO-only validation.
-- Todo:
-  - Define observation DTOs from `WorldContext`/observation builder.
-  - DTO-driven policy events (`policy.metadata` / `policy.possession` / `policy.anneal.update`) stream from `SimulationLoop`; finish migrating ML adapters to the DTO pathway before retiring remaining legacy hooks.
-  - DTO ML smoke harness (`tests/policy/test_dto_ml_smoke.py`) keeps torch-based parity between DTO and legacy feature tensors; integrate into automated ML workflows next.
-  - Adjust training/orchestrator code to the new DTO flow and record updated parity baselines.
+- Scripted parity smokes (`tests/test_behavior_personality_bias.py`) pass, and
+  DTO parity + ML smoke suites were re-run on 2025-10-11 confirming schema
+  v0.2.0 metrics (feature_dim=81, map_shape=(4, 11, 11)). Remaining policy work is
+  documentation + release coordination; adapters already operate DTO-only.
 
 ## Simulation Loop Cleanup (WP3 Section 3)
 
 - Console commands now flow through `ConsoleRouter.enqueue`, which forwards them to the world runtime and records telemetry; if the router is absent the loop drops buffered commands with a warning. `SimulationLoop.step` no longer calls `runtime.queue_console` and the new smoke (`tests/core/test_sim_loop_modular_smoke.py`) covers DTO envelopes plus console telemetry.
 - World factory + adapter always operate on `WorldContext.observe`; the legacy ObservationBuilder fallback is gone from the loop, and `DefaultWorldAdapter.observe` simply proxies the context with fresh unit coverage in `tests/adapters/test_default_world_adapter.py`. Remaining work is to migrate adapter-side observation helpers/tests to the DTO-native path (T2.4) and keep ML parity in sync.
-- Plan: finish ML parity work, complete failure/snapshot refactors, add the promised health-monitor smokes, and mark WP1 Step 8 / WP2 Step 7 complete. Snapshot exports now capture the context RNG seed so resumed runs stay deterministic.
+- Next steps: finish Stage 6 documentation/release items, run the full regression
+  sweep, and then hand off to WP1/WP2 for final port cleanup. Snapshot exports already
+  capture the context RNG seed so resumed runs stay deterministic.
 
 ## Cross-Package Dependencies
 
@@ -51,9 +52,11 @@ Use this as reorientation material if the working memory is compacted. It summar
 
 ## Immediate Next Steps
 
-1. **Telemetry**: Complete T4.2b by routing console result emissions entirely through the dispatcher (`TelemetryPublisher.emit_event`) and removing any lingering direct writer calls.
-2. **Loop Smokes**: Implement T4.5a integration tests (`tests/core/test_sim_loop_modular_smoke.py`) exercising default providers plus console routing.
-3. **Adapter Coverage**: Expand adapter tests (T2.4) to cover the DTO-only observe path and guard against regression.
-4. **Docs**: Update ADR-001 / console docs once telemetry + loop cleanup completes; sync WP1/WP2 briefs with the latest DTO-only architecture.
+1. Stage 6 documentation refresh (ADR-001/002, WP briefs, dto_migration guide) and prepare
+   release comms for the DTO-only milestone.
+2. Run the full regression sweep (`pytest`, `ruff check`, `mypy`) and record results in the
+   Stage 6 audit.
+3. Remove any lingering DTO transition shims and coordinate WP1/WP2 sign-off once the
+   above steps are green.
 
 Keep this snapshot updated if major structural decisions change.

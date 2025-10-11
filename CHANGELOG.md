@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 ### Added
+
+- Telemetry and policy pipeline now emit DTO-only payloads with structured `summary` metrics; 
+  guardrails, parity harness (feature_dim=81, map_shape=(4, 11, 11)), and console docs updated.
 - Runtime-checkable protocols for agent, relationship, and employment services (`townlet.world.agents.interfaces`).
 - `AffordanceEnvironment` wiring in `world/affordances/` plus service-focused unit tests (`tests/test_agents_services.py`).
 - Read-only `WorldRuntimeAdapter` façade (`townlet.world.core.runtime_adapter`) and observation/telemetry adapter smoke tests (`tests/test_observation_builder_parity.py`, `tests/test_telemetry_adapter_smoke.py`).

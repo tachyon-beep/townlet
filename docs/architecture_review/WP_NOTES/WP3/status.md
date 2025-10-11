@@ -1,6 +1,6 @@
 # WP3 Status
 
-**Current state (2025-10-10)**
+**Current state (2025-10-11)**
 - Scoping complete: WP3 owns the telemetry sink rework, policy observation flow, and the final simulation loop cleanup.
 - Event schema drafted (`event_schema.md`) covering `loop.tick`, `loop.health`, `loop.failure`, `console.result`, and policy/stability payloads.
 - `TelemetryEventDispatcher` implemented with bounded queue/rivalry caches and subscriber hooks; Stdout adapter now routes lifecycle events through the dispatcher, and the stub sink logs events via the same path.
@@ -21,7 +21,10 @@
   - `pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_events.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/orchestration/test_console_health_smokes.py tests/test_console_router.py tests/core/test_sim_loop_modular_smoke.py tests/core/test_sim_loop_with_dummies.py -q`
   - `pytest tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py tests/core/test_sim_loop_dto_parity.py -q`
   Snapshot handling now records the context RNG seed so resumed runs stay deterministic; the full-suite + lint/type sweep is scheduled for Stage 6.
-- **Stage 6 (guardrails & docs)**: Added `tests/core/test_no_legacy_observation_usage.py` to block ObservationBuilder/legacy payload usage in runtime code and extended `tests/test_telemetry_surface_guard.py` to assert DTO envelopes/metadata on every tick. Documentation/ADR refresh, world adapter cleanup, and the full regression sweep remain before closure.
+- **Stage 6 (guardrails & docs)**: Guard tests were re-run after removing the last
+  `ObservationBuilder` imports from the world package; telemetry surface checks remain
+  green. Documentation/ADR refresh, the full regression sweep (pytest/ruff/mypy), and
+  release comms are the remaining closure tasks.
 - **WP3B complete:** queue/affordance/employment/economy/relationship systems now run entirely through modular services. `WorldContext.tick` no longer calls legacy apply/resolve helpers, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and targeted system tests (`tests/world/test_systems_*.py`) lock the behaviour. World-level smokes (`pytest tests/world -q`) pass with the bridge removed.
 - Behaviour parity smokes (`tests/test_behavior_personality_bias.py`) remain green; DTO parity harness awaits reward/ML scenarios under WP3C.
 - Remaining work packages:
