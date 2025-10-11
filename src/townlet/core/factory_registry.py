@@ -41,15 +41,8 @@ class FactoryRegistry:
         return factory(**kwargs)
 
 
-_legacy_world_registry = FactoryRegistry("world")
 _policy_registry = FactoryRegistry("policy")
 _telemetry_registry = FactoryRegistry("telemetry")
-
-
-def world_registry() -> FactoryRegistry:
-    # Deprecated: retained for backward compatibility while callers migrate to
-    # ``townlet.factories.world_factory`` provider registration.
-    return _legacy_world_registry
 
 
 def policy_registry() -> FactoryRegistry:
@@ -67,16 +60,9 @@ def _ensure_protocol(instance: object, protocol: type[T_concrete], name: str) ->
 
 
 def resolve_world(name: str, **kwargs: Any) -> WorldRuntime:
-    try:
-        from townlet.factories.registry import ConfigurationError as FactoryConfigurationError  # local import to avoid cycles
-        from townlet.factories.world_factory import create_world as _create_world  # local import to avoid cycles
+    from townlet.factories.world_factory import create_world as _create_world  # local import to avoid cycles
 
-        instance = _create_world(provider=name, **kwargs)
-    except FactoryConfigurationError:
-        # Fallback for legacy registrations that still rely on the old
-        # registry API. This path is temporary and can be removed once all
-        # callers migrate to ``townlet.factories``.
-        instance = _legacy_world_registry.resolve(name, **kwargs)
+    instance = _create_world(provider=name, **kwargs)
     return _ensure_protocol(instance, WorldRuntime, name)
 
 

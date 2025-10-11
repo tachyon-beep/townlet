@@ -13,7 +13,7 @@
 - Stage 3C in progress: `TrajectoryService` consumes DTO envelopes (`tests/policy/test_trajectory_service_dto.py`) and the training orchestrator captures DTO-backed rollouts (`tests/policy/test_training_orchestrator_capture.py`); replay pipelines no longer touch `loop.observations`.
 - **Stage 3D**: policy ports/backends now advertise DTO envelope support, `resolve_policy_backend` enforces the capability check, `StubPolicyBackend` emits a `DeprecationWarning` for legacy observation batches, and `SimulationLoop` streams `policy.metadata` / `policy.possession` / `policy.anneal.update` events through the dispatcher.
 - **Stage 3C DTO path cleanup**: legacy observation batches are no longer cached/passed to policy providers; `TrajectoryService`, `PolicyController`, and adapters operate strictly on DTO envelopes.
-- **Stage 3C dataset enrichment (new)**: trajectory frames now embed DTO agent context (`needs`, `wallet`, job, queue state, pending intent) plus schema metadata, and replay samples persist anneal context so PPO/BC datasets retain the richer DTO view.
+- **Stage 3C dataset enrichment**: trajectory frames now embed DTO agent context (`needs`, `wallet`, job, queue state, pending intent) plus schema metadata, and replay samples persist anneal context so PPO/BC datasets retain the richer DTO view.
 - **DTO export bridge**: `RolloutBuffer.save` writes DTO-native JSON artefacts (`*_dto.json`) beside legacy `.npz` samples and includes them in manifests, isolating the legacy translator for Stage 5 retirement.
 - **Stage 3E**: regression guards in place—DTO parity harness re-run, `PolicyController` raises when DTO envelopes are absent, telemetry policy events are covered by new smokes, and rollout capture tests continue to verify DTO trajectory plumbing.
 - **Stage 4 (completed 2025-10-11):** DTO ML smoke harness compares DTO vs legacy feature tensors using random-weight Torch networks (`tests/policy/test_dto_ml_smoke.py -q`). Baseline dimensions from `dto_parity/ml_dimensions.txt` enforced; legacy observation builder parity verified during the smoke, ensuring DTO features drive identical model outputs.
@@ -21,10 +21,12 @@
   - `pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_events.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/orchestration/test_console_health_smokes.py tests/test_console_router.py tests/core/test_sim_loop_modular_smoke.py tests/core/test_sim_loop_with_dummies.py -q`
   - `pytest tests/policy/test_dto_ml_smoke.py tests/world/test_world_context_parity.py tests/core/test_sim_loop_dto_parity.py -q`
   Snapshot handling now records the context RNG seed so resumed runs stay deterministic; the full-suite + lint/type sweep is scheduled for Stage 6.
-- **Stage 6 (guardrails & docs)**: Guard tests were re-run after removing the last
-  `ObservationBuilder` imports from the world package; telemetry surface checks remain
-  green. Documentation/ADR refresh, the full regression sweep (pytest/ruff/mypy), and
-  release comms are the remaining closure tasks.
+- **Stage 6 (guardrails & docs)**: guard tests were re-run after removing the
+  last `ObservationBuilder` references; telemetry surface checks remain green.
+  Replay exporter now consumes DTO trajectory frames directly, and the legacy
+  world factory registry has been removed. Remaining closure tasks are the
+  documentation refresh, full regression sweep (pytest/ruff/mypy), release
+  comms, and retirement of non-DT0 telemetry shims.
 - **WP3B complete:** queue/affordance/employment/economy/relationship systems now run entirely through modular services. `WorldContext.tick` no longer calls legacy apply/resolve helpers, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and targeted system tests (`tests/world/test_systems_*.py`) lock the behaviour. World-level smokes (`pytest tests/world -q`) pass with the bridge removed.
 - Behaviour parity smokes (`tests/test_behavior_personality_bias.py`) remain green; DTO parity harness awaits reward/ML scenarios under WP3C.
 - Remaining work packages:

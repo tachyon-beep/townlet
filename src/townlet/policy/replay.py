@@ -540,13 +540,10 @@ class ReplayDataset:
 
 
 def frames_to_replay_sample(frames: Sequence[dict[str, Any]]) -> ReplaySample:
-    """Convert collected trajectory frames into a replay sample."""
+    """Convert DTO-backed trajectory frames into a replay sample."""
 
     if not frames:
         raise ValueError("frames sequence cannot be empty")
-
-    # TODO(WP3 Stage 5): drop this legacy export translator once external replay
-    # payloads move to native DTO artefacts.
 
     timesteps = len(frames)
     map_seq = np.stack(

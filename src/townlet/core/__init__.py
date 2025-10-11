@@ -8,7 +8,6 @@ from .factory_registry import (
     resolve_telemetry,
     resolve_world,
     telemetry_registry,
-    world_registry,
 )
 from .interfaces import (
     PolicyBackendProtocol,
@@ -34,7 +33,6 @@ __all__ = [
     "resolve_world",
     "telemetry_provider_name",
     "telemetry_registry",
-    "world_registry",
 ]
 
 
