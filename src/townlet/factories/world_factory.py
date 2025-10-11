@@ -7,7 +7,6 @@ from typing import Any
 
 from townlet.adapters.world_default import DefaultWorldAdapter
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.observations.builder import ObservationBuilder
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.testing import DummyWorldRuntime
@@ -41,7 +40,6 @@ def _build_default_world(
     config: Any | None = None,
     ticks_per_day: int | None = None,
     world_kwargs: Mapping[str, Any] | None = None,
-    observation_builder: ObservationBuilder | None = None,
     **unexpected_kwargs: Any,
 ) -> WorldRuntime:
     if unexpected_kwargs:
@@ -74,7 +72,6 @@ def _build_default_world(
 
     lifecycle = LifecycleManager(config=config)
     perturbations = PerturbationScheduler(config=config, rng=perturbation_rng)
-    builder = observation_builder or ObservationBuilder(config=config)
     ticks = _derive_ticks_per_day(config, ticks_per_day)
 
     return DefaultWorldAdapter(
@@ -82,7 +79,6 @@ def _build_default_world(
         lifecycle=lifecycle,
         perturbations=perturbations,
         ticks_per_day=ticks,
-        observation_builder=builder,
     )
 
 

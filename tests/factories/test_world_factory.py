@@ -56,6 +56,15 @@ def test_create_world_rejects_legacy_service_overrides(base_config):
         )
 
 
+def test_create_world_rejects_observation_builder_override(base_config):
+    with pytest.raises(TypeError, match="Unsupported arguments"):
+        create_world(
+            provider="default",
+            config=base_config,
+            observation_builder=object(),
+        )
+
+
 def test_create_world_rejects_legacy_runtime_argument():
     with pytest.raises(TypeError):
         create_world(provider="default", runtime=object())

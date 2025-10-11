@@ -120,3 +120,6 @@ Use this audit as the starting point for the Stage 5 cleanup implementation.
   `ObservationBuilder`; it delegates observations to `WorldContext.observe`,
   stages policy actions via the context, and converts DTO agents back to the
   legacy mapping for callers. Adapter unit tests were updated accordingly.
+- **2025-10-11 — S5.C completed:** Factory wiring no longer accepts
+  `observation_builder`; it relies on the context-provided service, and tests
+  now guard that passing the legacy kwarg raises a `TypeError`.
