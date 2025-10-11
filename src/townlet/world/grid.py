@@ -59,6 +59,7 @@ from townlet.world.observation import (
 )
 from townlet.world.observation import snapshot_precondition_context
 from townlet.world.observations.interfaces import ObservationServiceProtocol
+from townlet.world.observations.service import ObservationBuilderService
 from townlet.world.perturbations import PerturbationService
 from townlet.world.preconditions import (
     CompiledPrecondition,
@@ -290,7 +291,7 @@ class WorldState:
             record_rivalry_conflict=self._apply_rivalry_conflict,
         )
         self._hook_registry = HookRegistry()
-        self._observation_service = None
+        self._observation_service = ObservationBuilderService(config=self.config)
         modules = list(self.config.affordances.runtime.hook_allowlist)
         if not modules:
             modules.append("townlet.world.hooks.default")

@@ -6,7 +6,6 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations import ObservationBuilder
 from townlet.world import AgentSnapshot
 from townlet.world.agents.nightly_reset import NightlyResetService
 from townlet.world.core import WorldContext
@@ -18,7 +17,6 @@ def simulation_loop() -> SimulationLoop:
     loop = SimulationLoop(config)
     loop.world.agents.clear()
     loop.world.objects.clear()
-    loop.world.context.observation_service = ObservationBuilder(config=config)
     return loop
 
 
@@ -28,6 +26,7 @@ def test_world_context_mirrors_world_state(simulation_loop: SimulationLoop) -> N
 
     assert isinstance(context, WorldContext)
     assert simulation_loop.world_context is context
+    assert context.observation_service is not None
 
     # mutate state and ensure context sees the changes
     world.register_object(object_id="fridge_1", object_type="fridge", position=(0, 0))

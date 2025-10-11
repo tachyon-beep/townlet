@@ -14,7 +14,6 @@ from townlet.policy.fallback import StubPolicyBackend
 from townlet.telemetry.fallback import StubTelemetrySink
 from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
 from townlet.world.core import WorldContext
-from townlet.observations import ObservationBuilder
 
 
 def _register_stub_ports() -> None:
@@ -54,7 +53,6 @@ def test_simulation_loop_dto_parity_across_ticks(tmp_path) -> None:
     bootstrap = loop._build_bootstrap_policy_envelope()
     loop._set_policy_observation_envelope(bootstrap)
 
-    loop.world.context.observation_service = ObservationBuilder(config=config)
     steps = 3
     envelopes: list[object] = []
     queue_metrics_history: list[dict[str, int]] = []

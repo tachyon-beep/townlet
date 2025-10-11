@@ -7,7 +7,6 @@ import pytest
 from pathlib import Path
 
 from townlet.config import load_config
-from townlet.observations import ObservationBuilder
 from townlet.world.grid import WorldState
 from townlet.world.core import WorldContext
 from townlet.world.dto.observation import ObservationEnvelope
@@ -17,7 +16,6 @@ from townlet.world.dto.observation import ObservationEnvelope
 def world_context() -> WorldContext:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     world = WorldState.from_config(config)
-    world.context.observation_service = ObservationBuilder(config=config)
     return world.context
 
 
