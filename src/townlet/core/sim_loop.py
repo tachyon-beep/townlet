@@ -46,6 +46,7 @@ from townlet.snapshots import (
 )
 from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
+from townlet.telemetry.fallback import StubTelemetrySink
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.utils.coerce import coerce_float, coerce_int
@@ -175,6 +176,7 @@ class SimulationLoop:
         self._console_service: ConsoleService | None = None
         self._policy_port: PolicyBackendProtocol | None = None
         self._telemetry_port: TelemetrySink | None = None
+        self.telemetry_publisher: TelemetryPublisher | None = None
         self._policy_controller: PolicyController | None = None
         self._console_router: ConsoleRouter | None = None
         self._health_monitor: HealthMonitor | None = None
@@ -252,7 +254,13 @@ class SimulationLoop:
 
         telemetry_components = self._resolve_telemetry_components()
         self._telemetry_port = telemetry_components.port
-        self.telemetry: TelemetryPublisher = telemetry_components.publisher
+        self.telemetry_publisher = telemetry_components.publisher
+        sink_for_clients: TelemetrySinkProtocol
+        if isinstance(self._telemetry_port, StubTelemetrySink):
+            sink_for_clients = self._telemetry_port
+        else:
+            sink_for_clients = telemetry_components.publisher
+        self.telemetry = cast(TelemetrySinkProtocol, sink_for_clients)
         self._resolved_providers["telemetry"] = telemetry_components.provider
 
         controller = self._policy_controller
