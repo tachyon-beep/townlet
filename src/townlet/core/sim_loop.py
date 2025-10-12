@@ -128,10 +128,15 @@ class SimulationLoop:
         self.config = config
         self.config.register_snapshot_migrations()
         self._runtime_config: AffordanceRuntimeConfig = self.config.affordances.runtime
-        if affordance_runtime_factory is not None:
-            self._affordance_runtime_factory = affordance_runtime_factory
+        if affordance_runtime_factory is None:
+            factory = self._load_affordance_runtime_factory(self._runtime_config)
         else:
-            self._affordance_runtime_factory = self._load_affordance_runtime_factory(self._runtime_config)
+            factory = affordance_runtime_factory
+        self._affordance_runtime_factory: Callable[
+            [WorldState, AffordanceRuntimeContext],
+            DefaultAffordanceRuntime,
+        ]
+        self._affordance_runtime_factory = factory
         self.runtime: WorldRuntime | None = None
         self._world_provider = (world_provider or "default").strip()
         self._world_provider_locked = world_provider is not None
@@ -155,14 +160,14 @@ class SimulationLoop:
         self._health = SimulationLoopHealth()
         self._world_adapter: WorldRuntimeAdapter | None = None
         self._world_context: WorldContext | None = None
-        self._world_port = None
-        self._policy_port = None
-        self._telemetry_port = None
+        self._world_port: WorldRuntime | None = None
+        self._policy_port: PolicyBackendProtocol | None = None
+        self._telemetry_port: TelemetrySinkProtocol | None = None
         self._policy_controller: PolicyController | None = None
         self._console_router: ConsoleRouter | None = None
         self._health_monitor: HealthMonitor | None = None
         self._rivalry_history: list[dict[str, object]] = []
-        self._policy_observation_envelope = None
+        self._policy_observation_envelope: ObservationEnvelope | None = None
         self._last_policy_metadata_event: dict[str, object] | None = None
         self._last_policy_possession_agents: tuple[str, ...] | None = None
         self._last_policy_anneal_event: dict[str, object] | None = None

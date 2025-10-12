@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -421,7 +421,10 @@ class ReplayDataset:
             # In streaming mode, we don't cache samples globally. We still want
             # to batch by homogeneous shapes, so build signature buckets by
             # peeking each entry once.
-            signatures: dict[tuple, list[int]] = {}
+            stream_signatures: dict[
+                tuple[tuple[int, ...], tuple[int, ...], tuple[tuple[int, ...], ...]],
+                list[int],
+            ] = {}
             for idx, (sample_path, meta_path) in enumerate(self._entries):
                 s = load_replay_sample(sample_path, meta_path)
                 sig = (
@@ -429,10 +432,12 @@ class ReplayDataset:
                     tuple(s.features.shape),
                     tuple(getattr(s, f).shape for f in TRAINING_ARRAY_FIELDS),
                 )
-                signatures.setdefault(sig, []).append(idx)
+                stream_signatures.setdefault(sig, []).append(idx)
                 self._ensure_sample_metrics(s, (sample_path, meta_path))
             # Deterministic order by signature
-            self._buckets = [signatures[key] for key in sorted(signatures.keys())]
+            self._buckets = [
+                stream_signatures[key] for key in sorted(stream_signatures.keys())
+            ]
         else:
             self._cached_samples = [
                 load_replay_sample(sample, meta) for sample, meta in self._entries
@@ -440,15 +445,20 @@ class ReplayDataset:
             for sample, entry in zip(self._cached_samples, self._entries):
                 self._ensure_sample_metrics(sample, entry)
             # Build buckets based on cached sample shapes
-            signatures: dict[tuple, list[int]] = {}
+            cached_signatures: dict[
+                tuple[tuple[int, ...], tuple[int, ...], tuple[tuple[int, ...], ...]],
+                list[int],
+            ] = {}
             for idx, s in enumerate(self._cached_samples):
                 sig = (
                     tuple(s.map.shape),
                     tuple(s.features.shape),
                     tuple(getattr(s, f).shape for f in TRAINING_ARRAY_FIELDS),
                 )
-                signatures.setdefault(sig, []).append(idx)
-            self._buckets = [signatures[key] for key in sorted(signatures.keys())]
+                cached_signatures.setdefault(sig, []).append(idx)
+            self._buckets = [
+                cached_signatures[key] for key in sorted(cached_signatures.keys())
+            ]
         self.baseline_metrics = self._aggregate_metrics()
 
     def _ensure_homogeneous(self, samples: Sequence[ReplaySample]) -> None:
@@ -501,7 +511,7 @@ class ReplayDataset:
             sample.metadata["metrics"] = metrics
 
     def _aggregate_metrics(self) -> dict[str, float]:
-        metrics_sources: list[dict[str, float]] = []
+        metrics_sources: list[Mapping[str, float | int]] = []
         if self.metrics_map:
             metrics_sources = [dict(values) for values in self.metrics_map.values()]
         elif self._cached_samples is not None:
@@ -517,8 +527,6 @@ class ReplayDataset:
         counts: dict[str, int] = {}
         for metrics in metrics_sources:
             for key, value in metrics.items():
-                if not isinstance(value, (int, float)):
-                    continue
                 totals[key] = totals.get(key, 0.0) + float(value)
                 counts[key] = counts.get(key, 0) + 1
 

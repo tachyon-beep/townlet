@@ -1,0 +1,946 @@
+src/townlet/telemetry/relationship_metrics.py:156: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/relationship_metrics.py:156: note: Possible overload variants:
+src/townlet/telemetry/relationship_metrics.py:156: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/relationship_metrics.py:156: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/telemetry/relationship_metrics.py:157: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/relationship_metrics.py:157: note: Possible overload variants:
+src/townlet/telemetry/relationship_metrics.py:157: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/relationship_metrics.py:157: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/telemetry/relationship_metrics.py:166: error: "object" has no attribute "items"  [attr-defined]
+src/townlet/telemetry/relationship_metrics.py:167: error: "object" has no attribute "items"  [attr-defined]
+src/townlet/telemetry/relationship_metrics.py:168: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/relationship_metrics.py:168: note: Possible overload variants:
+src/townlet/telemetry/relationship_metrics.py:168: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/relationship_metrics.py:168: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/telemetry/relationship_metrics.py:170: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
+src/townlet/telemetry/transform/normalizers.py:27: error: Statement is unreachable  [unreachable]
+src/townlet/console/command.py:167: error: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "str")  [assignment]
+src/townlet/agents/models.py:28: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/telemetry/aggregation/collector.py:66: error: Argument 1 to "deepcopy" has incompatible type "Mapping[str, Any]"; expected "dict[str, Any]"  [arg-type]
+src/townlet/telemetry/aggregation/collector.py:70: error: Argument 1 to "deepcopy" has incompatible type "Mapping[Any, Any]"; expected "dict[str, Any]"  [arg-type]
+src/townlet/telemetry/aggregation/collector.py:75: error: Incompatible return value type (got "Mapping[str, Any]", expected "dict[str, Any] | None")  [return-value]
+src/townlet/telemetry/aggregation/collector.py:79: error: Incompatible return value type (got "Mapping[Any, Any]", expected "dict[str, Any] | None")  [return-value]
+src/townlet/orchestration/health.py:22: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/utils/rng.py:19: error: Returning Any from function declared to return "tuple[object, ...]"  [no-any-return]
+src/townlet/world/perturbations/service.py:82: error: Returning Any from function declared to return "dict[str, dict[str, object]]"  [no-any-return]
+src/townlet/world/perturbations/service.py:85: error: Returning Any from function declared to return "dict[str, bool]"  [no-any-return]
+src/townlet/world/perturbations/service.py:88: error: Returning Any from function declared to return "bool"  [no-any-return]
+src/townlet/policy/dto_view.py:185: error: Returning Any from function declared to return "SimpleNamespace | None"  [no-any-return]
+src/townlet/policy/dto_view.py:242: error: Statement is unreachable  [unreachable]
+src/townlet/world/state.py:135: error: Unexpected keyword argument "type" for "emit" of "EventDispatcher"  [call-arg]
+src/townlet/world/events.py: note: "emit" of "EventDispatcher" defined here
+src/townlet/world/spatial.py:35: error: Incompatible types in assignment (expression has type "tuple[int, ...]", target has type "tuple[int, int]")  [assignment]
+src/townlet/world/spatial.py:36: error: Argument 1 to "setdefault" of "MutableMapping" has incompatible type "tuple[int, ...]"; expected "tuple[int, int]"  [arg-type]
+src/townlet/world/console/handlers.py:296: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/world/console/handlers.py:329: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/world/console/handlers.py:378: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/world/console/handlers.py:431: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/world/console/handlers.py:438: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/world/console/handlers.py:443: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/world/dto/factory.py:113: error: Argument 1 to "asdict" has incompatible type "DataclassInstance | type[DataclassInstance]"; expected "DataclassInstance"  [arg-type]
+src/townlet/world/dto/factory.py:200: error: Unexpected keyword argument "global_context" for "ObservationEnvelope"  [call-arg]
+src/townlet/world/dto/observation.py: note: "ObservationEnvelope" defined here
+src/townlet/world/dto/factory.py:217: error: Returning Any from function declared to return "Sequence[Any] | None"  [no-any-return]
+src/townlet/world/dto/factory.py:220: error: Returning Any from function declared to return "Sequence[Any] | None"  [no-any-return]
+src/townlet/world/dto/factory.py:244: error: Argument 1 to "asdict" has incompatible type "DataclassInstance | type[DataclassInstance]"; expected "DataclassInstance"  [arg-type]
+src/townlet/core/utils.py:23: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/employment.py:15: error: Module "townlet.world.grid" does not explicitly export attribute "AgentSnapshot"  [attr-defined]
+src/townlet/world/employment.py:660: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/world/employment.py:660: note: Possible overload variants:
+src/townlet/world/employment.py:660: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/world/employment.py:660: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/world/queue/manager.py:196: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
+src/townlet/world/agents/relationships_service.py:177: error: Incompatible types in assignment (expression has type "RelationshipLedger", variable has type "RivalryLedger")  [assignment]
+src/townlet/world/agents/relationships_service.py:181: error: Argument "ledger" to "_restore_pinned_ties" of "RelationshipService" has incompatible type "RivalryLedger"; expected "RelationshipLedger"  [arg-type]
+src/townlet/world/agents/relationships_service.py:200: error: Incompatible types in assignment (expression has type "RivalryLedger", variable has type "RelationshipLedger")  [assignment]
+src/townlet/world/agents/relationships_service.py:201: error: "RelationshipLedger" has no attribute "remove"  [attr-defined]
+src/townlet/world/agents/relationships_service.py:216: error: Argument 1 to "dict" has incompatible type "Mapping[str, Mapping[str, float]]"; expected "SupportsKeysAndGetItem[str, dict[str, float]]"  [arg-type]
+src/townlet/world/employment_service.py:99: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/world/systems/relationships.py:84: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/systems/relationships.py:92: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/employment_runtime.py:45: error: Returning Any from function declared to return "float"  [no-any-return]
+src/townlet/world/employment_runtime.py:48: error: Returning Any from function declared to return "float"  [no-any-return]
+src/townlet/world/employment_runtime.py:74: error: Returning Any from function declared to return "str"  [no-any-return]
+src/townlet/world/employment_runtime.py:121: error: Returning Any from function declared to return "list[str]"  [no-any-return]
+src/townlet/world/economy/service.py:52: error: Incompatible types in assignment (expression has type "float", target has type "int")  [assignment]
+src/townlet/world/economy/service.py:145: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/core/runtime_adapter.py:56: error: Cannot override writeable attribute with read-only property  [override]
+src/townlet/world/core/runtime_adapter.py:60: error: Cannot override writeable attribute with read-only property  [override]
+src/townlet/world/core/runtime_adapter.py:60: error: Signature of "config" incompatible with supertype "WorldRuntimeAdapterProtocol"  [override]
+src/townlet/world/core/runtime_adapter.py:60: note:      Superclass:
+src/townlet/world/core/runtime_adapter.py:60: note:          object
+src/townlet/world/core/runtime_adapter.py:60: note:      Subclass:
+src/townlet/world/core/runtime_adapter.py:60: note:          SimulationConfig
+src/townlet/world/core/runtime_adapter.py:114: error: Returning Any from function declared to return "Mapping[str, Mapping[str, float]]"  [no-any-return]
+src/townlet/world/core/runtime_adapter.py:134: error: Returning Any from function declared to return "Mapping[str, object]"  [no-any-return]
+src/townlet/world/core/runtime_adapter.py:147: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/core/runtime_adapter.py:149: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/core/runtime_adapter.py:151: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/core/runtime_adapter.py:155: error: Statement is unreachable  [unreachable]
+src/townlet/world/affordances/core.py:29: error: Module "townlet.world.grid" does not explicitly export attribute "AgentSnapshot"  [attr-defined]
+src/townlet/world/affordances/core.py:144: error: Argument 1 to "update" of "TypedDict" has incompatible type "Mapping[str, object]"; expected "TypedDict({'stage'?: Literal['before', 'after', 'fail'], 'hook'?: str, 'tick'?: int, 'agent_id'?: str, 'object_id'?: str, 'affordance_id'?: str, 'environment'?: AffordanceEnvironment, 'world'?: Any, 'spec'?: Any, 'effects'?: dict[str, float], 'reason'?: str, 'condition'?: str, 'context'?: dict[str, object]})"  [typeddict-item]
+src/townlet/world/affordances/core.py:185: error: Argument 2 to "setdefault" of "MutableMapping" has incompatible type "list[Never]"; expected "int"  [arg-type]
+src/townlet/world/affordances/core.py:186: error: "int" has no attribute "append"  [attr-defined]
+src/townlet/world/affordances/core.py:187: error: Argument 1 to "len" has incompatible type "int"; expected "Sized"  [arg-type]
+src/townlet/world/affordances/core.py:188: error: "int" has no attribute "__delitem__"  [attr-defined]
+src/townlet/world/affordances/core.py:189: error: Argument 1 to "len" has incompatible type "int"; expected "Sized"  [arg-type]
+src/townlet/world/affordances/core.py:190: error: "int" has no attribute "__delitem__"  [attr-defined]
+src/townlet/world/affordances/core.py:240: error: Returning Any from function declared to return "MutableMapping[str, Any]"  [no-any-return]
+src/townlet/world/affordances/core.py:568: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/world/affordances/core.py:568: note: Possible overload variants:
+src/townlet/world/affordances/core.py:568: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/world/affordances/core.py:568: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/world/affordances/core.py:590: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/affordances/core.py:690: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/world/affordances/core.py:693: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/world/affordances/core.py:704: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/world/affordances/core.py:714: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/world/affordances/core.py:714: note: Possible overload variants:
+src/townlet/world/affordances/core.py:714: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/world/affordances/core.py:714: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/world/observe.py:21: error: Argument 1 to "ensure_world_adapter" has incompatible type "WorldRuntimeAdapterProtocol | object"; expected "WorldRuntimeAdapterProtocol | WorldState"  [arg-type]
+src/townlet/world/observe.py:119: error: Argument 1 to "ensure_world_adapter" has incompatible type "WorldRuntimeAdapterProtocol | object"; expected "WorldRuntimeAdapterProtocol | WorldState"  [arg-type]
+src/townlet/world/observe.py:129: error: Returning Any from function declared to return "tuple[int, int] | None"  [no-any-return]
+src/townlet/world/observations/context.py:19: error: Argument 1 to "ensure_world_adapter" has incompatible type "WorldRuntimeAdapterProtocol | object"; expected "WorldRuntimeAdapterProtocol | WorldState"  [arg-type]
+src/townlet/world/observations/context.py:86: error: Need type annotation for "fallback"  [var-annotated]
+src/townlet/world/observations/cache.py:27: error: Argument 1 to "ensure_world_adapter" has incompatible type "WorldRuntimeAdapterProtocol | object"; expected "WorldRuntimeAdapterProtocol | WorldState"  [arg-type]
+src/townlet/world/agents/employment.py:138: error: Returning Any from function declared to return "Iterable[str]"  [no-any-return]
+src/townlet/world/agents/employment.py:138: error: "EmploymentRuntime" has no attribute "pending_agents"  [attr-defined]
+src/townlet/world/agents/nightly_reset.py:37: error: Statement is unreachable  [unreachable]
+src/townlet/world/affordances/service.py:34: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/world/affordances/service.py:40: error: Missing type parameters for generic type "tuple"  [type-arg]
+src/townlet/world/affordances/service.py:41: error: Returning Any from function declared to return "tuple[Any, ...]"  [no-any-return]
+src/townlet/world/affordances/service.py:93: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/world/affordances/service.py:115: error: Argument "stage" to "build_hook_payload" has incompatible type "str"; expected "Literal['before', 'after', 'fail']"  [arg-type]
+src/townlet/world/affordances/service.py:120: error: Argument "affordance_id" to "build_hook_payload" has incompatible type "Any | None"; expected "str"  [arg-type]
+src/townlet/observations/builder.py:207: error: Argument 1 to "ensure_world_adapter" has incompatible type "WorldRuntimeAdapterProtocol | object"; expected "WorldRuntimeAdapterProtocol | WorldState"  [arg-type]
+src/townlet/observations/builder.py:217: error: Invalid index type "int" for "ndarray[tuple[Any, ...], dtype[Any]] | dict[str, object]"; expected type "str"  [index]
+src/townlet/observations/builder.py:220: error: Invalid index type "int" for "ndarray[tuple[Any, ...], dtype[Any]] | dict[str, object]"; expected type "str"  [index]
+src/townlet/observations/builder.py:222: error: Incompatible types in assignment (expression has type "dict[str, ndarray[tuple[Any, ...], dtype[Any]] | dict[str, object]]", target has type "dict[str, ndarray[tuple[Any, ...], dtype[Any]]]")  [assignment]
+src/townlet/observations/builder.py:245: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/observations/builder.py:246: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/observations/builder.py:247: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/observations/builder.py:248: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/observations/builder.py:250: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/observations/builder.py:262: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/observations/builder.py:265: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/observations/builder.py:270: error: "object" has no attribute "encode"  [attr-defined]
+src/townlet/observations/builder.py:279: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/observations/builder.py:309: error: Value of type "Iterable[tuple[str, float]]" is not indexable  [index]
+src/townlet/observations/builder.py:917: error: Statement is unreachable  [unreachable]
+src/townlet/observations/builder.py:920: error: Dict entry 0 has incompatible type "str": "str"; expected "str": "float"  [dict-item]
+src/townlet/observations/builder.py:943: error: Incompatible return value type (got "tuple[list[dict[str, object]], str]", expected "tuple[list[dict[str, float]], str]")  [return-value]
+src/townlet/observations/builder.py:974: error: Argument 1 to "_embed_agent_id" of "ObservationBuilder" has incompatible type "float"; expected "str"  [arg-type]
+src/townlet/observations/builder.py:976: error: Dict entry 0 has incompatible type "str": "ndarray[tuple[Any, ...], dtype[Any]]"; expected "str": "float"  [dict-item]
+src/townlet/observations/builder.py:985: error: Dict entry 0 has incompatible type "str": "ndarray[tuple[int], dtype[floating[_32Bit]]]"; expected "str": "float"  [dict-item]
+src/townlet/world/systems/affordances.py:143: error: Argument "spatial_index" to "request_access" has incompatible type "Any | None"; expected "WorldSpatialIndex"  [arg-type]
+src/townlet/observations/__init__.py:13: error: Argument "config" to "ObservationBuilder" has incompatible type "object"; expected "SimulationConfig"  [arg-type]
+src/townlet/world/observations/service.py:59: error: Incompatible types in assignment (expression has type "dict[Any, Any]", target has type "ndarray[tuple[Any, ...], dtype[Any]]")  [assignment]
+src/townlet/world/core/context.py:34: error: Skipping analyzing "townlet.world.console.service": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+src/townlet/world/core/context.py:34: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+src/townlet/world/core/context.py:188: error: Argument 1 to "_to_mapping" has incompatible type "object"; expected "Mapping[str, Any] | None"  [arg-type]
+src/townlet/world/core/context.py:252: error: Argument 1 to "apply_actions" has incompatible type "townlet.world.grid.WorldState"; expected "townlet.world.state.WorldState"  [arg-type]
+src/townlet/world/core/context.py:260: error: Argument "state" to "SystemContext" has incompatible type "townlet.world.grid.WorldState"; expected "townlet.world.state.WorldState"  [arg-type]
+src/townlet/world/core/context.py:299: error: Incompatible return value type (got "RuntimeStepResult", expected "dict[str, Any]")  [return-value]
+src/townlet/world/core/context.py:299: error: Argument 1 to "RuntimeStepResult" has incompatible type "**dict[str, object]"; expected "list[ConsoleCommandResult]"  [arg-type]
+src/townlet/world/core/context.py:299: error: Argument 1 to "RuntimeStepResult" has incompatible type "**dict[str, object]"; expected "list[dict[str, object]]"  [arg-type]
+src/townlet/world/core/context.py:299: error: Argument 1 to "RuntimeStepResult" has incompatible type "**dict[str, object]"; expected "dict[str, object]"  [arg-type]
+src/townlet/world/core/context.py:299: note: "dict" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+src/townlet/world/core/context.py:299: note: Consider using "Mapping" instead, which is covariant in the value type
+src/townlet/world/core/context.py:299: error: Argument 1 to "RuntimeStepResult" has incompatible type "**dict[str, object]"; expected "dict[str, bool]"  [arg-type]
+src/townlet/world/core/context.py:299: error: Argument 1 to "RuntimeStepResult" has incompatible type "**dict[str, object]"; expected "dict[str, str]"  [arg-type]
+src/townlet/world/core/context.py:327: error: Returning Any from function declared to return "Mapping[str, Any]"  [no-any-return]
+src/townlet/world/core/context.py:327: error: "AffordanceRuntimeService" has no attribute "runtime_snapshot"; maybe "running_snapshot"?  [attr-defined]
+src/townlet/world/core/context.py:338: error: Statement is unreachable  [unreachable]
+src/townlet/world/core/context.py:487: error: Statement is unreachable  [unreachable]
+src/townlet/world/grid.py:361: error: Argument "relationships" to "AffordanceEnvironment" has incompatible type "RelationshipService"; expected "RelationshipServiceProtocol"  [arg-type]
+src/townlet/world/grid.py:361: note: Following member(s) of "RelationshipService" have conflicts:
+src/townlet/world/grid.py:361: note:     Expected:
+src/townlet/world/grid.py:361: note:         def update_relationship(self, agent_a: str, agent_b: str, *, trust: float = ..., familiarity: float = ..., rivalry: float = ..., event: str = ...) -> None
+src/townlet/world/grid.py:361: note:     Got:
+src/townlet/world/grid.py:361: note:         def update_relationship(self, agent_a: str, agent_b: str, *, trust: float = ..., familiarity: float = ..., rivalry: float = ..., event: Literal['generic', 'chat_success', 'chat_failure', 'queue_polite', 'conflict', 'shared_meal', 'employment_help', 'employment_shift_taken'] = ...) -> None
+src/townlet/world/grid.py:391: error: Incompatible types in assignment (expression has type "AffordanceCoordinator", variable has type "<subclass of "townlet.world.affordances.core.DefaultAffordanceRuntime" and "townlet.world.affordances.runtime.AffordanceCoordinator">")  [assignment]
+src/townlet/world/grid.py:398: error: Incompatible types in assignment (expression has type "Callable[[str, Iterable[str], NamedArg(str, 'agent_id'), NamedArg(str, 'object_id'), NamedArg(Any, 'spec'), DefaultNamedArg(Mapping[str, Any] | None, 'extra'), DefaultNamedArg(bool, 'debug_enabled')], bool]", variable has type "Callable[[str, Iterable[str]], bool]")  [assignment]
+src/townlet/world/grid.py:419: error: Argument "active_reservations" to "LifecycleService" has incompatible type "dict[str, str]"; expected "MutableMapping[str, str | None]"  [arg-type]
+src/townlet/world/grid.py:485: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/grid.py:489: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/grid.py:877: error: Argument "state" to "SystemContext" has incompatible type "townlet.world.grid.WorldState"; expected "townlet.world.state.WorldState"  [arg-type]
+src/townlet/world/grid.py:1018: error: Returning Any from function declared to return "RelationshipTie | None"  [no-any-return]
+src/townlet/world/grid.py:1020: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/grid.py:1025: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/grid.py:1104: error: Argument 2 to "load_relationship_metrics" has incompatible type "Mapping[str, object] | None"; expected "dict[str, object] | None"  [arg-type]
+src/townlet/world/grid.py:1249: error: Argument 1 to "record_avoidance_event" of "QueueConflictTracker" has incompatible type "dict[str, int | str | None]"; expected "dict[str, object]"  [arg-type]
+src/townlet/world/grid.py:1249: note: "dict" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+src/townlet/world/grid.py:1249: note: Consider using "Mapping" instead, which is covariant in the value type
+src/townlet/world/grid.py:1329: error: Unexpected keyword argument "type" for "emit" of "EventDispatcher"  [call-arg]
+src/townlet/world/events.py: note: "emit" of "EventDispatcher" defined here
+src/townlet/world/grid.py:1369: error: Incompatible types in assignment (expression has type "ManifestAffordance", variable has type "ManifestObject")  [assignment]
+src/townlet/world/grid.py:1371: error: "ManifestObject" has no attribute "affordance_id"  [attr-defined]
+src/townlet/world/grid.py:1373: error: "ManifestObject" has no attribute "duration"  [attr-defined]
+src/townlet/world/grid.py:1374: error: "ManifestObject" has no attribute "effects"  [attr-defined]
+src/townlet/world/grid.py:1375: error: "ManifestObject" has no attribute "preconditions"  [attr-defined]
+src/townlet/world/grid.py:1376: error: "ManifestObject" has no attribute "hooks"  [attr-defined]
+src/townlet/world/grid.py:1437: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/scheduler/perturbations.py:193: error: Argument 2 to "pop" of "dict" has incompatible type "None"; expected "ScheduledPerturbation"  [arg-type]
+src/townlet/scheduler/perturbations.py:195: error: Statement is unreachable  [unreachable]
+src/townlet/scheduler/perturbations.py:238: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/scheduler/perturbations.py:277: error: Argument "location" to "apply_arranged_meet" of "PerturbationService" has incompatible type "object"; expected "str | None"  [arg-type]
+src/townlet/scheduler/perturbations.py:363: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/scheduler/perturbations.py:450: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
+src/townlet/scheduler/perturbations.py:512: error: Missing type parameters for generic type "tuple"  [type-arg]
+src/townlet/scheduler/perturbations.py:515: error: Missing type parameters for generic type "tuple"  [type-arg]
+src/townlet/scheduler/perturbations.py:539: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/scheduler/perturbations.py:539: note: Possible overload variants:
+src/townlet/scheduler/perturbations.py:539: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/scheduler/perturbations.py:539: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/scheduler/perturbations.py:540: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/scheduler/perturbations.py:540: note: Possible overload variants:
+src/townlet/scheduler/perturbations.py:540: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/scheduler/perturbations.py:540: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/scheduler/perturbations.py:541: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/scheduler/perturbations.py:541: note: Possible overload variants:
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/scheduler/perturbations.py:541: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/lifecycle/manager.py:93: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/lifecycle/manager.py:93: note: Possible overload variants:
+src/townlet/lifecycle/manager.py:93: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/lifecycle/manager.py:93: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/lifecycle/manager.py:94: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/lifecycle/manager.py:94: note: Possible overload variants:
+src/townlet/lifecycle/manager.py:94: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/lifecycle/manager.py:94: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/lifecycle/manager.py:136: error: Incompatible types in assignment (expression has type "str | None", variable has type "str")  [assignment]
+src/townlet/lifecycle/manager.py:138: error: Statement is unreachable  [unreachable]
+src/townlet/world/runtime.py:123: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/world/runtime.py:153: error: Argument "rng_streams" to "snapshot_from_world" has incompatible type "Mapping[str, object] | None"; expected "Mapping[str, Random] | None"  [arg-type]
+src/townlet/snapshots/state.py:26: error: Module "townlet.world.grid" does not explicitly export attribute "AgentSnapshot"  [attr-defined]
+src/townlet/snapshots/state.py:106: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:106: note: Possible overload variants:
+src/townlet/snapshots/state.py:106: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/snapshots/state.py:106: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/snapshots/state.py:310: error: Incompatible types in assignment (expression has type "dict[str, int]", variable has type "dict[str, object]")  [assignment]
+src/townlet/snapshots/state.py:310: note: "dict" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+src/townlet/snapshots/state.py:310: note: Consider using "Mapping" instead, which is covariant in the value type
+src/townlet/snapshots/state.py:316: error: Statement is unreachable  [unreachable]
+src/townlet/snapshots/state.py:369: error: Need type annotation for "migrations_payload"  [var-annotated]
+src/townlet/snapshots/state.py:379: error: Incompatible types in assignment (expression has type "SnapshotState", variable has type "AgentSnapshot")  [assignment]
+src/townlet/snapshots/state.py:394: error: Argument "relationships" to "SnapshotState" has incompatible type "Mapping[str, Mapping[str, Mapping[str, float]]]"; expected "dict[str, dict[str, dict[str, float]]]"  [arg-type]
+src/townlet/snapshots/state.py:395: error: "WorldRuntimeAdapterProtocol" has no attribute "relationship_metrics_snapshot"; maybe "relationships_snapshot"?  [attr-defined]
+src/townlet/snapshots/state.py:399: error: Argument "migrations" to "SnapshotState" has incompatible type "dict[str, list[Any]]"; expected "dict[str, object]"  [arg-type]
+src/townlet/snapshots/state.py:399: note: "dict" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+src/townlet/snapshots/state.py:399: note: Consider using "Mapping" instead, which is covariant in the value type
+src/townlet/snapshots/state.py:402: error: "AgentSnapshot" has no attribute "rng_streams"  [attr-defined]
+src/townlet/snapshots/state.py:403: error: Incompatible return value type (got "AgentSnapshot", expected "SnapshotState")  [return-value]
+src/townlet/snapshots/state.py:418: error: Need type annotation for "position"  [var-annotated]
+src/townlet/snapshots/state.py:418: error: Argument 1 to "tuple" has incompatible type "object"; expected "Iterable[Never]"  [arg-type]
+src/townlet/snapshots/state.py:419: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:419: note: Possible overload variants:
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/snapshots/state.py:419: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/snapshots/state.py:422: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/snapshots/state.py:423: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/snapshots/state.py:424: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/snapshots/state.py:442: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/snapshots/state.py:445: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:445: note: Possible overload variants:
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/snapshots/state.py:445: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/snapshots/state.py:446: error: Argument "job_id" to "AgentSnapshot" has incompatible type "object"; expected "str | None"  [arg-type]
+src/townlet/snapshots/state.py:448: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:448: note: Possible overload variants:
+src/townlet/snapshots/state.py:448: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/snapshots/state.py:448: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/snapshots/state.py:449: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:449: note: Possible overload variants:
+src/townlet/snapshots/state.py:449: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/snapshots/state.py:449: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/snapshots/state.py:451: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:451: note: Possible overload variants:
+src/townlet/snapshots/state.py:451: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/snapshots/state.py:451: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/snapshots/state.py:452: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/snapshots/state.py:453: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:453: note: Possible overload variants:
+src/townlet/snapshots/state.py:453: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/snapshots/state.py:453: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/snapshots/state.py:454: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/snapshots/state.py:465: error: Argument "occupied_by" to "InteractiveObject" has incompatible type "object"; expected "str | None"  [arg-type]
+src/townlet/snapshots/state.py:466: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:466: note: Possible overload variants:
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/snapshots/state.py:466: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/snapshots/state.py:487: error: Argument 1 to "import_state" of "DefaultAffordanceRuntime" has incompatible type "dict[str, object]"; expected "Mapping[str, Mapping[str, object]]"  [arg-type]
+src/townlet/snapshots/state.py:495: error: Argument 1 to "set_employment_exits_today" of "WorldState" has incompatible type "object"; expected "int"  [arg-type]
+src/townlet/snapshots/state.py:545: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
+src/townlet/snapshots/state.py:564: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/snapshots/state.py:579: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/snapshots/state.py:622: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:622: note: Possible overload variants:
+src/townlet/snapshots/state.py:622: note:     def [_T] list(self) -> list[_T]
+src/townlet/snapshots/state.py:622: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/snapshots/state.py:627: error: Incompatible types in assignment (expression has type "list[MigrationEdge]", variable has type "Path")  [assignment]
+src/townlet/snapshots/state.py:631: error: Argument 1 to "apply_path" of "SnapshotMigrationRegistry" has incompatible type "Path"; expected "list[MigrationEdge]"  [arg-type]
+src/townlet/snapshots/state.py:637: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/snapshots/state.py:637: note: Possible overload variants:
+src/townlet/snapshots/state.py:637: note:     def [_T] list(self) -> list[_T]
+src/townlet/snapshots/state.py:637: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/stability/promotion.py:161: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/promotion.py:161: note: Possible overload variants:
+src/townlet/stability/promotion.py:161: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/promotion.py:161: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/promotion.py:162: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/promotion.py:162: note: Possible overload variants:
+src/townlet/stability/promotion.py:162: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/promotion.py:162: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/promotion.py:165: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/promotion.py:165: note: Possible overload variants:
+src/townlet/stability/promotion.py:165: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/promotion.py:165: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/promotion.py:169: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/promotion.py:169: note: Possible overload variants:
+src/townlet/stability/promotion.py:169: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/promotion.py:169: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/monitor.py:141: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/monitor.py:141: note: Possible overload variants:
+src/townlet/stability/monitor.py:141: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/monitor.py:141: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/monitor.py:146: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/monitor.py:146: note: Possible overload variants:
+src/townlet/stability/monitor.py:146: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/monitor.py:146: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/monitor.py:147: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/stability/monitor.py:147: note: Possible overload variants:
+src/townlet/stability/monitor.py:147: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/stability/monitor.py:147: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/stability/monitor.py:174: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/stability/monitor.py:306: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/stability/monitor.py:306: note: Possible overload variants:
+src/townlet/stability/monitor.py:306: note:     def [_T] list(self) -> list[_T]
+src/townlet/stability/monitor.py:306: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/world/context.py:20: error: Missing positional argument "config" in call to "WorldState"  [call-arg]
+src/townlet/world/core/__init__.py:12: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/world/agents/__init__.py:6: error: Module "townlet.world.employment_service" does not explicitly export attribute "EmploymentEngine"  [attr-defined]
+src/townlet/testing/dummy_world.py:82: error: Unexpected keyword argument "global_context" for "ObservationEnvelope"  [call-arg]
+src/townlet/world/dto/observation.py: note: "ObservationEnvelope" defined here
+src/townlet/telemetry/worker.py:12: error: Module "townlet.config.loader" does not explicitly export attribute "TelemetryRetryPolicy"  [attr-defined]
+src/townlet/telemetry/worker.py:188: error: Statement is unreachable  [unreachable]
+src/townlet/rewards/engine.py:156: error: Returning Any from function declared to return "Iterable[dict[str, object]]"  [no-any-return]
+src/townlet/rewards/engine.py:164: error: Returning Any from function declared to return "Iterable[dict[str, object]]"  [no-any-return]
+src/townlet/rewards/engine.py:172: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/rewards/engine.py:256: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/rewards/engine.py:321: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/policy/replay_buffer.py:53: error: Missing type parameters for generic type "tuple"  [type-arg]
+src/townlet/policy/replay_buffer.py:61: error: Missing type parameters for generic type "tuple"  [type-arg]
+src/townlet/policy/behavior.py:89: error: "object" has no attribute "active_agent"  [attr-defined]
+src/townlet/policy/behavior.py:167: error: "object" has no attribute "active_agent"  [attr-defined]
+src/townlet/policy/behavior.py:197: error: "object" has no attribute "position"  [attr-defined]
+src/townlet/policy/behavior.py:212: error: "object" has no attribute "needs"  [attr-defined]
+src/townlet/policy/behavior.py:213: error: "object" has no attribute "needs"  [attr-defined]
+src/townlet/policy/behavior.py:214: error: "object" has no attribute "needs"  [attr-defined]
+src/townlet/policy/behavior.py:303: error: "object" has no attribute "needs"  [attr-defined]
+src/townlet/policy/behavior.py:305: error: "object" has no attribute "needs"  [attr-defined]
+src/townlet/policy/behavior.py:307: error: "object" has no attribute "needs"  [attr-defined]
+src/townlet/policy/behavior.py:328: error: "object" has no attribute "relationship_tie"  [attr-defined]
+src/townlet/policy/behavior.py:331: error: "object" has no attribute "rivalry_value"  [attr-defined]
+src/townlet/policy/behavior.py:343: error: "object" has no attribute "relationship_tie"  [attr-defined]
+src/townlet/policy/behavior.py:382: error: "SimulationConfig" has no attribute "world"  [attr-defined]
+src/townlet/policy/behavior.py:408: error: "object" has no attribute "active_agent"  [attr-defined]
+src/townlet/policy/behavior.py:421: error: "object" has no attribute "queue_snapshot"  [attr-defined]
+src/townlet/policy/behavior.py:631: error: Returning Any from function declared to return "object | None"  [no-any-return]
+src/townlet/orchestration/policy.py:113: error: Returning Any from function declared to return "Mapping[str, object] | list[dict[str, object]] | None"  [no-any-return]
+src/townlet/orchestration/policy.py:113: error: "flush_transitions" of "PolicyBackendProtocol" does not return a value (it only ever returns None)  [func-returns-value]
+src/townlet/console/handlers.py:108: error: Returning Any from function declared to return "T"  [no-any-return]
+src/townlet/console/handlers.py:212: error: Incompatible return value type (got "dict[str, object]", expected "dict[str, dict[str, object]]")  [return-value]
+src/townlet/console/handlers.py:247: error: Statement is unreachable  [unreachable]
+src/townlet/console/handlers.py:256: error: Unsupported left operand type for + ("object")  [operator]
+src/townlet/console/handlers.py:259: error: "TelemetrySinkProtocol" has no attribute "latest_relationship_overlay"; maybe "latest_relationship_metrics", "latest_relationship_summary", or "latest_relationship_updates"?  [attr-defined]
+src/townlet/console/handlers.py:279: error: Statement is unreachable  [unreachable]
+src/townlet/console/handlers.py:293: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/console/handlers.py:294: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/console/handlers.py:295: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/console/handlers.py:320: error: No overload variant of "reversed" matches argument type "Iterable[Mapping[str, object]]"  [call-overload]
+src/townlet/console/handlers.py:320: note: Possible overload variants:
+src/townlet/console/handlers.py:320: note:     def [_T] reversed(Reversible[_T], /) -> reversed[_T]
+src/townlet/console/handlers.py:320: note:     def [_T] reversed(SupportsLenAndGetItem[_T], /) -> reversed[_T]
+src/townlet/console/handlers.py:321: error: No overload variant of "reversed" matches argument type "Iterable[Mapping[str, object]]"  [call-overload]
+src/townlet/console/handlers.py:321: note: Possible overload variants:
+src/townlet/console/handlers.py:321: note:     def [_T] reversed(Reversible[_T], /) -> reversed[_T]
+src/townlet/console/handlers.py:321: note:     def [_T] reversed(SupportsLenAndGetItem[_T], /) -> reversed[_T]
+src/townlet/console/handlers.py:398: error: "PolicyBackendProtocol" has no attribute "set_policy_hash"; maybe "active_policy_hash"?  [attr-defined]
+src/townlet/console/handlers.py:400: error: "PolicyBackendProtocol" has no attribute "set_policy_hash"; maybe "active_policy_hash"?  [attr-defined]
+src/townlet/console/handlers.py:489: error: Item "None" of "Mapping[str, object] | None" has no attribute "get"  [union-attr]
+src/townlet/console/handlers.py:535: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:535: note: Possible overload variants:
+src/townlet/console/handlers.py:535: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:535: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:609: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:609: note: Possible overload variants:
+src/townlet/console/handlers.py:609: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:609: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:648: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:648: note: Possible overload variants:
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/console/handlers.py:648: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/console/handlers.py:652: error: "object" has no attribute "setdefault"  [attr-defined]
+src/townlet/console/handlers.py:653: error: Unsupported target for indexed assignment ("Mapping[str, object]")  [index]
+src/townlet/console/handlers.py:712: error: "PolicyBackendProtocol" has no attribute "acquire_possession"  [attr-defined]
+src/townlet/console/handlers.py:722: error: "PolicyBackendProtocol" has no attribute "release_possession"  [attr-defined]
+src/townlet/console/handlers.py:795: error: Unsupported operand types for > ("int" and "object")  [operator]
+src/townlet/console/handlers.py:800: error: Incompatible types in assignment (expression has type "object", variable has type "int")  [assignment]
+src/townlet/console/handlers.py:817: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:817: note: Possible overload variants:
+src/townlet/console/handlers.py:817: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:817: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:834: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:834: note: Possible overload variants:
+src/townlet/console/handlers.py:834: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:834: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:838: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:838: note: Possible overload variants:
+src/townlet/console/handlers.py:838: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:838: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:841: error: "TelemetrySinkProtocol" has no attribute "latest_queue_history"  [attr-defined]
+src/townlet/console/handlers.py:846: error: Value of type "Iterable[Mapping[str, object]]" is not indexable  [index]
+src/townlet/console/handlers.py:874: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/console/handlers.py:877: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
+src/townlet/console/handlers.py:895: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/console/handlers.py:907: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:907: note: Possible overload variants:
+src/townlet/console/handlers.py:907: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:907: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:942: error: Argument 1 to "_attach_metadata" has incompatible type "dict[str, dict[str, object]]"; expected "dict[str, object]"  [arg-type]
+src/townlet/console/handlers.py:942: note: "dict" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+src/townlet/console/handlers.py:942: note: Consider using "Mapping" instead, which is covariant in the value type
+src/townlet/console/handlers.py:1109: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:1109: note: Possible overload variants:
+src/townlet/console/handlers.py:1109: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:1109: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:1111: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:1111: note: Possible overload variants:
+src/townlet/console/handlers.py:1111: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/console/handlers.py:1111: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/console/handlers.py:1121: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/console/handlers.py:1159: error: Item "None" of "Path | None" has no attribute "read_text"  [union-attr]
+src/townlet/console/handlers.py:1181: error: Item "None" of "Path | None" has no attribute "parent"  [union-attr]
+src/townlet/console/handlers.py:1183: error: Item "None" of "SimulationConfig | None" has no attribute "snapshot"  [union-attr]
+src/townlet/console/handlers.py:1186: error: Argument 1 to "load" of "SnapshotManager" has incompatible type "Path | None"; expected "Path"  [arg-type]
+src/townlet/console/handlers.py:1187: error: Argument 2 to "load" of "SnapshotManager" has incompatible type "SimulationConfig | None"; expected "SimulationConfig"  [arg-type]
+src/townlet/console/handlers.py:1189: error: Item "None" of "SimulationConfig | None" has no attribute "snapshot"  [union-attr]
+src/townlet/console/handlers.py:1190: error: Item "None" of "SimulationConfig | None" has no attribute "snapshot"  [union-attr]
+src/townlet/console/handlers.py:1198: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:1198: note: Possible overload variants:
+src/townlet/console/handlers.py:1198: note:     def [_T] list(self) -> list[_T]
+src/townlet/console/handlers.py:1198: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/console/handlers.py:1208: error: Item "None" of "Path | None" has no attribute "parent"  [union-attr]
+src/townlet/console/handlers.py:1211: error: Argument 1 to "load" of "SnapshotManager" has incompatible type "Path | None"; expected "Path"  [arg-type]
+src/townlet/console/handlers.py:1212: error: Argument 2 to "load" of "SnapshotManager" has incompatible type "SimulationConfig | None"; expected "SimulationConfig"  [arg-type]
+src/townlet/console/handlers.py:1214: error: Item "None" of "SimulationConfig | None" has no attribute "snapshot"  [union-attr]
+src/townlet/console/handlers.py:1215: error: Item "None" of "SimulationConfig | None" has no attribute "snapshot"  [union-attr]
+src/townlet/console/handlers.py:1223: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/console/handlers.py:1223: note: Possible overload variants:
+src/townlet/console/handlers.py:1223: note:     def [_T] list(self) -> list[_T]
+src/townlet/console/handlers.py:1223: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/console/handlers.py:1224: error: "TelemetrySinkProtocol" has no attribute "record_snapshot_migrations"; maybe "latest_snapshot_migrations"?  [attr-defined]
+src/townlet/console/handlers.py:1284: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1284: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1285: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1285: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1286: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1286: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1287: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1287: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1288: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1288: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1289: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1289: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1290: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1290: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1291: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1291: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1292: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1292: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1293: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1293: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1294: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1294: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/console/handlers.py:1295: error: Argument 2 to "register" of "ConsoleRouter" has incompatible type "Callable[[ConsoleCommand], object]"; expected "ConsoleHandler"  [arg-type]
+src/townlet/console/handlers.py:1295: note: "ConsoleHandler.__call__" has type "Callable[[Arg(ConsoleCommand, 'command')], object]"
+src/townlet/adapters/policy_scripted.py:65: error: Returning Any from function declared to return "Mapping[str, object] | list[dict[str, object]] | None"  [no-any-return]
+src/townlet/adapters/policy_scripted.py:65: error: "flush_transitions" of "PolicyBackendProtocol" does not return a value (it only ever returns None)  [func-returns-value]
+src/townlet_ui/telemetry.py:951: error: Incompatible types in assignment (expression has type "Any | None", variable has type "Mapping[str, Any]")  [assignment]
+src/townlet/telemetry/transform/transforms.py:162: error: Unsupported right operand type for in ("object")  [operator]
+src/townlet/telemetry/transform/transforms.py:193: error: No overload variant of "set" matches argument type "object"  [call-overload]
+src/townlet/telemetry/transform/transforms.py:193: note: Possible overload variants:
+src/townlet/telemetry/transform/transforms.py:193: note:     def [_T] set(self) -> set[_T]
+src/townlet/telemetry/transform/transforms.py:193: note:     def [_T] set(self, Iterable[_T], /) -> set[_T]
+src/townlet/telemetry/aggregation/aggregator.py:31: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/telemetry/aggregation/aggregator.py:63: error: Argument "relationship_snapshot" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Mapping[str, Mapping[str, float]]]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:68: error: Argument "job_snapshot" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Mapping[str, Any]]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:69: error: Argument "economy_snapshot" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Mapping[str, Any]]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:70: error: Argument "economy_settings" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Any]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:71: error: Argument "price_spikes" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Mapping[str, Any]]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:72: error: Argument "utilities" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Any]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:75: error: Argument "stability_metrics" to "build" of "StreamPayloadBuilder" has incompatible type "Any | None"; expected "Mapping[str, Any]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:79: error: Argument "perturbations" to "build" of "StreamPayloadBuilder" has incompatible type "Mapping[str, Any] | None"; expected "Mapping[str, Any]"  [arg-type]
+src/townlet/telemetry/aggregation/aggregator.py:104: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/aggregation/aggregator.py:104: note: Possible overload variants:
+src/townlet/telemetry/aggregation/aggregator.py:104: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/aggregation/aggregator.py:104: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/policy/rollout.py:58: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/policy/rollout.py:72: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/policy/rollout.py:160: error: "InMemoryReplayDataset" has no attribute "baseline_metrics"  [attr-defined]
+src/townlet/policy/rollout.py:196: error: Statement is unreachable  [unreachable]
+src/townlet/policy/rollout.py:236: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/policy/rollout.py:236: note: Possible overload variants:
+src/townlet/policy/rollout.py:236: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/policy/rollout.py:236: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/orchestration/console.py:99: error: Incompatible return value type (got "SnapshotState", expected "Mapping[str, Any]")  [return-value]
+src/townlet/adapters/world_default.py:102: error: Incompatible types in assignment (expression has type "dict[str, Any]", variable has type "RuntimeStepResult | None")  [assignment]
+src/townlet/adapters/world_default.py:105: error: "dict[str, Any]" has no attribute "events"  [attr-defined]
+src/townlet/adapters/world_default.py:107: error: Incompatible return value type (got "dict[str, Any]", expected "RuntimeStepResult")  [return-value]
+src/townlet/adapters/world_default.py:112: error: Return type "Mapping[str, Any]" of "observe" incompatible with return type "ObservationEnvelope" in supertype "townlet.ports.world.WorldRuntime"  [override]
+src/townlet/adapters/world_default.py:123: error: Incompatible return value type (got "ObservationEnvelope", expected "Mapping[str, Any]")  [return-value]
+src/townlet/factories/world_factory.py:21: error: Incompatible return value type (got "object", expected "WorldRuntime")  [return-value]
+src/townlet/factories/world_factory.py:65: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/factories/world_factory.py:87: error: Cannot instantiate abstract class "DefaultWorldAdapter" with abstract attribute "bind_world"  [abstract]
+src/townlet/factories/world_factory.py:87: note: "bind_world" is implicitly abstract because it has an empty function body. If it is not meant to be abstract, explicitly `return` or `return None`.
+src/townlet/factories/world_factory.py:108: error: Incompatible return value type (got "DummyWorldRuntime", expected "WorldRuntime")  [return-value]
+src/townlet/factories/world_factory.py:108: note: "DummyWorldRuntime" is missing following "WorldRuntime" protocol member:
+src/townlet/factories/world_factory.py:108: note:     bind_world
+src/townlet/telemetry/publisher.py:18: error: Module "townlet.config.loader" does not explicitly export attribute "TelemetryTransformEntry"  [attr-defined]
+src/townlet/telemetry/publisher.py:181: error: Call to untyped function "_build_transport_client" in typed context  [no-untyped-call]
+src/townlet/telemetry/publisher.py:193: error: Argument "backpressure_strategy" to "TelemetryWorkerManager" has incompatible type "str"; expected "Literal['drop_oldest', 'block', 'fan_out']"  [arg-type]
+src/townlet/telemetry/publisher.py:204: error: Argument "console_sink" to "TelemetryAggregator" has incompatible type "Callable[[Iterable[ConsoleCommandResult]], None]"; expected "Callable[[Iterable[object]], None] | None"  [arg-type]
+src/townlet/telemetry/publisher.py:208: error: Argument 1 to "tuple" has incompatible type "list[object]"; expected "Iterable[TelemetryTransformProtocol]"  [arg-type]
+src/townlet/telemetry/publisher.py:239: error: Argument "schema_by_kind" to "SchemaValidationTransform" has incompatible type "dict[str, object]"; expected "Mapping[str, CompiledSchema]"  [arg-type]
+src/townlet/telemetry/publisher.py:300: error: Incompatible types in assignment (expression has type "tuple[str]", variable has type "set[str]")  [assignment]
+src/townlet/telemetry/publisher.py:323: error: Argument "schema_by_kind" to "SchemaValidationTransform" has incompatible type "dict[str, object]"; expected "Mapping[str, CompiledSchema]"  [arg-type]
+src/townlet/telemetry/publisher.py:379: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/telemetry/publisher.py:380: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:380: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:380: note:     def [_T] list(self) -> list[_T]
+src/townlet/telemetry/publisher.py:380: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/telemetry/publisher.py:442: error: Incompatible types in assignment (expression has type "object", variable has type "dict[str, int] | None")  [assignment]
+src/townlet/telemetry/publisher.py:446: error: Incompatible types in assignment (expression has type "object", variable has type "dict[str, float] | None")  [assignment]
+src/townlet/telemetry/publisher.py:451: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:451: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:451: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:455: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:455: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:455: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:467: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:467: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:467: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:468: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:468: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:468: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:503: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:503: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:503: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:504: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:504: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:504: note:     def [_T] list(self) -> list[_T]
+src/townlet/telemetry/publisher.py:504: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/telemetry/publisher.py:802: error: Invalid index type "str" for "dict[Never, Never]"; expected type "Never"  [index]
+src/townlet/telemetry/publisher.py:802: error: Incompatible types in assignment (expression has type "object", target has type "Never")  [assignment]
+src/townlet/telemetry/publisher.py:804: error: Invalid index type "str" for "dict[Never, Never]"; expected type "Never"  [index]
+src/townlet/telemetry/publisher.py:804: error: Incompatible types in assignment (expression has type "object", target has type "Never")  [assignment]
+src/townlet/telemetry/publisher.py:807: error: Invalid index type "str" for "dict[Never, Never]"; expected type "Never"  [index]
+src/townlet/telemetry/publisher.py:807: error: Incompatible types in assignment (expression has type "object", target has type "Never")  [assignment]
+src/townlet/telemetry/publisher.py:926: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/telemetry/publisher.py:959: error: Call to untyped function "_build_transport_client" in typed context  [no-untyped-call]
+src/townlet/telemetry/publisher.py:1033: error: No overload variant of "asdict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1033: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1033: note:     def asdict(obj: DataclassInstance) -> dict[str, Any]
+src/townlet/telemetry/publisher.py:1033: note:     def [_T] asdict(obj: DataclassInstance, *, dict_factory: Callable[[list[tuple[str, Any]]], _T]) -> _T
+src/townlet/telemetry/publisher.py:1049: error: Statement is unreachable  [unreachable]
+src/townlet/telemetry/publisher.py:1174: error: Argument 1 to "dict" has incompatible type "Mapping[str, Mapping[str, float]]"; expected "SupportsKeysAndGetItem[str, dict[str, dict[Any, Any]]]"  [arg-type]
+src/townlet/telemetry/publisher.py:1223: error: "WorldRuntimeAdapterProtocol" has no attribute "relationship_metrics_snapshot"; maybe "relationships_snapshot"?  [attr-defined]
+src/townlet/telemetry/publisher.py:1245: error: Argument 1 to "_capture_relationship_snapshot" of "TelemetryPublisher" has incompatible type "WorldRuntimeAdapterProtocol | None"; expected "WorldState | WorldRuntimeAdapterProtocol"  [arg-type]
+src/townlet/telemetry/publisher.py:1276: error: Statement is unreachable  [unreachable]
+src/townlet/telemetry/publisher.py:1277: error: Incompatible types in assignment (expression has type "dict[str, object]", variable has type "dict[str, float] | None")  [assignment]
+src/townlet/telemetry/publisher.py:1295: error: Argument 1 to "_build_personality_snapshot" of "TelemetryPublisher" has incompatible type "WorldRuntimeAdapterProtocol | None"; expected "WorldState | WorldRuntimeAdapterProtocol"  [arg-type]
+src/townlet/telemetry/publisher.py:1447: error: Argument 1 to "_update_kpi_history" of "TelemetryPublisher" has incompatible type "WorldRuntimeAdapterProtocol | None"; expected "WorldState | WorldRuntimeAdapterProtocol"  [arg-type]
+src/townlet/telemetry/publisher.py:1457: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1457: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:1457: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:1458: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1458: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:1458: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:1463: error: "object" has no attribute "items"  [attr-defined]
+src/townlet/telemetry/publisher.py:1535: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1535: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:1535: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:1539: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1539: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1539: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/publisher.py:1539: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/telemetry/publisher.py:1540: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1540: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1540: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/publisher.py:1540: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/telemetry/publisher.py:1543: error: "object" has no attribute "items"  [attr-defined]
+src/townlet/telemetry/publisher.py:1545: error: No overload variant of "dict" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1545: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[_KT, _VT], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, SupportsKeysAndGetItem[str, _VT], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, Iterable[tuple[_KT, _VT]], /) -> dict[_KT, _VT]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, Iterable[tuple[str, _VT]], /, **kwargs: _VT) -> dict[str, _VT]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, Iterable[list[str]], /) -> dict[str, str]
+src/townlet/telemetry/publisher.py:1545: note:     def [_KT, _VT] dict(self, Iterable[list[bytes]], /) -> dict[bytes, bytes]
+src/townlet/telemetry/publisher.py:1661: error: "object" has no attribute "items"  [attr-defined]
+src/townlet/telemetry/publisher.py:1663: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
+src/townlet/telemetry/publisher.py:1665: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/telemetry/publisher.py:1666: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/telemetry/publisher.py:1896: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/telemetry/publisher.py:1897: error: No overload variant of "list" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:1897: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:1897: note:     def [_T] list(self) -> list[_T]
+src/townlet/telemetry/publisher.py:1897: note:     def [_T] list(self, Iterable[_T], /) -> list[_T]
+src/townlet/telemetry/publisher.py:1986: error: Argument 1 to "ConsoleCommandResult" has incompatible type "**dict[str, str | dict[Any, Any] | Any | None]"; expected "str"  [arg-type]
+src/townlet/telemetry/publisher.py:1986: error: Argument 1 to "ConsoleCommandResult" has incompatible type "**dict[str, str | dict[Any, Any] | Any | None]"; expected "dict[str, Any] | None"  [arg-type]
+src/townlet/telemetry/publisher.py:1986: note: "dict" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+src/townlet/telemetry/publisher.py:1986: note: Consider using "Mapping" instead, which is covariant in the value type
+src/townlet/telemetry/publisher.py:1986: error: Argument 1 to "ConsoleCommandResult" has incompatible type "**dict[str, str | dict[Any, Any] | Any | None]"; expected "str | None"  [arg-type]
+src/townlet/telemetry/publisher.py:1986: error: Argument 1 to "ConsoleCommandResult" has incompatible type "**dict[str, str | dict[Any, Any] | Any | None]"; expected "int | None"  [arg-type]
+src/townlet/telemetry/publisher.py:2253: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/telemetry/publisher.py:2382: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/telemetry/publisher.py:2383: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/telemetry/publisher.py:2422: error: Statement is unreachable  [unreachable]
+src/townlet/telemetry/publisher.py:2531: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/telemetry/publisher.py:2532: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/telemetry/publisher.py:2532: note: Possible overload variants:
+src/townlet/telemetry/publisher.py:2532: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/telemetry/publisher.py:2532: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/telemetry/publisher.py:2661: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/telemetry/publisher.py:2668: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/policy/models.py:60: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/models.py:71: error: Unused "type: ignore[misc, too-few-public-methods]" comment  [unused-ignore]
+src/townlet/policy/models.py:71: error: Name "ConflictAwarePolicyNetwork" already defined on line 34  [no-redef]
+src/townlet/policy/models.py:71: note: Error code "no-redef" not covered by "type: ignore" comment
+src/townlet/policy/backends/pytorch/bc.py:36: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/backends/pytorch/bc.py:36: error: Missing type parameters for generic type "Dataset"  [type-arg]
+src/townlet/policy/backends/pytorch/bc.py:36: note: Error code "type-arg" not covered by "type: ignore" comment
+src/townlet/policy/backends/pytorch/bc.py:63: error: Returning Any from function declared to return "int"  [no-any-return]
+src/townlet/policy/backends/pytorch/bc.py:65: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/backends/pytorch/bc.py:65: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/policy/backends/pytorch/bc.py:65: note: Error code "no-untyped-def" not covered by "type: ignore" comment
+src/townlet/adapters/telemetry_stdout.py:35: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/bc.py:31: error: Name "BCTrainingConfig" already defined (possibly by an import)  [no-redef]
+src/townlet/policy/bc.py:38: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/bc.py:38: error: Name "BCTrajectoryDataset" already defined (possibly by an import)  [no-redef]
+src/townlet/policy/bc.py:38: note: Error code "no-redef" not covered by "type: ignore" comment
+src/townlet/policy/bc.py:42: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/bc.py:42: error: Name "BCTrainer" already defined (possibly by an import)  [no-redef]
+src/townlet/policy/bc.py:42: note: Error code "no-redef" not covered by "type: ignore" comment
+src/townlet/policy/bc.py:56: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/policy/bc.py:56: note: Error code "no-untyped-def" not covered by "type: ignore" comment
+src/townlet/policy/training_orchestrator.py:72: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/policy/training_orchestrator.py:82: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/training_orchestrator.py:191: error: Argument 1 to "record_events" of "RolloutBuffer" has incompatible type "Iterable[Mapping[str, object]]"; expected "Iterable[dict[str, object]]"  [arg-type]
+src/townlet/policy/training_orchestrator.py:267: error: "Mapping[str, float]" has no attribute "update"  [attr-defined]
+src/townlet/policy/training_orchestrator.py:273: error: Incompatible return value type (got "Mapping[str, float]", expected "dict[str, float]")  [return-value]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "learning_rate" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "clip_param" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "value_loss_coef" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "entropy_coef" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "num_epochs" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "mini_batch_size" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "gae_lambda" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "gamma" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "max_grad_norm" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "value_clip" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:412: error: Missing named argument "num_mini_batches" for "PPOConfig"  [call-arg]
+src/townlet/policy/training_orchestrator.py:427: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/training_orchestrator.py:454: error: Argument 2 to "build_policy_network" of "PolicyTrainingOrchestrator" has incompatible type "tuple[int, ...]"; expected "tuple[int, int, int]"  [arg-type]
+src/townlet/policy/training_orchestrator.py:561: error: Call to untyped function "_ppo_ops" of "PolicyTrainingOrchestrator" in typed context  [no-untyped-call]
+src/townlet/policy/training_orchestrator.py:610: error: Incompatible types in assignment (expression has type "Tensor", variable has type "int")  [assignment]
+src/townlet/policy/training_orchestrator.py:620: error: Call to untyped function "Categorical" in typed context  [no-untyped-call]
+src/townlet/policy/training_orchestrator.py:621: error: Call to untyped function "log_prob" in typed context  [no-untyped-call]
+src/townlet/policy/training_orchestrator.py:622: error: Call to untyped function "entropy" in typed context  [no-untyped-call]
+src/townlet/policy/training_orchestrator.py:678: error: "int" has no attribute "shape"  [attr-defined]
+src/townlet/policy/training_orchestrator.py:743: error: Dict entry 1 has incompatible type "str": "str"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:792: error: Dict entry 1 has incompatible type "str": "str"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:793: error: Dict entry 2 has incompatible type "str": "str"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:794: error: Dict entry 3 has incompatible type "str": "float | None"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:801: error: Dict entry 6 has incompatible type "str": "float | None"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:802: error: Dict entry 7 has incompatible type "str": "float | None"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:803: error: Dict entry 8 has incompatible type "str": "float | None"; expected "str": "float"  [dict-item]
+src/townlet/policy/training_orchestrator.py:922: error: Incompatible types in assignment (expression has type "str", variable has type "Literal['OFF', 'C1', 'C2', 'C3']")  [assignment]
+src/townlet/policy/runner.py:152: error: Name "behavior" already defined on line 130  [no-redef]
+src/townlet/policy/runner.py:152: error: "Callable[[PolicyRuntime], BehaviorController]" has no attribute "setter"  [attr-defined]
+src/townlet/policy/runner.py:152: error: Untyped decorator makes function "behavior" untyped  [misc]
+src/townlet/policy/runner.py:264: error: Argument 2 to "record_action" of "TrajectoryService" has incompatible type "object"; expected "dict[str, Any]"  [arg-type]
+src/townlet/policy/runner.py:323: error: Incompatible types in assignment (expression has type "QueueManager", variable has type "DTOQueueManagerView | None")  [assignment]
+src/townlet/policy/runner.py:324: error: Incompatible types in assignment (expression has type "WorldState", variable has type "DTOWorldView | None")  [assignment]
+src/townlet/policy/runner.py:513: error: No overload variant of "get" of "dict" matches argument types "object", "str"  [call-overload]
+src/townlet/policy/runner.py:513: note: Possible overload variants:
+src/townlet/policy/runner.py:513: note:     def get(self, int, None = ..., /) -> str | None
+src/townlet/policy/runner.py:513: note:     def get(self, int, str, /) -> str
+src/townlet/policy/runner.py:513: note:     def [_T] get(self, int, _T, /) -> str | _T
+src/townlet/policy/runner.py:515: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/policy/runner.py:515: note: Possible overload variants:
+src/townlet/policy/runner.py:515: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/policy/runner.py:515: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/policy/runner.py:517: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/policy/runner.py:518: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
+src/townlet/policy/runner.py:636: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/core/factory_registry.py:66: error: Only concrete class can be given where "type[WorldRuntime]" is expected  [type-abstract]
+src/townlet/core/factory_registry.py:71: error: Only concrete class can be given where "type[PolicyBackendProtocol]" is expected  [type-abstract]
+src/townlet/core/factory_registry.py:76: error: Only concrete class can be given where "type[TelemetrySinkProtocol]" is expected  [type-abstract]
+src/townlet/core/factory_registry.py:92: error: Cannot instantiate abstract class "StubTelemetrySink" with abstract attribute "latest_stability_metrics"  [abstract]
+src/townlet/core/factory_registry.py:100: error: Incompatible return value type (got "PolicyRuntime", expected "PolicyBackendProtocol")  [return-value]
+src/townlet/core/factory_registry.py:100: note: Following member(s) of "PolicyRuntime" have conflicts:
+src/townlet/core/factory_registry.py:100: note:     Expected:
+src/townlet/core/factory_registry.py:100: note:         def flush_transitions(self, *, envelope: ObservationEnvelope) -> None
+src/townlet/core/factory_registry.py:100: note:     Got:
+src/townlet/core/factory_registry.py:100: note:         def flush_transitions(self, *, envelope: ObservationEnvelope | None = ...) -> list[dict[str, object]]
+src/townlet/core/factory_registry.py:100: note:     Expected:
+src/townlet/core/factory_registry.py:100: note:         def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None
+src/townlet/core/factory_registry.py:100: note:     Got:
+src/townlet/core/factory_registry.py:100: note:         def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None
+src/townlet/core/factory_registry.py:106: error: Cannot instantiate abstract class "StubTelemetrySink" with abstract attribute "latest_stability_metrics"  [abstract]
+src/townlet/core/factory_registry.py:107: error: Incompatible return value type (got "TelemetryPublisher", expected "TelemetrySinkProtocol")  [return-value]
+src/townlet/core/factory_registry.py:107: note: Following member(s) of "TelemetryPublisher" have conflicts:
+src/townlet/core/factory_registry.py:107: note:     Expected:
+src/townlet/core/factory_registry.py:107: note:         def emit_event(self, name: str, payload: Mapping[str, object] | None = ...) -> None
+src/townlet/core/factory_registry.py:107: note:     Got:
+src/townlet/core/factory_registry.py:107: note:         def emit_event(self, name: str, payload: Mapping[str, Any] | None = ...) -> Mapping[str, Any]
+src/townlet/core/factory_registry.py:107: note:     Expected:
+src/townlet/core/factory_registry.py:107: note:         def import_state(self, payload: Mapping[str, object]) -> None
+src/townlet/core/factory_registry.py:107: note:     Got:
+src/townlet/core/factory_registry.py:107: note:         def import_state(self, payload: dict[str, object]) -> None
+src/townlet/core/factory_registry.py:107: note:     <1 more conflict(s) not shown>
+src/townlet/factories/telemetry_factory.py:16: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/factories/telemetry_factory.py:27: error: Cannot instantiate abstract class "StubTelemetrySink" with abstract attribute "latest_stability_metrics"  [abstract]
+src/townlet/factories/telemetry_factory.py:37: error: Cannot instantiate abstract class "StubTelemetrySink" with abstract attribute "latest_stability_metrics"  [abstract]
+src/townlet/factories/policy_factory.py:16: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/factories/policy_factory.py:26: error: Argument 1 to "ScriptedPolicyAdapter" has incompatible type "PolicyRuntime"; expected "PolicyBackendProtocol"  [arg-type]
+src/townlet/factories/policy_factory.py:26: note: Following member(s) of "PolicyRuntime" have conflicts:
+src/townlet/factories/policy_factory.py:26: note:     Expected:
+src/townlet/factories/policy_factory.py:26: note:         def flush_transitions(self, *, envelope: ObservationEnvelope) -> None
+src/townlet/factories/policy_factory.py:26: note:     Got:
+src/townlet/factories/policy_factory.py:26: note:         def flush_transitions(self, *, envelope: ObservationEnvelope | None = ...) -> list[dict[str, object]]
+src/townlet/factories/policy_factory.py:26: note:     Expected:
+src/townlet/factories/policy_factory.py:26: note:         def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None
+src/townlet/factories/policy_factory.py:26: note:     Got:
+src/townlet/factories/policy_factory.py:26: note:         def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None
+src/townlet/factories/policy_factory.py:40: error: Module "townlet.core.factory_registry" does not explicitly export attribute "torch_available"  [attr-defined]
+src/townlet/factories/policy_factory.py:47: error: Argument 1 to "ScriptedPolicyAdapter" has incompatible type "PolicyRuntime"; expected "PolicyBackendProtocol"  [arg-type]
+src/townlet/factories/policy_factory.py:47: note: Following member(s) of "PolicyRuntime" have conflicts:
+src/townlet/factories/policy_factory.py:47: note:     Expected:
+src/townlet/factories/policy_factory.py:47: note:         def flush_transitions(self, *, envelope: ObservationEnvelope) -> None
+src/townlet/factories/policy_factory.py:47: note:     Got:
+src/townlet/factories/policy_factory.py:47: note:         def flush_transitions(self, *, envelope: ObservationEnvelope | None = ...) -> list[dict[str, object]]
+src/townlet/factories/policy_factory.py:47: note:     Expected:
+src/townlet/factories/policy_factory.py:47: note:         def post_step(self, rewards: Mapping[str, float], terminated: Mapping[str, bool]) -> None
+src/townlet/factories/policy_factory.py:47: note:     Got:
+src/townlet/factories/policy_factory.py:47: note:         def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None
+src/townlet/core/__init__.py:39: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/core/sim_loop.py:139: error: Incompatible types in assignment (expression has type "Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime] | None", variable has type "Callable[[WorldState, AffordanceRuntimeContext], DefaultAffordanceRuntime]")  [assignment]
+src/townlet/core/sim_loop.py:264: error: Argument "telemetry" to "ConsoleRouter" has incompatible type "TelemetrySinkProtocol"; expected "TelemetrySink"  [arg-type]
+src/townlet/core/sim_loop.py:360: error: Argument 1 to "PolicyRuntime" has incompatible type "**dict[str, object]"; expected "SimulationConfig"  [arg-type]
+src/townlet/core/sim_loop.py:371: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/core/sim_loop.py:381: error: Argument 1 to "TelemetryPublisher" has incompatible type "**dict[str, object]"; expected "SimulationConfig"  [arg-type]
+src/townlet/core/sim_loop.py:388: error: Incompatible types in assignment (expression has type "TelemetryPublisher", variable has type "TelemetrySinkProtocol")  [assignment]
+src/townlet/core/sim_loop.py:388: note: Following member(s) of "TelemetryPublisher" have conflicts:
+src/townlet/core/sim_loop.py:388: note:     Expected:
+src/townlet/core/sim_loop.py:388: note:         def emit_event(self, name: str, payload: Mapping[str, object] | None = ...) -> None
+src/townlet/core/sim_loop.py:388: note:     Got:
+src/townlet/core/sim_loop.py:388: note:         def emit_event(self, name: str, payload: Mapping[str, Any] | None = ...) -> Mapping[str, Any]
+src/townlet/core/sim_loop.py:388: note:     Expected:
+src/townlet/core/sim_loop.py:388: note:         def import_state(self, payload: Mapping[str, object]) -> None
+src/townlet/core/sim_loop.py:388: note:     Got:
+src/townlet/core/sim_loop.py:388: note:         def import_state(self, payload: dict[str, object]) -> None
+src/townlet/core/sim_loop.py:388: note:     <1 more conflict(s) not shown>
+src/townlet/core/sim_loop.py:483: error: Item "None" of "WorldRuntime | None" has no attribute "snapshot"  [union-attr]
+src/townlet/core/sim_loop.py:606: error: Returning Any from function declared to return "Mapping[str, object]"  [no-any-return]
+src/townlet/core/sim_loop.py:614: error: Argument "console_operations" to "tick" of "WorldRuntime" has incompatible type "list[object]"; expected "Iterable[ConsoleCommandEnvelope] | None"  [arg-type]
+src/townlet/core/sim_loop.py:658: error: Argument 1 to "deepcopy" has incompatible type "Mapping[Any, Any]"; expected "dict[str, object]"  [arg-type]
+src/townlet/core/sim_loop.py:698: error: Argument 2 to "on_tick" of "HealthMonitor" has incompatible type "TelemetrySinkProtocol"; expected "TelemetrySink"  [arg-type]
+src/townlet/core/sim_loop.py:709: error: Argument "option_switch_counts" to "track" of "StabilityMonitor" has incompatible type "Mapping[str, int]"; expected "dict[str, int] | None"  [arg-type]
+src/townlet/core/sim_loop.py:751: error: Argument 1 to "list" has incompatible type "Mapping[str, object] | list[dict[str, object]]"; expected "Iterable[dict[str, object]]"  [arg-type]
+src/townlet/core/sim_loop.py:819: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:820: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:821: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:822: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:823: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:824: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:825: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:826: error: "object" has no attribute "get"  [attr-defined]
+src/townlet/core/sim_loop.py:971: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:971: note: Possible overload variants:
+src/townlet/core/sim_loop.py:971: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:971: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:972: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:972: note: Possible overload variants:
+src/townlet/core/sim_loop.py:972: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:972: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:978: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:978: note: Possible overload variants:
+src/townlet/core/sim_loop.py:978: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:978: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:979: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:979: note: Possible overload variants:
+src/townlet/core/sim_loop.py:979: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:979: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:984: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:984: note: Possible overload variants:
+src/townlet/core/sim_loop.py:984: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:984: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1003: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/core/sim_loop.py:1003: error: Returning Any from function declared to return "int"  [no-any-return]
+src/townlet/core/sim_loop.py:1003: note: Error code "no-any-return" not covered by "type: ignore" comment
+src/townlet/core/sim_loop.py:1003: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:1003: note: Error code "call-overload" not covered by "type: ignore" comment
+src/townlet/core/sim_loop.py:1003: note: Possible overload variants:
+src/townlet/core/sim_loop.py:1003: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:1003: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1056: error: Value of type "object" is not indexable  [index]
+src/townlet/core/sim_loop.py:1057: error: Value of type "object" is not indexable  [index]
+src/townlet/core/sim_loop.py:1058: error: Value of type "object" is not indexable  [index]
+src/townlet/core/sim_loop.py:1086: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:1086: note: Possible overload variants:
+src/townlet/core/sim_loop.py:1086: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:1086: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1087: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:1087: note: Possible overload variants:
+src/townlet/core/sim_loop.py:1087: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:1087: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1089: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:1089: note: Possible overload variants:
+src/townlet/core/sim_loop.py:1089: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:1089: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1090: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:1090: note: Possible overload variants:
+src/townlet/core/sim_loop.py:1090: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:1090: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1095: error: No overload variant of "int" matches argument type "object"  [call-overload]
+src/townlet/core/sim_loop.py:1095: note: Possible overload variants:
+src/townlet/core/sim_loop.py:1095: note:     def int(str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc = ..., /) -> int
+src/townlet/core/sim_loop.py:1095: note:     def int(str | bytes | bytearray, /, base: SupportsIndex) -> int
+src/townlet/core/sim_loop.py:1227: error: Returning Any from function declared to return "ObservationEnvelope"  [no-any-return]
+src/townlet/core/sim_loop.py:1264: error: Returning Any from function declared to return "ObservationEnvelope | None"  [no-any-return]
+src/townlet/core/sim_loop.py:1358: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/core/sim_loop.py:1417: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/core/sim_loop.py:1442: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/core/sim_loop.py:1442: error: "bool" is invalid as return type for "__exit__" that always returns False  [exit-return]
+src/townlet/core/sim_loop.py:1442: note: Use "typing.Literal[False]" as the return type or change it to "None"
+src/townlet/core/sim_loop.py:1442: note: If return type of "__exit__" implies that it may return True, the context manager may swallow exceptions
+src/townlet/policy/scenario_utils.py:11: error: Module "townlet.world.grid" does not explicitly export attribute "AgentSnapshot"  [attr-defined]
+src/townlet/policy/scenario_utils.py:38: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet/policy/scenario_utils.py:140: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/policy/scenario_utils.py:145: error: Function is missing a return type annotation  [no-untyped-def]
+src/townlet/policy/scenario_utils.py:145: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet/policy/scenario_utils.py:151: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet_ui/dashboard.py:23: error: Cannot find implementation or library stub for module named "rich.tooltip"  [import-not-found]
+src/townlet_ui/dashboard.py:26: error: Unused "type: ignore" comment  [unused-ignore]
+src/townlet_ui/dashboard.py:26: error: Name "Tooltip" already defined (possibly by an import)  [no-redef]
+src/townlet_ui/dashboard.py:26: note: Error code "no-redef" not covered by "type: ignore" comment
+src/townlet_ui/dashboard.py:33: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]
+src/townlet_ui/dashboard.py:34: error: Incompatible types in "yield from" (actual type "Segment", expected type "ConsoleRenderable | RichCast | str")  [misc]
+src/townlet_ui/dashboard.py:493: error: Argument 1 to "append" of "list" has incompatible type "Text"; expected "Table"  [arg-type]
+src/townlet_ui/dashboard.py:494: error: List item 1 has incompatible type "Text"; expected "Table"  [list-item]
+src/townlet_ui/dashboard.py:763: error: Incompatible types in assignment (expression has type "QueueHistoryEntry", variable has type "PriceSpikeEntry")  [assignment]
+src/townlet_ui/dashboard.py:765: error: "PriceSpikeEntry" has no attribute "tick"  [attr-defined]
+src/townlet_ui/dashboard.py:766: error: "PriceSpikeEntry" has no attribute "cooldown_delta"  [attr-defined]
+src/townlet_ui/dashboard.py:767: error: "PriceSpikeEntry" has no attribute "ghost_step_delta"  [attr-defined]
+src/townlet_ui/dashboard.py:768: error: "PriceSpikeEntry" has no attribute "rotation_delta"  [attr-defined]
+src/townlet_ui/dashboard.py:1079: error: Statement is unreachable  [unreachable]
+src/townlet_ui/dashboard.py:1168: error: Name "body" already defined on line 1000  [no-redef]
+src/townlet_ui/dashboard.py:1171: error: Incompatible types in assignment (expression has type "Group", variable has type "Text")  [assignment]
+src/townlet_ui/dashboard.py:1259: error: Statement is unreachable  [unreachable]
+src/townlet_ui/dashboard.py:1975: error: Module "townlet.world.grid" does not explicitly export attribute "AgentSnapshot"  [attr-defined]
+src/townlet_ui/dashboard.py:2061: error: Argument 1 to "append" of "list" has incompatible type "Text"; expected "Panel"  [arg-type]
+src/townlet/benchmark/utils.py:107: error: Argument 1 to "Path" has incompatible type "Path | None"; expected "str | PathLike[str]"  [arg-type]
+src/townlet/benchmark/utils.py:115: error: Returning Any from function declared to return "dict[str, Any]"  [no-any-return]
+src/townlet/demo/runner.py:13: error: Module "townlet.world.grid" does not explicitly export attribute "AgentSnapshot"  [attr-defined]
+Found 539 errors in 75 files (checked 190 source files)

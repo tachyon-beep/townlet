@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from townlet.world.grid import WorldState
+from townlet.world.dto.observation import ObservationEnvelope
 
 
 class ScriptedPolicy:
@@ -14,7 +16,7 @@ class ScriptedPolicy:
 
     def decide(
         self, world: WorldState, tick: int
-    ) -> dict[str, dict]:  # pragma: no cover - interface
+    ) -> dict[str, dict[str, object]]:  # pragma: no cover - interface
         raise NotImplementedError
 
     def describe(self) -> str:
@@ -31,7 +33,7 @@ class IdlePolicy(ScriptedPolicy):
 
     name: str = "idle"
 
-    def decide(self, world: WorldState, tick: int) -> dict[str, dict]:
+    def decide(self, world: WorldState, tick: int) -> dict[str, dict[str, object]]:
         return {agent_id: {"kind": "wait"} for agent_id in world.agents.keys()}
 
 
@@ -49,17 +51,17 @@ class ScriptedPolicyAdapter:
 
     def __init__(self, scripted_policy: ScriptedPolicy) -> None:
         self.scripted_policy = scripted_policy
-        self.last_actions: dict[str, dict] = {}
+        self.last_actions: dict[str, dict[str, object]] = {}
         self.last_rewards: dict[str, float] = {}
         self.last_terminated: dict[str, bool] = {}
         self._latest_snapshot: dict[str, dict[str, object]] = {}
         self._policy_hash: str | None = None
         self._anneal_ratio: float | None = None
 
-    def decide(self, world: WorldState, tick: int) -> dict[str, dict]:
+    def decide(self, world: WorldState, tick: int) -> dict[str, dict[str, object]]:
         actions = self.scripted_policy.decide(world, tick)
         # Ensure every agent has an action (default wait)
-        wait_action = {"kind": "wait"}
+        wait_action: dict[str, object] = {"kind": "wait"}
         self.last_actions = {
             agent_id: actions.get(agent_id, wait_action)
             for agent_id in world.agents.keys()
@@ -91,14 +93,14 @@ class ScriptedPolicyAdapter:
         }
 
     def flush_transitions(
-        self, observations
+        self, observations: ObservationEnvelope | None
     ) -> None:  # pragma: no cover - SimulationLoop hook
         # Scripted policies do not accumulate PPO transitions.
         return
 
     def collect_trajectory(
         self, *, clear: bool = False
-    ):  # pragma: no cover - SimulationLoop hook
+    ) -> list[dict[str, Any]]:  # pragma: no cover - SimulationLoop hook
         return []
 
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:

@@ -241,9 +241,9 @@ def _evaluate(node: ast.AST, context: Mapping[str, Any]) -> Any:
 
 def _apply_compare(operator: ast.cmpop, left: Any, right: Any) -> bool:
     if isinstance(operator, ast.Eq):
-        return left == right
+        return bool(left == right)
     if isinstance(operator, ast.NotEq):
-        return left != right
+        return bool(left != right)
     if isinstance(operator, ast.Lt):
         return bool(left is not None and right is not None and left < right)
     if isinstance(operator, ast.LtE):
@@ -253,15 +253,21 @@ def _apply_compare(operator: ast.cmpop, left: Any, right: Any) -> bool:
     if isinstance(operator, ast.GtE):
         return bool(left is not None and right is not None and left >= right)
     if isinstance(operator, ast.In):
-        try:
-            return left in right  # type: ignore[operator]
-        except TypeError:
-            return False
+        if isinstance(right, (str, bytes)):
+            return str(left) in right
+        if isinstance(right, Mapping):
+            return left in right
+        if isinstance(right, (Sequence, set, frozenset)):
+            return left in right
+        return False
     if isinstance(operator, ast.NotIn):
-        try:
-            return left not in right  # type: ignore[operator]
-        except TypeError:
-            return False
+        if isinstance(right, (str, bytes)):
+            return str(left) not in right
+        if isinstance(right, Mapping):
+            return left not in right
+        if isinstance(right, (Sequence, set, frozenset)):
+            return left not in right
+        return True
     raise PreconditionEvaluationError(
         f"Unsupported comparison operator: {type(operator).__name__}"
     )

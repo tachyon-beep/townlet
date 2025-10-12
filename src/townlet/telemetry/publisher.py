@@ -823,6 +823,25 @@ class TelemetryPublisher:
         payload = dict(metrics)
         transport_payload = payload.get("transport")
         if isinstance(transport_payload, Mapping):
+            worker_payload = transport_payload.get("worker")
+            worker_alive = bool(
+                worker_payload.get("alive", transport_payload.get("worker_alive", False))
+                if isinstance(worker_payload, Mapping)
+                else transport_payload.get("worker_alive", False)
+            )
+            worker_error = (
+                worker_payload.get("error", transport_payload.get("worker_error"))
+                if isinstance(worker_payload, Mapping)
+                else transport_payload.get("worker_error")
+            )
+            if isinstance(worker_payload, Mapping):
+                worker_restart_source = worker_payload.get("restart_count", 0)
+            else:
+                worker_restart_source = transport_payload.get("worker_restart_count", 0)
+            try:
+                worker_restart_count = int(worker_restart_source or 0)
+            except (TypeError, ValueError):
+                worker_restart_count = 0
             payload["transport"] = {
                 "provider": transport_payload.get("provider"),
                 "queue_length": int(transport_payload.get("queue_length", 0) or 0),
@@ -832,21 +851,9 @@ class TelemetryPublisher:
                 "bytes_flushed_total": int(transport_payload.get("bytes_flushed_total", 0) or 0),
                 "auth_enabled": bool(transport_payload.get("auth_enabled", False)),
                 "worker": {
-                    "alive": bool(
-                        transport_payload.get("worker", {}).get("alive")  # type: ignore[call-arg]
-                        if isinstance(transport_payload.get("worker"), Mapping)
-                        else transport_payload.get("worker_alive", False)
-                    ),
-                    "error": (
-                        transport_payload.get("worker", {}).get("error")  # type: ignore[call-arg]
-                        if isinstance(transport_payload.get("worker"), Mapping)
-                        else transport_payload.get("worker_error")
-                    ),
-                    "restart_count": int(
-                        transport_payload.get("worker", {}).get("restart_count", 0)  # type: ignore[call-arg]
-                        if isinstance(transport_payload.get("worker"), Mapping)
-                        else transport_payload.get("worker_restart_count", 0) or 0
-                    ),
+                    "alive": worker_alive,
+                    "error": worker_error,
+                    "restart_count": worker_restart_count,
                 },
             }
         context_payload = payload.get("global_context")
@@ -885,10 +892,14 @@ class TelemetryPublisher:
                             return len(value)
                         if isinstance(value, (list, tuple, set)):
                             return len(value)
-                        try:
-                            return int(value)  # type: ignore[arg-type]
-                        except (TypeError, ValueError):
-                            return 0
+                        if isinstance(value, (int, float)):
+                            return int(value)
+                        if isinstance(value, str):
+                            try:
+                                return int(value)
+                            except ValueError:
+                                return 0
+                        return 0
 
                     summary["perturbations_pending"] = _count_entries(pending_section)
                     summary["perturbations_active"] = _count_entries(active_section)

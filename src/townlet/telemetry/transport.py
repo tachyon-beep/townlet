@@ -8,6 +8,8 @@ import ssl
 import sys
 from collections import deque
 from contextlib import AbstractContextManager
+from types import TracebackType
+from typing import BinaryIO, IO, Optional, TypeVar, Literal
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -19,7 +21,10 @@ class TelemetryTransportError(RuntimeError):
     """Raised when telemetry messages cannot be delivered."""
 
 
-class BaseTransport(AbstractContextManager):
+TTransport = TypeVar("TTransport", bound="BaseTransport")
+
+
+class BaseTransport(AbstractContextManager["BaseTransport"]):
     """Common lifecycle helpers for telemetry transports."""
 
     def start(self) -> None:
@@ -32,11 +37,16 @@ class BaseTransport(AbstractContextManager):
         raise NotImplementedError
 
     # Context manager helpers -------------------------------------------------
-    def __enter__(self):  # pragma: no cover - rarely used
+    def __enter__(self: TTransport) -> TTransport:  # pragma: no cover - rarely used
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc, tb):  # pragma: no cover - rarely used
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:  # pragma: no cover - rarely used
         self.stop()
         return False
 
@@ -49,7 +59,7 @@ class StdoutTransport(BaseTransport):
     """Writes telemetry payloads to stdout (for development/debug)."""
 
     def __init__(self) -> None:
-        self._stream = None
+        self._stream: BinaryIO | None = None
 
     def start(self) -> None:
         self._stream = sys.stdout.buffer
@@ -71,7 +81,7 @@ class FileTransport(BaseTransport):
 
     def __init__(self, path: Path) -> None:
         self._path = path.expanduser()
-        self._handle = None
+        self._handle: IO[bytes] | None = None
 
     def start(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,7 +129,7 @@ class TcpTransport(BaseTransport):
         self._endpoint = (host.strip(), port)
         self._connect_timeout = connect_timeout
         self._send_timeout = send_timeout
-        self._socket = None
+        self._socket: socket.socket | ssl.SSLSocket | None = None
         self._enable_tls = enable_tls
         self._verify_hostname = verify_hostname
         self._ca_file = Path(ca_file).expanduser() if ca_file else None
@@ -131,7 +141,6 @@ class TcpTransport(BaseTransport):
                 "Plaintext TCP transport is disabled; enable TLS or allow plaintext explicitly"
             )
         self._ssl_context: ssl.SSLContext | None = None
-        self._socket = None
         # Eagerly build SSL context to support tests that inspect TLS settings
         if self._enable_tls:
             self._ssl_context = self._build_ssl_context()
@@ -205,7 +214,7 @@ class HttpTransport(BaseTransport):
         self._url = url
         # urllib uses a single timeout parameter; reuse the larger bound for safety.
         timeout = max(connect_timeout, send_timeout)
-        self._timeout = timeout if timeout > 0 else None
+        self._timeout: float | None = timeout if timeout > 0 else None
         self._opener = urllib_request.build_opener()
 
     def send(self, payload: bytes) -> None:
@@ -351,17 +360,17 @@ def create_transport(
     """Factory helper for `TelemetryPublisher`."""
 
     if transport_type == "stdout":
-        t = StdoutTransport()
-        t.start()
-        return t
+        stdout_transport = StdoutTransport()
+        stdout_transport.start()
+        return stdout_transport
     if transport_type == "file":
         if file_path is None:
             raise TelemetryTransportError(
                 "telemetry.transport.file_path is required when using file transport"
             )
-        t = FileTransport(file_path)
-        t.start()
-        return t
+        file_transport = FileTransport(file_path)
+        file_transport.start()
+        return file_transport
     if transport_type == "tcp":
         if endpoint is None:
             raise TelemetryTransportError(
@@ -371,7 +380,7 @@ def create_transport(
             logger.warning(
                 "telemetry_tcp_plaintext_enabled endpoint=%s", endpoint
             )
-        t = TcpTransport(
+        tcp_transport = TcpTransport(
             endpoint,
             connect_timeout=connect_timeout,
             send_timeout=send_timeout,
@@ -382,36 +391,36 @@ def create_transport(
             key_file=key_file,
             allow_plaintext=allow_plaintext,
         )
-        t.start()
-        return t
+        tcp_transport.start()
+        return tcp_transport
     if transport_type == "http":
         if endpoint is None:
             raise TelemetryTransportError(
                 "telemetry.transport.endpoint is required when using http transport"
             )
-        t = HttpTransport(
+        http_transport = HttpTransport(
             endpoint,
             connect_timeout=connect_timeout,
             send_timeout=send_timeout,
         )
-        t.start()
-        return t
+        http_transport.start()
+        return http_transport
     if transport_type == "websocket":
         if websocket_url is None:
             raise TelemetryTransportError(
                 "telemetry.transport.websocket_url required for websocket transport"
             )
-        t = WebsocketTransport(websocket_url)
-        t.start()
-        return t
+        websocket_transport = WebsocketTransport(websocket_url)
+        websocket_transport.start()
+        return websocket_transport
     if transport_type == "prometheus":
         if file_path is None:
             raise TelemetryTransportError(
                 "telemetry.transport.file_path is required for prometheus transport"
             )
-        t = PrometheusTextfileTransport(file_path)
-        t.start()
-        return t
+        prometheus_transport = PrometheusTextfileTransport(file_path)
+        prometheus_transport.start()
+        return prometheus_transport
     raise TelemetryTransportError(
         f"Unsupported telemetry transport type: {transport_type}"
     )
