@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.world.grid import AgentSnapshot
-
-from tests.helpers.modular_world import ModularTestWorld
 
 CONFIG_PATH = Path("configs/examples/poc_hybrid.yaml")
 

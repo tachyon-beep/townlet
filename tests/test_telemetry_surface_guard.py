@@ -16,8 +16,8 @@ def test_telemetry_protocol_excludes_legacy_writers() -> None:
         "record_loop_failure",
     }
 
-    protocol_attrs = {name for name in dir(TelemetrySinkProtocol)}
-    publisher_attrs = {name for name in dir(TelemetryPublisher)}
+    protocol_attrs = set(dir(TelemetrySinkProtocol))
+    publisher_attrs = set(dir(TelemetryPublisher))
 
     offending_protocol = legacy_methods & protocol_attrs
     offending_publisher = legacy_methods & publisher_attrs

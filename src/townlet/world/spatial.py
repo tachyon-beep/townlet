@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Mapping, TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from townlet.world.agents.snapshot import AgentSnapshot
 
@@ -22,7 +23,7 @@ class WorldSpatialIndex:
     def rebuild(
         self,
         agents: Mapping[str, AgentSnapshot],
-        objects: Mapping[str, "InteractiveObject"],
+        objects: Mapping[str, InteractiveObject],
         active_reservations: Mapping[str, str],
     ) -> None:
         """Recalculate cached lookups from authoritative world state."""

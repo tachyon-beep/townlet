@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Dict, List
+from typing import Any
 
 
 class DummyTelemetrySink:
@@ -10,8 +10,8 @@ class DummyTelemetrySink:
     def __init__(self) -> None:
         self.started = False
         self.stopped = False
-        self.events: List[tuple[str, dict[str, Any]]] = []
-        self.metrics: List[tuple[str, float, dict[str, Any]]] = []
+        self.events: list[tuple[str, dict[str, Any]]] = []
+        self.metrics: list[tuple[str, float, dict[str, Any]]] = []
         self._transport_status: dict[str, Any] = {
             "provider": "dummy",
             "queue_length": 0,

@@ -3,8 +3,7 @@ from __future__ import annotations
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.events import EventDispatcher
 from townlet.world.rng import RngStreamManager
-from townlet.world.systems import SystemContext
-from townlet.world.systems import affordances
+from townlet.world.systems import SystemContext, affordances
 
 
 class FakeRuntime:

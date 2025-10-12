@@ -116,7 +116,7 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
 
 
 def test_precondition_success_allows_affordance_start() -> None:
-    loop, config = _make_loop()
+    loop, _config = _make_loop()
     world = loop.world
 
     world.agents["alice"] = AgentSnapshot(

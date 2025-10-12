@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping
+from collections.abc import Mapping
+from typing import Any
 
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import AffordanceOutcome, apply_affordance_outcome

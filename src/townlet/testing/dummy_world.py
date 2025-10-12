@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.snapshots.state import SnapshotState
@@ -84,8 +84,8 @@ class DummyWorldRuntime:
             agents=agents,
             global_context=GlobalObservationDTO(),
             actions=dict(self._last_actions),
-            terminated={agent: False for agent in selected},
-            termination_reasons={agent: "" for agent in selected},
+            terminated=dict.fromkeys(selected, False),
+            termination_reasons=dict.fromkeys(selected, ""),
         )
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
@@ -114,4 +114,3 @@ _DUMMY_WORLD_STATE = cast("WorldState", _StubWorldState())
 
 
 # Late imports to avoid circular dependencies during stub construction.
-from typing import Callable  # noqa: E402  # isort:skip

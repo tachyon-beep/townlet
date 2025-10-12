@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
+from collections.abc import Callable, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from townlet.world.dto.observation import ObservationEnvelope
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 class WorldRuntime(Protocol):
     """Minimal contract for advancing the world runtime."""
 
-    def bind_world(self, world: "WorldState") -> None:
+    def bind_world(self, world: WorldState) -> None:
         """Rebind the runtime to a freshly constructed world instance."""
 
     def agents(self) -> Iterable[str]:
@@ -35,22 +35,22 @@ class WorldRuntime(Protocol):
         self,
         *,
         tick: int,
-        console_operations: Iterable["ConsoleCommandEnvelope"] | None = None,
-        action_provider: Callable[["WorldState", int], Mapping[str, Any]] | None = None,
+        console_operations: Iterable[ConsoleCommandEnvelope] | None = None,
+        action_provider: Callable[[WorldState, int], Mapping[str, Any]] | None = None,
         policy_actions: Mapping[str, Any] | None = None,
-    ) -> "RuntimeStepResult":
+    ) -> RuntimeStepResult:
         """Advance the world by one tick and return observable artefacts."""
 
     def snapshot(
         self,
         *,
         config: Any | None = None,
-        telemetry: "TelemetrySinkProtocol" | None = None,
+        telemetry: TelemetrySinkProtocol | None = None,
         stability: Any | None = None,
         promotion: Any | None = None,
         rng_streams: Mapping[str, Any] | None = None,
         identity: Mapping[str, Any] | None = None,
-    ) -> "SnapshotState":
+    ) -> SnapshotState:
         """Return a diagnostic snapshot of the underlying world state."""
 
 

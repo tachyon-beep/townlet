@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from townlet.config import SimulationConfig
 from townlet.core.sim_loop import WorldComponents
@@ -46,7 +47,7 @@ class ModularTestWorld:
     ticks_per_day: int
 
     @classmethod
-    def from_config(cls, config: SimulationConfig) -> "ModularTestWorld":
+    def from_config(cls, config: SimulationConfig) -> ModularTestWorld:
         state = WorldState.from_config(config)
         context = getattr(state, "context", None)
         if context is None:

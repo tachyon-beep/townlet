@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from townlet.adapters.telemetry_stdout import StdoutTelemetryAdapter
-from townlet.telemetry.fallback import StubTelemetrySink
-from townlet.testing import DummyTelemetrySink
-from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.core import factory_registry as core_registry
+from townlet.telemetry.fallback import StubTelemetrySink
+from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.testing import DummyTelemetrySink
+
 from .registry import register, resolve
 
 

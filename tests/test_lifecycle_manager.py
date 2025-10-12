@@ -4,12 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.world.agents.lifecycle import LifecycleService
 from townlet.world.grid import AgentSnapshot
-
-from tests.helpers.modular_world import ModularTestWorld
 
 
 def _make_world(respawn_delay: int = 0) -> tuple[LifecycleManager, ModularTestWorld]:

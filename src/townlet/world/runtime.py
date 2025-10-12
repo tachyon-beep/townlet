@@ -19,10 +19,10 @@ from townlet.world.dto.observation import ObservationEnvelope
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig
     from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.lifecycle.manager import LifecycleManager
     from townlet.snapshots.state import SnapshotState
     from townlet.stability.monitor import StabilityMonitor
     from townlet.stability.promotion import PromotionManager
-    from townlet.lifecycle.manager import LifecycleManager
     from townlet.world.grid import WorldState
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
@@ -127,13 +127,13 @@ class WorldRuntime:
     def snapshot(
         self,
         *,
-        config: "SimulationConfig" | None = None,
-        telemetry: "TelemetrySinkProtocol" | None = None,
-        stability: "StabilityMonitor" | None = None,
-        promotion: "PromotionManager" | None = None,
+        config: SimulationConfig | None = None,
+        telemetry: TelemetrySinkProtocol | None = None,
+        stability: StabilityMonitor | None = None,
+        promotion: PromotionManager | None = None,
         rng_streams: Mapping[str, object] | None = None,
         identity: Mapping[str, object] | None = None,
-    ) -> "SnapshotState":  # pragma: no cover - thin pass-through
+    ) -> SnapshotState:  # pragma: no cover - thin pass-through
         """Expose the underlying world snapshot for diagnostics/tests."""
 
         target_config = config or getattr(self._world, "config", None)

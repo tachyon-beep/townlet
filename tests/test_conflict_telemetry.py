@@ -1,9 +1,9 @@
 from pathlib import Path
 
+from tests.helpers.telemetry import build_global_context
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot
-from tests.helpers.telemetry import build_global_context
 
 
 def test_conflict_snapshot_reports_rivalry_counts() -> None:

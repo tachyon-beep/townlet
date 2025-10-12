@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Callable, Dict
-
+from collections.abc import Callable
+from typing import Any
 
 Factory = Callable[..., object]
 
@@ -13,7 +13,7 @@ class ConfigurationError(RuntimeError):
     """Raised when a requested provider is not registered."""
 
 
-_REGISTRY: Dict[str, Dict[str, Factory]] = defaultdict(dict)
+_REGISTRY: dict[str, dict[str, Factory]] = defaultdict(dict)
 
 
 def register(kind: str, key: str) -> Callable[[Factory], Factory]:
@@ -48,7 +48,7 @@ def available(kind: str) -> list[str]:
 
 __all__ = [
     "ConfigurationError",
+    "available",
     "register",
     "resolve",
-    "available",
 ]

@@ -36,7 +36,8 @@ except ImportError:  # pragma: no cover - fallback shim
 
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.utils import policy_provider_name, telemetry_provider_name
-from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
+from townlet.world.dto.observation import ObservationEnvelope
+from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.telemetry import (
     AgentSummary,
     AnnealStatus,
@@ -51,7 +52,6 @@ from townlet_ui.telemetry import (
     TelemetryClient,
     TelemetrySnapshot,
 )
-from townlet.world.dto.observation import ObservationEnvelope
 
 if TYPE_CHECKING:
     from townlet.core.sim_loop import SimulationLoop
@@ -510,7 +510,7 @@ def dispatch_palette_selection(
     Returns the normalised `ConsoleCommand` produced by the executor so callers
     can preview or log the outgoing payload. When the executor queue is
     saturated, updates palette state with a warning banner and re-raises the
-    `CommandQueueFull` error so the caller can react (e.g. show dialog).
+    `CommandQueueFullError` so the caller can react (e.g. show dialog).
     """
 
     commands = _search_palette_commands(
@@ -551,7 +551,7 @@ def dispatch_palette_selection(
 
     try:
         command = executor.submit_payload(payload, enqueue=enqueue)
-    except CommandQueueFull as exc:
+    except CommandQueueFullError as exc:
         max_pending = exc.max_pending or exc.pending
         palette.status_message = f"Queue saturated ({exc.pending}/{max_pending})"
         palette.status_style = "yellow"

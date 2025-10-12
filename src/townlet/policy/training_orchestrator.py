@@ -393,7 +393,6 @@ class PolicyTrainingOrchestrator:
             raise ValueError("Replay dataset yielded no batches")
 
         example = batches[0]
-        timesteps = int(example.metadata.get("timesteps", 1) or 1)
         feature_dim = int(example.features.shape[2])
         map_shape = tuple(int(dim) for dim in example.maps.shape[2:])
         if map_shape is None:

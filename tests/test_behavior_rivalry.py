@@ -1,11 +1,10 @@
 from pathlib import Path
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.policy.behavior import ScriptedBehavior
 from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
-
-from tests.helpers.modular_world import ModularTestWorld
 
 
 def _make_world() -> ModularTestWorld:

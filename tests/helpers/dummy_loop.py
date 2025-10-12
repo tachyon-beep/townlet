@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.core.sim_loop import (
+    PolicyComponents,
     SimulationLoop,
     TelemetryComponents,
     WorldComponents,
-    PolicyComponents,
 )
 from townlet.snapshots.state import SnapshotState
 from townlet.telemetry.publisher import TelemetryPublisher
@@ -207,7 +208,7 @@ class _DummyRewardEngine:
         termination_reasons: Mapping[str, str],
     ) -> dict[str, float]:
         _ = (terminated, termination_reasons)
-        rewards = {agent_id: 0.0 for agent_id in world.agents}
+        rewards = dict.fromkeys(world.agents, 0.0)
         self._latest_breakdown = {agent_id: {"base": 0.0} for agent_id in world.agents}
         return rewards
 
@@ -371,7 +372,7 @@ class _LoopDummyWorldRuntime:
         if policy_actions:
             actions.update(policy_actions)
         self._last_actions = actions
-        terminated = {agent_id: False for agent_id in self._world.agents}
+        terminated = dict.fromkeys(self._world.agents, False)
         return RuntimeStepResult(
             console_results=[],
             events=[{"tick": tick, "queued_console": len(queued)}],
@@ -479,4 +480,4 @@ def build_dummy_loop(
     )
 
 
-__all__ = ["build_dummy_loop", "DummyLoopHarness"]
+__all__ = ["DummyLoopHarness", "build_dummy_loop"]

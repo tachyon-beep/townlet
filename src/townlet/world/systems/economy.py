@@ -6,7 +6,7 @@ import logging
 
 from townlet.world.economy import EconomyService
 
-from .base import SystemContext 
+from .base import SystemContext
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import http.server
 import json
+import threading
 import time
 from pathlib import Path
-import http.server
-import threading
 
 import pytest
 
@@ -296,7 +296,7 @@ def test_http_transport_posts_payload(tmp_path: Path) -> None:
             self.send_response(204)
             self.end_headers()
 
-        def log_message(self, format: str, *args: object) -> None:  # pragma: no cover - silence logs
+        def log_message(self, fmt: str, *args: object) -> None:  # pragma: no cover - silence logs
             return
 
     server = http.server.HTTPServer(("localhost", 0), CaptureHandler)

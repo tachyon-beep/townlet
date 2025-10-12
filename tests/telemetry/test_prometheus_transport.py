@@ -4,7 +4,6 @@ from pathlib import Path
 
 from townlet.telemetry.transport import (
     PrometheusTextfileTransport,
-    TelemetryTransportError,
     create_transport,
 )
 

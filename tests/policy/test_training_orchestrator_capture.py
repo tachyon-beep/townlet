@@ -6,6 +6,7 @@ from pathlib import Path
 from townlet.config import load_config
 from townlet.policy.training_orchestrator import PolicyTrainingOrchestrator
 
+
 class _StubPolicy:
     def __init__(self) -> None:
         self._frames = [

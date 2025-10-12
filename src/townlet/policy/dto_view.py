@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence
+from typing import Any
 
 from townlet.world.dto.observation import AgentObservationDTO, ObservationEnvelope
 
@@ -380,8 +381,8 @@ class DTOWorldView:
 
 
 __all__ = [
-    "DTOQueueManagerView",
     "DTOAffordanceRuntimeView",
+    "DTOQueueManagerView",
     "DTORelationshipView",
     "DTOWorldView",
 ]

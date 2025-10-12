@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
-from townlet.policy.fallback import StubPolicyBackend
-from townlet.testing import DummyPolicyBackend
-from townlet.policy.runner import PolicyRuntime
 from townlet.core import factory_registry as core_registry
+from townlet.policy.fallback import StubPolicyBackend
+from townlet.policy.runner import PolicyRuntime
+from townlet.testing import DummyPolicyBackend
+
 from .registry import register, resolve
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.world.grid import AgentSnapshot
 from townlet.world.observations.cache import build_local_cache
@@ -12,8 +13,6 @@ from townlet.world.observations.views import (
     find_nearest_object_of_type,
     local_view,
 )
-
-from tests.helpers.modular_world import ModularTestWorld
 
 
 def _make_world() -> ModularTestWorld:

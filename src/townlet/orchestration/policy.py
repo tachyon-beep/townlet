@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from townlet.core.interfaces import PolicyBackendProtocol
 from townlet.ports.policy import PolicyBackend
@@ -80,7 +80,7 @@ class PolicyController:
         world: Any,
         tick: int,
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: ObservationEnvelope | None = None,
     ) -> Mapping[str, Any]:
         """Return policy actions for the given world/tick."""
 
@@ -108,7 +108,7 @@ class PolicyController:
     def flush_transitions(
         self,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> Mapping[str, object] | list[dict[str, object]] | None:
         return self._backend.flush_transitions(envelope=envelope)
 

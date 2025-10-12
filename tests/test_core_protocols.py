@@ -12,8 +12,8 @@ from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
 )
-from townlet.ports.world import WorldRuntime as WorldRuntimePort
 from townlet.policy.runner import PolicyRuntime
+from townlet.ports.world import WorldRuntime as WorldRuntimePort
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.runtime import WorldRuntime as ConcreteWorldRuntime
 

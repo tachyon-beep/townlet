@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from townlet.core.interfaces import PolicyBackendProtocol
 
@@ -45,7 +45,7 @@ class StubPolicyBackend(PolicyBackendProtocol):
         world: Any,
         tick: int,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> Mapping[str, object]:
         _ = world, tick, envelope
         return {}
@@ -56,7 +56,7 @@ class StubPolicyBackend(PolicyBackendProtocol):
     def flush_transitions(
         self,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> None:
         _ = envelope
 

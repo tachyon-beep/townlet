@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from townlet.config import load_config
-
 from tests.helpers.modular_world import ModularTestWorld
+from townlet.config import load_config
 
 
 def _make_world() -> ModularTestWorld:

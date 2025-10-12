@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from typing import Any, Callable, Iterable, Mapping, Optional
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
 
 from townlet.console.command import (
     ConsoleCommandEnvelope,
@@ -12,8 +13,8 @@ from townlet.console.command import (
     ConsoleCommandResult,
 )
 from townlet.ports.telemetry import TelemetrySink
-from townlet.snapshots.state import SnapshotState
 from townlet.ports.world import WorldRuntime
+from townlet.snapshots.state import SnapshotState
 
 ConsoleHandler = Callable[[ConsoleCommandEnvelope], Mapping[str, Any]]
 
@@ -58,7 +59,7 @@ class ConsoleRouter:
         self._queue.clear()
         result_iter = iter(results or ())
 
-        def _next_result() -> Optional[ConsoleCommandResult]:
+        def _next_result() -> ConsoleCommandResult | None:
             try:
                 return next(result_iter)
             except StopIteration:

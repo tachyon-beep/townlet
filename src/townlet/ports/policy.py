@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.dto.observation import ObservationEnvelope
@@ -22,7 +22,7 @@ class PolicyBackend(Protocol):
         self,
         *,
         tick: int,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> Mapping[str, Any]:
         """Return an action mapping for the provided DTO envelope."""
 

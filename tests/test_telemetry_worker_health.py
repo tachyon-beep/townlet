@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import time
+import types
 from collections.abc import Mapping
 from pathlib import Path
-import types
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop

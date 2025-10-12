@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import random
-from collections.abc import Callable, Iterable, Mapping
 import hashlib
 import pickle
+import random
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
+from townlet.console.command import ConsoleCommandEnvelope
 from townlet.world.actions import Action, apply_actions
-from townlet.world.core.runtime_adapter import WorldRuntimeAdapter, ensure_world_adapter
+from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.dto import build_observation_envelope
 from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.observations.context import (
@@ -20,10 +20,12 @@ from townlet.world.observations.context import (
 )
 from townlet.world.rng import RngStreamManager
 from townlet.world.systems import default_systems
-from townlet.world.systems.base import SystemContext, SystemStep
 from townlet.world.systems.affordances import process_actions
+from townlet.world.systems.base import SystemContext, SystemStep
 
 if TYPE_CHECKING:  # pragma: no cover
+    from townlet.lifecycle.manager import LifecycleManager
+    from townlet.scheduler.perturbations import PerturbationScheduler
     from townlet.world.affordance_runtime_service import AffordanceRuntimeService
     from townlet.world.agents.employment import EmploymentService
     from townlet.world.agents.lifecycle import LifecycleService
@@ -34,34 +36,32 @@ if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.employment_runtime import EmploymentRuntime
     from townlet.world.employment_service import EmploymentCoordinator
     from townlet.world.grid import WorldState
-    from townlet.world.perturbations.service import PerturbationService
     from townlet.world.observations.interfaces import ObservationServiceProtocol
+    from townlet.world.perturbations.service import PerturbationService
     from townlet.world.queue import QueueConflictTracker, QueueManager
-    from townlet.lifecycle.manager import LifecycleManager
-    from townlet.scheduler.perturbations import PerturbationScheduler
 
 
 @dataclass(slots=True)
 class WorldContext:
     """Facade around the modular world capable of executing ticks."""
 
-    state: "WorldState"
-    queue_manager: "QueueManager"
-    queue_conflicts: "QueueConflictTracker"
-    affordance_service: "AffordanceRuntimeService"
-    console: "ConsoleService"
-    employment: "EmploymentCoordinator"
-    employment_runtime: "EmploymentRuntime"
-    employment_service: "EmploymentService"
-    lifecycle_service: "LifecycleService"
-    nightly_reset_service: "NightlyResetService"
-    relationships: "RelationshipService"
-    economy_service: "EconomyService"
-    perturbation_service: "PerturbationService"
+    state: WorldState
+    queue_manager: QueueManager
+    queue_conflicts: QueueConflictTracker
+    affordance_service: AffordanceRuntimeService
+    console: ConsoleService
+    employment: EmploymentCoordinator
+    employment_runtime: EmploymentRuntime
+    employment_service: EmploymentService
+    lifecycle_service: LifecycleService
+    nightly_reset_service: NightlyResetService
+    relationships: RelationshipService
+    economy_service: EconomyService
+    perturbation_service: PerturbationService
     config: object
     emit_event_callback: Callable[[str, dict[str, Any]], None]
     sync_reservation_callback: Callable[[str], None]
-    observation_service: "ObservationServiceProtocol | None" = None
+    observation_service: ObservationServiceProtocol | None = None
     systems: tuple[SystemStep, ...] | None = None
     rng_manager: RngStreamManager | None = None
     _pending_actions: dict[str, object] = field(default_factory=dict, init=False, repr=False)

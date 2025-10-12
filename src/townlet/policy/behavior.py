@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Protocol
+from typing import Any, Protocol
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig

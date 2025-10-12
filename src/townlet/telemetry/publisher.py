@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
+from townlet.config.loader import TelemetryTransformEntry
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.telemetry.aggregation import (
@@ -33,13 +34,11 @@ from townlet.telemetry.transform import (
     RedactFieldsTransform,
     SchemaValidationTransform,
     SnapshotEventNormalizer,
-    TelemetryTransformPipeline,
     TransformPipelineConfig,
     compile_json_schema,
     copy_relationship_snapshot,
     normalize_perturbations_payload,
 )
-from townlet.config.loader import TelemetryTransformEntry
 from townlet.telemetry.transport import (
     TelemetryTransportError,
     TransportBuffer,
@@ -1058,7 +1057,7 @@ class TelemetryPublisher:
         self,
         *,
         tick: int,
-        world: WorldState | "WorldRuntimeAdapterProtocol" | None = None,
+        world: WorldState | WorldRuntimeAdapterProtocol | None = None,
         rewards: dict[str, float],
         events: Iterable[dict[str, object]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,

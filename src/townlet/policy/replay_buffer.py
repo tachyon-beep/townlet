@@ -6,9 +6,9 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from townlet.policy.replay import (
+    TRAINING_ARRAY_FIELDS,
     ReplayBatch,
     ReplaySample,
-    TRAINING_ARRAY_FIELDS,
     build_batch,
 )
 

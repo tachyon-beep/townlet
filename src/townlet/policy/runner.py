@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import warnings
 import logging
+import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -71,13 +71,13 @@ def _pretty_action(action_repr: str) -> str:
 class ObservationEnvelopeCache:
     """Caches DTO envelopes plus derived helper views for diagnostics."""
 
-    envelope: "ObservationEnvelope"
+    envelope: ObservationEnvelope
     agent_ids: tuple[str, ...]
     anneal_context: Mapping[str, Any]
     action_lookup: dict[str, Any]
 
     @classmethod
-    def from_envelope(cls, envelope: "ObservationEnvelope") -> "ObservationEnvelopeCache":
+    def from_envelope(cls, envelope: ObservationEnvelope) -> ObservationEnvelopeCache:
         agent_ids = tuple(dto.agent_id for dto in envelope.agents)
         anneal_ctx = dict(envelope.global_context.anneal_context or {})
         action_lookup = dict(envelope.actions or {})
@@ -193,7 +193,7 @@ class PolicyRuntime:
         world: WorldState,
         tick: int,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> dict[str, object]:
         """Return an action dictionary per agent for the current tick."""
 
@@ -381,7 +381,7 @@ class PolicyRuntime:
     def flush_transitions(
         self,
         *,
-        envelope: "ObservationEnvelope | None" = None,
+        envelope: ObservationEnvelope | None = None,
     ) -> list[dict[str, object]]:
         """Combine stored transition data with observations and return frames."""
         dto_envelope = envelope
@@ -598,12 +598,12 @@ class PolicyRuntime:
     # ------------------------------------------------------------------
     # DTO cache helpers
     # ------------------------------------------------------------------
-    def update_observation_envelope(self, envelope: "ObservationEnvelope") -> None:
+    def update_observation_envelope(self, envelope: ObservationEnvelope) -> None:
         """Persist the latest DTO envelope for diagnostics and downstream consumers."""
 
         self._envelope_cache = ObservationEnvelopeCache.from_envelope(envelope)
 
-    def latest_envelope(self) -> "ObservationEnvelope | None":
+    def latest_envelope(self) -> ObservationEnvelope | None:
         """Return the most recent observation envelope."""
 
         cache = self._envelope_cache

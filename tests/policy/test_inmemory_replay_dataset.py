@@ -1,6 +1,6 @@
 import numpy as np
 
-from townlet.policy.replay import ReplaySample, TRAINING_ARRAY_FIELDS
+from townlet.policy.replay import TRAINING_ARRAY_FIELDS, ReplaySample
 from townlet.policy.replay_buffer import (
     InMemoryReplayDataset,
     InMemoryReplayDatasetConfig,

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import copy
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from townlet.world.agents.registry import AgentRecord, AgentRegistry
 from townlet.world.events import Event, EventDispatcher
@@ -20,7 +21,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 class WorldState:
     """Encapsulates mutable world data surfaced through the WP1 ports."""
 
-    config: "SimulationConfig"
+    config: SimulationConfig
     tick: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
     rng_seed: int | None = None
@@ -74,21 +75,21 @@ class WorldState:
     # ------------------------------------------------------------------
     def register_agent(
         self,
-        snapshot: "AgentSnapshot",
+        snapshot: AgentSnapshot,
         *,
         tick: int | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> "AgentSnapshot":
+    ) -> AgentSnapshot:
         """Insert or replace an agent snapshot in the registry."""
 
         return self.agents.add(snapshot, tick=tick, metadata=metadata)
 
-    def remove_agent(self, agent_id: str) -> "AgentSnapshot | None":
+    def remove_agent(self, agent_id: str) -> AgentSnapshot | None:
         """Remove an agent and return the previous snapshot."""
 
         return self.agents.discard(agent_id)
 
-    def agent_snapshots_view(self) -> Mapping[str, "AgentSnapshot"]:
+    def agent_snapshots_view(self) -> Mapping[str, AgentSnapshot]:
         """Return an immutable view over agent snapshots."""
 
         return self.agents.snapshots_view()

@@ -5,10 +5,9 @@ from __future__ import annotations
 import hashlib
 import random
 from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 
-def make(seed: Optional[int] = None) -> random.Random:
+def make(seed: int | None = None) -> random.Random:
     """Return a seeded PRNG instance."""
 
     return random.Random(seed)
@@ -19,10 +18,10 @@ class RngStreamManager:
     """Manage deterministic RNG streams keyed by name."""
 
     base_seed: int
-    _streams: Dict[str, random.Random] = field(default_factory=dict, init=False, repr=False)
+    _streams: dict[str, random.Random] = field(default_factory=dict, init=False, repr=False)
 
     @classmethod
-    def from_seed(cls, seed: int | None) -> "RngStreamManager":
+    def from_seed(cls, seed: int | None) -> RngStreamManager:
         if seed is None:
             seed = random.randrange(0, 2**63)
         return cls(base_seed=int(seed))

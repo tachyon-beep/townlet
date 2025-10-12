@@ -418,7 +418,7 @@ class ReplayDataset:
         self._buckets: list[list[int]] | None = None  # indices grouped by shape signature
         self.metrics_map = config.metrics_map or {}
         if self._streaming:
-            # In streaming mode, we don’t cache samples globally. We still want
+            # In streaming mode, we don't cache samples globally. We still want
             # to batch by homogeneous shapes, so build signature buckets by
             # peeking each entry once.
             signatures: dict[tuple, list[int]] = {}

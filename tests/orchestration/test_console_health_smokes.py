@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from townlet.config import SimulationConfig, load_config
-
 from tests.helpers.dummy_loop import build_dummy_loop
+from townlet.config import SimulationConfig, load_config
 
 
 @pytest.fixture()

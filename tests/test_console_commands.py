@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.telemetry import build_global_context
 from townlet.config import (
     ArrangedMeetEventConfig,
     FloatRange,
@@ -20,11 +21,10 @@ from townlet.snapshots.migrations import clear_registry, register_migration
 from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import AgentSnapshot
 from townlet_ui.commands import (
-    CommandQueueFull,
+    CommandQueueFullError,
     ConsoleCommandExecutor,
     PaletteCommandRequest,
 )
-from tests.helpers.telemetry import build_global_context
 
 
 def _load_palette_fixture(name: str) -> dict[str, object]:
@@ -133,7 +133,7 @@ def test_console_executor_queue_limit_guard() -> None:
     executor.submit_payload(payload)
     assert executor.pending_count() == 1
 
-    with pytest.raises(CommandQueueFull):
+    with pytest.raises(CommandQueueFullError):
         executor.submit_payload(payload)
 
     executor.shutdown()

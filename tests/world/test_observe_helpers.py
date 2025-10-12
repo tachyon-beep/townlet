@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
-from townlet.world.observe import find_nearest_object_of_type, local_view
 from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
+from townlet.world.observe import find_nearest_object_of_type, local_view
 
 
 class FakeWorldAdapter(WorldRuntimeAdapterProtocol):

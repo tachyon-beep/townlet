@@ -6,8 +6,8 @@ import copy
 import hashlib
 import logging
 import os
-import random
 import pickle
+import random
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,20 +50,18 @@ from townlet.world.console import (
     WorldConsoleController,
     install_world_console_handlers,
 )
-from townlet.world.events import Event, EventDispatcher
-from townlet.world.rng import RngStreamManager
-from townlet.world.systems.base import SystemContext
 from townlet.world.core.context import WorldContext
 from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
+from townlet.world.events import Event, EventDispatcher
 from townlet.world.hooks import load_modules as load_hook_modules
-from townlet.world.observations.views import (
-    find_nearest_object_of_type as observation_find_nearest_object_of_type,
-)
 from townlet.world.observations.context import snapshot_precondition_context
 from townlet.world.observations.interfaces import ObservationServiceProtocol
 from townlet.world.observations.service import WorldObservationService
+from townlet.world.observations.views import (
+    find_nearest_object_of_type as observation_find_nearest_object_of_type,
+)
 from townlet.world.perturbations import PerturbationService
 from townlet.world.preconditions import (
     CompiledPrecondition,
@@ -72,6 +70,7 @@ from townlet.world.preconditions import (
 )
 from townlet.world.queue import QueueConflictTracker, QueueManager
 from townlet.world.relationships import RelationshipTie
+from townlet.world.rng import RngStreamManager
 from townlet.world.spatial import WorldSpatialIndex
 from townlet.world.systems import affordances as affordance_system
 from townlet.world.systems import economy as economy_system
@@ -79,6 +78,7 @@ from townlet.world.systems import employment as employment_system
 from townlet.world.systems import perturbations as perturbation_system
 from townlet.world.systems import queues as queue_system
 from townlet.world.systems import relationships as relationship_system
+from townlet.world.systems.base import SystemContext
 
 logger = logging.getLogger(__name__)
 

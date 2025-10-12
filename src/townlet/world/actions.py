@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, MutableMapping, Sequence
+from typing import Any
 
 from townlet.world.events import Event
 from townlet.world.state import WorldState

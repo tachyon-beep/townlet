@@ -24,11 +24,12 @@ from townlet.core.utils import (
     policy_provider_name,
     telemetry_provider_name,
 )
-from townlet.ports.world import WorldRuntime
-from townlet.lifecycle.manager import LifecycleManager
 from townlet.factories import registry as port_registry_module
-from townlet.factories.registry import register as factory_register, available as factory_available
+from townlet.factories.registry import available as factory_available
+from townlet.factories.registry import register as factory_register
+from townlet.lifecycle.manager import LifecycleManager
 from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
+from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 
 

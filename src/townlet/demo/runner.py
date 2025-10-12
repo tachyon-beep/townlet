@@ -11,7 +11,7 @@ from townlet.core.utils import is_stub_telemetry
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
 from townlet.world.grid import AgentSnapshot, WorldState
-from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
+from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.dashboard import PaletteState, run_dashboard
 
 __all__ = [
@@ -56,7 +56,7 @@ class DemoScheduler:
                     message = f"Dispatched {item.name} at tick {tick}"
                     logger.info(message)
                     self._set_palette(executor, message, "green")
-                except CommandQueueFull as exc:
+                except CommandQueueFullError as exc:
                     warning = f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
                     logger.warning(warning)
                     self._set_palette(executor, warning, "yellow")
@@ -176,7 +176,7 @@ class DemoScheduler:
         payload = {"name": "announce_story", "kwargs": payload_kwargs}
         try:
             executor.submit_payload(payload)
-        except CommandQueueFull as exc:
+        except CommandQueueFullError as exc:
             warning = f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
             logger.warning(warning)
             return (warning, "yellow")

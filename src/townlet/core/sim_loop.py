@@ -26,6 +26,9 @@ from townlet.core.interfaces import (
 )
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
+from townlet.policy.runner import PolicyRuntime
+from townlet.ports.world import WorldRuntime
 from townlet.rewards.engine import RewardEngine
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots import (
@@ -35,20 +38,13 @@ from townlet.snapshots import (
 )
 from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
+from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
-from townlet.world.dto import build_observation_envelope
 from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.grid import WorldState
-from townlet.policy.runner import PolicyRuntime
-from townlet.telemetry.publisher import TelemetryPublisher
-from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
-from townlet.world.observations.context import (
-    agent_context as observation_agent_context,
-)
 from townlet.world.observations.interfaces import ObservationServiceProtocol
-from townlet.ports.world import WorldRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +145,9 @@ class SimulationLoop:
         self._telemetry_provider_locked = telemetry_provider is not None
         self._telemetry_options = dict(telemetry_options or {})
         self._telemetry_options_locked = telemetry_options is not None
-        self._world_components_override: Callable[["SimulationLoop"], WorldComponents] | None = None
-        self._policy_components_override: Callable[["SimulationLoop"], PolicyComponents] | None = None
-        self._telemetry_components_override: Callable[["SimulationLoop"], TelemetryComponents] | None = None
+        self._world_components_override: Callable[[SimulationLoop], WorldComponents] | None = None
+        self._policy_components_override: Callable[[SimulationLoop], PolicyComponents] | None = None
+        self._telemetry_components_override: Callable[[SimulationLoop], TelemetryComponents] | None = None
         self._observation_service: ObservationServiceProtocol | None = None
         self._runtime_variant: str = "facade"
         self._resolved_providers: dict[str, str] = {}
@@ -279,7 +275,7 @@ class SimulationLoop:
 
     def override_world_components(
         self,
-        builder: Callable[["SimulationLoop"], WorldComponents] | None,
+        builder: Callable[[SimulationLoop], WorldComponents] | None,
     ) -> None:
         """Override the world component builder (testing seam)."""
 
@@ -287,7 +283,7 @@ class SimulationLoop:
 
     def override_policy_components(
         self,
-        builder: Callable[["SimulationLoop"], PolicyComponents] | None,
+        builder: Callable[[SimulationLoop], PolicyComponents] | None,
     ) -> None:
         """Override the policy component builder (testing seam)."""
 
@@ -295,7 +291,7 @@ class SimulationLoop:
 
     def override_telemetry_components(
         self,
-        builder: Callable[["SimulationLoop"], TelemetryComponents] | None,
+        builder: Callable[[SimulationLoop], TelemetryComponents] | None,
     ) -> None:
         """Override the telemetry component builder (testing seam)."""
 
@@ -878,7 +874,7 @@ class SimulationLoop:
             except Exception:  # pragma: no cover - handlers should not break the loop
                 logger.exception("Simulation loop failure handler raised")
 
-    def _ensure_policy_envelope(self) -> "ObservationEnvelope":
+    def _ensure_policy_envelope(self) -> ObservationEnvelope:
         """Ensure a DTO envelope is available for policy decisions."""
 
         envelope = self._policy_observation_envelope
@@ -1116,7 +1112,7 @@ class SimulationLoop:
         }
         return payload
 
-    def _set_policy_observation_envelope(self, envelope: "ObservationEnvelope") -> None:
+    def _set_policy_observation_envelope(self, envelope: ObservationEnvelope) -> None:
         """Persist the current observation envelope and notify the backend."""
 
         self._policy_observation_envelope = envelope
@@ -1180,7 +1176,7 @@ class SimulationLoop:
             telemetry.emit_event("policy.anneal.update", anneal_payload)
             self._last_policy_anneal_event = copy.deepcopy(anneal_payload)
 
-    def _build_bootstrap_policy_envelope(self) -> "ObservationEnvelope":
+    def _build_bootstrap_policy_envelope(self) -> ObservationEnvelope:
         """Build a DTO envelope from the current world when none has been recorded."""
 
         context = self._require_world_context()
@@ -1435,7 +1431,7 @@ class SimulationLoop:
                 except Exception:  # pragma: no cover - defensive cleanup
                     logger.debug("Telemetry close raised during loop shutdown", exc_info=True)
 
-    def __enter__(self) -> "SimulationLoop":
+    def __enter__(self) -> SimulationLoop:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:

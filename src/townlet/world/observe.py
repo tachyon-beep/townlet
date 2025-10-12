@@ -129,4 +129,4 @@ def find_nearest_object_of_type(
     return min(targets, key=lambda pos: (pos[0] - ox) ** 2 + (pos[1] - oy) ** 2)
 
 
-__all__ = ["local_view", "find_nearest_object_of_type"]
+__all__ = ["find_nearest_object_of_type", "local_view"]

@@ -82,6 +82,7 @@ from townlet.policy.models import torch_available  # noqa: E402  pylint: disable
 from townlet.policy.runner import PolicyRuntime  # noqa: E402  pylint: disable=wrong-import-position
 from townlet.telemetry.fallback import StubTelemetrySink  # noqa: E402  pylint: disable=wrong-import-position
 from townlet.telemetry.publisher import TelemetryPublisher  # noqa: E402  pylint: disable=wrong-import-position
+
 _policy_registry.register("scripted", lambda **kwargs: PolicyRuntime(**kwargs))
 _policy_registry.register("default", lambda **kwargs: PolicyRuntime(**kwargs))
 _policy_registry.register("stub", lambda **kwargs: StubPolicyBackend(**kwargs))

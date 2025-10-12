@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import Any, Callable, TYPE_CHECKING
+from collections.abc import Callable, Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from townlet.core.interfaces import PolicyBackendProtocol
 from townlet.ports.policy import PolicyBackend
@@ -37,7 +37,7 @@ class ScriptedPolicyAdapter(PolicyBackend):
         self,
         *,
         tick: int,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> Mapping[str, Any]:
         if self._world_provider is None:
             raise RuntimeError("Policy adapter world provider not configured")
@@ -60,7 +60,7 @@ class ScriptedPolicyAdapter(PolicyBackend):
     def flush_transitions(
         self,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> Mapping[str, object] | list[dict[str, object]] | None:
         return self._backend.flush_transitions(envelope=envelope)
 

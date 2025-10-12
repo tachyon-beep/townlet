@@ -6,13 +6,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
 from townlet.config.loader import load_config
-from townlet.core.sim_loop import SimulationLoop
 from townlet.core import policy_registry, telemetry_registry
+from townlet.core.sim_loop import SimulationLoop
 from townlet.factories.registry import register as factory_register
 from townlet.policy.fallback import StubPolicyBackend
 from townlet.telemetry.fallback import StubTelemetrySink
-from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
 from townlet.world.core import WorldContext
 
 

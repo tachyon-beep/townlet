@@ -2,28 +2,27 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable, Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
-from townlet.world.dto.observation import ObservationEnvelope
+from townlet.snapshots import snapshot_from_world
+from townlet.snapshots.state import SnapshotState
 from townlet.world.core.context import WorldContext
 from townlet.world.core.runtime_adapter import ensure_world_adapter
+from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
-from townlet.snapshots.state import SnapshotState
-from townlet.snapshots import snapshot_from_world
-
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from townlet.config import SimulationConfig
     from townlet.console.command import ConsoleCommandEnvelope
-    from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
     from townlet.core.interfaces import TelemetrySinkProtocol
     from townlet.stability.monitor import StabilityMonitor
     from townlet.stability.promotion import PromotionManager
-    from townlet.config import SimulationConfig
+    from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
 
 class DefaultWorldAdapter(WorldRuntime):
@@ -74,7 +73,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self,
         *,
         tick: int,
-        console_operations: Iterable["ConsoleCommandEnvelope"] | None = None,
+        console_operations: Iterable[ConsoleCommandEnvelope] | None = None,
         action_provider: Callable[[WorldState, int], Mapping[str, Any]] | None = None,
         policy_actions: Mapping[str, Any] | None = None,
     ) -> RuntimeStepResult:
@@ -130,9 +129,9 @@ class DefaultWorldAdapter(WorldRuntime):
         self,
         *,
         config: SimulationConfig | None = None,
-        telemetry: "TelemetrySinkProtocol" | None = None,
-        stability: "StabilityMonitor" | None = None,
-        promotion: "PromotionManager" | None = None,
+        telemetry: TelemetrySinkProtocol | None = None,
+        stability: StabilityMonitor | None = None,
+        promotion: PromotionManager | None = None,
         rng_streams: Mapping[str, Any] | None = None,
         identity: Mapping[str, Any] | None = None,
     ) -> SnapshotState:
@@ -170,7 +169,7 @@ class DefaultWorldAdapter(WorldRuntime):
             raise RuntimeError("Perturbation scheduler unavailable on default world adapter")
         return self._perturbations
 
-    def bind_world_adapter(self, adapter: "WorldRuntimeAdapterProtocol") -> None:
+    def bind_world_adapter(self, adapter: WorldRuntimeAdapterProtocol) -> None:
         self._world_adapter = adapter
 
     @property

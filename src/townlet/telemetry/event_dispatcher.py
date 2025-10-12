@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from typing import Any, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
+from typing import Any
 
 
 class TelemetryEventDispatcher:

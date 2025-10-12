@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from townlet.orchestration.policy import PolicyController
 from townlet.core.interfaces import PolicyBackendProtocol
+from townlet.orchestration.policy import PolicyController
 from townlet.ports.policy import PolicyBackend
 
 

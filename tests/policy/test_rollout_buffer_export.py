@@ -5,8 +5,8 @@ import json
 from townlet.policy.rollout import RolloutBuffer
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.dto.observation import (
-    AgentObservationDTO,
     DTO_SCHEMA_VERSION,
+    AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )

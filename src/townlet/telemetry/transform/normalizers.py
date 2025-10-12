@@ -6,9 +6,9 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 __all__ = [
-    "normalize_snapshot_payload",
     "copy_relationship_snapshot",
     "normalize_perturbations_payload",
+    "normalize_snapshot_payload",
 ]
 
 

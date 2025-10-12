@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from townlet.policy.trajectory_service import TrajectoryService
 from townlet.policy.replay import frames_to_replay_sample
+from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.dto.observation import (
-    AgentObservationDTO,
     DTO_SCHEMA_VERSION,
+    AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )

@@ -7,7 +7,7 @@ from rich.console import Console
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
-from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
+from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.dashboard import (
     AgentCardState,
     PaletteState,
@@ -493,8 +493,8 @@ def test_dispatch_palette_selection_handles_queue_full() -> None:
     palette.status_message = None
     try:
         dispatch_palette_selection(snapshot, palette, executor)
-        raise AssertionError("Expected CommandQueueFull")
-    except CommandQueueFull:
+        raise AssertionError("Expected CommandQueueFullError")
+    except CommandQueueFullError:
         assert palette.status_message is not None
         assert "Queue saturated" in palette.status_message
         assert palette.status_style == "yellow"

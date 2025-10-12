@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .publisher import TelemetryPublisher
 from .event_dispatcher import TelemetryEventDispatcher
+from .publisher import TelemetryPublisher
 
-__all__ = ["TelemetryPublisher", "TelemetryEventDispatcher"]
+__all__ = ["TelemetryEventDispatcher", "TelemetryPublisher"]

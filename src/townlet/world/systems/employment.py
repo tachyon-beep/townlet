@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from townlet.config import EmploymentConfig
 from townlet.world.agents.employment import EmploymentService
@@ -172,6 +173,7 @@ __all__ = [
     "coworkers_on_shift",
     "defer_exit",
     "determine_state",
+    "exits_today",
     "finalize_shift",
     "get_context",
     "idle_state",
@@ -183,5 +185,4 @@ __all__ = [
     "reset_exits_today",
     "set_exits_today",
     "step",
-    "exits_today",
 ]

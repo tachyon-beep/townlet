@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.dummy_loop import build_dummy_loop
 from townlet.config import SimulationConfig, load_config
 from townlet.core.sim_loop import TickArtifacts
 from townlet.world.dto.observation import DTO_SCHEMA_VERSION
-
-from tests.helpers.dummy_loop import build_dummy_loop
 
 
 @pytest.fixture()

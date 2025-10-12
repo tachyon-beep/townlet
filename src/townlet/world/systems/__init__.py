@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Tuple
-
+from . import affordances, economy, employment, perturbations, queues, relationships
 from .base import SystemContext, SystemStep
 
-from . import queues, affordances, employment, relationships, economy, perturbations
 
-
-def default_systems() -> Tuple[SystemStep, ...]:
+def default_systems() -> tuple[SystemStep, ...]:
     """Return the ordered list of system steps (placeholders for now)."""
 
     return (

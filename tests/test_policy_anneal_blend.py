@@ -1,11 +1,10 @@
 from pathlib import Path
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.policy.behavior import AgentIntent, BehaviorController
 from townlet.policy.runner import PolicyRuntime
 from townlet.world.grid import AgentSnapshot
-
-from tests.helpers.modular_world import ModularTestWorld
 
 
 def _make_world(option_commit_ticks: int | None = None) -> tuple[PolicyRuntime, ModularTestWorld]:

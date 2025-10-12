@@ -3,11 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from townlet.config.conflict import QueueFairnessConfig
+from townlet.world.events import EventDispatcher
 from townlet.world.queue.conflict import QueueConflictTracker
 from townlet.world.queue.manager import QueueManager
-from townlet.world.spatial import WorldSpatialIndex
-from townlet.world.events import EventDispatcher
 from townlet.world.rng import RngStreamManager
+from townlet.world.spatial import WorldSpatialIndex
 from townlet.world.systems import SystemContext, queues
 
 

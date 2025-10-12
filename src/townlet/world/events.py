@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableSequence
 from dataclasses import dataclass
 from time import time
-from typing import Any, Callable, Iterable, Mapping, MutableSequence, Protocol
+from typing import Any, Protocol
 
 EventPayload = Mapping[str, Any]
 
@@ -52,7 +53,7 @@ class EventDispatcher:
     def emit(
         self,
         *,
-        type: str,
+        event_type: str,
         payload: EventPayload | None = None,
         tick: int | None = None,
         ts: float | None = None,
@@ -60,7 +61,7 @@ class EventDispatcher:
         """Create an event and enqueue it for later draining."""
 
         event = Event(
-            type=type,
+            type=event_type,
             payload=payload or {},
             tick=tick,
             ts=ts if ts is not None else time(),

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import itertools
+from pathlib import Path
 
 import pytest
 
-from pathlib import Path
-
 from townlet.config import load_config
-from townlet.world.grid import WorldState
 from townlet.world.core import WorldContext
 from townlet.world.dto.observation import ObservationEnvelope
+from townlet.world.grid import WorldState
 
 
 @pytest.fixture()

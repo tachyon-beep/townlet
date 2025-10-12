@@ -11,13 +11,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
 
-from townlet.world.runtime import ActionMapping, ActionProvider, RuntimeStepResult
-
 if TYPE_CHECKING:  # pragma: no cover
-    from townlet.console.command import ConsoleCommandEnvelope
-    from townlet.snapshots.state import SnapshotState
-    from townlet.world.grid import WorldState
     from townlet.world.dto.observation import ObservationEnvelope
+    from townlet.world.grid import WorldState
 
 ObservationBatch: TypeAlias = Mapping[str, object]
 RewardMapping: TypeAlias = Mapping[str, float]
@@ -47,7 +43,7 @@ class PolicyBackendProtocol(Protocol):
         world: WorldState,
         tick: int,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> Mapping[str, object]:
         """Return an action mapping for the provided world/tick."""
 
@@ -61,7 +57,7 @@ class PolicyBackendProtocol(Protocol):
     def flush_transitions(
         self,
         *,
-        envelope: "ObservationEnvelope",
+        envelope: ObservationEnvelope,
     ) -> None:
         """Flush buffered transitions once the DTO envelope is available."""
 

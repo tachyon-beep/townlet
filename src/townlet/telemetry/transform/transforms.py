@@ -7,11 +7,11 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from townlet.telemetry.interfaces import TelemetryEvent, TelemetryTransformProtocol
+    from townlet.telemetry.interfaces import TelemetryEvent
 
 __all__ = [
-    "RedactFieldsTransform",
     "EnsureFieldsTransform",
+    "RedactFieldsTransform",
     "SchemaValidationTransform",
 ]
 
@@ -30,7 +30,7 @@ class RedactFieldsTransform:
         self._fields = {str(field) for field in fields}
         self._kinds = {str(kind) for kind in apply_to_kinds} if apply_to_kinds is not None else None
 
-    def process(self, event: "TelemetryEvent") -> "TelemetryEvent" | None:
+    def process(self, event: TelemetryEvent) -> TelemetryEvent | None:
         if not self._fields:
             return event
         if self._kinds is not None and event.kind not in self._kinds:
@@ -52,7 +52,7 @@ class RedactFieldsTransform:
             metadata=dict(event.metadata),
         )
 
-    def flush(self) -> Iterable["TelemetryEvent"]:  # pragma: no cover - no buffering
+    def flush(self) -> Iterable[TelemetryEvent]:  # pragma: no cover - no buffering
         return ()
 
 
@@ -73,7 +73,7 @@ class EnsureFieldsTransform:
             default_required_fields = ("tick",)
         self._default_required = {str(field) for field in default_required_fields}
 
-    def process(self, event: "TelemetryEvent") -> "TelemetryEvent" | None:
+    def process(self, event: TelemetryEvent) -> TelemetryEvent | None:
         required = self._required_by_kind.get(event.kind, self._default_required)
         if not required:
             return event
@@ -87,7 +87,7 @@ class EnsureFieldsTransform:
             return None
         return event
 
-    def flush(self) -> Iterable["TelemetryEvent"]:  # pragma: no cover - no buffering
+    def flush(self) -> Iterable[TelemetryEvent]:  # pragma: no cover - no buffering
         return ()
 
 
@@ -97,7 +97,7 @@ class SchemaValidationTransform:
     def __init__(
         self,
         *,
-        schema_by_kind: Mapping[str, "CompiledSchema"],
+        schema_by_kind: Mapping[str, CompiledSchema],
         mode: str = "drop",
     ) -> None:
         self._schemas = {str(kind): schema for kind, schema in schema_by_kind.items()}
@@ -106,7 +106,7 @@ class SchemaValidationTransform:
             raise ValueError("schema_validator mode must be one of 'drop', 'warn', 'raise'")
         self._mode = normalized_mode
 
-    def process(self, event: "TelemetryEvent") -> "TelemetryEvent" | None:
+    def process(self, event: TelemetryEvent) -> TelemetryEvent | None:
         schema = self._schemas.get(event.kind)
         if schema is None:
             return event
@@ -130,7 +130,7 @@ class SchemaValidationTransform:
         )
         return None
 
-    def flush(self) -> Iterable["TelemetryEvent"]:  # pragma: no cover - no buffering
+    def flush(self) -> Iterable[TelemetryEvent]:  # pragma: no cover - no buffering
         return ()
 
 

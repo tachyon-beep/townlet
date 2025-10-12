@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Callable, Iterable as TypingIterable, Optional
+from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable as TypingIterable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - typing aid
-    from townlet.telemetry.interfaces import TelemetryAggregationProtocol, TelemetryEvent
+    from townlet.telemetry.interfaces import TelemetryEvent
 
 from .collector import StreamPayloadBuilder
 
@@ -20,8 +21,8 @@ class TelemetryAggregator:
         self,
         builder: StreamPayloadBuilder,
         *,
-        console_sink: Optional[Callable[[TypingIterable[object]], None]] = None,
-        failure_sink: Optional[Callable[[Mapping[str, Any]], None]] = None,
+        console_sink: Callable[[TypingIterable[object]], None] | None = None,
+        failure_sink: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> None:
         self._builder = builder
         self._console_sink = console_sink
@@ -45,7 +46,7 @@ class TelemetryAggregator:
         runtime_variant: str | None = None,
         global_context: Mapping[str, Any] | None = None,
         **extra: Any,
-    ) -> Iterable["TelemetryEvent"]:
+    ) -> Iterable[TelemetryEvent]:
         context_payload = global_context if isinstance(global_context, Mapping) else None
         payload: Mapping[str, Any] | None = extra.get("snapshot_payload")
         if payload is None:
@@ -96,7 +97,7 @@ class TelemetryAggregator:
             return
         self._console_sink(results)
 
-    def record_loop_failure(self, payload: Mapping[str, object]) -> Iterable["TelemetryEvent"]:
+    def record_loop_failure(self, payload: Mapping[str, object]) -> Iterable[TelemetryEvent]:
         if self._failure_sink is not None:
             self._failure_sink(payload)
         metadata = {"kind": "loop_failure"}

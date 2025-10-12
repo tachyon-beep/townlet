@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 from townlet.world.events import EventDispatcher
-from townlet.world.state import WorldState
 from townlet.world.rng import RngStreamManager
+from townlet.world.state import WorldState
 
 
 @dataclass(slots=True)

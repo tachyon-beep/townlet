@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any, Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
+from typing import Any
 
 from townlet.world.queue.manager import QueueManager
 from townlet.world.spatial import WorldSpatialIndex

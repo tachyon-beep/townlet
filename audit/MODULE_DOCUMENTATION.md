@@ -4773,7 +4773,7 @@ Generated automatically via static analysis of the repository. Each section summ
 - **Environment variables**: None detected
 
 ### Classes
-- **CommandQueueFull(RuntimeError)** — Raised when the executor queue exceeds the configured pending limit.
+- **CommandQueueFullError(RuntimeError)** — Raised when the executor queue exceeds the configured pending limit.
   - Methods:
     - `__init__(self, pending: int, max_pending: int) -> None` — No docstring provided.
 - **ConsoleCommandExecutor(object)** — Background dispatcher that forwards console commands via a router.
@@ -8632,4 +8632,3 @@ Generated automatically via static analysis of the repository. Each section summ
 ### Code Quality Notes
 - TODO markers present; implementation incomplete.
 - Missing module docstring.
-
