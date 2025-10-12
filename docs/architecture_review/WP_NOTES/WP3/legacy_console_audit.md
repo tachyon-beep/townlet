@@ -19,9 +19,9 @@ SimulationLoop
     └─ falls back to TelemetryPublisher._store_console_results (stub path)
 
 TelemetryPublisher
-    ├─ maintains `_console_results_batch`, `_console_results_history`,
-        `_console_results_tick` and exposes `latest_console_results()`
-    ├─ stores results in `_store_console_results` with legacy tick logic
+    ├─ derives `latest_console_results()` from dispatcher emissions (no legacy
+        `_console_results_batch/_history` caches)
+    ├─ appends console results to the audit log for parity
     └─ emits `console.result` events via dispatcher subscribers
 ```
 
@@ -55,10 +55,9 @@ TelemetryPublisher
      when routing directly through the dispatcher.
    - Handler registration still operates on the bridge.
 
-3. **Telemetry Caches**
-   - `_console_results_batch/history/tick` mimic the legacy snapshot view.
-   - Fallback behaviour (stub telemetry) still reads from these caches instead
-     of dispatcher events.
+3. **Telemetry Snapshot Glue**
+   - Publisher still retains a bounded history deque for CLI snapshots; confirm
+     downstream tools consume dispatcher events before trimming further.
 
 4. **Tests/Docs**
    - Numerous tests (`tests/test_console_commands.py`,
@@ -78,8 +77,8 @@ TelemetryPublisher
    - Update stub telemetry to consume dispatcher console events rather than the
      cached batch.
 3. **Telemetry Simplification**
-   - Remove `_console_results_batch/history` once downstream dashboards rely on
-     dispatcher events or CLI-level caches.
-   - Refresh tests/docs to match event-only flow.
+   - Verify CLI/dashboard consumers rely on dispatcher events and adjust the
+     remaining history buffers accordingly.
+   - Refresh tests/docs to match the event-only flow.
 
 This audit documents the legacy surfaces so Batch B can safely remove them.

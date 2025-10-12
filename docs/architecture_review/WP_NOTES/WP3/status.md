@@ -41,12 +41,11 @@
   `WorldState`/hook/adapter fallbacks and `legacy_grid_cleanup_plan.md` breaks the
   remediation into batches (Batch A complete: DTO-only observation context,
   immutable local view snapshots, and leaner default world adapter). Batch B has
-  started: console results now flow directly from `WorldState.apply_console`
-  (the `consume_console_results` shim is gone), `WorldState` delegates console
-  service construction to the factory via `attach_console_service`, and remaining
-  work focuses on relocating ownership fully to orchestration and trimming telemetry
-  caches. Subsequent batches will delete the console buffer, hook mutations, and
-  telemetry alias guards.
+  progressed: console results now flow directly from dispatcher emissions (no
+  world-level buffering), and `WorldState` delegates console service construction
+  to the factory via `attach_console_service`. Remaining work focuses on relocating
+  ownership fully to orchestration and modernising the affordance hooks before
+  trimming the last telemetry adapters.
 
 **Dependencies**
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).

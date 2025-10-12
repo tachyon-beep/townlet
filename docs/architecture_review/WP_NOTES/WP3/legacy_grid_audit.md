@@ -24,9 +24,9 @@ systems, DTO observation envelopes, and dispatcher-driven telemetry.
   `_recent_meal_participants`, `_job_keys`, `_pending_events`) duplicate logic now
   owned by modular systems (`world.systems.*`).  
   ↳ See lines ~85–540, ~880–1330.
-- Console plumbing persists (`ConsoleService`, `_console_results_batch`,
-  `_queue_console_command`), despite the simulation loop now routing console
-  inputs through the dispatcher.  
+- Console plumbing persists (`ConsoleService`, `_queue_console_command`),
+  despite the simulation loop now routing console inputs through the
+  dispatcher.  
   ↳ Lines ~160–320, ~1380–1500.
 - Employment fallback code (`assign_jobs_to_agents`, `_employment_runtime`,
   `apply_job_rewards`) still mutates agents directly instead of relying on
@@ -66,16 +66,17 @@ systems, DTO observation envelopes, and dispatcher-driven telemetry.
 - `adapters/world_default.py` still exposes `world_state`, `queue_manager`, and
   other internal surfaces rather than forwarding to discrete services.  
   ↳ Lines ~40–210.
-- Console helpers on the adapter return raw `_console_results_batch` data,
-  reinforcing the legacy console buffer behaviour.
+- Console helpers on the adapter still surface the internal console bridge
+  rather than a dispatcher-friendly façade.
 
 ### 5. Telemetry Publisher
 - `_ingest_health_metrics` and `_ingest_failure_snapshot` accept legacy alias
   fields (`worker_alive`, `tick_duration_ms`, `aliases`) and coerce them into
   the structured schema.  
   ↳ Lines ~780–880.
-- Console history flushing still references `_queue_console_flush_interval`
-  (legacy throttle) and mutates `_console_results_history`.
+- Console history flushing previously relied on `_console_results_history`; the
+  publisher now derives results from dispatcher events, but history retention
+  still needs validation once transports migrate fully.
 - `emit_event` paths allow bare dict payloads lacking DTO `global_context`
   without surfacing errors.
 

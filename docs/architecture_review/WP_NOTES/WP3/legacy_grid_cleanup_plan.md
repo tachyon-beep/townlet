@@ -20,16 +20,14 @@ chip away at the remaining legacy surfaces.
      refactors land.
 
 ## Batch B — Console & Hook Modernisation
-1. Replace legacy console buffer (`_console_results_batch`) with dispatcher
-   events; delete `_queue_console_command` and friends in `world/grid.py`.
-2. Rebuild affordance hook registration to emit DTO events or operate through
-   modular services without direct `WorldState` mutation.
-3. Update console handler tests and hook parity fixtures to validate the
-   dispatcher-first flow.
-   - *Progress 2025-10-11:* `WorldState.apply_console` now returns results
-     directly and `consume_console_results` has been removed. Console router
-     + loop tests updated accordingly. Remaining tasks: relocate the console
-     service out of `WorldState` and delete telemetry batch/history caches.
+- [x] Replace legacy console buffer (`_console_results_batch`) with dispatcher
+  events; delete `_queue_console_command` and friends in `world/grid.py`. *(2025-10-11)*
+- [ ] Rebuild affordance hook registration to emit DTO events or operate through
+  modular services without direct `WorldState` mutation.
+- [x] Update console handler tests and hook parity fixtures to validate the
+  dispatcher-first flow. *(2025-10-11)* Console results now flow entirely through
+  dispatcher events; `TelemetryPublisher` tracks the latest payloads without
+  maintaining mirrored batches, and console/telemetry suites cover the new path.
 
 ## Batch C — Employment & Affordance State
 1. Remove `_job_keys`, direct employment runtime caches, and job reward helpers

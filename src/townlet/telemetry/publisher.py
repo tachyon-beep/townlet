@@ -117,9 +117,9 @@ class TelemetryPublisher:
         self._rivalry_event_history: list[dict[str, object]] = []
         self._latest_possessed_agents: list[str] = []
         self._latest_precondition_failures: list[dict[str, object]] = []
-        self._console_results_batch: list[dict[str, Any]] = []
+        self._latest_console_results: list[dict[str, Any]] = []
+        self._last_console_results_tick: int | None = None
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
-        self._console_results_tick: int | None = None
         self._console_audit_path = Path("logs/console/commands.jsonl")
         self._latest_health_status: dict[str, object] = {}
         self._latest_economy_settings: dict[str, float] = {
@@ -423,7 +423,7 @@ class TelemetryPublisher:
             state["health"] = dict(self._latest_health_status)
         state["queue_history"] = list(self._queue_fairness_history)
         state["rivalry_events"] = list(self._rivalry_event_history)
-        state["console_results"] = list(self._console_results_batch)
+        state["console_results"] = list(self._latest_console_results)
         state["possessed_agents"] = list(self._latest_possessed_agents)
         if self._latest_policy_metadata_event is not None:
             state["policy_metadata_event"] = copy.deepcopy(self._latest_policy_metadata_event)
@@ -674,11 +674,22 @@ class TelemetryPublisher:
 
         console_payload = payload.get("console_results")
         if isinstance(console_payload, list):
-            self._console_results_batch = [
+            latest = [
                 dict(entry) for entry in console_payload if isinstance(entry, Mapping)
             ]
+            self._latest_console_results = latest
+            for entry in latest:
+                self._console_results_history.append(dict(entry))
+            if latest:
+                try:
+                    self._last_console_results_tick = int(latest[-1].get("tick", 0))
+                except (TypeError, ValueError):
+                    self._last_console_results_tick = None
+            else:
+                self._last_console_results_tick = None
         else:
-            self._console_results_batch = []
+            self._latest_console_results = []
+            self._last_console_results_tick = None
         possessed_payload = payload.get("possessed_agents")
         if isinstance(possessed_payload, list):
             self._latest_possessed_agents = [str(agent) for agent in possessed_payload]
@@ -721,19 +732,24 @@ class TelemetryPublisher:
         self._aggregator.record_console_results(results)
 
     def _store_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
-        batch: list[dict[str, Any]] = list(self._console_results_batch)
         for result in results:
             payload = result.to_dict()
             tick = payload.get("tick")
-            if tick is not None and tick != self._console_results_tick:
-                batch = []
-                self._console_results_tick = tick
-            elif tick is None and self._console_results_tick is None:
-                self._console_results_tick = self.current_tick()
-            batch.append(payload)
+            if tick is None:
+                payload = dict(payload)
+                tick = self.current_tick()
+                payload["tick"] = tick
+            try:
+                tick_int = int(tick)
+            except (TypeError, ValueError):
+                tick_int = self.current_tick()
+                payload["tick"] = tick_int
+            if self._last_console_results_tick != tick_int:
+                self._latest_console_results = []
+                self._last_console_results_tick = tick_int
+            self._latest_console_results.append(payload)
             self._console_results_history.append(payload)
             self._append_console_audit(payload)
-        self._console_results_batch = batch if batch else []
 
     def set_runtime_variant(self, variant: str | None) -> None:
         """Record which runtime variant produced the latest telemetry."""
@@ -741,7 +757,7 @@ class TelemetryPublisher:
         self._runtime_variant = variant
 
     def latest_console_results(self) -> list[dict[str, Any]]:
-        return list(self._console_results_batch)
+        return list(self._latest_console_results)
 
     def console_history(self) -> list[dict[str, Any]]:
         return list(self._console_results_history)

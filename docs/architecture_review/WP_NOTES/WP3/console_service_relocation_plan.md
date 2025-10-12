@@ -29,7 +29,7 @@ own buffering or handler lifecycle.
 
 - [ ] **Docs & Tests**
    - Refresh WP1/WP3 notes, ADR references, and console contract docs to describe
-     the new ownership.
+     the new ownership and event-only persistence.
    - Update tests/dummy harnesses to construct and attach console services
      explicitly; rerun console, telemetry, and dashboard suites.
 
