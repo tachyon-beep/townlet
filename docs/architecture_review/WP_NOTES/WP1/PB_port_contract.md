@@ -85,3 +85,16 @@ class WorldRuntime(Protocol):
   and add guard tests to prevent regressions.
 - PB-F will trim the deprecated members from `core/interfaces.py` once the new
   imports are in place.
+
+## Registry & Provider Metadata (2025-10-11)
+
+- The registry smoke `tests/test_factory_registry.py::test_simulation_loop_provider_metadata`
+  now asserts that `SimulationLoop.provider_info` reflects the active world,
+  policy, and telemetry providers, and that `policy_provider_name` /
+  `telemetry_provider_name` pull from that mapping.
+- The existing stub-path test (`test_simulation_loop_uses_registered_providers`)
+  was extended to prove that the `is_stub_policy` / `is_stub_telemetry` helpers
+  still infer stub status once the providers are registered through the factory
+  registry.
+- These checks give us early warning if future refactors drop provider metadata
+  or bypass the registry. Keep them aligned with any changes to port resolution.

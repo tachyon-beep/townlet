@@ -50,7 +50,7 @@ Maintain this checklist during WP1 implementation.
 ## 7. Step 7 — Factory & Adapter Wiring (in progress)
 - [x] Update `townlet.factories.world_factory.create_world` (and dummy provider hooks) to construct `WorldContext` (legacy runtime still supported for callers passing `runtime`).
 - [x] Refresh `WorldRuntimeAdapter` / dummy adapters to work with the modular context (DefaultWorldAdapter now wraps `WorldContext`).
-- [ ] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap once the new path lands.
+- [x] Ensure registry metadata (`provider_info`, stub detection) still resolves correctly after the swap once the new path lands.
 
 ## 8. Step 8 — Composition Root Integration
 - [ ] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers. *(Guarded pathway in place for `observe`, but world construction still instantiates legacy runtime directly.)*
@@ -60,3 +60,9 @@ Maintain this checklist during WP1 implementation.
 ## 9. Step 8 Testing & Docs
 - [~] Add/refresh test suites (`tests/test_ports_surface.py`, `tests/test_factories.py`, loop smoke tests, console router, health monitor, telemetry getter guard). *(Telemetry surface guard and DTO parity harness in place; loop/console/health monitor smokes still pending.)*
 - [ ] Update ADR-001 appendices; draft console/monitor ADR; refresh README/tasking once Step 8 lands.
+
+## 10. Close-out Checklist (run once WP3 Stage 6 is green)
+- [ ] Enforce dispatcher-only policy identity updates (tests updated per WP1↔︎WP3 handoff criteria).
+- [ ] Run full regression sweep: `pytest`, `ruff check src tests`, `mypy src`.
+- [ ] Update ADR-001, console/monitor ADR, WP1 README/status with the DTO-only identity flow and final port contract.
+- [ ] Publish release/changelog notes summarising port, telemetry, and DTO changes for downstream teams.

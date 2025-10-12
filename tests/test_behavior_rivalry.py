@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from townlet.config import SimulationConfig, load_config
+from townlet.config import load_config
 from townlet.policy.behavior import ScriptedBehavior
 from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
@@ -98,10 +98,8 @@ def test_scripted_behavior_initiates_chat_when_conditions_met() -> None:
 
 def test_scripted_behavior_avoids_chat_when_relationships_disabled() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    data = config.model_dump()
-    data["features"]["stages"]["relationships"] = "OFF"
-    config = SimulationConfig.model_validate(data)
     world = WorldState.from_config(config)
+    world.config.features.stages.relationships = "OFF"
     for agent_id in ("alice", "bob"):
         world.agents[agent_id] = AgentSnapshot(
             agent_id=agent_id,

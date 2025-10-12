@@ -10,6 +10,8 @@
 - **New 2025-10-11:** T5.1–T5.3 delivered — `townlet.testing` exposes dummy world/policy/telemetry implementations wired through factory providers and guarded by `tests/test_ports_surface.py`.
 - **New 2025-10-11:** T5.4 delivered — `tests/helpers/dummy_loop.py` builds a dummy loop harness and `tests/core/test_sim_loop_with_dummies.py` exercises two-tick DTO parity, console routing, and health telemetry using the new providers (regression: `pytest tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py -q`).
 - **New 2025-10-11 (add):** T1.3 finished — `create_world` no longer accepts legacy service kwargs; the default provider constructs lifecycle/perturbation plumbing internally and exposes them through the adapter for the loop to reuse.
+- **New 2025-10-11:** Step 7 metadata guard landed — `tests/test_factory_registry.py::test_simulation_loop_provider_metadata` now asserts `SimulationLoop.provider_info` reflects the resolved world/policy/telemetry providers, and the stub-path test verifies `policy_provider_name` / `telemetry_provider_name` continue to drive the `is_stub_*` helpers.
+- **New 2025-10-11:** Factory fallbacks upgraded — the optional `pytorch` and `http` providers now surface stub adapters when dependencies are missing, keeping `SimulationLoop` port-neutral while still reporting the requested provider in `provider_info` for audits and tests.
 - **New 2025-10-11:** T6.2 delivered — loop/factory/type hints now point to `townlet.ports.world.WorldRuntime`. The legacy `WorldRuntimeProtocol` alias has been retired. Port surface tests (`pytest tests/test_factory_registry.py tests/test_core_protocols.py tests/test_ports_surface.py -q`) assert the contract.
 - **New 2025-10-11:** T6.3 delivered — `tests/core/test_world_port_imports.py` guards against reintroducing the old alias anywhere under core/factories/orchestration/testing/telemetry.
 - Console routing always flows through `ConsoleRouter`, with buffered commands dropped (and logged) if the router is unavailable; telemetry ingestion happens through `console.result` events, and legacy `record_console_results` shims stay unused. Snapshot commands now return structured results derived from `SnapshotState`. The DTO regression subset (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py -q`) is part of the routine validation.
@@ -25,6 +27,15 @@
 - WP1 finalisation (Step 8 and telemetry docs/ADR refresh) is waiting on WP3
   Stage 6 to finish (full regression, ruff, mypy, and documentation updates).
   Until WP3 is green, keep the suite stabilisation work focused there.
+- **WP1↔︎WP3 handoff (execute post Stage 6):**
+  1. `SimulationLoop`, `PolicyController`, and adapters must emit policy identity/variant updates solely via dispatcher events (`policy.metadata`, `policy.possession`, `policy.anneal.update`). No direct calls to `TelemetrySink.update_policy_identity` or `set_runtime_variant`; extend `tests/test_telemetry_surface_guard.py` to enforce.
+  2. DTO envelopes are the only observation payload delivered to policy/training paths. `SimulationLoop.policy_controller.decide` should require an `ObservationEnvelope`, and guard tests (`tests/core/test_no_legacy_observation_usage.py`, policy parity smokes) must fail if a legacy observation dict is requested.
+  3. Telemetry/ADR docs capture the dispatcher-driven identity flow and reference the DTO schema appendix. Release notes highlight removal of legacy identity getters and the DTO-only requirement for downstream consumers.
+
+**Close-out sequence (post WP3 Stage 6)**
+1. Update dispatcher identity flow & DTO guard tests (per handoff above).
+2. Run full regression sweep: `pytest`, `ruff check src tests`, `mypy src`.
+3. Refresh ADR-001, console/monitor ADR, WP1 README/status, and publish release notes summarising port + DTO changes.
 
 **Legacy caller inventory (updated 2025-10-10)**
 - Policy:

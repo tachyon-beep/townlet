@@ -18,9 +18,15 @@ from townlet.core import (
     telemetry_registry,
 )
 from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
+from townlet.core.utils import (
+    is_stub_policy,
+    is_stub_telemetry,
+    policy_provider_name,
+    telemetry_provider_name,
+)
 from townlet.ports.world import WorldRuntime
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.factories.registry import register as factory_register
+from townlet.factories.registry import register as factory_register, available as factory_available
 from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
 from townlet.scheduler.perturbations import PerturbationScheduler
 
@@ -252,6 +258,40 @@ def test_simulation_loop_uses_registered_providers(sample_config: Any) -> None:
     try:
         assert isinstance(loop.policy, _StubPolicy)
         assert isinstance(loop._telemetry_port, _StubTelemetry)
+        info = loop.provider_info
+        assert info["policy"] == "stub"
+        assert info["telemetry"] == "stub"
+        assert policy_provider_name(loop) == "stub"
+        assert telemetry_provider_name(loop) == "stub"
+        assert is_stub_policy(loop.policy, info["policy"])
+        assert is_stub_telemetry(loop._telemetry_port, info["telemetry"])
+    finally:
+        loop.close()
+
+
+def test_simulation_loop_provider_metadata(sample_config: Any) -> None:
+    policy_registry().register("stub_meta", lambda **kwargs: _StubPolicy(kwargs.get("config")))
+    _register_port_policy("stub_meta")
+    telemetry_registry().register("stub_meta", lambda **kwargs: _StubTelemetry(kwargs.get("config")))
+    _register_port_telemetry("stub_meta")
+
+    loop = SimulationLoop(
+        sample_config,
+        policy_provider="stub_meta",
+        telemetry_provider="stub_meta",
+    )
+    try:
+        info = loop.provider_info
+        assert info["policy"] == "stub_meta"
+        assert info["telemetry"] == "stub_meta"
+        expected_world = sample_config.runtime.world.provider or "default"
+        assert info["world"] == expected_world
+
+        assert policy_provider_name(loop) == "stub_meta"
+        assert telemetry_provider_name(loop) == "stub_meta"
+
+        assert "stub_meta" in factory_available("policy")
+        assert "stub_meta" in factory_available("telemetry")
     finally:
         loop.close()
 

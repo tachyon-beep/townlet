@@ -25,6 +25,14 @@ so the next session can resume without re-auditing.
 - **Dummy providers**: `townlet.testing` exposes dummy world/policy/telemetry
   implementations. Smokes `tests/core/test_sim_loop_with_dummies.py` and
   `tests/test_ports_surface.py` validate the port surfaces and DTO flow.
+- **Registry metadata guards**: `tests/test_factory_registry.py::test_simulation_loop_provider_metadata`
+  and the stub-path variant assert `SimulationLoop.provider_info` mirrors the
+  resolved providers and that the `is_stub_*` helpers still infer stub status via
+  the registry.
+- **Provider fallbacks**: policy/telemetry factories own the optional `pytorch`
+  and `http` providers. When dependencies are missing they now return the stub
+  adapters directly, so `SimulationLoop` stays port-neutral (no concrete class
+  checks) while still advertising the requested provider in `provider_info`.
 - **Telemetry payloads**: `loop.tick` emits DTO-backed `global_context`, while
   `loop.health`/`loop.failure` now expose structured payloads (transport +
   DTO context + summary metrics) without legacy alias fields. Summary values

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.scheduler.perturbations import PerturbationScheduler
+from townlet.world.dto.observation import ObservationEnvelope
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig
@@ -87,6 +88,32 @@ class WorldRuntime:
     @property
     def world_adapter(self) -> WorldRuntimeAdapterProtocol | None:
         return self._world_adapter
+
+    def agents(self) -> Iterable[str]:
+        """Return known agent identifiers."""
+
+        state_agents = getattr(self._world, "agents", None)
+        if isinstance(state_agents, Mapping):
+            return state_agents.keys()
+        if isinstance(state_agents, Iterable):  # pragma: no cover - legacy fallback
+            return state_agents
+        context = getattr(self._world, "context", None)
+        if context is not None:
+            agents_view = getattr(context.state, "agents", {})
+            if isinstance(agents_view, Mapping):
+                return agents_view.keys()
+        return ()
+
+    def observe(self, agent_ids: Iterable[str] | None = None) -> ObservationEnvelope:
+        """Produce a DTO observation envelope for the requested agents."""
+
+        context = getattr(self._world, "context", None)
+        if context is None or not hasattr(context, "observe"):
+            raise RuntimeError("World context does not support DTO observations")
+        envelope = context.observe(agent_ids=agent_ids)
+        if not isinstance(envelope, ObservationEnvelope):
+            raise TypeError("World context returned non-DTO observation envelope")
+        return envelope
 
     def apply_actions(self, actions: ActionMapping) -> None:
         """Stage policy actions for the next tick."""

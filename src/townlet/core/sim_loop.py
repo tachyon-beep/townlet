@@ -75,7 +75,7 @@ class PolicyComponents:
 @dataclass(slots=True)
 class TelemetryComponents:
     port: TelemetrySinkProtocol
-    publisher: TelemetryPublisher
+    publisher: TelemetrySinkProtocol
     provider: str
 
 
@@ -327,6 +327,8 @@ class SimulationLoop:
             config=self.config,
             ticks_per_day=ticks_per_day,
             world_kwargs=self._world_options,
+            affordance_runtime_factory=self._affordance_runtime_factory,
+            affordance_runtime_config=self._runtime_config,
         )
         context = getattr(world_port, "context", None)
         if context is None:
@@ -359,8 +361,13 @@ class SimulationLoop:
             provider=self._policy_provider,
             backend=policy_backend,
         )
-        decision_backend = getattr(policy_port, "backend", policy_backend)
-        controller = PolicyController(backend=decision_backend, port=policy_port)
+        controller: PolicyController | None = None
+        backend_attr = getattr(policy_port, "backend", None)
+        if backend_attr is not None:
+            decision_backend = backend_attr
+            controller = PolicyController(backend=decision_backend, port=policy_port)
+        else:
+            decision_backend = policy_port  # type: ignore[assignment]
         return PolicyComponents(
             port=policy_port,
             controller=controller,
@@ -375,9 +382,18 @@ class SimulationLoop:
             provider=self._telemetry_provider,
             publisher=publisher,
         )
+        port_publisher = getattr(telemetry_port, "publisher", None)
+        if isinstance(port_publisher, TelemetryPublisher):
+            publisher_sink: TelemetrySinkProtocol = port_publisher
+        else:
+            publisher_sink = telemetry_port
+            try:  # pragma: no cover - defensive close
+                publisher.close()
+            except Exception:
+                pass
         return TelemetryComponents(
             port=telemetry_port,
-            publisher=publisher,
+            publisher=publisher_sink,
             provider=self._telemetry_provider,
         )
 
@@ -603,7 +619,7 @@ class SimulationLoop:
             terminated = runtime_result.terminated
             termination_reasons = runtime_result.termination_reasons
             if self._console_router is not None:
-                self._console_router.run_pending(tick=self.tick)
+                self._console_router.run_pending(console_results, tick=self.tick)
 
             if console_results and self._console_router is None:
                 emitter = (

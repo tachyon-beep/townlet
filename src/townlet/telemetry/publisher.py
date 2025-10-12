@@ -120,6 +120,7 @@ class TelemetryPublisher:
         self._latest_precondition_failures: list[dict[str, object]] = []
         self._console_results_batch: list[dict[str, Any]] = []
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
+        self._console_results_tick: int | None = None
         self._console_audit_path = Path("logs/console/commands.jsonl")
         self._latest_health_status: dict[str, object] = {}
         self._latest_economy_settings: dict[str, float] = {
@@ -721,9 +722,15 @@ class TelemetryPublisher:
         self._aggregator.record_console_results(results)
 
     def _store_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
-        batch: list[dict[str, Any]] = []
+        batch: list[dict[str, Any]] = list(self._console_results_batch)
         for result in results:
             payload = result.to_dict()
+            tick = payload.get("tick")
+            if tick is not None and tick != self._console_results_tick:
+                batch = []
+                self._console_results_tick = tick
+            elif tick is None and self._console_results_tick is None:
+                self._console_results_tick = self.current_tick()
             batch.append(payload)
             self._console_results_history.append(payload)
             self._append_console_audit(payload)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 from townlet.console.command import (
     ConsoleCommandEnvelope,
@@ -39,24 +39,56 @@ class ConsoleRouter:
         envelope = self._coerce_envelope(command)
         self._queue.append(envelope)
 
-    def run_pending(self, *, tick: int | None = None) -> None:
-        while self._queue:
-            envelope = self._queue.popleft()
-            result = self._execute(envelope, tick=tick)
-            event_payload = {
-                "command": envelope.raw
-                if envelope.raw is not None
-                else {
-                    "name": envelope.name,
-                    "args": list(envelope.args),
-                    "kwargs": dict(envelope.kwargs),
-                    "cmd_id": envelope.cmd_id,
-                    "issuer": envelope.issuer,
-                    "mode": envelope.mode,
-                },
-                "result": result.to_dict(),
-            }
-            self._telemetry.emit_event("console.result", event_payload)
+    def run_pending(
+        self,
+        results: Iterable[ConsoleCommandResult] | None = None,
+        *,
+        tick: int | None = None,
+    ) -> None:
+        """Emit console results for commands processed this tick.
+
+        The world runtime is responsible for executing commands and returning
+        ``ConsoleCommandResult`` entries. The router pairs those results with
+        the original envelopes (to preserve raw payload metadata) and forwards
+        them to telemetry. If the runtime does not supply a result for an
+        enqueued command, the router falls back to its local handler registry.
+        """
+
+        pending = list(self._queue)
+        self._queue.clear()
+        result_iter = iter(results or ())
+
+        def _next_result() -> Optional[ConsoleCommandResult]:
+            try:
+                return next(result_iter)
+            except StopIteration:
+                return None
+
+        for envelope in pending:
+            runtime_result = _next_result()
+            if runtime_result is None:
+                runtime_result = self._execute(envelope, tick=tick)
+            else:
+                runtime_result = runtime_result.clone()
+                if runtime_result.tick is None and tick is not None:
+                    runtime_result.tick = tick
+                if (
+                    runtime_result.status == "error"
+                    and envelope is not None
+                    and envelope.name.strip().lower() in self._handlers
+                ):
+                    error_payload = runtime_result.error or {}
+                    if str(error_payload.get("code")) in {"unknown_command", "unsupported"}:
+                        runtime_result = self._execute(envelope, tick=tick)
+            self._emit_event(envelope, runtime_result)
+
+        # Emit any additional runtime results that were produced without a
+        # matching queued command (should be rare, but guard defensively).
+        for orphan in result_iter:
+            payload = orphan.clone()
+            if payload.tick is None and tick is not None:
+                payload.tick = tick
+            self._emit_event(None, payload)
 
     # ------------------------------------------------------------------
     # Default handlers
@@ -74,6 +106,38 @@ class ConsoleRouter:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def _emit_event(
+        self,
+        envelope: ConsoleCommandEnvelope | None,
+        result: ConsoleCommandResult,
+    ) -> None:
+        command_payload: Mapping[str, Any]
+        if envelope is None:
+            command_payload = {
+                "name": result.name,
+                "args": [],
+                "kwargs": {},
+                "cmd_id": result.cmd_id,
+                "issuer": result.issuer,
+                "mode": "viewer",
+            }
+        elif envelope.raw is not None:
+            command_payload = envelope.raw
+        else:
+            command_payload = {
+                "name": envelope.name,
+                "args": list(envelope.args),
+                "kwargs": dict(envelope.kwargs),
+                "cmd_id": envelope.cmd_id,
+                "issuer": envelope.issuer,
+                "mode": envelope.mode,
+            }
+        event_payload = {
+            "command": command_payload,
+            "result": result.to_dict(),
+        }
+        self._telemetry.emit_event("console.result", event_payload)
+
     def _coerce_envelope(self, payload: object) -> ConsoleCommandEnvelope:
         if isinstance(payload, ConsoleCommandEnvelope):
             return payload

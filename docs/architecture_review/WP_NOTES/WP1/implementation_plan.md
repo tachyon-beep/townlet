@@ -128,3 +128,18 @@ Use this plan to track implementation progress. Update checkboxes or add subsect
    - Finalise the console/health ADR summarising the new orchestration pipeline.
    - Update WP1 notes with migration instructions for downstream teams (policy trainer, telemetry, console UI).
 4. Final test sweep: full `pytest`, targeted smokes (`scripts/run_simulation.py` for a few ticks), and lint/type checks (`ruff`, `mypy`).
+
+## 9. Post-WP3 Stage 6 Handoff (added 2025-10-11)
+Once WP3 Stage 6 has executed its regression sweep and documentation updates:
+1. **Dispatcher-only identity flow**
+   - Remove any remaining direct calls to `TelemetrySink.update_policy_identity` or `set_runtime_variant`.
+   - Extend `tests/test_telemetry_surface_guard.py` (and related telemetry smokes) to fail if dispatcher events regress or direct mutations return.
+2. **DTO-only policy/training pathways**
+   - Ensure `PolicyController.decide` and training adapters require an `ObservationEnvelope`.
+   - Update guard tests (`tests/core/test_no_legacy_observation_usage.py`, policy DTO smokes) so they fail if legacy observation dicts reappear.
+3. **Documentation & release refresh**
+   - Update ADR-001, console/monitor ADR, WP1 README/status with dispatcher/DTO guidance.
+   - Publish release notes summarising identity-event changes and DTO-only requirements for downstream consumers.
+4. **Final verification**
+   - Run full `pytest`, `ruff check src tests`, and `mypy src`.
+   - Capture command outputs in WP1 status/pre-compact notes for traceability.

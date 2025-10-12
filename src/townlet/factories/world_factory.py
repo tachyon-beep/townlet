@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from townlet.adapters.world_default import DefaultWorldAdapter
@@ -40,6 +40,12 @@ def _build_default_world(
     config: Any | None = None,
     ticks_per_day: int | None = None,
     world_kwargs: Mapping[str, Any] | None = None,
+    affordance_runtime_factory: Callable[
+        [WorldState, Any],
+        Any,
+    ]
+    | None = None,
+    affordance_runtime_config: Any | None = None,
     **unexpected_kwargs: Any,
 ) -> WorldRuntime:
     if unexpected_kwargs:
@@ -52,6 +58,10 @@ def _build_default_world(
         if config is None:
             raise TypeError("create_world requires 'config' when 'world' is not supplied")
         world_options = dict(world_kwargs or {})
+        if affordance_runtime_factory is not None:
+            world_options["affordance_runtime_factory"] = affordance_runtime_factory
+        if affordance_runtime_config is not None:
+            world_options["affordance_runtime_config"] = affordance_runtime_config
         target_world = WorldState.from_config(config, **world_options)  # type: ignore[arg-type]
     else:
         if config is None:

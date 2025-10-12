@@ -402,7 +402,7 @@ class ScriptedBehavior(BehaviorController):
         *,
         queue_view: object,
         relationship_view: object,
-        dto_world: DTOWorldView | None,
+        dto_world: DTOWorldView | None = None,
     ) -> bool:
         active = queue_view.active_agent(object_id)
         if (
