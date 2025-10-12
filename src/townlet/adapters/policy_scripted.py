@@ -13,7 +13,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class ScriptedPolicyAdapter(PolicyBackend):
-    """Adapter that delegates to the legacy scripted policy runtime."""
+    """Adapter forwarding decisions to the scripted policy runtime."""
 
     def __init__(
         self,

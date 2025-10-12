@@ -8,6 +8,6 @@ __all__ = ["ObservationBuilder", "create_observation_builder"]
 
 
 def create_observation_builder(*, config: object) -> ObservationBuilder:
-    """Factory returning the legacy observation builder."""
+    """Factory returning the standard observation builder implementation."""
 
     return ObservationBuilder(config=config)

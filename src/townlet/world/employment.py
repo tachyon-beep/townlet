@@ -48,56 +48,6 @@ class EmploymentEngine:
             snapshot.inventory.setdefault("wages_earned", 0)
 
     def apply_job_state(self, world: WorldState) -> None:
-        if self._config.employment.enforce_job_loop:
-            self._apply_job_state_enforced(world)
-        else:
-            self._apply_job_state_legacy(world)
-
-    def _apply_job_state_legacy(self, world: WorldState) -> None:
-        jobs = self._config.jobs
-        default_job_id = world._job_keys[0] if world._job_keys else None
-        for snapshot in world.agents.values():
-            job_id = snapshot.job_id
-            if job_id is None or job_id not in jobs:
-                if default_job_id is None:
-                    snapshot.on_shift = False
-                    continue
-                job_id = default_job_id
-                snapshot.job_id = job_id
-            spec = jobs[job_id]
-            start = spec.start_tick
-            end = spec.end_tick or spec.start_tick
-            wage_rate = spec.wage_rate or self._config.economy.get("wage_income", 0.0)
-            lateness_penalty = spec.lateness_penalty
-            location = spec.location
-            required_position = tuple(location) if location else (0, 0)
-
-            if start <= world.tick <= end:
-                snapshot.on_shift = True
-                if world.tick == start and snapshot.position != required_position:
-                    snapshot.lateness_counter += 1
-                    if snapshot.last_late_tick != world.tick:
-                        snapshot.wallet = max(0.0, snapshot.wallet - lateness_penalty)
-                        snapshot.last_late_tick = world.tick
-                        self._emit_event(
-                            "job_late",
-                            {
-                                "agent_id": snapshot.agent_id,
-                                "job_id": job_id,
-                                "tick": world.tick,
-                            },
-                        )
-                if location and tuple(location) != snapshot.position:
-                    snapshot.on_shift = False
-                else:
-                    snapshot.wallet += wage_rate
-                    snapshot.inventory["wages_earned"] = (
-                        snapshot.inventory.get("wages_earned", 0) + 1
-                    )
-            else:
-                snapshot.on_shift = False
-
-    def _apply_job_state_enforced(self, world: WorldState) -> None:
         jobs = self._config.jobs
         default_job_id = world._job_keys[0] if world._job_keys else None
         employment_cfg = self._config.employment

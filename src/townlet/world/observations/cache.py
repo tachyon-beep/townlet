@@ -1,8 +1,7 @@
-"""Local cache helpers extracted during WP-C Phase 4.
+"""Local cache helpers used by the observation builder.
 
-These utilities mirror the legacy functions previously hosted in the deprecated
-``townlet.world.observation`` module and are consumed by the observation builder to
-construct egocentric spatial views around each agent.
+These utilities construct egocentric spatial views around each agent and are
+shared between the DTO observation pipeline and the scripted policy adapters.
 """
 
 from __future__ import annotations

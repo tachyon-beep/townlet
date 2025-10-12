@@ -1,4 +1,4 @@
-"""Adapter implementations that bridge legacy runtime components to new ports."""
+"""Adapter implementations that map runtime components onto the port surface."""
 
 from .policy_scripted import ScriptedPolicyAdapter
 from .telemetry_stdout import StdoutTelemetryAdapter

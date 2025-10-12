@@ -1326,7 +1326,7 @@ class WorldState:
     def emit_event(self, event: str, payload: Mapping[str, Any]) -> Event:
         """Emit an event into both legacy and modular pipelines."""
 
-        event_obj = self._event_dispatcher.emit(type=event, payload=payload, tick=self.tick)
+        event_obj = self._event_dispatcher.emit(event_type=event, payload=payload, tick=self.tick)
         events = self._pending_events.setdefault(self.tick, [])
         events.append({"event": event, "tick": self.tick, **dict(payload)})
         return event_obj
