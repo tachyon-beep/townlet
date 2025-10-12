@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from townlet.agents.relationship_modifiers import RelationshipEvent
 from townlet.world.agents.relationships_service import RelationshipService
-from townlet.world.relationships import RelationshipLedger
+from townlet.world.relationships import RelationshipLedger, RelationshipTie
+from townlet.world.rivalry import RivalryLedger
 
 from .base import SystemContext
 
@@ -81,15 +82,19 @@ def set_relationship(
     )
 
 
-def relationship_tie(service: RelationshipService, agent_id: str, other_id: str):
+def relationship_tie(
+    service: RelationshipService, agent_id: str, other_id: str
+) -> RelationshipTie | None:
     return service.relationship_tie(agent_id, other_id)
 
 
-def get_relationship_ledger(service: RelationshipService, agent_id: str) -> RelationshipLedger:
+def get_relationship_ledger(
+    service: RelationshipService, agent_id: str
+) -> RelationshipLedger:
     return service.get_relationship_ledger(agent_id)
 
 
-def get_rivalry_ledger(service: RelationshipService, agent_id: str):
+def get_rivalry_ledger(service: RelationshipService, agent_id: str) -> RivalryLedger:
     return service.get_rivalry_ledger(agent_id)
 
 

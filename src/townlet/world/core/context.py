@@ -368,6 +368,7 @@ class WorldContext:
 
     def export_job_snapshot(self) -> Mapping[str, Mapping[str, object]]:
         snapshot: dict[str, dict[str, object]] = {}
+        basket_cost_getter = getattr(self.economy_service, "basket_cost_for_agent", None)
         for agent_id, agent in self.state.agent_snapshots_view().items():
             job_payload: dict[str, object] = {
                 "job_id": getattr(agent, "job_id", None),
@@ -381,6 +382,13 @@ class WorldContext:
                 "absent_shifts_7d": int(getattr(agent, "absent_shifts_7d", 0)),
                 "wages_withheld": float(getattr(agent, "wages_withheld", 0.0)),
             }
+            if callable(basket_cost_getter):
+                try:
+                    job_payload["basket_cost"] = float(basket_cost_getter(agent.agent_id))
+                except Exception:  # pragma: no cover - defensive
+                    job_payload["basket_cost"] = 0.0
+            else:
+                job_payload["basket_cost"] = 0.0
             inventory = getattr(agent, "inventory", None)
             if isinstance(inventory, Mapping):
                 job_payload["inventory"] = dict(inventory)

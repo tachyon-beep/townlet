@@ -143,6 +143,18 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
                 return cleaned
         return []
 
+    def basket_cost(self, agent_id: str) -> float:
+        economy = getattr(self._world, "economy_service", None)
+        if economy is None:
+            return 0.0
+        getter = getattr(economy, "basket_cost_for_agent", None)
+        if callable(getter):
+            try:
+                return float(getter(agent_id))
+            except Exception:  # pragma: no cover - defensive
+                return 0.0
+        return 0.0
+
     def _employment_context_wages(self, agent_id: str) -> float:
         return self._world.employment_service.context_wages(agent_id)
 

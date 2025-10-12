@@ -93,6 +93,9 @@ class WorldRuntimeAdapterProtocol(Protocol):
     def objects_snapshot(self) -> Mapping[str, Mapping[str, Any]]:
         ...
 
+    def basket_cost(self, agent_id: str) -> float:
+        ...
+
 
 @runtime_checkable
 class ObservationServiceProtocol(Protocol):

@@ -311,7 +311,7 @@ def test_price_updates_economy_and_basket(employment_loop: SimulationLoop) -> No
     result = loop.telemetry.latest_console_results()[-1]
     assert result["status"] == "ok"
     assert loop.config.economy["meal_cost"] == pytest.approx(0.8)
-    basket = loop.world.agents["alice"].inventory.get("basket_cost")
+    basket = loop.world.economy_service.basket_cost_for_agent("alice")
     assert basket == pytest.approx(
         loop.config.economy["meal_cost"]
         + loop.config.economy["cook_energy_cost"]

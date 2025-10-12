@@ -1344,16 +1344,18 @@ class TelemetryPublisher(_TelemetrySinkBase):
             }
         elif adapter is not None:
             self._warn_missing_global_field("job_snapshot")
-            self._latest_job_snapshot = {
-                agent_id: {
+            latest: dict[str, dict[str, object]] = {}
+            for agent_id, snapshot in adapter.agent_snapshots_view().items():
+                inventory = snapshot.inventory
+                job_payload: dict[str, object] = {
                     "job_id": snapshot.job_id,
                     "on_shift": snapshot.on_shift,
                     "wallet": snapshot.wallet,
                     "lateness_counter": snapshot.lateness_counter,
-                    "wages_earned": snapshot.inventory.get("wages_earned", 0),
-                    "meals_cooked": snapshot.inventory.get("meals_cooked", 0),
-                    "meals_consumed": snapshot.inventory.get("meals_consumed", 0),
-                    "basket_cost": snapshot.inventory.get("basket_cost", 0.0),
+                    "wages_earned": inventory.get("wages_earned", 0),
+                    "meals_cooked": inventory.get("meals_cooked", 0),
+                    "meals_consumed": inventory.get("meals_consumed", 0),
+                    "basket_cost": adapter.basket_cost(agent_id),
                     "shift_state": snapshot.shift_state,
                     "attendance_ratio": snapshot.attendance_ratio,
                     "late_ticks_today": snapshot.late_ticks_today,
@@ -1365,8 +1367,8 @@ class TelemetryPublisher(_TelemetrySinkBase):
                         for need, value in snapshot.needs.items()
                     },
                 }
-                for agent_id, snapshot in adapter.agent_snapshots_view().items()
-            }
+                latest[agent_id] = job_payload
+            self._latest_job_snapshot = latest
         else:
             self._warn_missing_global_field("job_snapshot")
 
