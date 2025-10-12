@@ -17,9 +17,13 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
+from townlet.console.command import (
+    ConsoleCommandEnvelope,
+    ConsoleCommandError,
+)
 from townlet.console.service import ConsoleService
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
@@ -28,6 +32,7 @@ from townlet.core.interfaces import (
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
+from townlet.ports.telemetry import TelemetrySink
 from townlet.policy.runner import PolicyRuntime
 from townlet.ports.world import WorldRuntime
 from townlet.rewards.engine import RewardEngine
@@ -41,6 +46,7 @@ from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
+from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
@@ -138,7 +144,7 @@ class SimulationLoop:
         self._affordance_runtime_factory: Callable[
             [WorldState, AffordanceRuntimeContext],
             DefaultAffordanceRuntime,
-        ]
+        ] | None
         self._affordance_runtime_factory = factory
         self.runtime: WorldRuntime | None = None
         self._world_provider = (world_provider or "default").strip()
@@ -244,7 +250,7 @@ class SimulationLoop:
 
         telemetry_components = self._resolve_telemetry_components()
         self._telemetry_port = telemetry_components.port
-        self.telemetry = telemetry_components.publisher
+        self.telemetry = cast(TelemetrySinkProtocol, telemetry_components.publisher)
         self._resolved_providers["telemetry"] = telemetry_components.provider
 
         controller = self._policy_controller
@@ -322,6 +328,21 @@ class SimulationLoop:
             return self._telemetry_components_override(self)
         return self._build_default_telemetry_components()
 
+    def _coerce_console_command(self, payload: object) -> ConsoleCommandEnvelope:
+        """Normalise console payloads into envelopes expected by the runtime."""
+
+        if isinstance(payload, ConsoleCommandEnvelope):
+            return payload
+        if isinstance(payload, str):
+            command = payload.strip()
+            if not command:
+                raise ValueError("console command must not be empty")
+            return ConsoleCommandEnvelope(name=command)
+        try:
+            return ConsoleCommandEnvelope.from_payload(payload)
+        except ConsoleCommandError as exc:
+            raise ValueError(str(exc)) from exc
+
     def _build_default_world_components(self) -> WorldComponents:
         cfg = getattr(self.config, "observations_config", None)
         ticks_per_day = 1440
@@ -365,11 +386,11 @@ class SimulationLoop:
         )
 
     def _build_default_policy_components(self) -> PolicyComponents:
-        policy_kwargs = {"config": self.config, **self._policy_options}
-        policy_backend = PolicyRuntime(**policy_kwargs)
+        policy_backend = PolicyRuntime(config=self.config)
         policy_port = create_policy(
             provider=self._policy_provider,
             backend=policy_backend,
+            **self._policy_options,
         )
         controller: PolicyController | None = None
         backend_attr = getattr(policy_port, "backend", None)
@@ -377,7 +398,7 @@ class SimulationLoop:
             decision_backend = backend_attr
             controller = PolicyController(backend=decision_backend, port=policy_port)
         else:
-            decision_backend = policy_port  # type: ignore[assignment]
+            decision_backend = policy_port
         return PolicyComponents(
             port=policy_port,
             controller=controller,
@@ -386,21 +407,20 @@ class SimulationLoop:
         )
 
     def _build_default_telemetry_components(self) -> TelemetryComponents:
-        telemetry_kwargs = {"config": self.config, **self._telemetry_options}
-        publisher = TelemetryPublisher(**telemetry_kwargs)
+        publisher = TelemetryPublisher(config=self.config)
         telemetry_port = create_telemetry(
             provider=self._telemetry_provider,
             publisher=publisher,
+            **self._telemetry_options,
         )
         port_publisher = getattr(telemetry_port, "publisher", None)
+        publisher_sink: TelemetrySinkProtocol
         if isinstance(port_publisher, TelemetryPublisher):
-            publisher_sink: TelemetrySinkProtocol = port_publisher
+            publisher_sink = port_publisher
+        elif isinstance(port_publisher, TelemetrySinkProtocol):
+            publisher_sink = port_publisher
         else:
-            publisher_sink = telemetry_port
-            try:  # pragma: no cover - defensive close
-                publisher.close()
-            except Exception:
-                pass
+            publisher_sink = publisher
         return TelemetryComponents(
             port=telemetry_port,
             publisher=publisher_sink,
@@ -489,7 +509,10 @@ class SimulationLoop:
             runtime_anneal_ratio=anneal_ratio,
         )
         self.telemetry.update_policy_identity(identity_payload)
-        state = self.runtime.snapshot(
+        runtime = self.runtime
+        if runtime is None:
+            raise RuntimeError("WorldRuntime is not initialised")
+        state = runtime.snapshot(
             config=self.config,
             telemetry=self.telemetry,
             stability=self.stability,
@@ -583,18 +606,26 @@ class SimulationLoop:
         """Advance the simulation loop by one tick and return the DTO envelope and rewards."""
         tick_start = time.perf_counter()
         next_tick = self.tick + 1
-        console_ops = list(self.telemetry.drain_console_buffer())
+        raw_console_commands = list(self.telemetry.drain_console_buffer())
+        console_envelopes: list[ConsoleCommandEnvelope] = []
+        for command in raw_console_commands:
+            try:
+                envelope = self._coerce_console_command(command)
+            except ValueError:
+                logger.warning("Ignoring invalid console command payload: %r", command)
+                continue
+            console_envelopes.append(envelope)
         runtime = self.runtime
         if runtime is None:  # pragma: no cover - defensive guard
             raise RuntimeError("WorldRuntime is not initialised")
         if self._console_router is not None:
-            for command in console_ops:
-                try:
-                    self._console_router.enqueue(command)
-                except ValueError:
-                    logger.warning("Ignoring invalid console command payload: %r", command)
-        elif console_ops:
-            logger.warning("ConsoleRouter unavailable; dropping %d buffered commands", len(console_ops))
+            for envelope in console_envelopes:
+                self._console_router.enqueue(envelope)
+        elif console_envelopes:
+            logger.warning(
+                "ConsoleRouter unavailable; dropping %d buffered commands",
+                len(console_envelopes),
+            )
 
         controller = self._policy_controller
         try:
@@ -620,7 +651,7 @@ class SimulationLoop:
 
             runtime_result = runtime.tick(
                 tick=self.tick,
-                console_operations=console_ops,
+                console_operations=console_envelopes,
                 action_provider=_action_provider,
             )
             console_results = runtime_result.console_results
@@ -647,11 +678,11 @@ class SimulationLoop:
             if controller is not None:
                 policy_snapshot = controller.latest_policy_snapshot()
                 possessed_agents = controller.possessed_agents()
-                option_switch_counts = controller.consume_option_switch_counts()
+                option_switch_counts_raw = controller.consume_option_switch_counts()
             else:  # pragma: no cover - defensive fallback
                 policy_snapshot = self.policy.latest_policy_snapshot()
                 possessed_agents = self.policy.possessed_agents()
-                option_switch_counts = self.policy.consume_option_switch_counts()
+                option_switch_counts_raw = self.policy.consume_option_switch_counts()
             hunger_levels = {
                 agent_id: float(snapshot.needs.get("hunger", 1.0))
                 for agent_id, snapshot in self.world.agents.items()
@@ -664,19 +695,12 @@ class SimulationLoop:
             queues_snapshot: dict[str, object] = {}
             queue_length = 0.0
             if isinstance(queue_state_export, Mapping):
-                queues_snapshot = copy.deepcopy(queue_state_export)
+                queues_snapshot = copy.deepcopy(dict(queue_state_export))
                 queues_payload = queues_snapshot.get("queues", {})
                 if isinstance(queues_payload, Mapping):
                     queue_length = float(
                         sum(len(entries or []) for entries in queues_payload.values())
                     )
-            stability_inputs = {
-                "hunger_levels": hunger_levels,
-                "option_switch_counts": option_switch_counts,
-                "reward_samples": dict(rewards),
-                "queue_metrics": queue_metrics,
-                "employment_snapshot": employment_metrics,
-            }
             perturbation_state = self.perturbations.latest_state()
             policy_hash = controller.active_policy_hash() if controller is not None else self.policy.active_policy_hash()
             anneal_ratio = controller.current_anneal_ratio() if controller is not None else self.policy.current_anneal_ratio()
@@ -686,14 +710,22 @@ class SimulationLoop:
                 runtime_anneal_ratio=anneal_ratio,
             )
             possessed_agents_list = sorted(str(agent) for agent in possessed_agents)
+            option_switch_counts = {
+                str(agent): int(count)
+                for agent, count in sorted(option_switch_counts_raw.items())
+            }
             policy_metadata = {
                 "identity": policy_identity,
                 "possessed_agents": possessed_agents_list,
-                "option_switch_counts": {
-                    str(agent): int(count)
-                    for agent, count in sorted(option_switch_counts.items())
-                },
+                "option_switch_counts": dict(option_switch_counts),
                 "anneal_ratio": anneal_ratio,
+            }
+            stability_inputs = {
+                "hunger_levels": hunger_levels,
+                "option_switch_counts": dict(option_switch_counts),
+                "reward_samples": dict(rewards),
+                "queue_metrics": queue_metrics,
+                "employment_snapshot": employment_metrics,
             }
             adapter = self.world_adapter
             embedding_metrics = self._collect_embedding_metrics(adapter)
@@ -704,7 +736,8 @@ class SimulationLoop:
             }
             snapshot_for_health["metrics"] = {"queue_length": queue_length}
             if self._health_monitor is not None and self._telemetry_port is not None:
-                self._health_monitor.on_tick(snapshot_for_health, self._telemetry_port)
+                telemetry_sink = cast(TelemetrySink, self._telemetry_port)
+                self._health_monitor.on_tick(snapshot_for_health, telemetry_sink)
             self.stability.track(
                 tick=self.tick,
                 rewards=rewards,
@@ -722,7 +755,7 @@ class SimulationLoop:
             self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
             promotion_state = self.promotion.snapshot()
             stability_metrics["promotion_state"] = promotion_state
-            anneal_context = {}
+            anneal_context: dict[str, object] = {}
             try:
                 anneal_context = self.policy.anneal_context()
             except Exception:  # pragma: no cover - defensive
@@ -754,14 +787,18 @@ class SimulationLoop:
             if dto_envelope is None:
                 raise SimulationLoopError(self.tick, "World context failed to produce an observation envelope")
             if controller is not None:
-                frames = controller.flush_transitions(envelope=dto_envelope)
+                raw_frames = controller.flush_transitions(envelope=dto_envelope)
             else:  # pragma: no cover - defensive fallback
-                frames = self.policy.flush_transitions(envelope=dto_envelope)
-            frames = list(frames or [])
-            if frames:
+                raw_frames = self.policy.flush_transitions(envelope=dto_envelope)
+            frame_list: list[dict[str, object]] = []
+            if raw_frames is not None:
+                for frame in raw_frames:
+                    if isinstance(frame, Mapping):
+                        frame_list.append(dict(frame))
+            if frame_list:
                 anneal_ctx = dto_envelope.global_context.anneal_context or {}
                 metadata_copy = dict(policy_metadata)
-                for frame in frames:
+                for frame in frame_list:
                     frame.setdefault("anneal_context", anneal_ctx)
                     meta = frame.setdefault("metadata", {})
                     if isinstance(meta, dict):
@@ -816,7 +853,12 @@ class SimulationLoop:
             else:  # pragma: no cover - defensive
                 self.telemetry.emit_event("loop.health", health_payload)
             if logger.isEnabledFor(logging.INFO):
-                summary = health_payload.get("summary", {})
+                summary_mapping = health_payload.get("summary")
+                summary: Mapping[str, object]
+                if isinstance(summary_mapping, Mapping):
+                    summary = summary_mapping
+                else:
+                    summary = {}
                 logger.info(
                     (
                         "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
@@ -987,6 +1029,17 @@ class SimulationLoop:
             except (TypeError, ValueError):
                 last_flush_duration = None
 
+        worker_alive = bool(transport_status.get("worker_alive", False))
+        worker_error = transport_status.get("worker_error")
+        worker_restart_count = coerce_int(
+            transport_status.get("worker_restart_count"), default=0
+        )
+        worker_status: dict[str, object] = {
+            "alive": worker_alive,
+            "error": worker_error,
+            "restart_count": worker_restart_count,
+        }
+
         transport_payload: dict[str, object] = {
             "provider": transport_status.get("provider"),
             "queue_length": queue_length,
@@ -999,13 +1052,7 @@ class SimulationLoop:
                 transport_status.get("bytes_flushed_total"), default=0
             ),
             "auth_enabled": bool(transport_status.get("auth_enabled", False)),
-            "worker": {
-                "alive": bool(transport_status.get("worker_alive", False)),
-                "error": transport_status.get("worker_error"),
-                "restart_count": coerce_int(
-                    transport_status.get("worker_restart_count"), default=0
-                ),
-            },
+            "worker": worker_status,
         }
 
         perturbations_pending = 0
@@ -1073,9 +1120,9 @@ class SimulationLoop:
             "payloads_flushed_total": transport_payload["payloads_flushed_total"],
             "bytes_flushed_total": transport_payload["bytes_flushed_total"],
             "auth_enabled": transport_payload["auth_enabled"],
-            "worker_alive": transport_payload["worker"]["alive"],
-            "worker_error": transport_payload["worker"]["error"],
-            "worker_restart_count": transport_payload["worker"]["restart_count"],
+            "worker_alive": worker_alive,
+            "worker_error": worker_error,
+            "worker_restart_count": worker_restart_count,
             "perturbations_pending": perturbations_pending,
             "perturbations_active": perturbations_active,
             "employment_exit_queue": employment_exit_queue,

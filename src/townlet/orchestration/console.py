@@ -12,7 +12,7 @@ from townlet.console.command import (
     ConsoleCommandError,
     ConsoleCommandResult,
 )
-from townlet.ports.telemetry import TelemetrySink
+from townlet.core.interfaces import TelemetrySinkProtocol
 from townlet.ports.world import WorldRuntime
 from townlet.snapshots.state import SnapshotState
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class ConsoleRouter:
     """Queue-based console router emitting structured results via telemetry."""
 
-    def __init__(self, world: WorldRuntime, telemetry: TelemetrySink) -> None:
+    def __init__(self, world: WorldRuntime, telemetry: TelemetrySinkProtocol) -> None:
         self._world = world
         self._telemetry = telemetry
         self._queue: deque[ConsoleCommandEnvelope] = deque()
