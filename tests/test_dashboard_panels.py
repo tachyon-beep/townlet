@@ -69,8 +69,7 @@ def _make_loop() -> SimulationLoop:
             "social_events": [],
         },
     )
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
     return loop
 
 

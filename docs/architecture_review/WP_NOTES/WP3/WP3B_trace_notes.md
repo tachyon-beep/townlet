@@ -9,7 +9,7 @@ post-tick need levels.
 ## Observed Call Flow (WorldContext.tick)
 
 1. **Respawn & Console Processing**
-   - `lifecycle.process_respawns` → `WorldState.apply_console` → `WorldState.consume_console_results`.
+   - `lifecycle.process_respawns` → `WorldState.apply_console` (returns command results for router).
 2. **Perturbations**
    - `perturbations.tick` (unchanged from legacy flow).
 3. **Action Application (Transitional Bridge)**

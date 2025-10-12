@@ -37,6 +37,13 @@ Latest context snapshot so we can resume quickly after memory compaction.
   now covers observation context hardening, DTO-only local view snapshots, and
   `DefaultWorldAdapter` surface tightening (immutable agent list, snapshot-based
   object lookups).
+- Batch B audit drafted in `legacy_console_audit.md` mapping the remaining
+  console buffering path (WorldState → ConsoleService/Bridge → telemetry caches)
+  ahead of removing world-level buffers in favour of dispatcher events.
+- Console processing now returns results directly (`WorldState.apply_console`
+  yields the `ConsoleCommandResult` list); the legacy `consume_console_results`
+  hook has been removed from world/context/runtime and affected tests updated.
+  Telemetry still maintains historical caches pending the next cleanup pass.
 
 ## Outstanding Work (DTO Rollout)
 1. Run the remaining Stage 6 close-out tasks (`ruff`, `mypy`) and capture results in the Stage 6 audit log (full `pytest` is already green).

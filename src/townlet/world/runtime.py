@@ -198,8 +198,7 @@ class WorldRuntime:
 
             world.tick = tick
             lifecycle.process_respawns(world, tick=tick)
-            world.apply_console(queued_ops)
-            console_results = list(world.consume_console_results())
+            console_results = list(world.apply_console(queued_ops))
             perturbations.tick(world, current_tick=tick)
             world.apply_actions(prepared_actions)
             world.resolve_affordances(current_tick=tick)

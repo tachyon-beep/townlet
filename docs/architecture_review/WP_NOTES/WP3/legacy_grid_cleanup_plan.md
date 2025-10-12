@@ -26,6 +26,10 @@ chip away at the remaining legacy surfaces.
    modular services without direct `WorldState` mutation.
 3. Update console handler tests and hook parity fixtures to validate the
    dispatcher-first flow.
+   - *Progress 2025-10-11:* `WorldState.apply_console` now returns results
+     directly and `consume_console_results` has been removed. Console router
+     + loop tests updated accordingly. Remaining tasks: relocate the console
+     service out of `WorldState` and delete telemetry batch/history caches.
 
 ## Batch C — Employment & Affordance State
 1. Remove `_job_keys`, direct employment runtime caches, and job reward helpers

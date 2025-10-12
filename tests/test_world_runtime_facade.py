@@ -15,15 +15,11 @@ class _StubWorld:
     def __init__(self) -> None:
         self.tick = 0
         self.calls: list[tuple[str, Any]] = []
-        self._console_results: list[ConsoleCommandResult] = []
         self._events: list[dict[str, object]] = []
 
-    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
+    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> list[ConsoleCommandResult]:
         self.calls.append(("apply_console", list(operations)))
-
-    def consume_console_results(self) -> list[ConsoleCommandResult]:
-        self.calls.append(("consume_console_results", None))
-        return list(self._console_results)
+        return []
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
         self.calls.append(("apply_actions", dict(actions)))
@@ -99,7 +95,6 @@ def test_runtime_tick_invokes_dependencies_in_order() -> None:
     call_sequence = [name for name, _ in world.calls]
     assert call_sequence == [
         "apply_console",
-        "consume_console_results",
         "apply_actions",
         "resolve_affordances",
         "drain_events",

@@ -236,8 +236,7 @@ class WorldContext:
         state.tick = tick
 
         lifecycle.process_respawns(state, tick=tick)
-        state.apply_console(console_operations)
-        console_results = list(state.consume_console_results())
+        console_results = list(state.apply_console(console_operations))
 
         perturbations.tick(state, current_tick=tick)
 

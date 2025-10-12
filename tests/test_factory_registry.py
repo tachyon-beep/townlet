@@ -36,14 +36,11 @@ from townlet.scheduler.perturbations import PerturbationScheduler
 class _StubWorld:
     def __init__(self) -> None:
         self.tick = 0
-        self._console_results: list[ConsoleCommandResult] = []
         self._events: list[dict[str, object]] = []
 
-    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
+    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> list[ConsoleCommandResult]:
         _ = list(operations)
-
-    def consume_console_results(self) -> list[ConsoleCommandResult]:
-        return list(self._console_results)
+        return []
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
         _ = dict(actions)

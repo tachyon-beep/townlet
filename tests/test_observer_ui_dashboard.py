@@ -202,8 +202,7 @@ def test_narration_panel_shows_styled_categories() -> None:
         },
     )
 
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
 
     events: list[dict[str, object]] = []
 

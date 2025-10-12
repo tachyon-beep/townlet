@@ -68,8 +68,7 @@ def test_shower_events_in_telemetry() -> None:
 
     loop.tick = 0
     emit_loop_tick(telemetry, tick=loop.tick, world=world)
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
 
     granted = world.queue_manager.request_access("shower_1", "alice", world.tick)
     assert granted is True
@@ -103,8 +102,7 @@ def test_shower_complete_narration() -> None:
     )
 
     emit_loop_tick(telemetry, tick=loop.tick, world=world)
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
 
     request = world.queue_manager.request_access("shower_1", "alice", world.tick)
     assert request is True
@@ -139,8 +137,7 @@ def test_sleep_events_in_telemetry() -> None:
 
     loop.tick = 0
     emit_loop_tick(telemetry, tick=loop.tick, world=world)
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
 
     granted = world.queue_manager.request_access("bed_1", "alice", world.tick)
     assert granted is True
@@ -223,8 +220,7 @@ def test_affordance_runtime_running_snapshot() -> None:
     )
 
     emit_loop_tick(telemetry, tick=loop.tick, world=world)
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
 
     granted = world.queue_manager.request_access("bed_1", "alice", world.tick)
     assert granted is True

@@ -19,8 +19,7 @@ Source: `src/townlet/world/runtime.py::WorldRuntime.tick` (see repo snapshot).
 3. **Tick pipeline**
    - `world.tick = tick` (stamp tick).
    - `lifecycle.process_respawns(world, tick)` (spawn new agents).
-   - `world.apply_console(queued_ops)` (legacy only; modular path handles this inside `WorldContext`).
-   - `console_results = list(world.consume_console_results())` (capture command output).
+   - `console_results = list(world.apply_console(queued_ops))` (capture command output).
    - `perturbations.tick(world, current_tick=tick)` (apply scheduler).
    - `world.apply_actions(prepared_actions)` (legacy only; modular path handles this inside `WorldContext`).
    - `world.resolve_affordances(current_tick=tick)` (legacy only; modular path delegates to modular systems).

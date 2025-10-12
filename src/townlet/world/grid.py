@@ -498,9 +498,9 @@ class WorldState:
     def generate_agent_id(self, base_id: str) -> str:
         return self._lifecycle_service.generate_agent_id(base_id)
 
-    def apply_console(self, operations: Iterable[Any]) -> None:
+    def apply_console(self, operations: Iterable[Any]) -> list[ConsoleCommandResult]:
         """Apply console operations before the tick sequence runs."""
-        self._console.apply(operations)
+        return self._console.apply(operations)
 
     def attach_rng(self, rng: random.Random) -> None:
         """Attach a deterministic RNG used for world-level randomness."""
@@ -596,11 +596,6 @@ class WorldState:
             self._affordance_service.clear_hooks(name)
         else:
             self._hook_registry.clear(name)
-
-    def consume_console_results(self) -> list[ConsoleCommandResult]:
-        """Return and clear buffered console results."""
-
-        return self._console.consume_results()
 
     def spawn_agent(
         self,
