@@ -1454,8 +1454,9 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        if getattr(self, "_relationships", None) is not None:
-            relationship_system.decay(self._relationships)
+        relationships = getattr(self, "_relationships", None)
+        if relationships is None:
+            raise RuntimeError("Relationship service missing; modular decay requires RelationshipService")
         employment_service = getattr(self, "_employment_service", None)
         if employment_service is None:
             coordinator = getattr(self, "employment", None)
