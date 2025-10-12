@@ -9,6 +9,7 @@ from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import AffordanceOutcome, apply_affordance_outcome
 from townlet.world.affordances.core import advance_running_affordances as _advance_runtime
 from townlet.world.agents.snapshot import AgentSnapshot
+from townlet.world.spatial import WorldSpatialIndex
 from townlet.world.systems import queues as queue_system
 
 from .base import SystemContext
@@ -136,6 +137,8 @@ def process_actions(state: Any, actions: Mapping[str, Any], tick: int) -> None:
         outcome_metadata: dict[str, object] = {}
 
         if kind == "request" and object_id and queue_manager is not None:
+            if not isinstance(spatial_index, WorldSpatialIndex):
+                raise RuntimeError("Affordance queue requests require a spatial index")
             granted = queue_system.request_access(
                 manager=queue_manager,
                 objects=objects,

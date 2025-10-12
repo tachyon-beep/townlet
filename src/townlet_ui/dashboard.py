@@ -1972,7 +1972,7 @@ def run_dashboard(
     policy_provider: str | None = None,
 ) -> None:
     """Continuously render dashboard against a SimulationLoop instance."""
-    from townlet.world.grid import AgentSnapshot
+    from townlet.world.agents.snapshot import AgentSnapshot
 
     if not loop.world.agents:
         profile_name, resolved_personality = loop.world.select_personality_profile("observer_demo")

@@ -182,6 +182,10 @@ def _process_queue_conflicts(state: Any, manager: QueueManager, tick: int) -> No
     runtime_service = getattr(state, "_affordance_service", None)
 
     for object_id, occupant in list(active_reservations.items()):
+        if occupant is None:
+            # Reservation bookkeeping may temporarily yield a placeholder; skip until
+            # the queue manager records a concrete occupant.
+            continue
         queue = manager.queue_snapshot(object_id)
         if not queue:
             continue

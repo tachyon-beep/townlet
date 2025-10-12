@@ -33,10 +33,6 @@ class NightlyResetService:
         for snapshot in list(self.agents.values()):
             previous_position = snapshot.position
             home = snapshot.home_position or snapshot.position
-            if home is None:
-                home = snapshot.position
-                snapshot.home_position = home
-
             target = home
             if target is not None and target != snapshot.position:
                 occupied = any(

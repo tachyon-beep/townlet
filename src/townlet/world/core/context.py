@@ -173,10 +173,11 @@ class WorldContext:
             for agent_id in raw_batch.keys()
         }
 
+        ordered_targets: list[str]
         if agent_ids is None:
             ordered_targets = list(raw_batch.keys())
         else:
-            ordered_targets: list[str] = []
+            ordered_targets = []
             seen: set[str] = set()
             for agent in agent_ids:
                 if agent in raw_batch and agent not in seen:

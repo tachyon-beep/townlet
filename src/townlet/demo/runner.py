@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from townlet.core.interfaces import TelemetrySinkProtocol
 from townlet.core.sim_loop import SimulationLoop
 from townlet.core.utils import is_stub_telemetry
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.agents.snapshot import AgentSnapshot
+
+if TYPE_CHECKING:
+    from townlet.world.grid import WorldState
 from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.dashboard import PaletteState, run_dashboard
 
