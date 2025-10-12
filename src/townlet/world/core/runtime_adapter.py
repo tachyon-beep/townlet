@@ -57,9 +57,17 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
     def tick(self) -> int:
         return self._world.tick
 
+    @tick.setter
+    def tick(self, value: int) -> None:
+        raise AttributeError("WorldRuntimeAdapter.tick is read-only")
+
     @property
     def config(self) -> SimulationConfig:  # pragma: no cover - simple accessor
         return self._world.config
+
+    @config.setter
+    def config(self, value: object) -> None:
+        raise AttributeError("WorldRuntimeAdapter.config is read-only")
 
     def agent_snapshots_view(self) -> Mapping[str, AgentSnapshot]:
         return self._world.agent_snapshots_view()
@@ -92,14 +100,21 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
         return self._world.queue_manager
 
     def relationships_snapshot(self) -> Mapping[str, Mapping[str, Mapping[str, float]]]:
-        return self._world.relationships_snapshot()
+        snapshot = self._world.relationships_snapshot()
+        return {
+            str(owner): {
+                str(other): {str(metric): float(value) for metric, value in metrics.items()}
+                for other, metrics in relations.items()
+            }
+            for owner, relations in snapshot.items()
+        }
 
     def relationship_metrics_snapshot(self) -> Mapping[str, object]:
         getter = getattr(self._world, "relationship_metrics_snapshot", None)
         if callable(getter):
             metrics = getter()
             if isinstance(metrics, Mapping):
-                return metrics
+                return {str(key): value for key, value in metrics.items()}
         return {}
 
     def rivalry_top(self, agent_id: str, limit: int) -> Iterable[tuple[str, float]]:
@@ -108,7 +123,12 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
     def rivalry_snapshot(self) -> Mapping[str, Mapping[str, float]]:
         snapshot_getter = getattr(self._world, "rivalry_snapshot", None)
         if callable(snapshot_getter):
-            return snapshot_getter()
+            snapshot = snapshot_getter()
+            if isinstance(snapshot, Mapping):
+                return {
+                    str(owner): {str(other): float(value) for other, value in relations.items()}
+                    for owner, relations in snapshot.items()
+                }
         return {}
 
     def consume_rivalry_events(self) -> Iterable[Mapping[str, object]]:
@@ -116,7 +136,11 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
         if callable(consumer):
             events = consumer() or []
             if isinstance(events, Iterable):
-                return list(events)
+                cleaned: list[Mapping[str, object]] = []
+                for event in events:
+                    if isinstance(event, Mapping):
+                        cleaned.append({str(key): value for key, value in event.items()})
+                return cleaned
         return []
 
     def _employment_context_wages(self, agent_id: str) -> float:
@@ -128,7 +152,9 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
     def running_affordances_snapshot(self) -> Mapping[str, object]:
         snapshot_getter = getattr(self._world, "running_affordances_snapshot", None)
         if callable(snapshot_getter):
-            return snapshot_getter()
+            snapshot = snapshot_getter() or {}
+            if isinstance(snapshot, Mapping):
+                return {str(key): value for key, value in snapshot.items()}
         return {}
 
     def objects_snapshot(self) -> Mapping[str, Mapping[str, object]]:
@@ -136,11 +162,17 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
 
         snapshot: dict[str, dict[str, object]] = {}
         for object_id, obj in self._world.objects.items():
+            raw_position = getattr(obj, "position", None)
+            position = None
+            if raw_position is not None and len(raw_position) >= 2:
+                position = (int(raw_position[0]), int(raw_position[1]))
+            stock_payload = getattr(obj, "stock", {})
+            stock = dict(stock_payload) if isinstance(stock_payload, Mapping) else {}
             snapshot[object_id] = {
                 "object_type": getattr(obj, "object_type", ""),
-                "position": getattr(obj, "position", None),
+                "position": position,
                 "occupied_by": getattr(obj, "occupied_by", None),
-                "stock": dict(getattr(obj, "stock", {})),
+                "stock": stock,
             }
         return MappingProxyType(snapshot)
 
@@ -154,11 +186,11 @@ def ensure_world_adapter(
         return world
     from townlet.world.grid import WorldState  # local import to avoid cycles
     try:
-        from townlet.world.core.context import WorldContext  # type: ignore
+        from townlet.world.core.context import WorldContext
     except ImportError:  # pragma: no cover - fallback during partial initialisation
-        world_context_cls = None  # type: ignore
+        world_context_cls = None
     else:
-        world_context_cls = WorldContext  # type: ignore
+        world_context_cls = WorldContext
 
     if isinstance(world, WorldState):
         return WorldRuntimeAdapter(world)

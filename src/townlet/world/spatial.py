@@ -31,7 +31,10 @@ class WorldSpatialIndex:
         self._agents_by_position.clear()
         self._positions_by_agent.clear()
         for agent_id, snapshot in agents.items():
-            position = tuple(snapshot.position)
+            raw_position = getattr(snapshot, "position", None)
+            if raw_position is None or len(raw_position) < 2:
+                continue
+            position = (int(raw_position[0]), int(raw_position[1]))
             self._positions_by_agent[agent_id] = position
             bucket = self._agents_by_position.setdefault(position, [])
             bucket.append(agent_id)
@@ -42,9 +45,13 @@ class WorldSpatialIndex:
             if not occupant:
                 continue
             obj = objects.get(object_id)
-            if obj is None or obj.position is None:
+            if obj is None:
                 continue
-            self._reservation_tiles.add(obj.position)
+            obj_position = getattr(obj, "position", None)
+            if obj_position is None or len(obj_position) < 2:
+                continue
+            position_tuple = (int(obj_position[0]), int(obj_position[1]))
+            self._reservation_tiles.add(position_tuple)
 
     def insert_agent(self, agent_id: str, position: tuple[int, int]) -> None:
         """Register a new agent at ``position`` without rebuilding indices."""

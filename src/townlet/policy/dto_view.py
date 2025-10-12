@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from townlet.world.dto.observation import AgentObservationDTO, ObservationEnvelope
 
@@ -159,9 +159,7 @@ class DTOWorldView:
         self.tick = int(getattr(world, "tick", envelope.tick))
         self._guardrail_emitter = guardrail_emitter
         self._fallback_agent_warning_emitted = False
-        self._agent_snapshots = self._build_agent_snapshots(
-            envelope.agents, world_agent_lookup=getattr(world, "agents", None)
-        )
+        self._agent_snapshots = self._build_agent_snapshots(envelope.agents)
         self._queue_affinity_metrics = global_ctx.queue_affinity_metrics or {}
 
     # ------------------------------------------------------------------
@@ -182,7 +180,7 @@ class DTOWorldView:
                     agent_id,
                 )
                 self._fallback_agent_warning_emitted = True
-            return getter(agent_id)
+            return _to_namespace(getter(agent_id))
         return None
 
     def iter_agent_snapshots(self) -> Iterator[tuple[str, SimpleNamespace]]:
@@ -201,7 +199,10 @@ class DTOWorldView:
                 )
                 self._fallback_agent_warning_emitted = True
             for agent_id, snapshot in items():
-                yield str(agent_id), snapshot
+                namespace = _to_namespace(snapshot)
+                if namespace is None:
+                    namespace = SimpleNamespace(raw=snapshot)
+                yield str(agent_id), namespace
 
     def agent_ids(self) -> tuple[str, ...]:
         if self._agent_snapshots:
@@ -236,10 +237,10 @@ class DTOWorldView:
             return None
         return dict(pending) if isinstance(pending, Mapping) else None
 
-    def agents_at_position(self, position: Sequence[int]) -> tuple[str, ...]:
-        target = tuple(position) if position is not None else None
-        if target is None:
+    def agents_at_position(self, position: Sequence[int] | None) -> tuple[str, ...]:
+        if position is None:
             return ()
+        target = tuple(position)
         matches: list[str] = []
         for agent_id, snapshot in self.iter_agent_snapshots():
             if getattr(snapshot, "position", None) == target:
@@ -319,12 +320,12 @@ class DTOWorldView:
             and world is not None
             and hasattr(world, "record_relationship_guard_block")
         ):
-                world.record_relationship_guard_block(
-                    agent_id=payload.get("agent_id"),
-                    reason=payload.get("reason"),
-                    target_agent=payload.get("target_agent"),
-                    object_id=payload.get("object_id"),
-                )
+            world.record_relationship_guard_block(
+                agent_id=payload.get("agent_id"),
+                reason=payload.get("reason"),
+                target_agent=payload.get("target_agent"),
+                object_id=payload.get("object_id"),
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -332,8 +333,6 @@ class DTOWorldView:
     def _build_agent_snapshots(
         self,
         agents: Sequence[AgentObservationDTO],
-        *,
-        world_agent_lookup: Any,
     ) -> dict[str, SimpleNamespace]:
         if not agents:
             return {}
@@ -386,3 +385,13 @@ __all__ = [
     "DTORelationshipView",
     "DTOWorldView",
 ]
+def _to_namespace(candidate: Any) -> SimpleNamespace | None:
+    if candidate is None:
+        return None
+    if isinstance(candidate, SimpleNamespace):
+        return candidate
+    if isinstance(candidate, Mapping):
+        return SimpleNamespace(**{str(key): value for key, value in candidate.items()})
+    if hasattr(candidate, "__dict__"):
+        return SimpleNamespace(**candidate.__dict__)
+    return None

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, is_dataclass
-from typing import Any
+from typing import Any, Iterable, Tuple, cast
 
 import numpy as np
 
@@ -45,7 +45,7 @@ def build_observation_envelope(
     economy_snapshot: Mapping[str, Any] | None = None,
     anneal_context: Mapping[str, Any] | None = None,
     agent_contexts: Mapping[str, Mapping[str, Any]] | None = None,
-) -> ObservationEnvelope:
+    ) -> ObservationEnvelope:
     """Build an observation envelope ready for policy/telemetry consumers."""
 
     agent_ids = sorted(observations.keys())
@@ -59,13 +59,28 @@ def build_observation_envelope(
             str(object_id): str(agent)
             for object_id, agent in _iter_mapping(queues.get("active", {}))
         }
-        raw_entries = queues.get("queues", {})
-        if isinstance(raw_entries, Mapping):
-            queue_entries = {
-                str(object_id): list(raw_entries.get(object_id) or [])
-                for object_id in raw_entries.keys()
-            }
-        cooldown_entries = list(queues.get("cooldowns", []) or [])
+        queue_payload = queues.get("queues", {})
+        if isinstance(queue_payload, Mapping):
+            queue_entries = {}
+            for object_id, entries in queue_payload.items():
+                if not isinstance(entries, Iterable):
+                    continue
+                cleaned: list[Mapping[str, Any]] = []
+                for entry in entries:
+                    if isinstance(entry, Mapping):
+                        cleaned.append({str(k): _to_builtin(v) for k, v in entry.items()})
+                if cleaned:
+                    queue_entries[str(object_id)] = cleaned
+        cooldown_entries = []
+        for entry in queues.get("cooldowns", []) or []:
+            if isinstance(entry, Mapping):
+                cooldown_entries.append(
+                    {
+                        "object_id": str(entry.get("object_id", "")),
+                        "expiry": int(entry.get("expiry", 0)),
+                        "agent_id": str(entry.get("agent_id", "")),
+                    }
+                )
 
     for agent_id in agent_ids:
         payload = observations.get(agent_id, {})
@@ -109,8 +124,11 @@ def build_observation_envelope(
                 except Exception:
                     position_payload = None
             personality = getattr(snapshot, "personality", None)
-            if is_dataclass(personality):
-                personality_payload = _to_builtin(asdict(personality))
+            if _is_dataclass_instance(personality):
+                personality_payload = {
+                    str(key): _to_builtin(val)
+                    for key, val in asdict(personality).items()  # type: ignore[arg-type]
+                }
             if job_snapshot and agent_id in job_snapshot:
                 job_payload = _to_builtin(job_snapshot[agent_id])
             else:
@@ -164,7 +182,7 @@ def build_observation_envelope(
                 str(component): float(value)
                 for component, value in _iter_mapping(breakdown)
             }
-            for agent_id, breakdown in _iter_mapping(reward_breakdown)
+    for agent_id, breakdown in _iter_mapping(reward_breakdown)
         },
         perturbations=_to_builtin(perturbations),
         policy_snapshot=_to_builtin(policy_snapshot),
@@ -197,7 +215,7 @@ def build_observation_envelope(
         for agent_id, reason in _iter_mapping(termination_reasons)
     }
 
-    return ObservationEnvelope(
+    return ObservationEnvelope.model_construct(
         tick=int(tick),
         agents=agent_dtos,
         global_context=global_context,
@@ -214,19 +232,28 @@ def _coerce_ndarray(value: Any) -> Sequence[Any] | None:
     if value is None:
         return None
     if isinstance(value, np.ndarray):
-        return value.tolist()
+        return cast(Sequence[Any], value.tolist())
     if isinstance(value, (list, tuple)):
         return [_to_builtin(item) for item in value]
-    return _to_builtin(value)
+    coerced = _to_builtin(value)
+    if coerced is None:
+        return None
+    if isinstance(coerced, (list, tuple)):
+        return [_to_builtin(item) for item in coerced]
+    return [coerced]
 
 
-def _iter_mapping(value: Mapping[str, Any] | None) -> Sequence[tuple[Any, Any]]:
+def _iter_mapping(value: Mapping[str, Any] | None) -> Tuple[tuple[Any, Any], ...]:
     if not value or not isinstance(value, Mapping):
         return ()
     try:
         return tuple(sorted(value.items(), key=lambda item: str(item[0])))
     except TypeError:
         return tuple(value.items())
+
+
+def _is_dataclass_instance(value: Any) -> bool:
+    return is_dataclass(value) and not isinstance(value, type)
 
 
 def _to_builtin(value: Any) -> Any:
@@ -240,8 +267,8 @@ def _to_builtin(value: Any) -> Any:
         return value.item()
     if isinstance(value, np.ndarray):
         return value.tolist()
-    if is_dataclass(value):
-        return _to_builtin(asdict(value))
+    if _is_dataclass_instance(value):
+        return {str(key): _to_builtin(val) for key, val in asdict(value).items()}
     if isinstance(value, Action):
         return {
             "agent_id": value.agent_id,
