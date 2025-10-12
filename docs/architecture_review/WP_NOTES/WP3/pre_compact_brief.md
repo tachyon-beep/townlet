@@ -89,3 +89,12 @@ Latest context snapshot so we can resume quickly after memory compaction.
   - **WP3C**: DTO parity expansion with ML validation and legacy observation retirement (next).
   - These unblock **WP1** (simulation loop cleanup) and **WP2** (world adapter parity) so we can
     ship the composition-root refactor once DTO-only decisions are verified.
+
+### Stage 6 Type-Safety Sweep (2025-10-12)
+- Strategic mypy blockers cleared: DTO factory, policy DTO view,
+  runtime adapter, queue manager, and spatial/relationship systems
+  now fully typed. DTO pipeline and telemetry dispatching are guarded
+  by mypy.
+- Stage 6 lint/type close-out in progress: focus shifting to remaining
+  legacy modules (employment, affordances, economy) before running
+  the final `ruff`/`mypy`/docs sweep.

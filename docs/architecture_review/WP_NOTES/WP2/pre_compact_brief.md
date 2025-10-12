@@ -21,3 +21,11 @@ Snapshot of WP2 so the next session can resume without re-auditing prior work.
   final DTO-only observers will replace the wrapper once WP3 Stage 6 closes.
 - Console/telemetry orchestration is owned by WP1; WP2’s responsibility is to expose port-friendly world services and drop legacy shims when DTO parity is confirmed.
 - Track dependencies in `WP3C_plan.md` and WP1 status so we remove the legacy world handles immediately after DTO-only consumers ship.
+
+### Stage 6 Hygiene (2025-10-12)
+- World-facing port modules now type-check clean (spatial index,
+  relationship service, runtime adapter, queue manager). The DTO
+  factory is locked down, keeping the port surface deterministic for
+  the integration refactor.
+- Remaining mypy debt sits in legacy employment/affordance/economy
+  modules scheduled for Batch C cleanup once WP3 Stage 6 finishes.

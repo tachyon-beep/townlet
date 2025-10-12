@@ -48,3 +48,15 @@ Use this as reorientation after compaction.
   transport/global context), dispatcher queue history prefers the embedded context, and UI/CLI helpers
   pull queue/perturbation metrics from the structured fields.
 - Regression bundle (`pytest tests/test_sim_loop_health.py tests/telemetry/test_event_dispatcher.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/test_telemetry_watch.py -q`) stays green across the structured schema.
+
+### Stage 6 Progress Snapshot (2025-10-12)
+- Targeted mypy backlog burning down: critical modules now clean
+  (`world/dto/factory.py`, `policy/dto_view.py`, `world/spatial.py`,
+  `world/agents/relationships_service.py`, `world/core/runtime_adapter.py`,
+  `world/queue/manager.py`). Remaining mypy noise is confined to legacy
+  employment/economy/affordance modules and UI dashboards.
+- DTO/telemetry refactor validated: `ObservationEnvelope` construction,
+  DTO world view, queue/relationship snapshots, and runtime adapter
+  typing are all enforced by mypy.
+- Strategy: continue sweeping the high-impact modules (employment,
+  affordance runtime, economy services) before the Stage 6 full run.
