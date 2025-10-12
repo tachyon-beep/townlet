@@ -112,7 +112,8 @@ def _normalise_action(raw: Action) -> Action:
         raise ActionValidationError("agent_id must be a non-empty string")
     if not isinstance(raw.kind, str):
         raise ActionValidationError("kind must be a string")
-    kind = raw.kind.strip().lower()
+    raw_kind = raw.kind.strip().lower()
+    kind = "noop" if raw_kind == "wait" else raw_kind
     if kind not in SUPPORTED_KINDS:
         raise ActionValidationError(f"unsupported action kind '{raw.kind}'")
 

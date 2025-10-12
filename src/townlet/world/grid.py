@@ -49,6 +49,8 @@ from townlet.world.console import (
     install_world_console_handlers,
 )
 from townlet.world.events import Event, EventDispatcher
+from townlet.world.rng import RngStreamManager
+from townlet.world.systems.base import SystemContext
 from townlet.world.core.context import WorldContext
 from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
@@ -197,6 +199,7 @@ class WorldState:
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
     _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
     _event_dispatcher: EventDispatcher = field(init=False, repr=False)
+    _compat_rng_manager: RngStreamManager | None = field(init=False, default=None, repr=False)
 
     @classmethod
     def from_config(
@@ -260,6 +263,7 @@ class WorldState:
             request_ctx_reset=self.request_ctx_reset,
             tick_supplier=lambda: self.tick,
         )
+        self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
         self._relationship_window_ticks = 600
         self._relationships = RelationshipService(
             self.config,
@@ -495,6 +499,7 @@ class WorldState:
 
         self._rng = rng
         self._rng_state = rng.getstate()
+        self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
 
     @property
     def rng(self) -> random.Random:
@@ -840,12 +845,29 @@ class WorldState:
 
     def resolve_affordances(self, current_tick: int) -> None:
         """Resolve queued affordances and hooks."""
-        affordance_system.resolve(self._affordance_service, current_tick)
+        self.tick = current_tick
+        ctx = self._legacy_system_context()
+        queue_system.step(ctx)
+        affordance_system.step(ctx)
+        employment_system.step(ctx)
+        relationship_system.step(ctx)
+        economy_system.step(ctx)
+        perturbation_system.step(ctx)
 
     def running_affordances_snapshot(self) -> dict[str, RunningAffordanceState]:
         """Return a serializable view of running affordances (for tests/telemetry)."""
 
         return self._affordance_service.running_snapshot()
+
+    def _legacy_system_context(self) -> SystemContext:
+        if self._compat_rng_manager is None:
+            seed = getattr(self, "_rng_seed", None)
+            self._compat_rng_manager = RngStreamManager.from_seed(seed)
+        return SystemContext(
+            state=self,
+            rng=self._compat_rng_manager,
+            events=self._event_dispatcher,
+        )
 
     def request_ctx_reset(self, agent_id: str) -> None:
         """Mark an agent so the next observation toggles ctx_reset_flag."""
