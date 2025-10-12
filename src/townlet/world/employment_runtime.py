@@ -52,13 +52,13 @@ class EmploymentRuntime:
     # Shift lifecycle helpers (delegating to EmploymentEngine internals)
     # ------------------------------------------------------------------
     def idle_state(self, snapshot: Any, ctx: dict[str, Any]) -> None:
-        self.coordinator._employment_idle_state(self.world, snapshot, ctx)
+        self.coordinator.employment_idle_state(self.world, snapshot, ctx)
 
     def prepare_state(self, snapshot: Any, ctx: dict[str, Any]) -> None:
-        self.coordinator._employment_prepare_state(snapshot, ctx)
+        self.coordinator.employment_prepare_state(snapshot, ctx)
 
     def begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        self.coordinator._employment_begin_shift(ctx, start, end)
+        self.coordinator.employment_begin_shift(ctx, start, end)
 
     def determine_state(
         self,
@@ -69,7 +69,7 @@ class EmploymentRuntime:
         at_required_location: bool,
         employment_cfg: EmploymentConfig,
     ) -> str:
-        return self.coordinator._employment_determine_state(
+        return self.coordinator.employment_determine_state(
             ctx=ctx,
             tick=tick,
             start=start,
@@ -88,7 +88,7 @@ class EmploymentRuntime:
         lateness_penalty: float,
         employment_cfg: EmploymentConfig,
     ) -> None:
-        self.coordinator._employment_apply_state_effects(
+        self.coordinator.employment_apply_state_effects(
             world=self.world,
             snapshot=snapshot,
             ctx=ctx,
@@ -107,16 +107,16 @@ class EmploymentRuntime:
         employment_cfg: EmploymentConfig,
         job_id: str | None,
     ) -> None:
-        self.coordinator._employment_finalize_shift(
-            self.world,
-            snapshot,
-            ctx,
-            employment_cfg,
-            job_id,
+        self.coordinator.employment_finalize_shift(
+            world=self.world,
+            snapshot=snapshot,
+            ctx=ctx,
+            employment_cfg=employment_cfg,
+            job_id=job_id,
         )
 
     def coworkers_on_shift(self, snapshot: Any) -> list[str]:
-        return self.coordinator._employment_coworkers_on_shift(self.world, snapshot)
+        return self.coordinator.employment_coworkers_on_shift(self.world, snapshot)
 
     # ------------------------------------------------------------------
     # Queue & exit helpers

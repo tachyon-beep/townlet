@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from townlet.config import SimulationConfig
+from townlet.config import EmploymentConfig, SimulationConfig
 from townlet.world.employment import EmploymentEngine
 
 
@@ -108,7 +109,101 @@ class EmploymentCoordinator:
     def has_context(self, agent_id: str) -> bool:
         return self.engine.has_context(agent_id)
 
+    def employment_context_wages(self, agent_id: str) -> float:
+        return self.engine.employment_context_wages(agent_id)
 
-def create_employment_coordinator(config: SimulationConfig, emit_event) -> EmploymentCoordinator:
+    def employment_context_punctuality(self, agent_id: str) -> float:
+        return self.engine.employment_context_punctuality(agent_id)
+
+    # -- typed bridges for engine internals ---------------------------
+
+    def employment_idle_state(
+        self,
+        world: Any,
+        snapshot: Any,
+        ctx: dict[str, Any],
+    ) -> None:
+        self.engine._employment_idle_state(world, snapshot, ctx)
+
+    def employment_prepare_state(
+        self,
+        snapshot: Any,
+        ctx: dict[str, Any],
+    ) -> None:
+        self.engine._employment_prepare_state(snapshot, ctx)
+
+    def employment_begin_shift(
+        self,
+        ctx: dict[str, Any],
+        start: int,
+        end: int,
+    ) -> None:
+        self.engine._employment_begin_shift(ctx, start, end)
+
+    def employment_determine_state(
+        self,
+        *,
+        ctx: dict[str, Any],
+        tick: int,
+        start: int,
+        at_required_location: bool,
+        employment_cfg: EmploymentConfig,
+    ) -> str:
+        return self.engine._employment_determine_state(
+            ctx=ctx,
+            tick=tick,
+            start=start,
+            at_required_location=at_required_location,
+            employment_cfg=employment_cfg,
+        )
+
+    def employment_apply_state_effects(
+        self,
+        *,
+        world: Any,
+        snapshot: Any,
+        ctx: dict[str, Any],
+        state: str,
+        at_required_location: bool,
+        wage_rate: float,
+        lateness_penalty: float,
+        employment_cfg: EmploymentConfig,
+    ) -> None:
+        self.engine._employment_apply_state_effects(
+            world=world,
+            snapshot=snapshot,
+            ctx=ctx,
+            state=state,
+            at_required_location=at_required_location,
+            wage_rate=wage_rate,
+            lateness_penalty=lateness_penalty,
+            employment_cfg=employment_cfg,
+        )
+
+    def employment_finalize_shift(
+        self,
+        *,
+        world: Any,
+        snapshot: Any,
+        ctx: dict[str, Any],
+        employment_cfg: EmploymentConfig,
+        job_id: str | None,
+    ) -> None:
+        self.engine._employment_finalize_shift(
+            world=world,
+            snapshot=snapshot,
+            ctx=ctx,
+            employment_cfg=employment_cfg,
+            job_id=job_id,
+        )
+
+    def employment_coworkers_on_shift(self, world: Any, snapshot: Any) -> list[str]:
+        return self.engine._employment_coworkers_on_shift(world, snapshot)
+
+
+def create_employment_coordinator(
+    config: SimulationConfig,
+    emit_event: Callable[[str, dict[str, object]], None],
+) -> EmploymentCoordinator:
     engine = EmploymentEngine(config, emit_event)
     return EmploymentCoordinator(engine=engine)

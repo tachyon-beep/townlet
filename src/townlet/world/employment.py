@@ -4,15 +4,31 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from collections.abc import Callable, Iterable, Mapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
+from typing import TYPE_CHECKING, Any, Protocol
 
 from townlet.config import EmploymentConfig, SimulationConfig
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from .grid import AgentSnapshot, WorldState
+    from townlet.world.agents.snapshot import AgentSnapshot
+
+    class EmploymentWorld(Protocol):
+        tick: int
+        agents: MutableMapping[str, "AgentSnapshot"]
+
+        def update_relationship(
+            self,
+            agent_a: str,
+            agent_b: str,
+            *,
+            trust: float = ...,
+            familiarity: float = ...,
+            rivalry: float = ...,
+            event: str = ...,
+        ) -> None:
+            ...
 
 
 class EmploymentEngine:
@@ -37,14 +53,14 @@ class EmploymentEngine:
 
     # -- job assignment -------------------------------------------------
 
-    def assign_jobs_to_agents(self, world: WorldState) -> None:
+    def assign_jobs_to_agents(self, world: EmploymentWorld) -> None:
         job_ids = self._job_ids()
         if not job_ids:
             return
         for index, snapshot in enumerate(world.agents.values()):
             self.assign_job_if_missing(world, snapshot, job_index=index)
 
-    def apply_job_state(self, world: WorldState) -> None:
+    def apply_job_state(self, world: EmploymentWorld) -> None:
         jobs = self._config.jobs
         job_ids = self._job_ids()
         default_job_id = job_ids[0] if job_ids else None
@@ -132,7 +148,7 @@ class EmploymentEngine:
 
     def assign_job_if_missing(
         self,
-        world: WorldState,
+        world: EmploymentWorld,
         snapshot: AgentSnapshot,
         *,
         job_index: int | None = None,
@@ -176,7 +192,7 @@ class EmploymentEngine:
             "absence_events": deque(),
         }
 
-    def get_employment_context(self, world: WorldState, agent_id: str) -> dict[str, Any]:
+    def get_employment_context(self, world: EmploymentWorld, agent_id: str) -> dict[str, Any]:
         ctx = self._state.get(agent_id)
         if ctx is None or ctx.get("attendance_samples") is None:
             ctx = self.context_defaults()
@@ -208,7 +224,7 @@ class EmploymentEngine:
     # -- state transitions ----------------------------------------------
 
     def _employment_idle_state(
-        self, world: WorldState, snapshot: AgentSnapshot, ctx: dict[str, Any]
+        self, world: EmploymentWorld, snapshot: AgentSnapshot, ctx: dict[str, Any]
     ) -> None:
         if ctx["state"] not in {"pre_shift", "idle"}:
             self._employment_finalize_shift(
@@ -284,7 +300,7 @@ class EmploymentEngine:
     def _employment_apply_state_effects(
         self,
         *,
-        world: WorldState,
+        world: EmploymentWorld,
         snapshot: AgentSnapshot,
         ctx: dict[str, Any],
         state: str,
@@ -408,7 +424,7 @@ class EmploymentEngine:
 
     def _employment_finalize_shift(
         self,
-        world: WorldState,
+        world: EmploymentWorld,
         snapshot: AgentSnapshot,
         ctx: dict[str, Any],
         employment_cfg: EmploymentConfig,
@@ -442,7 +458,7 @@ class EmploymentEngine:
         ctx["late_ticks"] = 0
 
     def _employment_coworkers_on_shift(
-        self, world: WorldState, snapshot: AgentSnapshot
+        self, world: EmploymentWorld, snapshot: AgentSnapshot
     ) -> list[str]:
         job_id = snapshot.job_id
         if job_id is None:
@@ -458,7 +474,7 @@ class EmploymentEngine:
 
     # -- exit queue management -----------------------------------------
 
-    def enqueue_exit(self, world: WorldState, agent_id: str, tick: int) -> None:
+    def enqueue_exit(self, world: EmploymentWorld, agent_id: str, tick: int) -> None:
         pending_before = len(self._exit_queue)
         if agent_id in self._exit_queue:
             return
@@ -497,7 +513,7 @@ class EmploymentEngine:
                 len(self._manual_exits),
             )
 
-    def remove_from_queue(self, world: WorldState, agent_id: str) -> None:
+    def remove_from_queue(self, world: EmploymentWorld, agent_id: str) -> None:
         if agent_id in self._exit_queue:
             self._exit_queue.remove(agent_id)
         self._exit_timestamps.pop(agent_id, None)
@@ -516,7 +532,7 @@ class EmploymentEngine:
             "review_window": employment_cfg.exit_review_window,
         }
 
-    def request_manual_exit(self, world: WorldState, agent_id: str, tick: int) -> bool:
+    def request_manual_exit(self, world: EmploymentWorld, agent_id: str, tick: int) -> bool:
         if agent_id not in world.agents:
             return False
         self._manual_exits.add(agent_id)
@@ -529,7 +545,7 @@ class EmploymentEngine:
         )
         return True
 
-    def defer_exit(self, world: WorldState, agent_id: str) -> bool:
+    def defer_exit(self, world: EmploymentWorld, agent_id: str) -> bool:
         if agent_id not in world.agents:
             return False
         self._manual_exits.discard(agent_id)
@@ -618,7 +634,14 @@ class EmploymentEngine:
         self._exit_timestamps.clear()
         if isinstance(timestamps, Mapping):
             for agent_id, tick in timestamps.items():
-                self._exit_timestamps[str(agent_id)] = int(tick)
+                coerced = _coerce_int(tick)
+                if coerced is None:
+                    logger.debug(
+                        "Ignoring non-integer queue timestamp",
+                        extra={"agent_id": agent_id, "tick": tick},
+                    )
+                    continue
+                self._exit_timestamps[str(agent_id)] = coerced
 
         manual = payload.get("manual_exits", [])
         self._manual_exits.clear()
@@ -626,13 +649,32 @@ class EmploymentEngine:
             self._manual_exits.update(str(agent_id) for agent_id in manual)
 
         exits_today = payload.get("exits_today", 0)
-        self.set_exits_today(int(exits_today))
+        self.set_exits_today(_coerce_int(exits_today) or 0)
 
     def reset_exits_today(self) -> None:
         self._exits_today = 0
 
     def set_exits_today(self, value: int) -> None:
-        self._exits_today = max(0, int(value))
+        coerced = _coerce_int(value)
+        self._exits_today = max(0, coerced or 0)
 
     def increment_exits_today(self) -> None:
         self._exits_today += 1
+
+
+def _coerce_int(value: object) -> int | None:
+    """Best-effort conversion to ``int`` that preserves type safety."""
+
+    if isinstance(value, bool):
+        # bool is a subclass of int but explicitly handle for clarity.
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
