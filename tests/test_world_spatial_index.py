@@ -19,6 +19,7 @@ def test_agents_move_between_tiles_updates_index() -> None:
     world.respawn_agent({"agent_id": "alice", "position": [0, 0]})
 
     world.apply_actions({"alice": {"kind": "move", "position": (1, 0)}})
+    world.resolve_affordances(current_tick=world.tick)
 
     assert "alice" in world.agents_at_tile((1, 0))
     assert world.agents_at_tile((0, 0)) == ()

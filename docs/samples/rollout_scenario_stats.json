@@ -1,182 +1,72 @@
 {
-  "employment_punctuality": {
-    "rollout_sample_dawn_001.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 0.6853142072764582,
-      "action_nonzero": 2.0,
-      "action_total": 80.0,
-      "action_unknown_count": 80.0,
-      "lateness_mean": 0.887499988079071,
-      "log_prob_mean": -1.0233815908432007,
-      "reward_mean": -0.20000001788139343,
-      "reward_sum": -16.000001907348633,
-      "rivalry_avoid_count_max": 1.0,
-      "rivalry_avoid_count_mean": 0.8500000238418579,
-      "rivalry_max_max": 0.9800000190734863,
-      "rivalry_max_mean": 0.8524376153945923,
-      "timesteps": 80.0,
-      "value_pred_last": -0.03193243592977524
-    },
-    "rollout_sample_erin_002.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 0.11690684913753106,
-      "action_nonzero": 2.0,
-      "action_total": 80.0,
-      "action_unknown_count": 80.0,
-      "lateness_mean": 0.887499988079071,
-      "log_prob_mean": -1.0547422170639038,
-      "reward_mean": -0.20000001788139343,
-      "reward_sum": -16.000001907348633,
-      "rivalry_avoid_count_max": 1.0,
-      "rivalry_avoid_count_mean": 0.8500000238418579,
-      "rivalry_max_max": 0.9800000190734863,
-      "rivalry_max_mean": 0.8524376153945923,
-      "timesteps": 80.0,
-      "value_pred_last": -0.03720990940928459
-    }
-  },
   "kitchen_breakfast": {
     "rollout_sample_alice_001.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": -0.0,
-      "action_nonzero": 1.0,
-      "action_total": 40.0,
-      "action_unknown_count": 40.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -0.6707960367202759,
+      "timesteps": 40,
+      "reward_sum": -8.00000011920929,
       "reward_mean": -0.20000000298023224,
-      "reward_sum": -8.0,
-      "rivalry_avoid_count_max": 0.0,
-      "rivalry_avoid_count_mean": 0.0,
-      "rivalry_max_max": 0.0,
-      "rivalry_max_mean": 0.0,
-      "timesteps": 40.0,
-      "value_pred_last": 0.06924818456172943
+      "log_prob_mean": -0.6707960650324821
     },
     "rollout_sample_bob_002.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 0.11690684913753106,
-      "action_nonzero": 2.0,
-      "action_total": 40.0,
-      "action_unknown_count": 40.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -0.6808087229728699,
+      "timesteps": 40,
+      "reward_sum": -8.00000011920929,
       "reward_mean": -0.20000000298023224,
-      "reward_sum": -8.0,
-      "rivalry_avoid_count_max": 0.0,
-      "rivalry_avoid_count_mean": 0.0,
-      "rivalry_max_max": 0.0,
-      "rivalry_max_mean": 0.0,
-      "timesteps": 40.0,
-      "value_pred_last": 0.09764218330383301
-    }
-  },
-  "observation_baseline": {
-    "rollout_sample_iris_001.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": -0.0,
-      "action_nonzero": 1.0,
-      "action_total": 20.0,
-      "action_unknown_count": 20.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": 0.0,
-      "reward_mean": -0.20000000298023224,
-      "reward_sum": -4.0,
-      "rivalry_avoid_count_max": 0.0,
-      "rivalry_avoid_count_mean": 0.0,
-      "rivalry_max_max": 0.0,
-      "rivalry_max_mean": 0.0,
-      "timesteps": 20.0,
-      "value_pred_last": 0.013921573758125305
+      "log_prob_mean": -0.6808087289333343
     }
   },
   "queue_conflict": {
     "rollout_sample_anna_001.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 1.1001149808820405,
-      "action_nonzero": 4.0,
-      "action_total": 80.0,
-      "action_unknown_count": 80.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -1.898941993713379,
-      "reward_mean": -0.20000001788139343,
-      "reward_sum": -16.000001907348633,
-      "rivalry_avoid_count_max": 2.0,
-      "rivalry_avoid_count_mean": 0.4375,
-      "rivalry_max_max": 0.9900000095367432,
-      "rivalry_max_mean": 0.2577499747276306,
-      "timesteps": 80.0,
-      "value_pred_last": -0.011833226308226585
+      "timesteps": 80,
+      "reward_sum": -16.00000023841858,
+      "reward_mean": -0.20000000298023224,
+      "log_prob_mean": -1.8967590540647508
     },
     "rollout_sample_ben_002.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 1.7426397016134285,
-      "action_nonzero": 6.0,
-      "action_total": 80.0,
-      "action_unknown_count": 80.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -1.916529655456543,
-      "reward_mean": -0.20000001788139343,
-      "reward_sum": -16.000001907348633,
-      "rivalry_avoid_count_max": 2.0,
-      "rivalry_avoid_count_mean": 0.7875000238418579,
-      "rivalry_max_max": 0.9900000095367432,
-      "rivalry_max_mean": 0.5460000038146973,
-      "timesteps": 80.0,
-      "value_pred_last": 0.0041900090873241425
+      "timesteps": 80,
+      "reward_sum": -16.00000023841858,
+      "reward_mean": -0.20000000298023224,
+      "log_prob_mean": -1.9161511838436127
     },
     "rollout_sample_cara_003.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 1.7426397016134285,
-      "action_nonzero": 6.0,
-      "action_total": 80.0,
-      "action_unknown_count": 80.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -1.9128175973892212,
-      "reward_mean": -0.20000001788139343,
-      "reward_sum": -16.000001907348633,
-      "rivalry_avoid_count_max": 2.0,
-      "rivalry_avoid_count_mean": 0.800000011920929,
-      "rivalry_max_max": 0.9900000095367432,
-      "rivalry_max_mean": 0.5451250076293945,
-      "timesteps": 80.0,
-      "value_pred_last": -0.009061619639396667
+      "timesteps": 80,
+      "reward_sum": -16.00000023841858,
+      "reward_mean": -0.20000000298023224,
+      "log_prob_mean": -1.9095555901527406
+    }
+  },
+  "employment_punctuality": {
+    "rollout_sample_dawn_001.npz": {
+      "timesteps": 80,
+      "reward_sum": -16.00000023841858,
+      "reward_mean": -0.20000000298023224,
+      "log_prob_mean": -1.0233815610408783
+    },
+    "rollout_sample_erin_002.npz": {
+      "timesteps": 80,
+      "reward_sum": -16.00000023841858,
+      "reward_mean": -0.20000000298023224,
+      "log_prob_mean": -1.0547422908246518
     }
   },
   "rivalry_decay": {
     "rollout_sample_finn_001.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": -0.0,
-      "action_nonzero": 1.0,
-      "action_total": 50.0,
-      "action_unknown_count": 50.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -0.6591312885284424,
+      "timesteps": 50,
+      "reward_sum": -10.000000149011612,
       "reward_mean": -0.20000000298023224,
-      "reward_sum": -10.0,
-      "rivalry_avoid_count_max": 1.0,
-      "rivalry_avoid_count_mean": 0.9200000166893005,
-      "rivalry_max_max": 0.949999988079071,
-      "rivalry_max_mean": 0.8720000386238098,
-      "timesteps": 50.0,
-      "value_pred_last": 0.07199309766292572
+      "log_prob_mean": -0.6591313564777375
     },
     "rollout_sample_gina_002.npz": {
-      "action_blocked_ratio": 0.0,
-      "action_entropy": 0.6410354778811556,
-      "action_nonzero": 2.0,
-      "action_total": 50.0,
-      "action_unknown_count": 50.0,
-      "lateness_mean": 0.0,
-      "log_prob_mean": -0.6975134015083313,
+      "timesteps": 50,
+      "reward_sum": -10.000000149011612,
       "reward_mean": -0.20000000298023224,
-      "reward_sum": -10.0,
-      "rivalry_avoid_count_max": 1.0,
-      "rivalry_avoid_count_mean": 0.9200000166893005,
-      "rivalry_max_max": 0.949999988079071,
-      "rivalry_max_mean": 0.8720000386238098,
-      "timesteps": 50.0,
-      "value_pred_last": 0.09568886458873749
+      "log_prob_mean": -0.6975134325027466
+    }
+  },
+  "observation_baseline": {
+    "rollout_sample_iris_001.npz": {
+      "timesteps": 20,
+      "reward_sum": -4.000000059604645,
+      "reward_mean": -0.20000000298023224,
+      "log_prob_mean": 0.0
     }
   }
 }

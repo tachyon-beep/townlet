@@ -25,11 +25,13 @@
   last `ObservationBuilder` references; telemetry surface checks remain green.
   Replay exporter now consumes DTO trajectory frames directly, the legacy world
   factory registry has been removed, and the telemetry pipeline no longer emits
-  alias fields (dashboards read from structured DTO data). Remaining closure
-  tasks are the documentation refresh, full regression sweep (pytest/ruff/mypy),
-  release comms, and retirement of any remaining non-DTO telemetry shims. This
-  full regression run currently fails because in-progress WP1/WP2 refactor work
-  broke the suite—finish or stabilise those changes before the Stage 6 sweep.
+  alias fields (dashboards read from structured DTO data). Factory/port
+  registries are restored between tests so the telemetry `stub` provider stays
+  bound to `StubTelemetrySink`; the new regression
+  `tests/test_telemetry_stub_compat.py` covers stub/stdout parity for console
+  snapshots and snapshot restore/demo smoke paths. Remaining closure tasks are
+  the documentation refresh, ruff/mypy sweep, release comms, and retirement of
+  any remaining non-DTO telemetry shims.
 - **WP3B complete:** queue/affordance/employment/economy/relationship systems now run entirely through modular services. `WorldContext.tick` no longer calls legacy apply/resolve helpers, `_apply_need_decay` only invokes employment/economy fallbacks when services are absent, and targeted system tests (`tests/world/test_systems_*.py`) lock the behaviour. World-level smokes (`pytest tests/world -q`) pass with the bridge removed.
 - Behaviour parity smokes (`tests/test_behavior_personality_bias.py`) remain green; DTO parity harness awaits reward/ML scenarios under WP3C.
 - Remaining work packages:
@@ -40,4 +42,4 @@
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).
 - Unblocks WP2 Step 7 (policy/world adapters still exposing legacy handles until observation-first DTOs are available).
 
-- Stage 6 guardrail checks re-run 2025-10-11 (no new ObservationBuilder references; telemetry surface guard green). Full-suite pytest/ruff/mypy sweep still pending for the close-out checklist.
+- Stage 6 guardrail checks re-run 2025-10-11 (no new ObservationBuilder references; telemetry surface guard green). Full `pytest` run now passes; ruff/mypy and documentation/release notes remain on the close-out checklist.

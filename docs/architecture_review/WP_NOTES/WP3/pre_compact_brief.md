@@ -26,17 +26,17 @@ Latest context snapshot so we can resume quickly after memory compaction.
   `ObservationBuilder` imports from the world package (now uses
   `WorldObservationService`). Parity harness + ML smoke tests were re-executed on
   2025-10-11 confirming DTO schema v0.2.0 outputs (feature_dim=81,
-  map_shape=(4, 11, 11)). Remaining Stage 6 items are the documentation refresh,
-  full-suite pytest/ruff/mypy sweep, and release notes.
+  map_shape=(4, 11, 11)). Port/factory registries are restored between tests so
+  the telemetry `stub` provider stays bound to `StubTelemetrySink`; the new
+  regression `tests/test_telemetry_stub_compat.py` covers stub/stdout parity for
+  console snapshots, snapshot save/load, and demo seeding. Remaining Stage 6
+  items are the documentation refresh, ruff/mypy sweep, and release notes.
 
 ## Outstanding Work (DTO Rollout)
-1. Stabilise the suite by finishing the WP1/WP2 refactor fallout so `pytest`
-   completes without legacy failures.
-2. Once green, run the full Stage 6 regression sweep (`pytest`, `ruff`, `mypy`)
-   and capture results in the Stage 6 audit log.
-3. Documentation refresh (ADR-001/002, WP1/WP2/WP3 briefs) and release comms for
+1. Run the remaining Stage 6 close-out tasks (`ruff`, `mypy`) and capture results in the Stage 6 audit log (full `pytest` is already green).
+2. Documentation refresh (ADR-001/002, WP1/WP2/WP3 briefs) and release comms for
    the DTO-only telemetry/policy milestone.
-4. Final removal of any adapter shims or TODOs blocking WP1/WP2 sign-off once the
+3. Final removal of any adapter shims or TODOs blocking WP1/WP2 sign-off once the
    above work is green.
 
 ## Notes / Reminders

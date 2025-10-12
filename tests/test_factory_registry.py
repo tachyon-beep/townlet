@@ -26,6 +26,7 @@ from townlet.core.utils import (
 )
 from townlet.ports.world import WorldRuntime
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.factories import registry as port_registry_module
 from townlet.factories.registry import register as factory_register, available as factory_available
 from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
 from townlet.scheduler.perturbations import PerturbationScheduler
@@ -134,6 +135,27 @@ class _StubPolicy(PolicyBackendProtocol):  # type: ignore[misc]
 
     def current_anneal_ratio(self) -> float | None:
         return None
+
+    def supports_observation_envelope(self) -> bool:
+        return True
+
+
+@pytest.fixture(autouse=True)
+def restore_factory_registries() -> None:
+    registry = policy_registry()
+    telemetry_reg = telemetry_registry()
+    original_policy = dict(registry._providers)  # type: ignore[attr-defined]
+    original_telemetry = dict(telemetry_reg._providers)  # type: ignore[attr-defined]
+    original_ports = {
+        kind: dict(providers)
+        for kind, providers in port_registry_module._REGISTRY.items()
+    }
+    yield
+    registry._providers = dict(original_policy)  # type: ignore[attr-defined]
+    telemetry_reg._providers = dict(original_telemetry)  # type: ignore[attr-defined]
+    port_registry_module._REGISTRY.clear()
+    for kind, providers in original_ports.items():
+        port_registry_module._REGISTRY[kind] = dict(providers)
 
 
 class _StubTelemetry(TelemetrySinkProtocol):  # type: ignore[misc]

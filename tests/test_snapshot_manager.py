@@ -309,7 +309,7 @@ def test_world_relationship_snapshot_round_trip(
     saved_path = manager.save(state)
     loaded = manager.load(saved_path, sample_config)
 
-    restored_world = WorldState.from_config(sample_config)
+    restored_world = WorldState.from_config(sample_config, rng=random.Random(2024))
     apply_snapshot_to_world(restored_world, loaded)
     restored_telemetry = TelemetryPublisher(sample_config)
     from townlet.snapshots.state import apply_snapshot_to_telemetry

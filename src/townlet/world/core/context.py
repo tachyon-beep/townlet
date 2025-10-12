@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable, Iterable, Mapping
+import hashlib
+import pickle
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, TYPE_CHECKING
@@ -69,6 +71,8 @@ class WorldContext:
             self.systems = default_systems()
         if self.rng_manager is None:
             seed = getattr(self.state, "rng_seed", None)
+            if seed is None:
+                seed = _derive_seed_from_state(self.state.get_rng_state())
             self.rng_manager = RngStreamManager.from_seed(seed)
 
     # ------------------------------------------------------------------
@@ -118,7 +122,10 @@ class WorldContext:
             if callable(drain):
                 drain()
         self._pending_actions.clear()
-        self.rng_manager = RngStreamManager.from_seed(getattr(self.state, "rng_seed", None))
+        seed_value = getattr(self.state, "rng_seed", None)
+        if seed_value is None:
+            seed_value = _derive_seed_from_state(self.state.get_rng_state())
+        self.rng_manager = RngStreamManager.from_seed(seed_value)
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
         for agent_id, payload in actions.items():
@@ -463,6 +470,12 @@ class WorldContext:
                 },
             )
         return coerced
+
+
+def _derive_seed_from_state(state: tuple[Any, ...]) -> int:
+    payload = pickle.dumps(state)
+    digest = hashlib.sha256(payload).digest()
+    return int.from_bytes(digest[:8], "big", signed=False)
 
 
 __all__ = ["WorldContext"]

@@ -9,7 +9,7 @@ Snapshot of WP2 so the next session can resume without re-auditing prior work.
 - DTO export plumbing from WP3C is compatible: trajectory frames include DTO metadata and `RolloutBuffer.save` emits `*_dto.json` artefacts referenced in manifests, so world consumers can migrate without relying on the legacy observation dict.
 
 ## Outstanding
-1. Finish the WP1/WP2 refactor fallout that currently breaks the full suite so WP3 Stage 6 can run to completion.
+1. Coordinate with WP3 Stage 6 to complete the remaining close-out work (ruff, mypy, documentation, release notes) now that the full suite is green.
 2. After WP3 closes, remove legacy handles from world adapters/factories (Step 7 cleanup) and proceed with Step 8 composition-root refactor alongside WP1.
 3. Update ADR-002/README once the adapter cleanup lands and ensure the simulation loop no longer references `WorldState` internals.
 4. Prepare regression coverage for the default provider swap (factory tests, loop smokes) when WP1 Step 8 resumes.

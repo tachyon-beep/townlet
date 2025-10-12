@@ -9,6 +9,7 @@
 - **New 2025-10-11:** T1.4 + T1.5 landed — factory/unit tests now assert DTO observation envelopes/events and invalid provider inputs raise `ConfigurationError`; missing config continues to raise `TypeError`.
 - **New 2025-10-11:** T5.1–T5.3 delivered — `townlet.testing` exposes dummy world/policy/telemetry implementations wired through factory providers and guarded by `tests/test_ports_surface.py`.
 - **New 2025-10-11:** T5.4 delivered — `tests/helpers/dummy_loop.py` builds a dummy loop harness and `tests/core/test_sim_loop_with_dummies.py` exercises two-tick DTO parity, console routing, and health telemetry using the new providers (regression: `pytest tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py -q`).
+- **New 2025-10-11:** Telemetry stub compatibility locked down — factory/port registries are restored after tests so the built-in `stub` provider continues to return `StubTelemetrySink`. The new regression `tests/test_telemetry_stub_compat.py` ensures console snapshots, snapshot saves, and demo seeding succeed under both stdout and stub transports (and surfaces the stub warning banner), preventing Stage 6 DTO payloads from regressing when transports swap.
 - **New 2025-10-11 (add):** T1.3 finished — `create_world` no longer accepts legacy service kwargs; the default provider constructs lifecycle/perturbation plumbing internally and exposes them through the adapter for the loop to reuse.
 - **New 2025-10-11:** Step 7 metadata guard landed — `tests/test_factory_registry.py::test_simulation_loop_provider_metadata` now asserts `SimulationLoop.provider_info` reflects the resolved world/policy/telemetry providers, and the stub-path test verifies `policy_provider_name` / `telemetry_provider_name` continue to drive the `is_stub_*` helpers.
 - **New 2025-10-11:** Factory fallbacks upgraded — the optional `pytorch` and `http` providers now surface stub adapters when dependencies are missing, keeping `SimulationLoop` port-neutral while still reporting the requested provider in `provider_info` for audits and tests.
@@ -23,10 +24,12 @@
   `tests/test_ports_surface.py tests/core/test_sim_loop_with_dummies.py tests/orchestration/test_console_health_smokes.py -q`).
 - PB-A locked in the revised `WorldRuntime` port contract (`PB_port_contract.md`). PB-B/C executed on 2025-10-11: adapters/dummies no longer expose `queue_console`, `SimulationLoop` relies solely on DTO pathways, and port surface tests confirm the lean contract. Next PB steps (PB-D/E/F) will swap loop imports to `townlet.ports.world.WorldRuntime`, add guard tests, and prune the deprecated protocol alias. Update documentation (ADR-001, console/monitor ADR, WP1 README/status) after the port cleanup convergence.
 
-**Blocking dependency (2025-10-11 insight)**
-- WP1 finalisation (Step 8 and telemetry docs/ADR refresh) is waiting on WP3
-  Stage 6 to finish (full regression, ruff, mypy, and documentation updates).
-  Until WP3 is green, keep the suite stabilisation work focused there.
+**Blocking dependency (2025-10-11 insight, updated)**
+- WP1 finalisation (Step 8 and telemetry docs/ADR refresh) now depends on WP3
+  Stage 6 completing the remaining close-out tasks (ruff/mypy sweep,
+  documentation refresh, release comms). The full `pytest` suite is green after
+  the port-registry restoration, so coordinate the lint/type/doc work with WP3
+  before locking Step 8.
 - **WP1↔︎WP3 handoff (execute post Stage 6):**
   1. `SimulationLoop`, `PolicyController`, and adapters must emit policy identity/variant updates solely via dispatcher events (`policy.metadata`, `policy.possession`, `policy.anneal.update`). No direct calls to `TelemetrySink.update_policy_identity` or `set_runtime_variant`; extend `tests/test_telemetry_surface_guard.py` to enforce.
   2. DTO envelopes are the only observation payload delivered to policy/training paths. `SimulationLoop.policy_controller.decide` should require an `ObservationEnvelope`, and guard tests (`tests/core/test_no_legacy_observation_usage.py`, policy parity smokes) must fail if a legacy observation dict is requested.

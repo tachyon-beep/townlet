@@ -542,7 +542,6 @@ class SimulationLoop:
             self._rng_world.setstate(world_state)
         if events_rng_str := rng_streams.get("events"):
             events_state = decode_rng_state(events_rng_str)
-            self.perturbations.set_rng_state(events_state)
             self._rng_events.setstate(events_state)
         if policy_rng_str := rng_streams.get("policy"):
             policy_state = decode_rng_state(policy_rng_str)

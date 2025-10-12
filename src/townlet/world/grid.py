@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import logging
 import os
 import random
+import pickle
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,6 +81,11 @@ from townlet.world.systems import queues as queue_system
 from townlet.world.systems import relationships as relationship_system
 
 logger = logging.getLogger(__name__)
+
+def _derive_seed_from_state(state: tuple[Any, ...]) -> int:
+    payload = pickle.dumps(state)
+    digest = hashlib.sha256(payload).digest()
+    return int.from_bytes(digest[:8], "big", signed=False)
 
 _CONSOLE_HISTORY_LIMIT = 512
 _CONSOLE_RESULT_BUFFER_LIMIT = 256
@@ -263,7 +270,6 @@ class WorldState:
             request_ctx_reset=self.request_ctx_reset,
             tick_supplier=lambda: self.tick,
         )
-        self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
         self._relationship_window_ticks = 600
         self._relationships = RelationshipService(
             self.config,
@@ -280,10 +286,12 @@ class WorldState:
             dict(runtime_cfg.options) if runtime_cfg is not None else {}
         )
         self._load_affordance_definitions()
-        self._rng_seed = None
         if self._rng is None:
             self._rng = random.Random()
         self._rng_state = self._rng.getstate()
+        if self._rng_seed is None:
+            self._rng_seed = _derive_seed_from_state(self._rng_state)
+        self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
         self._console = ConsoleService(
             world=self,
             history_limit=_CONSOLE_HISTORY_LIMIT,
@@ -499,6 +507,8 @@ class WorldState:
 
         self._rng = rng
         self._rng_state = rng.getstate()
+        if self._rng_seed is None:
+            self._rng_seed = _derive_seed_from_state(self._rng_state)
         self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
 
     @property
