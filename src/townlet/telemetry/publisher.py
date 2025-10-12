@@ -50,11 +50,17 @@ from townlet.world.core.runtime_adapter import ensure_world_adapter
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from townlet.core.interfaces import TelemetrySinkProtocol
     from townlet.world.grid import WorldState
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
+if TYPE_CHECKING:
+    _TelemetrySinkBase = TelemetrySinkProtocol
+else:  # pragma: no cover - runtime base is object to avoid circular imports
+    _TelemetrySinkBase = object
 
-class TelemetryPublisher:
+
+class TelemetryPublisher(_TelemetrySinkBase):
     """Publish telemetry snapshots, manage console ingress, and track health."""
 
     def __init__(self, config: SimulationConfig) -> None:
@@ -438,7 +444,7 @@ class TelemetryPublisher:
             state["promotion_state"] = promotion_state
         return state
 
-    def import_state(self, payload: dict[str, object]) -> None:
+    def import_state(self, payload: Mapping[str, object]) -> None:
         self._latest_queue_metrics = payload.get("queue_metrics") or None
         if self._latest_queue_metrics is not None:
             self._latest_queue_metrics = dict(self._latest_queue_metrics)
@@ -1918,10 +1924,10 @@ class TelemetryPublisher:
 
         return self._event_dispatcher
 
-    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
         """Forward an event through the internal dispatcher."""
 
-        return self._event_dispatcher.emit_event(name, payload)
+        self._event_dispatcher.emit_event(name, payload)
 
     def _handle_event(self, name: str, payload: Mapping[str, Any]) -> None:
         """Internal subscriber that bridges events back into publisher behaviour."""

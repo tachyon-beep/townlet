@@ -14,10 +14,11 @@ import random
 import time
 import traceback
 from collections.abc import Callable, Iterable, Mapping
+from types import TracebackType
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
 from townlet.console.command import (
@@ -29,6 +30,7 @@ from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
 )
+from townlet.ports.telemetry import TelemetrySink
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
@@ -73,14 +75,14 @@ class WorldComponents:
 class PolicyComponents:
     port: PolicyBackendProtocol
     controller: PolicyController | None
-    decision_backend: Any
+    decision_backend: PolicyRuntime
     provider: str
 
 
 @dataclass(slots=True)
 class TelemetryComponents:
-    port: TelemetrySinkProtocol
-    publisher: TelemetrySinkProtocol
+    port: TelemetrySink
+    publisher: TelemetryPublisher
     provider: str
 
 
@@ -172,7 +174,7 @@ class SimulationLoop:
         self._world_port: WorldRuntime | None = None
         self._console_service: ConsoleService | None = None
         self._policy_port: PolicyBackendProtocol | None = None
-        self._telemetry_port: TelemetrySinkProtocol | None = None
+        self._telemetry_port: TelemetrySink | None = None
         self._policy_controller: PolicyController | None = None
         self._console_router: ConsoleRouter | None = None
         self._health_monitor: HealthMonitor | None = None
@@ -244,13 +246,13 @@ class SimulationLoop:
 
         policy_components = self._resolve_policy_components()
         self._policy_port = policy_components.port
-        self.policy = policy_components.decision_backend
+        self.policy: PolicyRuntime = policy_components.decision_backend
         self._policy_controller = policy_components.controller
         self._resolved_providers["policy"] = policy_components.provider
 
         telemetry_components = self._resolve_telemetry_components()
         self._telemetry_port = telemetry_components.port
-        self.telemetry = cast(TelemetrySinkProtocol, telemetry_components.publisher)
+        self.telemetry: TelemetryPublisher = telemetry_components.publisher
         self._resolved_providers["telemetry"] = telemetry_components.provider
 
         controller = self._policy_controller
@@ -413,17 +415,9 @@ class SimulationLoop:
             publisher=publisher,
             **self._telemetry_options,
         )
-        port_publisher = getattr(telemetry_port, "publisher", None)
-        publisher_sink: TelemetrySinkProtocol
-        if isinstance(port_publisher, TelemetryPublisher):
-            publisher_sink = port_publisher
-        elif isinstance(port_publisher, TelemetrySinkProtocol):
-            publisher_sink = port_publisher
-        else:
-            publisher_sink = publisher
         return TelemetryComponents(
             port=telemetry_port,
-            publisher=publisher_sink,
+            publisher=publisher,
             provider=self._telemetry_provider,
         )
 
@@ -736,8 +730,7 @@ class SimulationLoop:
             }
             snapshot_for_health["metrics"] = {"queue_length": queue_length}
             if self._health_monitor is not None and self._telemetry_port is not None:
-                telemetry_sink = cast(TelemetrySink, self._telemetry_port)
-                self._health_monitor.on_tick(snapshot_for_health, telemetry_sink)
+                self._health_monitor.on_tick(snapshot_for_health, self._telemetry_port)
             self.stability.track(
                 tick=self.tick,
                 rewards=rewards,
@@ -1305,7 +1298,7 @@ class SimulationLoop:
         except Exception:  # pragma: no cover - defensive
             anneal_context = {}
 
-        return context.observe(
+        bootstrap_envelope: ObservationEnvelope = context.observe(
             actions={},
             terminated=terminated,
             termination_reasons={},
@@ -1318,6 +1311,7 @@ class SimulationLoop:
             promotion_state=promotion_state,
             anneal_context=anneal_context,
         )
+        return bootstrap_envelope
 
     def _try_context_observe(
         self,
@@ -1342,7 +1336,7 @@ class SimulationLoop:
         if getattr(context, "observation_service", None) is None:
             return None
         try:
-            return context.observe(
+            observation: ObservationEnvelope = context.observe(
                 actions=actions,
                 policy_snapshot=policy_snapshot,
                 policy_metadata=policy_metadata,
@@ -1355,6 +1349,7 @@ class SimulationLoop:
                 rewards=rewards,
                 reward_breakdown=reward_breakdown,
             )
+            return observation
         except Exception:  # pragma: no cover - defensive fallback
             logger.debug("context_observe_failed", exc_info=True)
             return None
@@ -1436,8 +1431,9 @@ class SimulationLoop:
             return None
         factory_callable = self._import_symbol(runtime_config.factory)
 
-        def _factory(world: WorldState, context: AffordanceRuntimeContext):
-            return factory_callable(world=world, context=context, config=runtime_config)
+        def _factory(world: WorldState, context: AffordanceRuntimeContext) -> DefaultAffordanceRuntime:
+            instance = factory_callable(world=world, context=context, config=runtime_config)
+            return cast(DefaultAffordanceRuntime, instance)
 
         return _factory
 
@@ -1495,15 +1491,20 @@ class SimulationLoop:
         )
 
     @staticmethod
-    def _import_symbol(path: str):
+    def _import_symbol(path: str) -> Callable[..., Any]:
         module_name, separator, attribute = path.partition(":")
         if separator != ":" or not module_name or not attribute:
             raise ValueError(f"Invalid runtime factory path '{path}'. Use 'module:callable' format.")
         module = import_module(module_name)
         try:
-            return getattr(module, attribute)
+            symbol = getattr(module, attribute)
         except AttributeError as exc:  # pragma: no cover - defensive
             raise AttributeError(f"Runtime factory '{attribute}' not found in module '{module_name}'") from exc
+        if not callable(symbol):
+            raise TypeError(
+                f"Runtime factory '{attribute}' in module '{module_name}' is not callable"
+            )
+        return cast(Callable[..., Any], symbol)
 
     def close(self) -> None:
         """Release resources held by the loop (telemetry, runtime, policy)."""
@@ -1520,7 +1521,12 @@ class SimulationLoop:
     def __enter__(self) -> SimulationLoop:
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:
         self.close()
         return False
 
