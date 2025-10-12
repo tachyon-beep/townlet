@@ -42,9 +42,11 @@
   remediation into batches (Batch A complete: DTO-only observation context,
   immutable local view snapshots, and leaner default world adapter). Batch B has
   started: console results now flow directly from `WorldState.apply_console`
-  (the `consume_console_results` shim is gone), with remaining work focused on
-  relocating the console service and trimming telemetry caches. Subsequent batches
-  will delete the console buffer, hook mutations, and telemetry alias guards.
+  (the `consume_console_results` shim is gone), `WorldState` delegates console
+  service construction to the factory via `attach_console_service`, and remaining
+  work focuses on relocating ownership fully to orchestration and trimming telemetry
+  caches. Subsequent batches will delete the console buffer, hook mutations, and
+  telemetry alias guards.
 
 **Dependencies**
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).

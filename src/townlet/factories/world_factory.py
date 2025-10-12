@@ -11,7 +11,7 @@ from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.testing import DummyWorldRuntime
 from townlet.world.core.context import WorldContext
-from townlet.world.grid import WorldState
+from townlet.world.grid import WorldState, build_console_service
 from townlet.world.rng import RngStreamManager
 
 from .registry import register, resolve
@@ -62,7 +62,11 @@ def _build_default_world(
             world_options["affordance_runtime_factory"] = affordance_runtime_factory
         if affordance_runtime_config is not None:
             world_options["affordance_runtime_config"] = affordance_runtime_config
-        target_world = WorldState.from_config(config, **world_options)  # type: ignore[arg-type]
+        target_world = WorldState.from_config(
+            config,
+            attach_console=False,
+            **world_options,
+        )  # type: ignore[arg-type]
     else:
         if config is None:
             config = getattr(target_world, "config", None)
@@ -71,6 +75,16 @@ def _build_default_world(
         raise TypeError("WorldState missing configuration; cannot build modular world runtime")
 
     context: WorldContext | None = getattr(target_world, "context", None)
+    if context is None:
+        console_service = build_console_service(target_world)
+        target_world.attach_console_service(console_service)
+        context = target_world.context
+    else:
+        console_service = getattr(context, "console", None)
+        if console_service is None:
+            console_service = build_console_service(target_world)
+            target_world.attach_console_service(console_service)
+            context = target_world.context
     if context is None:
         raise TypeError("WorldState missing context; cannot build modular world runtime")
 

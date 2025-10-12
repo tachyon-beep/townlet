@@ -44,6 +44,9 @@ Latest context snapshot so we can resume quickly after memory compaction.
   yields the `ConsoleCommandResult` list); the legacy `consume_console_results`
   hook has been removed from world/context/runtime and affected tests updated.
   Telemetry still maintains historical caches pending the next cleanup pass.
+- `WorldState` no longer instantiates its own `ConsoleService`; the default world
+  factory builds the service and attaches it via `WorldState.attach_console_service`,
+  paving the way for orchestration-level ownership.
 
 ## Outstanding Work (DTO Rollout)
 1. Run the remaining Stage 6 close-out tasks (`ruff`, `mypy`) and capture results in the Stage 6 audit log (full `pytest` is already green).

@@ -195,8 +195,8 @@ class WorldState:
     affordance_runtime_config: AffordanceRuntimeConfig | None = None
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
-    _console: ConsoleService = field(init=False)
-    _console_controller: WorldConsoleController = field(init=False, repr=False)
+    _console: ConsoleService | None = field(init=False, default=None, repr=False)
+    _console_controller: WorldConsoleController | None = field(init=False, default=None, repr=False)
     _spatial_index: WorldSpatialIndex = field(init=False, repr=False)
     _queue_conflicts: QueueConflictTracker = field(init=False)
     _observation_service: ObservationServiceProtocol | None = field(
@@ -219,6 +219,10 @@ class WorldState:
             | None
         ) = None,
         affordance_runtime_config: AffordanceRuntimeConfig | None = None,
+        attach_console: bool = True,
+        console_service_factory: (
+            Callable[[WorldState], ConsoleService] | None
+        ) = None,
     ) -> WorldState:
         """Bootstrap the initial world from config."""
 
@@ -228,6 +232,10 @@ class WorldState:
             affordance_runtime_config=affordance_runtime_config,
         )
         instance.attach_rng(rng or random.Random())
+        if attach_console:
+            factory = console_service_factory or build_console_service
+            console_service = factory(instance)
+            instance.attach_console_service(console_service)
         return instance
 
     def __post_init__(self) -> None:
@@ -292,12 +300,6 @@ class WorldState:
         if self._rng_seed is None:
             self._rng_seed = _derive_seed_from_state(self._rng_state)
         self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
-        self._console = ConsoleService(
-            world=self,
-            history_limit=_CONSOLE_HISTORY_LIMIT,
-            buffer_limit=_CONSOLE_RESULT_BUFFER_LIMIT,
-        )
-        self._console_controller = install_world_console_handlers(self, self._console)
         self._queue_conflicts = QueueConflictTracker(
             world=self,
             record_rivalry_conflict=self._apply_rivalry_conflict,
@@ -429,25 +431,7 @@ class WorldState:
             is_tile_blocked=lambda position: position in self._objects_by_position,
         )
         self.rebuild_spatial_index()
-        self.context = WorldContext(
-            state=self,
-            queue_manager=self.queue_manager,
-            queue_conflicts=self._queue_conflicts,
-            affordance_service=self._affordance_service,
-            console=self._console,
-            employment=self.employment,
-            employment_runtime=self._employment_runtime,
-            employment_service=self._employment_service,
-            lifecycle_service=self._lifecycle_service,
-            nightly_reset_service=self._nightly_reset_service,
-            relationships=self._relationships,
-            economy_service=self._economy_service,
-            perturbation_service=self._perturbation_service,
-            config=self.config,
-            emit_event_callback=self._emit_event,
-            sync_reservation_callback=self._sync_reservation,
-            observation_service=self._observation_service,
-        )
+        self.context: WorldContext | None = None
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
@@ -500,6 +484,8 @@ class WorldState:
 
     def apply_console(self, operations: Iterable[Any]) -> list[ConsoleCommandResult]:
         """Apply console operations before the tick sequence runs."""
+        if self._console is None:
+            raise RuntimeError("Console service not attached to world")
         return self._console.apply(operations)
 
     def attach_rng(self, rng: random.Random) -> None:
@@ -510,6 +496,34 @@ class WorldState:
         if self._rng_seed is None:
             self._rng_seed = _derive_seed_from_state(self._rng_state)
         self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
+
+    def attach_console_service(self, console: ConsoleService) -> None:
+        """Attach a console service and rebuild the world context."""
+
+        self._console = console
+        self._console_controller = install_world_console_handlers(self, console)
+        self.context = self._build_context(console)
+
+    def _build_context(self, console: ConsoleService) -> WorldContext:
+        return WorldContext(
+            state=self,
+            queue_manager=self.queue_manager,
+            queue_conflicts=self._queue_conflicts,
+            affordance_service=self._affordance_service,
+            console=console,
+            employment=self.employment,
+            employment_runtime=self._employment_runtime,
+            employment_service=self._employment_service,
+            lifecycle_service=self._lifecycle_service,
+            nightly_reset_service=self._nightly_reset_service,
+            relationships=self._relationships,
+            economy_service=self._economy_service,
+            perturbation_service=self._perturbation_service,
+            config=self.config,
+            emit_event_callback=self._emit_event,
+            sync_reservation_callback=self._sync_reservation,
+            observation_service=self._observation_service,
+        )
 
     @property
     def rng(self) -> random.Random:
@@ -554,6 +568,8 @@ class WorldState:
     ) -> None:
         """Register a console handler for queued commands."""
 
+        if self._console is None:
+            raise RuntimeError("Console service not attached to world")
         self._console.register_handler(
             name,
             handler,
@@ -565,6 +581,8 @@ class WorldState:
     def console_controller(self) -> WorldConsoleController:
         """Access the bound console controller (primarily for tests)."""
 
+        if self._console_controller is None:
+            raise RuntimeError("Console controller not attached to world")
         return self._console_controller
 
     @property
@@ -627,7 +645,10 @@ class WorldState:
         return self._economy_service.set_price_target(key, value)
 
     def _record_console_result(self, result: ConsoleCommandResult) -> None:
+        if self._console is None:
+            raise RuntimeError("Console service not attached to world")
         self._console.record_result(result)
+
 
     def _dispatch_affordance_hooks(
         self,
@@ -1602,3 +1623,18 @@ class WorldState:
         """Return on/off status for tracked utilities."""
 
         return economy_system.utility_snapshot(self._economy_service)
+
+
+def build_console_service(
+    world: WorldState,
+    *,
+    history_limit: int = _CONSOLE_HISTORY_LIMIT,
+    buffer_limit: int = _CONSOLE_RESULT_BUFFER_LIMIT,
+) -> ConsoleService:
+    """Construct a console service bound to the given world."""
+
+    return ConsoleService(
+        world=world,
+        history_limit=history_limit,
+        buffer_limit=buffer_limit,
+    )
