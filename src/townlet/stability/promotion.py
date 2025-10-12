@@ -162,11 +162,17 @@ class PromotionManager:
         self._required_passes = int(payload.get("required_passes", self._required_passes))
         self._candidate_ready = bool(payload.get("candidate_ready", False))
         ready_tick = payload.get("candidate_ready_tick")
-        self._candidate_ready_tick = int(ready_tick) if ready_tick is not None else None
+        if isinstance(ready_tick, (int, float, str)):
+            self._candidate_ready_tick = int(ready_tick)
+        else:
+            self._candidate_ready_tick = None
         last_result = payload.get("last_result")
         self._last_result = str(last_result) if last_result is not None else None
         last_tick = payload.get("last_evaluated_tick")
-        self._last_evaluated_tick = int(last_tick) if last_tick is not None else None
+        if isinstance(last_tick, (int, float, str)):
+            self._last_evaluated_tick = int(last_tick)
+        else:
+            self._last_evaluated_tick = None
         initial_release = payload.get("initial_release")
         if isinstance(initial_release, Mapping):
             self._initial_release = dict(initial_release)

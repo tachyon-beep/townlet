@@ -180,7 +180,11 @@ def apply_affordance_outcome(
     if outcome.metadata:
         history_entry["metadata"] = dict(outcome.metadata)
 
-    outcome_log = snapshot.inventory.setdefault("_affordance_outcomes", [])
+    stored = snapshot.inventory.setdefault("_affordance_outcomes", [])
+    if not isinstance(stored, list):
+        stored = []
+        snapshot.inventory["_affordance_outcomes"] = stored
+    outcome_log = stored
     outcome_log.append(history_entry)
     if len(outcome_log) > 10:
         del outcome_log[0]

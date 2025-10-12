@@ -6,7 +6,7 @@ import hashlib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from math import cos, sin, tau
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -26,6 +26,16 @@ from townlet.world.observations.views import (
 
 if TYPE_CHECKING:
     from townlet.world.agents.snapshot import AgentSnapshot
+
+
+def _mapping_or_empty(value: object) -> Mapping[str, object]:
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value)
+    return cast(Mapping[str, object], {})
+
+
+def _string_or_empty(value: object) -> str:
+    return value if isinstance(value, str) else ""
 
 
 @dataclass(frozen=True)
@@ -241,7 +251,7 @@ class ObservationBuilder:
         snapshot: AgentSnapshot,
         world_tick: int,
     ) -> None:
-        needs = context.get("needs", {})
+        needs = _mapping_or_empty(context.get("needs"))
         features[self._feature_index["need_hunger"]] = float(needs.get("hunger", 0.0))
         features[self._feature_index["need_hygiene"]] = float(needs.get("hygiene", 0.0))
         features[self._feature_index["need_energy"]] = float(needs.get("energy", 0.0))
@@ -265,7 +275,7 @@ class ObservationBuilder:
             context.get("wages_withheld", 0.0)
         )
 
-        last_action_id = context.get("last_action_id") or ""
+        last_action_id = _string_or_empty(context.get("last_action_id"))
         if last_action_id:
             digest = hashlib.blake2s(last_action_id.encode("utf-8")).digest()
             value = int.from_bytes(digest[:4], "little") / float(2**32)
@@ -303,8 +313,10 @@ class ObservationBuilder:
         world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
     ) -> None:
-        top_rivals = world.rivalry_top(
-            snapshot.agent_id, limit=self.config.conflict.rivalry.max_edges
+        top_rivals = list(
+            world.rivalry_top(
+                snapshot.agent_id, limit=self.config.conflict.rivalry.max_edges
+            )
         )
         max_rivalry = top_rivals[0][1] if top_rivals else 0.0
         avoid_threshold = self.config.conflict.rivalry.avoid_threshold
@@ -829,22 +841,30 @@ class ObservationBuilder:
             embed_vector = slot["embedding"]
             vector[offset : offset + self.social_cfg.embed_dim] = embed_vector
             offset += self.social_cfg.embed_dim
-            vector[offset] = slot["trust"]
+            vector[offset] = float(slot.get("trust", 0.0))
             offset += 1
-            vector[offset] = slot["familiarity"]
+            vector[offset] = float(slot.get("familiarity", 0.0))
             offset += 1
-            vector[offset] = slot["rivalry"]
+            vector[offset] = float(slot.get("rivalry", 0.0))
             offset += 1
 
         if self._social_aggregate_names:
-            trust_values = [slot["trust"] for slot in slot_values if slot["valid"]]
-            rivalry_values = [slot["rivalry"] for slot in slot_values if slot["valid"]]
+            trust_values = [
+                float(slot.get("trust", 0.0))
+                for slot in slot_values
+                if bool(slot.get("valid"))
+            ]
+            rivalry_values = [
+                float(slot.get("rivalry", 0.0))
+                for slot in slot_values
+                if bool(slot.get("valid"))
+            ]
             aggregates = self._compute_aggregates(trust_values, rivalry_values)
             for value in aggregates:
                 if offset < len(vector):
                     vector[offset] = value
                     offset += 1
-        valid_slots = sum(1 for slot in slot_values if slot["valid"])
+        valid_slots = sum(1 for slot in slot_values if bool(slot.get("valid")))
         slot_context.update(
             {
                 "configured_slots": self._social_slots,
@@ -860,7 +880,7 @@ class ObservationBuilder:
         self,
         world: WorldRuntimeAdapterProtocol,
         snapshot: AgentSnapshot,
-    ) -> tuple[list[dict[str, float]], dict[str, object]]:
+    ) -> tuple[list[dict[str, object]], dict[str, object]]:
         total_slots = self._social_slots
         context: dict[str, object] = {
             "relation_source": "disabled" if total_slots == 0 else "empty",
@@ -882,7 +902,7 @@ class ObservationBuilder:
         )
 
         friends = friend_candidates[: self.social_cfg.top_friends]
-        rivals: list[dict[str, float]] = []
+        rivals: list[dict[str, object]] = []
         for entry in rival_candidates:
             if entry in friends:
                 continue
@@ -890,7 +910,7 @@ class ObservationBuilder:
             if len(rivals) >= self.social_cfg.top_rivals:
                 break
 
-        slots: list[dict[str, float]] = []
+        slots: list[dict[str, object]] = []
         for entry in friends + rivals:
             slots.append(self._encode_relationship(entry))
 
@@ -903,15 +923,17 @@ class ObservationBuilder:
         self,
         world: WorldRuntimeAdapterProtocol,
         agent_id: str,
-    ) -> tuple[list[dict[str, float]], str]:
+    ) -> tuple[list[dict[str, object]], str]:
         snapshot_getter = getattr(world, "relationships_snapshot", None)
-        relationships: dict[str, dict[str, float]] = {}
+        relationships: dict[str, dict[str, object]] = {}
         if callable(snapshot_getter):
             data = snapshot_getter()
             if isinstance(data, dict):
-                relationships = data.get(agent_id, {}) or {}
+                candidate = data.get(agent_id, {}) or {}
+                if isinstance(candidate, dict):
+                    relationships = candidate
 
-        entries: list[dict[str, float]] = []
+        entries: list[dict[str, object]] = []
         for other_id, metrics in relationships.items():
             if not isinstance(metrics, dict):
                 continue
@@ -928,12 +950,14 @@ class ObservationBuilder:
             return entries, "relationships"
 
         # Fallback to rivalry ledger until full relationship system lands.
-        rivalry_data = world.rivalry_top(agent_id, limit=self.social_cfg.top_rivals)
+        rivalry_data = list(
+            world.rivalry_top(agent_id, limit=self.social_cfg.top_rivals)
+        )
         fallback_entries = []
         for other_id, rivalry in rivalry_data:
             fallback_entries.append(
                 {
-                    "other_id": other_id,
+                    "other_id": str(other_id),
                     "trust": 0.0,
                     "familiarity": 0.0,
                     "rivalry": float(rivalry),
@@ -969,18 +993,18 @@ class ObservationBuilder:
             )
             features[slice_] = values
 
-    def _encode_relationship(self, entry: dict[str, float]) -> dict[str, float]:
-        other_id = entry["other_id"]
+    def _encode_relationship(self, entry: Mapping[str, object]) -> dict[str, object]:
+        other_id = _string_or_empty(entry.get("other_id"))
         embedding = self._embed_agent_id(other_id)
         return {
             "embedding": embedding,
-            "trust": entry.get("trust", 0.0),
-            "familiarity": entry.get("familiarity", 0.0),
-            "rivalry": entry.get("rivalry", 0.0),
+            "trust": float(entry.get("trust", 0.0)),
+            "familiarity": float(entry.get("familiarity", 0.0)),
+            "rivalry": float(entry.get("rivalry", 0.0)),
             "valid": True,
         }
 
-    def _empty_relationship_entry(self) -> dict[str, float]:
+    def _empty_relationship_entry(self) -> dict[str, object]:
         return {
             "embedding": np.zeros(self.social_cfg.embed_dim, dtype=np.float32),
             "trust": 0.0,

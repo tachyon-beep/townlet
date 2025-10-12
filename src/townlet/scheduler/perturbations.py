@@ -360,7 +360,10 @@ class PerturbationScheduler:
 
         if isinstance(spec, PriceSpikeEventConfig):
             if "magnitude" in payload:
-                magnitude = float(payload["magnitude"])
+                magnitude_value = payload["magnitude"]
+                if not isinstance(magnitude_value, (int, float)):
+                    raise TypeError("magnitude payload must be numeric")
+                magnitude = float(magnitude_value)
             else:
                 magnitude = spec.magnitude.min
                 if spec.magnitude.max > spec.magnitude.min:

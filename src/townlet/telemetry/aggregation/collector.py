@@ -63,20 +63,20 @@ class StreamPayloadBuilder:
 
         def _prefer_required(value: Mapping[str, Any] | None, key: str) -> dict[str, Any]:
             if isinstance(value, Mapping):
-                return copy.deepcopy(value)
+                return dict(copy.deepcopy(value))
             if context_source is not None:
                 candidate = context_source.get(key)
                 if isinstance(candidate, Mapping):
-                    return copy.deepcopy(candidate)
+                    return dict(copy.deepcopy(candidate))
             return {}
 
         def _prefer_optional(value: Mapping[str, Any] | None, key: str) -> dict[str, Any] | None:
             if isinstance(value, Mapping):
-                return copy.deepcopy(value)
+                return dict(copy.deepcopy(value))
             if context_source is not None:
                 candidate = context_source.get(key)
                 if isinstance(candidate, Mapping):
-                    return copy.deepcopy(candidate)
+                    return dict(copy.deepcopy(candidate))
             return None
 
         queue_metrics = _prefer_required(queue_metrics, "queue_metrics")

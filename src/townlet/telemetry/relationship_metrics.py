@@ -8,8 +8,9 @@ operations dashboards.
 from __future__ import annotations
 
 from collections import Counter, deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import SupportsInt, cast
 
 
 def _advance_window(
@@ -161,22 +162,38 @@ class RelationshipChurnAccumulator:
         # Derive the active window width in case the payload came from a
         # different configuration.
         self.window_ticks = max(window_end - window_start, 1)
-        owners = payload.get("owners", {})
-        reasons = payload.get("reasons", {})
+        owners = _coerce_counter_payload(payload.get("owners"))
+        reasons = _coerce_counter_payload(payload.get("reasons"))
         self._per_owner = Counter({str(k): int(v) for k, v in owners.items()})
         self._per_reason = Counter({str(k): int(v) for k, v in reasons.items()})
         self._total = int(payload.get("total", 0))
         history: list[RelationshipEvictionSample] = []
-        for entry in payload.get("history", []):
+        for entry_obj in payload.get("history", []):
+            if not isinstance(entry_obj, Mapping):
+                continue
+            entry = cast(Mapping[str, object], entry_obj)
             sample = RelationshipEvictionSample(
                 window_start=int(entry.get("window_start", 0)),
                 window_end=int(entry.get("window_end", 0)),
                 total_evictions=int(entry.get("total", 0)),
-                per_owner={str(k): int(v) for k, v in entry.get("owners", {}).items()},
+                per_owner={
+                    str(k): int(v)
+                    for k, v in _coerce_counter_payload(entry.get("owners")).items()
+                },
                 per_reason={
-                    str(k): int(v) for k, v in entry.get("reasons", {}).items()
+                    str(k): int(v)
+                    for k, v in _coerce_counter_payload(entry.get("reasons")).items()
                 },
             )
             history.append(sample)
         maxlen = self._history.maxlen or len(history)
         self._history = deque(history[-maxlen:], maxlen=maxlen)
+
+
+def _coerce_counter_payload(
+    value: object,
+) -> Mapping[str, SupportsInt]:
+    """Return an items-capable mapping for counter reconstruction."""
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, SupportsInt], value)
+    return cast(Mapping[str, SupportsInt], {})

@@ -30,6 +30,8 @@ class ConflictAwarePolicyConfig:
 
 
 if torch_available():
+    assert torch is not None  # narrow for type checkers
+    assert nn is not None
 
     class ConflictAwarePolicyNetwork(nn.Module):
         """Simple convolution + MLP network producing policy logits and value."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import random
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -103,7 +103,10 @@ class SnapshotState:
         if "config_id" not in payload or "tick" not in payload:
             raise ValueError("Snapshot payload missing required fields")
         config_id = str(payload["config_id"])
-        tick = int(payload["tick"])
+        tick_value = payload["tick"]
+        if not isinstance(tick_value, (int, float, str)):
+            raise TypeError("Snapshot tick must be numeric")
+        tick = int(tick_value)
         agents_obj = payload.get("agents", {})
         if not isinstance(agents_obj, Mapping):
             raise ValueError("Snapshot agents field must be a mapping")
@@ -417,7 +420,12 @@ def apply_snapshot_to_world(
     for agent_id, payload in snapshot.agents.items():
         position = tuple(payload.get("position", (0, 0)))
         needs = dict(payload.get("needs", {}))
-        personality_data = payload.get("personality", {})
+        personality_payload = payload.get("personality", {})
+        personality_data = (
+            personality_payload
+            if isinstance(personality_payload, Mapping)
+            else {}
+        )
         fallback_personality = Personality(
             extroversion=float(personality_data.get("extroversion", 0.0)),
             forgiveness=float(personality_data.get("forgiveness", 0.0)),
@@ -540,12 +548,19 @@ def apply_snapshot_to_telemetry(
             emit("stability.metrics", dict(stability_metrics))
     if snapshot.identity and hasattr(telemetry, "update_policy_identity"):
         telemetry.update_policy_identity(snapshot.identity)
-    migrations_applied = snapshot.migrations.get("applied") if isinstance(snapshot.migrations, Mapping) else None
-    if migrations_applied:
+    migrations_applied = (
+        snapshot.migrations.get("applied")
+        if isinstance(snapshot.migrations, Mapping)
+        else None
+    )
+    if isinstance(migrations_applied, Iterable) and not isinstance(
+        migrations_applied, (str, bytes)
+    ):
         applied_list = [str(item) for item in migrations_applied]
-        emit = getattr(telemetry, "emit_event", None)
-        if callable(emit):
-            emit("telemetry.snapshot.migrations", {"applied": applied_list})
+        if applied_list:
+            emit = getattr(telemetry, "emit_event", None)
+            if callable(emit):
+                emit("telemetry.snapshot.migrations", {"applied": applied_list})
 
 
 class SnapshotManager:
