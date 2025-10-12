@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 from townlet.agents.models import Personality, PersonalityProfile, PersonalityProfiles
 from townlet.agents.relationship_modifiers import RelationshipEvent
@@ -33,6 +33,7 @@ from townlet.world.affordances import (
     AffordanceEnvironment,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
+    HookPayload,
     RunningAffordanceState,
 )
 from townlet.world.agents.employment import EmploymentService
@@ -69,7 +70,8 @@ from townlet.world.preconditions import (
     compile_preconditions,
 )
 from townlet.world.queue import QueueConflictTracker, QueueManager
-from townlet.world.relationships import RelationshipTie
+from townlet.world.relationships import RelationshipLedger, RelationshipTie
+from townlet.world.rivalry import RivalryLedger
 from townlet.world.rng import RngStreamManager, seed_from_state
 from townlet.world.spatial import WorldSpatialIndex
 from townlet.world.systems import affordances as affordance_system
@@ -90,16 +92,22 @@ class HookRegistry:
     """Registers named affordance hooks and returns handlers on demand."""
 
     def __init__(self) -> None:
-        self._handlers: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
+        self._handlers: dict[str, list[Callable[[HookPayload], object | None]]] = {}
 
-    def register(self, name: str, handler: Callable[[dict[str, Any]], None]) -> None:
+    def register(
+        self,
+        name: str,
+        handler: Callable[[HookPayload], object | None],
+    ) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError("Hook name must be a non-empty string")
         if not callable(handler):
             raise TypeError("Hook handler must be callable")
         self._handlers.setdefault(name, []).append(handler)
 
-    def handlers_for(self, name: str) -> tuple[Callable[[dict[str, Any]], None], ...]:
+    def handlers_for(
+        self, name: str
+    ) -> tuple[Callable[[HookPayload], object | None], ...]:
         return tuple(self._handlers.get(name, ()))
 
     def clear(self, name: str | None = None) -> None:
@@ -162,7 +170,7 @@ class WorldState:
         default_factory=dict,
         repr=False,
     )
-    _active_reservations: dict[str, str] = field(init=False, default_factory=dict)
+    _active_reservations: dict[str, str | None] = field(init=False, default_factory=dict)
     objects: dict[str, InteractiveObject] = field(init=False, default_factory=dict)
     affordances: dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
     _running_affordances: dict[str, RunningAffordance] = field(init=False, default_factory=dict)
@@ -175,6 +183,7 @@ class WorldState:
     _nightly_reset_service: NightlyResetService = field(init=False, repr=False)
     _economy_service: EconomyService = field(init=False, repr=False)
     _perturbation_service: PerturbationService = field(init=False, repr=False)
+    _affordance_runtime: AffordanceCoordinator = field(init=False, repr=False)
 
     _relationships: RelationshipService = field(init=False, repr=False)
     _relationship_window_ticks: int = 600
@@ -350,6 +359,18 @@ class WorldState:
                 "affordance_hooks_loaded modules=%s",
                 ",".join(accepted),
             )
+        def _noop_dispatch_hooks(
+            stage: Literal["before", "after", "fail"],
+            hook_names: Iterable[str],
+            *,
+            agent_id: str,
+            object_id: str,
+            spec: AffordanceSpec | None,
+            extra: Mapping[str, Any] | None = None,
+            debug_enabled: bool = False,
+        ) -> bool:
+            return True
+
         affordance_env = AffordanceEnvironment(
             queue_manager=self.queue_manager,
             agents=self.agents,
@@ -361,7 +382,7 @@ class WorldState:
             emit_event=self._emit_event,
             sync_reservation=self._sync_reservation,
             apply_affordance_effects=self._apply_affordance_effects,
-            dispatch_hooks=lambda *args, **kwargs: True,
+            dispatch_hooks=_noop_dispatch_hooks,
             record_queue_conflict=self._record_queue_conflict,
             apply_need_decay=self._apply_need_decay,
             build_precondition_context=self._build_precondition_context,
@@ -384,9 +405,10 @@ class WorldState:
                 options=self._runtime_options,
             )
         if isinstance(runtime_obj, AffordanceCoordinator):
-            self._affordance_runtime = runtime_obj
+            coordinator: AffordanceCoordinator = runtime_obj
         else:
-            self._affordance_runtime = AffordanceCoordinator(runtime_obj)
+            coordinator = AffordanceCoordinator(runtime_obj)
+        self._affordance_runtime = coordinator
         self._affordance_service = AffordanceRuntimeService(
             environment=affordance_env,
             context=context,
@@ -461,11 +483,11 @@ class WorldState:
         return self._perturbation_service
 
     @property
-    def _relationship_ledgers(self):
+    def _relationship_ledgers(self) -> Mapping[str, RelationshipLedger]:
         return self._relationships._relationship_ledgers
 
     @property
-    def _rivalry_ledgers(self):
+    def _rivalry_ledgers(self) -> Mapping[str, RivalryLedger]:
         return self._relationships._rivalry_ledgers
 
     @property
@@ -593,7 +615,9 @@ class WorldState:
         return self._affordance_service
 
     def register_affordance_hook(
-        self, name: str, handler: Callable[[dict[str, Any]], None]
+        self,
+        name: str,
+        handler: Callable[[HookPayload], object | None],
     ) -> None:
         """Register a callable invoked when a manifest hook fires."""
 
@@ -647,7 +671,7 @@ class WorldState:
 
     def _dispatch_affordance_hooks(
         self,
-        stage: str,
+        stage: Literal["before", "after", "fail"],
         hook_names: Iterable[str],
         *,
         agent_id: str,
@@ -917,11 +941,11 @@ class WorldState:
         return {agent_id: copy.deepcopy(snapshot) for agent_id, snapshot in self.agents.items()}
 
     @property
-    def active_reservations(self) -> dict[str, str]:
+    def active_reservations(self) -> dict[str, str | None]:
         """Expose a copy of active reservations for diagnostics/tests."""
         return dict(self._active_reservations)
 
-    def active_reservations_view(self) -> Mapping[str, str]:
+    def active_reservations_view(self) -> Mapping[str, str | None]:
         """Return a read-only snapshot of active reservations."""
 
         return MappingProxyType(self._active_reservations)
@@ -1039,12 +1063,12 @@ class WorldState:
         """Return the current relationship tie between two agents, if any."""
         return relationship_system.relationship_tie(self._relationships, agent_id, other_id)
 
-    def get_rivalry_ledger(self, agent_id: str):
+    def get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         """Return the rivalry ledger for ``agent_id``."""
 
         return relationship_system.get_rivalry_ledger(self._relationships, agent_id)
 
-    def _get_rivalry_ledger(self, agent_id: str):
+    def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         return self.get_rivalry_ledger(agent_id)
 
     def consume_chat_events(self) -> list[dict[str, Any]]:
@@ -1123,7 +1147,10 @@ class WorldState:
         return relationship_system.relationship_metrics_snapshot(self._relationships)
 
     def load_relationship_metrics(self, payload: Mapping[str, object] | None) -> None:
-        relationship_system.load_relationship_metrics(self._relationships, payload)
+        relationship_system.load_relationship_metrics(
+            self._relationships,
+            None if payload is None else dict(payload),
+        )
 
     def load_relationship_snapshot(
         self,
@@ -1235,14 +1262,13 @@ class WorldState:
             rivalry=0.05,
             event="chat_failure",
         )
-        self._queue_conflicts.record_chat_event(
-            {
-                "event": "chat_failure",
-                "speaker": speaker,
-                "listener": listener,
-                "tick": self.tick,
-            }
-        )
+        chat_payload: dict[str, object] = {
+            "event": "chat_failure",
+            "speaker": speaker,
+            "listener": listener,
+            "tick": int(self.tick),
+        }
+        self._queue_conflicts.record_chat_event(chat_payload)
         if emit:
             self._emit_event(
                 "chat_failure",
@@ -1261,7 +1287,7 @@ class WorldState:
         object_id: str | None,
         emit: bool,
     ) -> None:
-        queue_payload = {
+        queue_payload: dict[str, object] = {
             "agent": agent_id,
             "reason": reason,
             "target": target_agent,
@@ -1375,22 +1401,22 @@ class WorldState:
         self._reset_object_registry()
         self.affordances.clear()
 
-        for entry in manifest.objects:
+        for object_entry in manifest.objects:
             self.register_object(
-                object_id=entry.object_id,
-                object_type=entry.object_type,
-                position=getattr(entry, "position", None),
-                stock=getattr(entry, "stock", None),
+                object_id=object_entry.object_id,
+                object_type=object_entry.object_type,
+                position=getattr(object_entry, "position", None),
+                stock=getattr(object_entry, "stock", None),
             )
 
-        for entry in manifest.affordances:
+        for affordance_entry in manifest.affordances:
             self.register_affordance(
-                affordance_id=entry.affordance_id,
-                object_type=entry.object_type,
-                duration=entry.duration,
-                effects=entry.effects,
-                preconditions=entry.preconditions,
-                hooks=entry.hooks,
+                affordance_id=affordance_entry.affordance_id,
+                object_type=affordance_entry.object_type,
+                duration=affordance_entry.duration,
+                effects=affordance_entry.effects,
+                preconditions=affordance_entry.preconditions,
+                hooks=affordance_entry.hooks,
             )
 
         self._affordance_manifest_info = {
@@ -1428,13 +1454,13 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        if getattr(self, "_relationships", None) is None:
+        if getattr(self, "_relationships", None) is not None:
             relationship_system.decay(self._relationships)
         employment_service = getattr(self, "_employment_service", None)
         if employment_service is None:
             coordinator = getattr(self, "employment", None)
-            if coordinator is not None and hasattr(coordinator, "apply_job_state"):
-                coordinator.apply_job_state(self)  # type: ignore[call-arg]
+            if isinstance(coordinator, EmploymentCoordinator):
+                coordinator.apply_job_state(self)
         if getattr(self, "_economy_service", None) is None:
             self._update_basket_metrics()
 

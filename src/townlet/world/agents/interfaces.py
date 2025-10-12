@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import Protocol, runtime_checkable
 
+from townlet.agents.relationship_modifiers import RelationshipEvent
+
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.relationships import RelationshipLedger, RelationshipTie
 from townlet.world.rivalry import RivalryLedger
@@ -77,7 +79,7 @@ class RelationshipServiceProtocol(Protocol):
         trust: float = 0.0,
         familiarity: float = 0.0,
         rivalry: float = 0.0,
-        event: str = "generic",
+        event: RelationshipEvent = "generic",
     ) -> None:
         ...
 

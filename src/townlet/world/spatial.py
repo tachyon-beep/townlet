@@ -24,7 +24,7 @@ class WorldSpatialIndex:
         self,
         agents: Mapping[str, AgentSnapshot],
         objects: Mapping[str, InteractiveObject],
-        active_reservations: Mapping[str, str],
+        active_reservations: Mapping[str, str | None],
     ) -> None:
         """Recalculate cached lookups from authoritative world state."""
 

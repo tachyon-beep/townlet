@@ -34,11 +34,11 @@ class AffordanceEnvironment:
     objects: MutableMapping[str, Any]
     affordances: MutableMapping[str, Any]
     running_affordances: MutableMapping[str, Any]
-    active_reservations: MutableMapping[str, str]
+    active_reservations: MutableMapping[str, str | None]
     emit_event: Callable[[str, dict[str, object]], None]
     sync_reservation: Callable[[str], None]
     apply_affordance_effects: Callable[[str, dict[str, float]], None]
-    dispatch_hooks: Callable[[str, Iterable[str]], bool]
+    dispatch_hooks: DispatchHookCallable
     record_queue_conflict: Callable[..., None]
     apply_need_decay: Callable[[], None]
     build_precondition_context: Callable[..., dict[str, Any]]
@@ -727,3 +727,18 @@ def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int)
         )
 
     ctx.apply_need_decay()
+class DispatchHookCallable(Protocol):
+    """Callable signature used to run affordance hooks."""
+
+    def __call__(
+        self,
+        stage: Literal["before", "after", "fail"],
+        hook_names: Iterable[str],
+        *,
+        agent_id: str,
+        object_id: str,
+        spec: Any,
+        extra: Mapping[str, Any] | None = None,
+        debug_enabled: bool = False,
+    ) -> bool:
+        ...

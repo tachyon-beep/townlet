@@ -35,7 +35,7 @@ def request_access(
     *,
     manager: QueueManager,
     objects: Mapping[str, Any],
-    active_reservations: MutableMapping[str, str],
+    active_reservations: MutableMapping[str, str | None],
     spatial_index: WorldSpatialIndex,
     object_id: str,
     agent_id: str,
@@ -58,7 +58,7 @@ def sync_reservation(
     *,
     manager: QueueManager,
     objects: Mapping[str, Any],
-    active_reservations: MutableMapping[str, str],
+    active_reservations: MutableMapping[str, str | None],
     spatial_index: WorldSpatialIndex,
     object_id: str,
 ) -> None:
@@ -89,7 +89,7 @@ def refresh_reservations(
     *,
     manager: QueueManager,
     objects: Mapping[str, Any],
-    active_reservations: MutableMapping[str, str],
+    active_reservations: MutableMapping[str, str | None],
     spatial_index: WorldSpatialIndex,
 ) -> None:
     """Synchronise reservations for all known objects."""
@@ -170,7 +170,9 @@ def _emit_queue_conflict(
 
 
 def _process_queue_conflicts(state: Any, manager: QueueManager, tick: int) -> None:
-    active_reservations: Mapping[str, str] = getattr(state, "_active_reservations", {})
+    active_reservations: Mapping[str, str | None] = getattr(
+        state, "_active_reservations", {}
+    )
     if not active_reservations:
         return
 

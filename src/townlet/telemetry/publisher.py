@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
-from townlet.config.loader import TelemetryTransformEntry
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.telemetry.aggregation import (
@@ -51,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.config.telemetry import TelemetryTransformEntry
     from townlet.world.grid import WorldState
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
@@ -184,7 +184,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
                 "telemetry_transport_plaintext host=%s message='TLS disabled; plaintext transport is intended for localhost dev only.'",
                 endpoint,
             )
-        self._transport_client = self._build_transport_client()
+        self._transport_client: Any = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
         # Expose the flush poll interval for tests/diagnostics (legacy compatibility)
         self._flush_poll_interval = poll_interval
@@ -933,7 +933,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
         """Return the most recently recorded health payload."""
         return dict(self._latest_health_status)
 
-    def _build_transport_client(self):
+    def _build_transport_client(self) -> Any:
         cfg = self._transport_config
         try:
             client = create_transport(

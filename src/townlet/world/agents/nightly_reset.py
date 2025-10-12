@@ -16,7 +16,7 @@ class NightlyResetService:
 
     agents: AgentRegistry
     queue_manager: QueueManager
-    active_reservations: MutableMapping[str, str]
+    active_reservations: MutableMapping[str, str | None]
     employment_service: EmploymentService
     emit_event: Callable[[str, dict[str, object]], None]
     sync_reservation: Callable[[str], None]
