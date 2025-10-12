@@ -6,14 +6,9 @@ import logging
 import time
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    Protocol,
-    TypedDict,
-)
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
+from townlet.config import SimulationConfig
 from townlet.world.agents.interfaces import (
     AgentRegistryProtocol,
     RelationshipServiceProtocol,
@@ -49,6 +44,9 @@ class AffordanceEnvironment:
     build_precondition_context: Callable[..., dict[str, Any]]
     snapshot_precondition_context: Callable[[Mapping[str, Any]], dict[str, Any]]
     tick_supplier: Callable[[], int]
+    store_stock: MutableMapping[str, dict[str, int]]
+    recent_meal_participants: MutableMapping[str, dict[str, Any]]
+    config: SimulationConfig
     world_ref: Any | None = None
 
 

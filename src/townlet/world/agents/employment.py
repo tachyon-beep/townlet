@@ -46,6 +46,17 @@ class EmploymentService:
     def assign_jobs_to_agents(self) -> None:
         self.runtime.assign_jobs_to_agents()
 
+    def assign_job_if_missing(
+        self,
+        snapshot: AgentSnapshot,
+        *,
+        job_index: int | None = None,
+    ) -> None:
+        self.runtime.assign_job_if_missing(
+            snapshot,
+            job_index=job_index,
+        )
+
     # Context helpers -------------------------------------------------
     def context_defaults(self) -> dict[str, Any]:
         return self.runtime.context_defaults()

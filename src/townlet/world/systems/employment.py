@@ -23,9 +23,9 @@ def step(ctx: SystemContext) -> None:
     service = getattr(state, "_employment_service", None)
 
     if service is None:
-        legacy = getattr(state, "_apply_job_state", None)
-        if callable(legacy):
-            legacy()
+        coordinator = getattr(state, "employment", None)
+        if coordinator is not None and hasattr(coordinator, "apply_job_state"):
+            coordinator.apply_job_state(state)  # type: ignore[call-arg]
         else:
             logger.debug("employment_step_skipped service_missing state=%s", type(state).__name__)
         return

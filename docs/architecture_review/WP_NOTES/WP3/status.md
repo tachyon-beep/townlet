@@ -40,12 +40,15 @@
 - Legacy cleanup tracking: `legacy_grid_audit.md` documents the remaining
   `WorldState`/hook/adapter fallbacks and `legacy_grid_cleanup_plan.md` breaks the
   remediation into batches (Batch A complete: DTO-only observation context,
-  immutable local view snapshots, and leaner default world adapter). Batch B has
-  progressed: console results now flow directly from dispatcher emissions (no
-  world-level buffering), and `WorldState` delegates console service construction
-  to the factory via `attach_console_service`. Remaining work focuses on relocating
-  ownership fully to orchestration and modernising the affordance hooks before
-  trimming the last telemetry adapters.
+  immutable local view snapshots, and leaner default world adapter). Batch B is
+  now complete: console results flow directly from dispatcher emissions (no
+  world-level buffering), `WorldState` delegates console service construction
+  to the factory via `attach_console_service`, and default affordance hooks run
+  entirely through `AffordanceEnvironment` services instead of mutating legacy
+  state. Batch C kicked off with job roster ownership moved into the employment
+  service, manifest loading rebuilt around `_reset_object_registry`, and new
+  lifecycle tests covering round-robin job assignment; remaining work targets
+  the telemetry adapters slated for Batch D.
 
 **Dependencies**
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).

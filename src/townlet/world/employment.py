@@ -38,18 +38,16 @@ class EmploymentEngine:
     # -- job assignment -------------------------------------------------
 
     def assign_jobs_to_agents(self, world: WorldState) -> None:
-        if not world._job_keys:
+        job_ids = self._job_ids()
+        if not job_ids:
             return
         for index, snapshot in enumerate(world.agents.values()):
-            if snapshot.job_id is None or snapshot.job_id not in self._config.jobs:
-                snapshot.job_id = world._job_keys[index % len(world._job_keys)]
-            snapshot.inventory.setdefault("meals_cooked", 0)
-            snapshot.inventory.setdefault("meals_consumed", 0)
-            snapshot.inventory.setdefault("wages_earned", 0)
+            self.assign_job_if_missing(world, snapshot, job_index=index)
 
     def apply_job_state(self, world: WorldState) -> None:
         jobs = self._config.jobs
-        default_job_id = world._job_keys[0] if world._job_keys else None
+        job_ids = self._job_ids()
+        default_job_id = job_ids[0] if job_ids else None
         employment_cfg = self._config.employment
         arrival_buffer = self._config.behavior.job_arrival_buffer
         ticks_per_day = max(1, employment_cfg.exit_review_window)
@@ -128,6 +126,27 @@ class EmploymentEngine:
             )
 
     # -- context helpers ------------------------------------------------
+
+    def _job_ids(self) -> tuple[str, ...]:
+        return tuple(self._config.jobs.keys())
+
+    def assign_job_if_missing(
+        self,
+        world: WorldState,
+        snapshot: AgentSnapshot,
+        *,
+        job_index: int | None = None,
+    ) -> None:
+        job_ids = self._job_ids()
+        if not job_ids:
+            return
+        if job_index is None:
+            job_index = max(0, len(world.agents) - 1)
+        if snapshot.job_id is None or snapshot.job_id not in self._config.jobs:
+            snapshot.job_id = job_ids[job_index % len(job_ids)]
+        snapshot.inventory.setdefault("meals_cooked", 0)
+        snapshot.inventory.setdefault("meals_consumed", 0)
+        snapshot.inventory.setdefault("wages_earned", 0)
 
     def context_defaults(self) -> dict[str, Any]:
         window = max(1, self._config.employment.attendance_window)

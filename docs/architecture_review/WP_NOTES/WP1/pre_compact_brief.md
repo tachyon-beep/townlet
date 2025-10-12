@@ -3,6 +3,7 @@
 ## Current Focus
 - WP1 remediation continues; world factory and adapter operate solely on `WorldContext`, with adapter coverage added in `tests/adapters/test_default_world_adapter.py` to lock in `reset`/`tick`/`observe` semantics.
 - T4.4b completed: the loop emits a DTO-first `global_context`, publisher/aggregator/CLI/observer consumers rely on dispatcher DTO data, and documentation now references the DTO flow. Regression bundle (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py -q`) is recorded.
+- Console ownership sits with the orchestration layer: the world factory attaches the console service via `WorldState.attach_console_service`, `WorldComponents` exposes it to the loop, and `TelemetryPublisher` consumes dispatcher events for console results (tests cover router/CLI/dashboard pathways).
 - `tests/core/test_sim_loop_modular_smoke.py` continues to verify DTO envelopes plus console telemetry on default providers; broader UI/CLI tests still exercise the legacy pathway until the DTO migration lands.
 
 ## Strategic Guidance

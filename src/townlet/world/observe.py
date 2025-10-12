@@ -114,9 +114,24 @@ def find_nearest_object_of_type(
 
     adapter = ensure_world_adapter(world)
 
+    try:
+        snapshot = adapter.objects_snapshot()
+    except AttributeError:  # pragma: no cover - defensive fallback
+        snapshot = {}
+
+    if not snapshot:
+        objects = getattr(adapter, "objects", {})
+        snapshot = {
+            object_id: {
+                "object_type": getattr(obj, "object_type", None),
+                "position": getattr(obj, "position", None),
+            }
+            for object_id, obj in objects.items()
+        }
+
     targets = [
         payload.get("position")
-        for payload in adapter.objects_snapshot().values()
+        for payload in snapshot.values()
         if payload.get("object_type") == object_type and payload.get("position") is not None
     ]
     if not targets:

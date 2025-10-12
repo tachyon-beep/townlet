@@ -24,6 +24,14 @@ systems, DTO observation envelopes, and dispatcher-driven telemetry.
   `_recent_meal_participants`, `_job_keys`, `_pending_events`) duplicate logic now
   owned by modular systems (`world.systems.*`).  
   ↳ See lines ~85–540, ~880–1330.
+  - **Update 2025-10-11:** Job roster is now owned by the employment engine;
+    `_job_keys` has been removed from `WorldState`, lifecycle respawns call into
+    the employment service for assignments, and DTO inventories initialise wage
+    counters via the service facade.
+  - **Update 2025-10-11:** Legacy employment helpers (`_apply_job_state`,
+    `_employment_context_*`, shift helper wrappers) were removed; the modular
+    step falls back to the coordinator directly when services are absent, and
+    observation builders consume context data via `EmploymentService`.
 - Console plumbing persists (`ConsoleService`, `_queue_console_command`),
   despite the simulation loop now routing console inputs through the
   dispatcher.  
@@ -40,15 +48,18 @@ systems, DTO observation envelopes, and dispatcher-driven telemetry.
   `store_stock` inside `WorldState`; modular systems already expose register
   primitives.  
   ↳ Lines ~1340–1395.
+  - **Update 2025-10-11:** Manifest loader now resets the object registry via
+    `_reset_object_registry` and routes stock updates through
+    `register_object(..., stock=...)`, keeping `store_stock` and spatial indices
+    in sync with the lifecycle service.
 
 ### 2. `world/hooks/default.py`
-- Entire module assumes a mutable `WorldState` (`world.objects`, `world.agents`,
-  `_recent_meal_participants`). Hooks mutate agent inventories, wallet, and
-  store stock directly; they also call `_emit_event` (legacy path) instead of
-  emitting dispatcher DTO events.  
-  ↳ Lines ~20–190.
-- Hook registry still requires `world.register_affordance_hook`, which ties the
-  affordance runtime to legacy hook APIs.
+- **Resolved 2025-10-11:** Built-in hooks consume `HookPayload.environment`
+  services (queue manager, relationship service, emitter) rather than mutating
+  `WorldState` directly. Store stock and meal participant caches now flow
+  through the environment, and events are emitted via the dispatcher.
+- Hook registry still requires `world.register_affordance_hook`, keeping the
+  import-time registration contract in place for third-party modules.
 
 ### 3. Observation helpers
 - **Resolved 2025-10-11:** `observations/context.py` now requires a

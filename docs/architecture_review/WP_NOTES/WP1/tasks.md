@@ -54,7 +54,7 @@ Maintain this checklist during WP1 implementation.
 
 ## 8. Step 8 — Composition Root Integration
 - [ ] Refactor `SimulationLoop` to use `create_world/policy/telemetry` and drop legacy `resolve_*` helpers. *(Guarded pathway in place for `observe`, but world construction still instantiates legacy runtime directly.)*
-- [~] Introduce `ConsoleRouter` and `HealthMonitor` orchestration services; emit telemetry exclusively via events/metrics. *(Router/monitor instantiated each tick; legacy `runtime.queue_console` remains until the action routing migration lands.)*
+- [~] Introduce `ConsoleRouter` and `HealthMonitor` orchestration services; emit telemetry exclusively via events/metrics. *(Router/monitor instantiated each tick. Console services are now attached via the factory and telemetry consumes dispatcher-emitted results; remaining work is trimming the last legacy hook usages once WP3 finishes the DTO-only guards.)*
 - [x] Remove telemetry `latest_*` pulls from the loop and helper utilities. *(Loop now computes queue/employment metrics directly and emits `loop.tick/health/failure`, `console.result`, and `stability.metrics` via the telemetry port; guard tests ensure writer APIs stay retired.)*
 
 ## 9. Step 8 Testing & Docs

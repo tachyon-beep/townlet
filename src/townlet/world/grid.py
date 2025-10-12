@@ -16,7 +16,7 @@ from typing import Any
 
 from townlet.agents.models import Personality, PersonalityProfile, PersonalityProfiles
 from townlet.agents.relationship_modifiers import RelationshipEvent
-from townlet.config import AffordanceRuntimeConfig, EmploymentConfig, SimulationConfig
+from townlet.config import AffordanceRuntimeConfig, SimulationConfig
 from townlet.config.affordance_manifest import (
     AffordanceManifestError,
     load_affordance_manifest,
@@ -173,7 +173,6 @@ class WorldState:
     _running_affordances: dict[str, RunningAffordance] = field(init=False, default_factory=dict)
     _pending_events: dict[int, list[dict[str, Any]]] = field(init=False, default_factory=dict)
     store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
-    _job_keys: list[str] = field(init=False, default_factory=list)
     employment: EmploymentCoordinator = field(init=False, repr=False)
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
     _employment_service: EmploymentService = field(init=False, repr=False)
@@ -253,7 +252,6 @@ class WorldState:
         self._event_dispatcher = EventDispatcher()
         self._event_dispatcher.register(self._handle_guardrail_request)
         self.store_stock = {}
-        self._job_keys = list(self.config.jobs.keys())
         self.employment = create_employment_coordinator(self.config, self._emit_event)
         self.employment.reset_exits_today()
         self._employment_runtime = EmploymentRuntime(self, self.employment, self._emit_event)
@@ -374,6 +372,9 @@ class WorldState:
             build_precondition_context=self._build_precondition_context,
             snapshot_precondition_context=snapshot_precondition_context,
             tick_supplier=lambda: self.tick,
+            store_stock=self.store_stock,
+            recent_meal_participants=self._recent_meal_participants,
+            config=self.config,
             world_ref=self,
         )
         context = AffordanceRuntimeContext(environment=affordance_env)
@@ -409,7 +410,6 @@ class WorldState:
             embedding_allocator=self.embedding_allocator,
             queue_conflicts=self._queue_conflicts,
             recent_meal_participants=self._recent_meal_participants,
-            job_keys=tuple(self._job_keys),
             respawn_counters=self._respawn_counters,
             emit_event=self._emit_event,
             request_ctx_reset=self.request_ctx_reset,
@@ -788,6 +788,7 @@ class WorldState:
         object_id: str,
         object_type: str,
         position: tuple[int, int] | None = None,
+        stock: Mapping[str, Any] | None = None,
     ) -> None:
         """Register or update an interactive object in the world."""
 
@@ -813,12 +814,21 @@ class WorldState:
         if object_type == "shower":
             obj.stock.setdefault("power_on", 1)
             obj.stock.setdefault("water_on", 1)
+        if stock:
+            obj.stock.update(dict(stock))
         self.objects[object_id] = obj
         self.store_stock[object_id] = obj.stock
         if obj.position is not None:
             self._index_object_position(object_id, obj.position)
             if self._active_reservations.get(object_id):
                 self._spatial_index.set_reservation(obj.position, True)
+
+    def _reset_object_registry(self) -> None:
+        self.objects.clear()
+        self.store_stock.clear()
+        self._objects_by_position.clear()
+        self._active_reservations.clear()
+        self._spatial_index.rebuild(self.agents, self.objects, self._active_reservations)
 
     def _index_object_position(self, object_id: str, position: tuple[int, int]) -> None:
         bucket = self._objects_by_position.setdefault(position, [])
@@ -1367,21 +1377,16 @@ class WorldState:
                 f"Failed to load affordance manifest {manifest_path}: {error}"
             ) from error
 
-        self.objects.clear()
+        self._reset_object_registry()
         self.affordances.clear()
-        self.store_stock.clear()
 
         for entry in manifest.objects:
             self.register_object(
                 object_id=entry.object_id,
                 object_type=entry.object_type,
                 position=getattr(entry, "position", None),
+                stock=getattr(entry, "stock", None),
             )
-            if entry.stock:
-                obj = self.objects.get(entry.object_id)
-                if obj is not None:
-                    obj.stock.update(entry.stock)
-                    self.store_stock[entry.object_id] = obj.stock
 
         for entry in manifest.affordances:
             self.register_affordance(
@@ -1430,8 +1435,11 @@ class WorldState:
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
         if getattr(self, "_relationships", None) is None:
             relationship_system.decay(self._relationships)
-        if getattr(self, "_employment_service", None) is None:
-            self._apply_job_state()
+        employment_service = getattr(self, "_employment_service", None)
+        if employment_service is None:
+            coordinator = getattr(self, "employment", None)
+            if coordinator is not None and hasattr(coordinator, "apply_job_state"):
+                coordinator.apply_job_state(self)  # type: ignore[call-arg]
         if getattr(self, "_economy_service", None) is None:
             self._update_basket_metrics()
 
@@ -1442,104 +1450,6 @@ class WorldState:
         """Assign jobs to agents lacking a valid role."""
 
         employment_system.assign_jobs(self._employment_service)
-
-    def _apply_job_state(self) -> None:
-        service = getattr(self, "_employment_service", None)
-        if service is not None:
-            employment_system.apply_job_state(service)
-            return
-        coordinator = getattr(self, "employment", None)
-        if coordinator is not None:
-            try:
-                coordinator.apply_job_state(self)
-            except AttributeError:
-                pass
-
-    def _apply_job_state_enforced(self) -> None:
-        self.employment._apply_job_state_enforced(self)
-
-    # ------------------------------------------------------------------
-    # Employment helpers
-    # ------------------------------------------------------------------
-    def _employment_context_defaults(self) -> dict[str, Any]:
-        return employment_system.context_defaults(self._employment_service)
-
-    def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        return employment_system.get_context(self._employment_service, agent_id)
-
-    def _employment_context_wages(self, agent_id: str) -> float:
-        return employment_system.context_wages(self._employment_service, agent_id)
-
-    def _employment_context_punctuality(self, agent_id: str) -> float:
-        return employment_system.context_punctuality(self._employment_service, agent_id)
-
-    def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        employment_system.idle_state(self._employment_service, snapshot, ctx)
-
-    def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        employment_system.prepare_state(self._employment_service, snapshot, ctx)
-
-    def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        employment_system.begin_shift(self._employment_service, ctx, start, end)
-
-    def _employment_determine_state(
-        self,
-        *,
-        ctx: dict[str, Any],
-        tick: int,
-        start: int,
-        at_required_location: bool,
-        employment_cfg: EmploymentConfig,
-    ) -> str:
-        return employment_system.determine_state(
-            self._employment_service,
-            ctx=ctx,
-            tick=tick,
-            start=start,
-            at_required_location=at_required_location,
-            employment_cfg=employment_cfg,
-        )
-
-    def _employment_apply_state_effects(
-        self,
-        *,
-        snapshot: AgentSnapshot,
-        ctx: dict[str, Any],
-        state: str,
-        at_required_location: bool,
-        wage_rate: float,
-        lateness_penalty: float,
-        employment_cfg: EmploymentConfig,
-    ) -> None:
-        employment_system.apply_state_effects(
-            self._employment_service,
-            snapshot=snapshot,
-            ctx=ctx,
-            state=state,
-            at_required_location=at_required_location,
-            wage_rate=wage_rate,
-            lateness_penalty=lateness_penalty,
-            employment_cfg=employment_cfg,
-        )
-
-    def _employment_finalize_shift(
-        self,
-        *,
-        snapshot: AgentSnapshot,
-        ctx: dict[str, Any],
-        employment_cfg: EmploymentConfig,
-        job_id: str | None,
-    ) -> None:
-        employment_system.finalize_shift(
-            self._employment_service,
-            snapshot=snapshot,
-            ctx=ctx,
-            employment_cfg=employment_cfg,
-            job_id=job_id,
-        )
-
-    def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
-        return employment_system.coworkers_on_shift(self._employment_service, snapshot)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
         return dict(employment_system.queue_snapshot(self._employment_service))

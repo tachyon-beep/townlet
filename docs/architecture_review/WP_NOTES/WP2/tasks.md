@@ -26,7 +26,7 @@
 - [x] Event dispatcher helpers implemented with unit coverage (Step 3).
 - [x] World state container (RNG, ctx-reset, event buffer) with unit coverage.
 - [x] Systems scaffolding + queue reservation helpers extracted (Step 6).
-- [ ] Legacy cleanup + factory updates.
+- [~] Legacy cleanup + factory updates. *(Factories now attach the console service and surface the modular context; final adapter slimming waits on WP3C DTO parity.)*
 - [x] Tests & docs.
 - [x] WorldContext tick orchestration & integration tests.
 

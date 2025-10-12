@@ -160,6 +160,14 @@ class EmploymentServiceProtocol(Protocol):
     def assign_jobs_to_agents(self) -> None:
         ...
 
+    def assign_job_if_missing(
+        self,
+        snapshot: AgentSnapshot,
+        *,
+        job_index: int | None = None,
+    ) -> None:
+        ...
+
     def import_state(self, payload: Mapping[str, object]) -> None:
         ...
 

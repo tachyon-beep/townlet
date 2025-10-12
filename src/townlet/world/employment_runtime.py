@@ -22,8 +22,6 @@ class EmploymentRuntime:
     # High-level orchestration
     # ------------------------------------------------------------------
     def assign_jobs_to_agents(self) -> None:
-        if not self.world._job_keys:
-            return
         self.coordinator.assign_jobs_to_agents(self.world)
 
     def apply_job_state(self) -> None:
@@ -150,3 +148,14 @@ class EmploymentRuntime:
     def exit_queue_members(self) -> list[str]:
         return self.coordinator.exit_queue_members()
 
+    def assign_job_if_missing(
+        self,
+        snapshot: Any,
+        *,
+        job_index: int | None = None,
+    ) -> None:
+        self.coordinator.assign_job_if_missing(
+            self.world,
+            snapshot,
+            job_index=job_index,
+        )

@@ -36,6 +36,19 @@ class EmploymentCoordinator:
     def apply_job_state(self, world: Any) -> None:
         self.engine.apply_job_state(world)
 
+    def assign_job_if_missing(
+        self,
+        world: Any,
+        snapshot: Any,
+        *,
+        job_index: int | None = None,
+    ) -> None:
+        self.engine.assign_job_if_missing(
+            world,
+            snapshot,
+            job_index=job_index,
+        )
+
     @property
     def exits_today(self) -> int:
         return self.engine.exits_today

@@ -38,9 +38,9 @@ def test_step_falls_back_to_legacy_method() -> None:
     class LegacyState:
         def __init__(self) -> None:
             self._employment_service = None
-
-        def _apply_job_state(self) -> None:
-            calls.append("legacy")
+            self.employment = SimpleNamespace(
+                apply_job_state=lambda world: calls.append("legacy")
+            )
 
     state = LegacyState()
 

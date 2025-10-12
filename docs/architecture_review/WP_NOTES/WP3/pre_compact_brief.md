@@ -45,6 +45,24 @@ Latest context snapshot so we can resume quickly after memory compaction.
   hook has been removed from world/context/runtime and affected tests updated.
   Telemetry derives `latest_console_results` from dispatcher events instead of
   maintaining mirrored batch caches.
+- Default affordance hooks now consume `AffordanceEnvironment` services (queue
+  manager, relationship service, dispatcher emitters) rather than mutating
+  `WorldState` internals, eliminating direct writes to `store_stock`,
+  `_recent_meal_participants`, and `_emit_event`. `legacy_grid_cleanup_plan.md`
+  Batch B is now fully checked off.
+- Employment roster no longer depends on `WorldState._job_keys`; job assignment
+  flows through `EmploymentService.assign_job_if_missing` and lifecycle respawns
+  delegate to the service. DTO inventories seed wage counters during assignment
+  and new regression coverage (`tests/test_world_lifecycle_service.py::test_spawn_assigns_jobs_round_robin`)
+  locks in the behaviour.
+- Manifest loading relies on `_reset_object_registry()` and
+  `register_object(..., stock=...)`, ensuring spatial indices and `store_stock`
+  stay synchronised without manual dict mutation.
+- World-level employment shims (`_apply_job_state`, `_employment_context_*`,
+  shift helpers) have been removed; the modular employment system now falls back
+  to the coordinator when services are missing, and observation payloads read
+  directly from `EmploymentService`. New tests guard round-robin job assignment
+  and service-backed context lookups.
 - `WorldState` no longer instantiates its own `ConsoleService`; the default world
   factory builds the service and attaches it via `WorldState.attach_console_service`,
   paving the way for orchestration-level ownership.

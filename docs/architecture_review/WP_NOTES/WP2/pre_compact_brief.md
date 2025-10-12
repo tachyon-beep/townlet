@@ -6,6 +6,7 @@ Snapshot of WP2 so the next session can resume without re-auditing prior work.
 - **Steps 0–3**: planning, skeleton package creation, and stateless helper extraction (spatial index, observation helpers, event primitives) remain in place with unit coverage.
 - **Steps 4–6**: `AgentRegistry`, `WorldState`, action validation pipeline, and modular system orchestration (`queues`, `affordances`, `employment`, `relationships`, `economy`, `perturbations`) are all wired through `WorldContext.tick`, returning `RuntimeStepResult` with deterministic RNG streams. Tests across `tests/world/**` continue to pass.
 - **Step 7 factory integration**: default/dummy world providers now construct `WorldContext`, registry metadata stays accurate, and `WorldRuntimeAdapter` bridges modular results for callers still expecting the legacy runtime. Docs and tasks are updated accordingly.
+- Console plumbing follows the orchestration path: factories attach the console service, `WorldComponents` surfaces it to the loop, and telemetry consumes dispatcher events instead of legacy buffers.
 - DTO export plumbing from WP3C is compatible: trajectory frames include DTO metadata and `RolloutBuffer.save` emits `*_dto.json` artefacts referenced in manifests, so world consumers can migrate without relying on the legacy observation dict.
 
 ## Outstanding

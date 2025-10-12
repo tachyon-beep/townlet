@@ -3,6 +3,7 @@
 **Current state (2025-10-11)**
 - Planning, skeleton, stateless helper extraction, and state/action/system scaffolding (Steps 0–6) remain green; unit suites across `tests/world/**` continue to pass.
 - Step 7 factory/adapter integration is effectively complete: default providers now build `WorldContext`, dummy adapters are aligned, and `WorldRuntimeAdapter` bridges the modular result into remaining legacy pathways. Migration notes for the simulation loop live under WP1 but reflect WP2 surfaces.
+- Console services are now supplied by the factory via `WorldState.attach_console_service`; `WorldComponents` threads the handle into the loop and telemetry captures dispatcher-emitted results (no `_console_results_batch` mirrors). Console/telemetry regressions (`tests/test_console_router.py`, `tests/test_console_commands.py`, `tests/test_console_dispatcher.py`, `tests/test_telemetry_new_events.py`) stay green.
 - WP3B completion and the ongoing WP3C DTO rollout mean world adapters must now expose DTO-derived snapshots; the context supplies queue/affordance/employment/economy/relationship data required by the policy/telemetry ports. Recent DTO export work (RolloutBuffer `*_dto.json`) ensures training tooling can consume modular outputs without relying on legacy observation dicts.
 - Stage 6 guardrails in WP3 were re-run on 2025-10-11 after removing the last
   `ObservationBuilder` imports from the world package; telemetry surface guards
