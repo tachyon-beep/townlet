@@ -41,6 +41,7 @@ from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
+from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.dto.observation import ObservationEnvelope
@@ -976,20 +977,34 @@ class SimulationLoop:
         if isinstance(global_context, Mapping):
             context_payload = copy.deepcopy(dict(global_context))
 
-        queue_length = int(transport_status.get("queue_length", 0) or 0)
-        dropped_messages = int(transport_status.get("dropped_messages", 0) or 0)
+        queue_length = coerce_int(transport_status.get("queue_length"), default=0)
+        dropped_messages = coerce_int(transport_status.get("dropped_messages"), default=0)
+        last_flush_raw = transport_status.get("last_flush_duration_ms")
+        last_flush_duration: float | None = None
+        if last_flush_raw is not None:
+            try:
+                last_flush_duration = coerce_float(last_flush_raw)
+            except (TypeError, ValueError):
+                last_flush_duration = None
+
         transport_payload: dict[str, object] = {
             "provider": transport_status.get("provider"),
             "queue_length": queue_length,
             "dropped_messages": dropped_messages,
-            "last_flush_duration_ms": transport_status.get("last_flush_duration_ms"),
-            "payloads_flushed_total": int(transport_status.get("payloads_flushed_total", 0) or 0),
-            "bytes_flushed_total": int(transport_status.get("bytes_flushed_total", 0) or 0),
+            "last_flush_duration_ms": last_flush_duration,
+            "payloads_flushed_total": coerce_int(
+                transport_status.get("payloads_flushed_total"), default=0
+            ),
+            "bytes_flushed_total": coerce_int(
+                transport_status.get("bytes_flushed_total"), default=0
+            ),
             "auth_enabled": bool(transport_status.get("auth_enabled", False)),
             "worker": {
                 "alive": bool(transport_status.get("worker_alive", False)),
                 "error": transport_status.get("worker_error"),
-                "restart_count": int(transport_status.get("worker_restart_count", 0) or 0),
+                "restart_count": coerce_int(
+                    transport_status.get("worker_restart_count"), default=0
+                ),
             },
         }
 
@@ -1007,10 +1022,7 @@ class SimulationLoop:
                     return len(value)
                 if isinstance(value, (list, tuple, set)):
                     return len(value)
-                try:
-                    return int(value)  # type: ignore[arg-type]
-                except (TypeError, ValueError):
-                    return 0
+                return coerce_int(value, default=0)
 
             perturbations_pending = _coerce_count(pending_section)
             perturbations_active = _coerce_count(active_section)
@@ -1089,18 +1101,32 @@ class SimulationLoop:
         elif isinstance(self._last_global_context, Mapping):
             context_payload = copy.deepcopy(dict(self._last_global_context))
 
+        last_flush_raw = transport_status.get("last_flush_duration_ms")
+        last_flush_duration: float | None = None
+        if last_flush_raw is not None:
+            try:
+                last_flush_duration = coerce_float(last_flush_raw)
+            except (TypeError, ValueError):
+                last_flush_duration = None
+
         transport_payload: dict[str, object] = {
             "provider": transport_status.get("provider"),
-            "queue_length": int(transport_status.get("queue_length", 0) or 0),
-            "dropped_messages": int(transport_status.get("dropped_messages", 0) or 0),
-            "last_flush_duration_ms": transport_status.get("last_flush_duration_ms"),
-            "payloads_flushed_total": int(transport_status.get("payloads_flushed_total", 0) or 0),
-            "bytes_flushed_total": int(transport_status.get("bytes_flushed_total", 0) or 0),
+            "queue_length": coerce_int(transport_status.get("queue_length"), default=0),
+            "dropped_messages": coerce_int(transport_status.get("dropped_messages"), default=0),
+            "last_flush_duration_ms": last_flush_duration,
+            "payloads_flushed_total": coerce_int(
+                transport_status.get("payloads_flushed_total"), default=0
+            ),
+            "bytes_flushed_total": coerce_int(
+                transport_status.get("bytes_flushed_total"), default=0
+            ),
             "auth_enabled": bool(transport_status.get("auth_enabled", False)),
             "worker": {
                 "alive": bool(transport_status.get("worker_alive", False)),
                 "error": transport_status.get("worker_error"),
-                "restart_count": int(transport_status.get("worker_restart_count", 0) or 0),
+                "restart_count": coerce_int(
+                    transport_status.get("worker_restart_count"), default=0
+                ),
             },
         }
 

@@ -12,6 +12,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import SupportsInt, cast
 
+from townlet.utils.coerce import coerce_int
+
 
 def _advance_window(
     *,
@@ -154,8 +156,8 @@ class RelationshipChurnAccumulator:
         This helper allows soak harnesses to persist state across sessions.
         """
 
-        window_start = int(payload.get("window_start", 0))
-        window_end = int(payload.get("window_end", window_start))
+        window_start = coerce_int(payload.get("window_start"), default=0)
+        window_end = coerce_int(payload.get("window_end"), default=window_start)
         if window_end < window_start:
             raise ValueError("window_end must be >= window_start")
         self._window_start = window_start
@@ -164,28 +166,32 @@ class RelationshipChurnAccumulator:
         self.window_ticks = max(window_end - window_start, 1)
         owners = _coerce_counter_payload(payload.get("owners"))
         reasons = _coerce_counter_payload(payload.get("reasons"))
-        self._per_owner = Counter({str(k): int(v) for k, v in owners.items()})
-        self._per_reason = Counter({str(k): int(v) for k, v in reasons.items()})
-        self._total = int(payload.get("total", 0))
+        self._per_owner = Counter({str(k): coerce_int(v) for k, v in owners.items()})
+        self._per_reason = Counter({str(k): coerce_int(v) for k, v in reasons.items()})
+        self._total = coerce_int(payload.get("total"), default=0)
         history: list[RelationshipEvictionSample] = []
-        for entry_obj in payload.get("history", []):
-            if not isinstance(entry_obj, Mapping):
-                continue
-            entry = cast(Mapping[str, object], entry_obj)
-            sample = RelationshipEvictionSample(
-                window_start=int(entry.get("window_start", 0)),
-                window_end=int(entry.get("window_end", 0)),
-                total_evictions=int(entry.get("total", 0)),
-                per_owner={
-                    str(k): int(v)
+        history_payload = payload.get("history")
+        if isinstance(history_payload, Iterable) and not isinstance(
+            history_payload, (str, bytes)
+        ):
+            for entry_obj in history_payload:
+                if not isinstance(entry_obj, Mapping):
+                    continue
+                entry = cast(Mapping[str, object], entry_obj)
+                sample = RelationshipEvictionSample(
+                    window_start=coerce_int(entry.get("window_start"), default=0),
+                    window_end=coerce_int(entry.get("window_end"), default=0),
+                    total_evictions=coerce_int(entry.get("total"), default=0),
+                    per_owner={
+                        str(k): coerce_int(v)
                     for k, v in _coerce_counter_payload(entry.get("owners")).items()
                 },
                 per_reason={
-                    str(k): int(v)
+                    str(k): coerce_int(v)
                     for k, v in _coerce_counter_payload(entry.get("reasons")).items()
                 },
-            )
-            history.append(sample)
+                )
+                history.append(sample)
         maxlen = self._history.maxlen or len(history)
         self._history = deque(history[-maxlen:], maxlen=maxlen)
 
