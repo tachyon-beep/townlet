@@ -113,3 +113,9 @@ Latest context snapshot so we can resume quickly after memory compaction.
     (`tests/test_affordance_hooks.py`, `tests/test_affordance_telemetry.py`,
     basket/console smoke) re-run clean. Outstanding mypy debt now concentrates on
     the observation builders and legacy `observe.py` shims.
+- Core context typed pass (2025-10-12 evening): world context now returns
+  `RuntimeStepResult`, observation batch filtering relies on the typed
+  adapter union, and the affordance snapshot export is wired through the new
+  `running_snapshot` API. Targeted tests (`pytest tests/test_world_context.py -q`)
+  and mypy on `world/core/context.py` are green, narrowing the remaining debt to
+  dashboard/grid legacy surfaces.

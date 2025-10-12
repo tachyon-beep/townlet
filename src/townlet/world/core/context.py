@@ -8,7 +8,7 @@ import random
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.world.actions import Action, apply_actions
@@ -22,6 +22,7 @@ from townlet.world.rng import RngStreamManager
 from townlet.world.systems import default_systems
 from townlet.world.systems.affordances import process_actions
 from townlet.world.systems.base import SystemContext, SystemStep
+from townlet.world.observations.interfaces import AdapterSource
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.lifecycle.manager import LifecycleManager
@@ -31,7 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.agents.lifecycle import LifecycleService
     from townlet.world.agents.nightly_reset import NightlyResetService
     from townlet.world.agents.relationships_service import RelationshipService
-    from townlet.world.console.service import ConsoleService
+    from townlet.world.console.service import ConsoleService  # type: ignore[import-untyped]
     from townlet.world.economy import EconomyService
     from townlet.world.employment_runtime import EmploymentRuntime
     from townlet.world.employment_service import EmploymentCoordinator
@@ -39,6 +40,8 @@ if TYPE_CHECKING:  # pragma: no cover
     from townlet.world.observations.interfaces import ObservationServiceProtocol
     from townlet.world.perturbations.service import PerturbationService
     from townlet.world.queue import QueueConflictTracker, QueueManager
+    from townlet.world.runtime import RuntimeStepResult
+    from townlet.world.state import WorldState as ModularWorldState
 
 
 @dataclass(slots=True)
@@ -162,7 +165,7 @@ class WorldContext:
         if self.observation_service is None:
             raise RuntimeError("WorldContext observation service not configured")
 
-        adapter = ensure_world_adapter(self.state)
+        adapter = ensure_world_adapter(cast(AdapterSource, self.state))
         terminated_map = dict(terminated or {})
         raw_batch = self.observation_service.build_batch(adapter, terminated_map)
         contexts = {
@@ -231,7 +234,7 @@ class WorldContext:
         lifecycle: LifecycleManager,
         perturbations: PerturbationScheduler,
         ticks_per_day: int,
-    ) -> dict[str, Any]:
+    ) -> "RuntimeStepResult":
         state = self.state
         state.tick = tick
 
@@ -248,7 +251,7 @@ class WorldContext:
 
         action_objects = self._coerce_actions(combined_actions)
         if action_objects:
-            apply_actions(state, action_objects)
+            apply_actions(cast("ModularWorldState", state), action_objects)
         if combined_actions:
             process_actions(state, combined_actions, tick=tick)
         self._pending_actions.clear()
@@ -256,7 +259,7 @@ class WorldContext:
         rng_manager = self.rng_manager or RngStreamManager.from_seed(getattr(state, "rng_seed", None))
         dispatcher = state.event_dispatcher()
         system_ctx = SystemContext(
-            state=state,
+            state=cast("ModularWorldState", state),
             rng=rng_manager,
             events=dispatcher,
         )
@@ -286,16 +289,15 @@ class WorldContext:
 
         events = state.drain_events()
 
-        result_payload = {
-            "console_results": console_results,
-            "events": events,
-            "actions": {key: combined_actions[key] for key in combined_actions},
-            "terminated": terminated,
-            "termination_reasons": termination_reasons,
-        }
         from townlet.world.runtime import RuntimeStepResult
 
-        return RuntimeStepResult(**result_payload)
+        return RuntimeStepResult(
+            console_results=console_results,
+            events=events,
+            actions={key: combined_actions[key] for key in combined_actions},
+            terminated=terminated,
+            termination_reasons=termination_reasons,
+        )
 
     # ------------------------------------------------------------------
     # Snapshot helpers used for observation/telemetry assembly
@@ -323,18 +325,19 @@ class WorldContext:
 
     def export_running_affordances(self) -> Mapping[str, Any]:
         try:
-            return self.affordance_service.runtime_snapshot()
+            return self.affordance_service.running_snapshot()
         except Exception:  # pragma: no cover - defensive
             return {}
 
     def export_relationship_snapshot(self) -> Mapping[str, Mapping[str, Mapping[str, float]]]:
         try:
-            snapshot = self.relationships.relationships_snapshot()
-            if isinstance(snapshot, Mapping):
-                return snapshot
+            snapshot = cast(
+                Mapping[str, Mapping[str, Mapping[str, float]]],
+                self.relationships.relationships_snapshot(),
+            )
         except Exception:  # pragma: no cover - defensive
             return {}
-        return {}
+        return snapshot
 
     def export_relationship_metrics(self) -> Mapping[str, Any]:
         getter = getattr(self.relationships, "relationship_metrics_snapshot", None)
@@ -486,9 +489,9 @@ def _derive_seed_from_state(state: tuple[Any, ...]) -> int:
 
 
 __all__ = ["WorldContext"]
-def _to_mapping(value: Mapping[str, Any] | None) -> Mapping[str, Any]:
-    if value is None:
-        return {}
+
+
+def _to_mapping(value: object) -> Mapping[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
