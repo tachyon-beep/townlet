@@ -148,6 +148,11 @@ class EmploymentRuntime:
     def exit_queue_members(self) -> list[str]:
         return self.coordinator.exit_queue_members()
 
+    def pending_agents(self) -> tuple[str, ...]:
+        """Return the current exit queue as an immutable tuple."""
+
+        return tuple(self.coordinator.exit_queue_members())
+
     def assign_job_if_missing(
         self,
         snapshot: Any,
