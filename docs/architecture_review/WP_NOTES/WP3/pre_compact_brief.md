@@ -34,8 +34,9 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Legacy sweep prep: `legacy_grid_audit.md` captures the remaining hot spots
   (`world/grid.py`, hooks, observation shims, adapters, telemetry fallbacks) and
   `legacy_grid_cleanup_plan.md` sequences the remediation into batches. Batch A
-  started with the observation context hardening (`agent_context` now requires a
-  DTO-capable adapter and fails loudly when employment hooks are missing).
+  now covers observation context hardening, DTO-only local view snapshots, and
+  `DefaultWorldAdapter` surface tightening (immutable agent list, snapshot-based
+  object lookups).
 
 ## Outstanding Work (DTO Rollout)
 1. Run the remaining Stage 6 close-out tasks (`ruff`, `mypy`) and capture results in the Stage 6 audit log (full `pytest` is already green).

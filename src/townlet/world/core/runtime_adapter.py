@@ -15,6 +15,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.config import SimulationConfig
     from townlet.observations.embedding import EmbeddingAllocator
     from townlet.world.agents.snapshot import AgentSnapshot
+    from townlet.world.core.context import WorldContext
     from townlet.world.grid import WorldState
     from townlet.world.queue.manager import QueueManager
 
@@ -76,10 +77,6 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
     def embedding_allocator(self) -> EmbeddingAllocatorProtocol:
         return self._allocator_adapter
 
-    @property
-    def objects(self) -> Mapping[str, object]:
-        return MappingProxyType(self._world.objects)
-
     def objects_by_position_view(self) -> Mapping[tuple[int, int], tuple[str, ...]]:
         return self._world.objects_by_position_view()
 
@@ -134,9 +131,22 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
             return snapshot_getter()
         return {}
 
+    def objects_snapshot(self) -> Mapping[str, Mapping[str, object]]:
+        """Return an immutable snapshot of interactive object metadata."""
+
+        snapshot: dict[str, dict[str, object]] = {}
+        for object_id, obj in self._world.objects.items():
+            snapshot[object_id] = {
+                "object_type": getattr(obj, "object_type", ""),
+                "position": getattr(obj, "position", None),
+                "occupied_by": getattr(obj, "occupied_by", None),
+                "stock": dict(getattr(obj, "stock", {})),
+            }
+        return MappingProxyType(snapshot)
+
 
 def ensure_world_adapter(
-    world: WorldRuntimeAdapterProtocol | WorldState,
+    world: WorldRuntimeAdapterProtocol | "WorldState" | "WorldContext",
 ) -> WorldRuntimeAdapterProtocol:
     """Return a runtime adapter, wrapping ``world`` when necessary."""
 

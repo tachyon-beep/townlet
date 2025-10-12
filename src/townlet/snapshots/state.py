@@ -294,11 +294,11 @@ def snapshot_from_world(
         }
 
     objects_payload: dict[str, dict[str, object]] = {}
-    for object_id, obj in adapter.objects.items():
+    for object_id, obj in adapter.objects_snapshot().items():
         objects_payload[object_id] = {
-            "object_type": obj.object_type,
-            "occupied_by": obj.occupied_by,
-            "stock": dict(obj.stock),
+            "object_type": obj.get("object_type"),
+            "occupied_by": obj.get("occupied_by"),
+            "stock": dict(obj.get("stock", {})),
         }
 
     queue_state = adapter.queue_manager.export_state()

@@ -107,7 +107,7 @@ class DefaultWorldAdapter(WorldRuntime):
         return result
 
     def agents(self) -> Iterable[str]:
-        return self._context.state.agents.keys()
+        return tuple(self._context.agents_view().keys())
 
     def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
         terminated = self._last_result.terminated if self._last_result else {}

@@ -30,7 +30,7 @@ def build_local_cache(
         position = adapter.agent_position(agent_id) or snapshot.position
         agent_lookup.setdefault(position, []).append(agent_id)
 
-    objects_view = adapter.objects
+    objects_view = adapter.objects_snapshot()
     object_lookup: dict[tuple[int, int], list[str]] = {}
     for position, object_ids_tuple in adapter.objects_by_position_view().items():
         filtered = [obj_id for obj_id in object_ids_tuple if obj_id in objects_view]

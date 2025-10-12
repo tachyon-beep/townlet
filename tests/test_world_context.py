@@ -43,8 +43,9 @@ def test_world_context_mirrors_world_state(simulation_loop: SimulationLoop) -> N
 
     adapter = simulation_loop.world_adapter
     assert adapter.queue_manager is world.queue_manager
+    snapshot = adapter.objects_snapshot()
     with pytest.raises(TypeError):
-        adapter.objects["new_object"] = object()  # type: ignore[index]
+        snapshot["new_object"] = {}  # type: ignore[index]
 
 
 def test_world_context_event_and_console_bridge(simulation_loop: SimulationLoop) -> None:

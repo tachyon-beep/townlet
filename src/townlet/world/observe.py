@@ -32,12 +32,9 @@ def local_view(
         }
 
     cx, cy = target_snapshot.position
-    objects_by_position = (
-        adapter.objects_by_position_view() if include_objects else {}
-    )
-    reservation_tiles = (
-        adapter.reservation_tiles() if include_objects else frozenset()
-    )
+    objects_by_position = adapter.objects_by_position_view() if include_objects else {}
+    objects_snapshot = adapter.objects_snapshot() if include_objects else {}
+    reservation_tiles = set(adapter.reservation_tiles()) if include_objects else set()
 
     tiles: list[list[dict[str, Any]]] = []
     seen_agents: dict[str, dict[str, Any]] = {}
@@ -72,18 +69,17 @@ def local_view(
                     )
 
             if include_objects:
-                objects_view = adapter.objects
                 for object_id in object_ids_for_tile:
-                    obj = objects_view.get(object_id)
+                    obj = objects_snapshot.get(object_id)
                     if obj is None:
                         continue
                     seen_objects.setdefault(
                         object_id,
                         {
                             "object_id": object_id,
-                            "object_type": obj.object_type,
-                            "position": obj.position,
-                            "occupied_by": obj.occupied_by,
+                            "object_type": obj.get("object_type"),
+                            "position": obj.get("position"),
+                            "occupied_by": obj.get("occupied_by"),
                         },
                     )
 
@@ -119,9 +115,9 @@ def find_nearest_object_of_type(
     adapter = ensure_world_adapter(world)
 
     targets = [
-        obj.position
-        for obj in adapter.objects.values()
-        if getattr(obj, "object_type", None) == object_type and obj.position is not None
+        payload.get("position")
+        for payload in adapter.objects_snapshot().values()
+        if payload.get("object_type") == object_type and payload.get("position") is not None
     ]
     if not targets:
         return None

@@ -55,10 +55,6 @@ class WorldRuntimeAdapterProtocol(Protocol):
     def embedding_allocator(self) -> EmbeddingAllocatorProtocol:
         ...
 
-    @property
-    def objects(self) -> Mapping[str, Any]:
-        ...
-
     def objects_by_position_view(self) -> Mapping[tuple[int, int], tuple[str, ...]]:
         ...
 
@@ -92,6 +88,9 @@ class WorldRuntimeAdapterProtocol(Protocol):
         ...
 
     def running_affordances_snapshot(self) -> Mapping[str, object]:
+        ...
+
+    def objects_snapshot(self) -> Mapping[str, Mapping[str, Any]]:
         ...
 
 

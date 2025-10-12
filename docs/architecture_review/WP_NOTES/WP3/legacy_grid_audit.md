@@ -51,17 +51,16 @@ systems, DTO observation envelopes, and dispatcher-driven telemetry.
   affordance runtime to legacy hook APIs.
 
 ### 3. Observation helpers
-- `observations/context.py` falls back to calling methods on the legacy world
-  object (`_employment_context_wages`, `_employment_context_punctuality`) via
-  `_maybe_call`. This allows legacy `WorldState` to satisfy consumers and keeps
-  the shims alive.  
-  ↳ Lines ~20–80.
-- `_resolve_agent_snapshot` still calls `world.agent_snapshots_view()` when no
-  adapter is present, masking missing DTO wiring.  
-  ↳ Lines ~86–110.
-- `observe.py.local_view` uses `adapter.objects` directly and implicitly trusts
-  legacy positional caches; `adapter.objects_by_position_view()` proxies the
-  legacy `_objects_by_position` map.
+- **Resolved 2025-10-11:** `observations/context.py` now requires a
+  DTO-capable adapter (no `_maybe_call` fallback); tests patch DTO context when
+  necessary.  
+  ↳ Lines ~12–55.
+- **Resolved 2025-10-11:** `observe.py.local_view` consumes immutable snapshots
+  (`adapter.objects_snapshot()`) and reservation sets, eliminating direct access
+  to mutable world structures. Snapshot export follows the same path.  
+  ↳ Lines ~20–120.
+- Remaining: tighten DTO-only enforcement by removing `ensure_world_adapter`
+  compatibility with raw `WorldState` once WP3B hook migration completes.
 
 ### 4. Adapters
 - `adapters/world_default.py` still exposes `world_state`, `queue_manager`, and

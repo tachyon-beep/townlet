@@ -327,7 +327,7 @@ class ObservationBuilder:
         queue_idx = self._feature_index.get("in_queue")
         if queue_idx is not None:
             in_queue = False
-            for object_id in world.objects.keys():
+            for object_id in world.objects_snapshot().keys():
                 queue = world.queue_manager.queue_snapshot(object_id)
                 if snapshot.agent_id in queue:
                     in_queue = True
@@ -474,6 +474,7 @@ class ObservationBuilder:
         if 'self' in channel_index:
             tensor[channel_index['self'], radius, radius] = 1.0
 
+        objects_snapshot = world.objects_snapshot()
         cx, cy = snapshot.position
         for dy in range(-radius, radius + 1):
             tile_y = dy + radius
@@ -503,9 +504,8 @@ class ObservationBuilder:
                 if self._compact_object_channels:
                     counts: dict[str, int] = {}
                     for object_id in objects_here:
-                        obj = world.objects.get(object_id)
-                        obj_type = getattr(obj, 'object_type', None) if obj is not None else None
-                        obj_key = str(obj_type).strip().lower() if obj_type else ''
+                        payload = objects_snapshot.get(object_id, {})
+                        obj_key = str(payload.get('object_type') or '').strip().lower()
                         if obj_key in self._compact_object_channels:
                             counts[obj_key] = counts.get(obj_key, 0) + 1
                     for obj_key, count in counts.items():
