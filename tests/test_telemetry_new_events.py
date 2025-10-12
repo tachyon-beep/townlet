@@ -21,6 +21,16 @@ def emit_loop_tick(
     world,
     **overrides,
 ) -> None:
+    global_context = overrides.pop("global_context", None)
+    if global_context is None:
+        rivalry_events: list[dict[str, object]] = []
+        consumer = getattr(world, "consume_rivalry_events", None)
+        if callable(consumer):
+            rivalry_events = [dict(event) for event in consumer() if isinstance(event, dict)]
+        global_context = {
+            "rivalry_events": rivalry_events,
+        }
+
     payload = {
         "tick": tick,
         "world": world,
@@ -34,6 +44,7 @@ def emit_loop_tick(
         "policy_identity": overrides.pop("policy_identity", {}),
         "possessed_agents": overrides.pop("possessed_agents", []),
         "social_events": overrides.pop("social_events", []),
+        "global_context": global_context,
     }
     payload.update(overrides)
     telemetry.emit_event("loop.tick", payload)

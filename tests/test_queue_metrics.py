@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from townlet.config import load_config
-from townlet.world.grid import WorldState
+
+from tests.helpers.modular_world import ModularTestWorld
 
 
-def _make_world() -> WorldState:
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents.clear()
     world.tick = 0
     return world

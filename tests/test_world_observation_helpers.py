@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
 from townlet.world.observations.cache import build_local_cache
 from townlet.world.observations.context import agent_context
 from townlet.world.observations.views import (
@@ -13,11 +13,13 @@ from townlet.world.observations.views import (
     local_view,
 )
 
+from tests.helpers.modular_world import ModularTestWorld
 
-def _make_world() -> WorldState:
+
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = False
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.register_object(object_id="shower", object_type="shower", position=(0, 1))
     world.register_object(object_id="fridge_1", object_type="fridge", position=(2, 0))
     world.register_object(object_id="stove_1", object_type="stove", position=(5, 0))

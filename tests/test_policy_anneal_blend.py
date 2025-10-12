@@ -3,15 +3,17 @@ from pathlib import Path
 from townlet.config import load_config
 from townlet.policy.behavior import AgentIntent, BehaviorController
 from townlet.policy.runner import PolicyRuntime
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
+
+from tests.helpers.modular_world import ModularTestWorld
 
 
-def _make_world(option_commit_ticks: int | None = None) -> tuple[PolicyRuntime, WorldState]:
+def _make_world(option_commit_ticks: int | None = None) -> tuple[PolicyRuntime, ModularTestWorld]:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     if option_commit_ticks is not None:
         config.policy_runtime.option_commit_ticks = option_commit_ticks
     runtime = PolicyRuntime(config)
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),

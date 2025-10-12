@@ -768,6 +768,7 @@ class SimulationLoop:
                 perturbations=perturbation_state,
                 promotion_state=promotion_state,
                 anneal_context=anneal_context,
+                rivalry_events=rivalry_events,
             )
             if self._telemetry_port is not None:
                 tick_event_payload = {
@@ -901,6 +902,7 @@ class SimulationLoop:
         perturbations: Mapping[str, object],
         promotion_state: Mapping[str, object],
         anneal_context: Mapping[str, object],
+        rivalry_events: Iterable[Mapping[str, object]],
     ) -> dict[str, object]:
         """Assemble the DTO-first global context payload for telemetry."""
 
@@ -928,6 +930,9 @@ class SimulationLoop:
             global_context.setdefault("promotion_state", copy.deepcopy(dict(promotion_state)))
         if anneal_context:
             global_context.setdefault("anneal_context", copy.deepcopy(dict(anneal_context)))
+
+        rivalry_list = [dict(event) for event in rivalry_events]
+        global_context["rivalry_events"] = rivalry_list
 
         context = self._world_context
         if context is not None:

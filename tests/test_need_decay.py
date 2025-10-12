@@ -6,22 +6,23 @@ import pytest
 
 from townlet.config import load_config
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
+
+from tests.helpers.modular_world import ModularTestWorld
 
 CONFIG_PATH = Path("configs/examples/poc_hybrid.yaml")
 
 
-def _make_world() -> tuple[LifecycleManager, WorldState]:
+def _make_world() -> tuple[LifecycleManager, ModularTestWorld]:
     config = load_config(CONFIG_PATH)
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents.clear()
     world.tick = 0
-    manager = LifecycleManager(config)
-    return manager, world
+    return world.lifecycle, world
 
 
 def _spawn_agent(
-    world: WorldState,
+    world: ModularTestWorld,
     *,
     hunger: float = 0.8,
     hygiene: float = 0.7,

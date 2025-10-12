@@ -1177,20 +1177,26 @@ class TelemetryPublisher:
         if len(self._queue_fairness_history) > 120:
             self._queue_fairness_history.pop(0)
 
-        new_events = adapter.consume_rivalry_events() if adapter is not None else ()
-        for event in new_events:
+        rivalry_history_payload = global_payload.get("rivalry_events", [])
+        if not isinstance(rivalry_history_payload, list):
+            logger.warning("rivalry_events_payload_invalid", extra={"type": type(rivalry_history_payload).__name__})
+            rivalry_history_payload = []
+
+        normalised_events: list[dict[str, object]] = []
+        for event in rivalry_history_payload:
             if not isinstance(event, Mapping):
+                logger.debug("rivalry_event_invalid", extra={"event": event})
                 continue
-            payload = {
-                "tick": int(event.get("tick", tick)),
-                "agent_a": str(event.get("agent_a", "")),
-                "agent_b": str(event.get("agent_b", "")),
-                "intensity": float(event.get("intensity", 0.0)),
-                "reason": str(event.get("reason", "unknown")),
-            }
-            self._rivalry_event_history.append(payload)
-        if len(self._rivalry_event_history) > 120:
-            self._rivalry_event_history = self._rivalry_event_history[-120:]
+            normalised_events.append(
+                {
+                    "tick": int(event.get("tick", tick)),
+                    "agent_a": str(event.get("agent_a", "")),
+                    "agent_b": str(event.get("agent_b", "")),
+                    "intensity": float(event.get("intensity", 0.0)),
+                    "reason": str(event.get("reason", "unknown")),
+                }
+            )
+        self._rivalry_event_history = normalised_events[-120:]
 
         self._latest_conflict_snapshot = {
             "queues": dict(queue_metrics),

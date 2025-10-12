@@ -5,11 +5,13 @@ from townlet.policy.behavior import ScriptedBehavior
 from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
 
+from tests.helpers.modular_world import ModularTestWorld
 
-def _make_world() -> WorldState:
+
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.conflict.rivalry.avoid_threshold = 0.1
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.register_object(object_id="shower_1", object_type="shower")
     world.register_object(object_id="fridge_1", object_type="fridge")
     world.register_object(object_id="stove_1", object_type="stove")
