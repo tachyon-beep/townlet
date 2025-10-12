@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from townlet import observations
+from townlet.config import SimulationConfig
 from townlet.world.observations.interfaces import (
+    AdapterSource,
     ObservationServiceProtocol,
     WorldRuntimeAdapterProtocol,
 )
@@ -15,7 +17,7 @@ from townlet.world.observations.interfaces import (
 class WorldObservationService(ObservationServiceProtocol):
     """Observation service backed by the standard observation pipeline."""
 
-    def __init__(self, *, config: Any) -> None:
+    def __init__(self, *, config: SimulationConfig) -> None:
         self._builder = observations.create_observation_builder(config=config)
 
     @property
@@ -33,14 +35,14 @@ class WorldObservationService(ObservationServiceProtocol):
 
     def build_batch(
         self,
-        world: WorldRuntimeAdapterProtocol | object,
+        world: AdapterSource,
         terminated: Mapping[str, bool],
     ) -> Mapping[str, Mapping[str, Any]]:
         return self._builder.build_batch(world, terminated)
 
     def build_single(
         self,
-        world: WorldRuntimeAdapterProtocol | object,
+        world: AdapterSource,
         agent_id: str,
         *,
         slot: int | None = None,
