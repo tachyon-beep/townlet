@@ -93,10 +93,17 @@ class ModularTestWorld:
     # Simulation loop integration
     # ------------------------------------------------------------------
     def world_components(self) -> WorldComponents:
-        observation_service = getattr(self.context, "observation_service", None)
+        adapter = create_world(world=self.state, config=self.config)
+        context = getattr(adapter, "context", None)
+        if context is None:
+            raise RuntimeError("World adapter missing context")
+        observation_service = getattr(context, "observation_service", None)
         if observation_service is None:
             raise RuntimeError("WorldContext missing observation service")
-        adapter = create_world(world=self.state, config=self.config)
+        console_service = getattr(context, "console", None)
+        if console_service is None:
+            raise RuntimeError("WorldContext missing console service")
+        self.context = context
         return WorldComponents(
             world=self.state,
             lifecycle=adapter.lifecycle_manager,
@@ -105,6 +112,7 @@ class ModularTestWorld:
             world_port=adapter,
             ticks_per_day=self.ticks_per_day,
             provider="default",
+            console_service=console_service,
         )
 
     # ------------------------------------------------------------------

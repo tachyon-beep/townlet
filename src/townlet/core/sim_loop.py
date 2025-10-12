@@ -26,6 +26,7 @@ from townlet.core.interfaces import (
 )
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
+from townlet.console.service import ConsoleService
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
 from townlet.policy.runner import PolicyRuntime
 from townlet.ports.world import WorldRuntime
@@ -58,6 +59,7 @@ class WorldComponents:
     world_port: WorldRuntime
     ticks_per_day: int
     provider: str
+    console_service: ConsoleService
 
 
 @dataclass(slots=True)
@@ -161,6 +163,7 @@ class SimulationLoop:
         self._world_adapter: WorldRuntimeAdapter | None = None
         self._world_context: WorldContext | None = None
         self._world_port: WorldRuntime | None = None
+        self._console_service: ConsoleService | None = None
         self._policy_port: PolicyBackendProtocol | None = None
         self._telemetry_port: TelemetrySinkProtocol | None = None
         self._policy_controller: PolicyController | None = None
@@ -224,6 +227,7 @@ class SimulationLoop:
         self.perturbations = world_components.perturbations
         self._observation_service = world_components.observation_service
         self._ticks_per_day = world_components.ticks_per_day
+        self._console_service = world_components.console_service
         self._world_port = world_components.world_port
         context = getattr(self._world_port, "context", None)
         if context is not None:
@@ -337,6 +341,9 @@ class SimulationLoop:
         observation_service = getattr(context, "observation_service", None)
         if observation_service is None:
             raise RuntimeError("World context missing observation service")
+        console_service = getattr(context, "console", None)
+        if console_service is None:
+            raise RuntimeError("World context missing console service")
         world = context.state
         lifecycle = getattr(world_port, "lifecycle_manager", None)
         if lifecycle is None:
@@ -353,6 +360,7 @@ class SimulationLoop:
             world_port=world_port,
             ticks_per_day=ticks_per_day,
             provider=self._world_provider,
+            console_service=console_service,
         )
 
     def _build_default_policy_components(self) -> PolicyComponents:

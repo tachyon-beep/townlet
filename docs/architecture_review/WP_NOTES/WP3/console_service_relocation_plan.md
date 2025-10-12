@@ -14,7 +14,7 @@ own buffering or handler lifecycle.
    - Ensure `WorldContext` creation happens only after a console service is
      attached.
 
-- [ ] **Rewire Factory & Loop**
+- [x] **Rewire Factory & Loop** *(2025-10-11)*
    - Update the default world factory to create the console service explicitly,
      call `world.attach_console_service`, and expose the service to the loop via
      `WorldComponents`.
@@ -33,4 +33,5 @@ own buffering or handler lifecycle.
    - Update tests/dummy harnesses to construct and attach console services
      explicitly; rerun console, telemetry, and dashboard suites.
 
-This file tracks progress through the relocation. Step 1 is now in progress.
+This file tracks progress through the relocation. Steps 1–2 complete; proceed
+with buffer removal and documentation refresh.

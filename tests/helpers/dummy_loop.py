@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from townlet.console.command import ConsoleCommandEnvelope
+from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.core.sim_loop import (
     PolicyComponents,
     SimulationLoop,
@@ -60,14 +60,45 @@ class _DummyObservationService:
     """Sentinel observation service satisfying attribute checks."""
 
 
+class _DummyConsoleService:
+    def __init__(self) -> None:
+        self._handlers: dict[str, Callable[[ConsoleCommandEnvelope], ConsoleCommandResult]] = {}
+        self._results: list[ConsoleCommandResult] = []
+        self.bridge = object()
+
+    def register_handler(
+        self,
+        name: str,
+        handler: Callable[[ConsoleCommandEnvelope], ConsoleCommandResult],
+        *,
+        mode: str = "viewer",
+        require_cmd_id: bool = False,
+    ) -> None:
+        _ = (mode, require_cmd_id)
+        self._handlers[name] = handler
+
+    def apply(self, operations: Iterable[ConsoleCommandEnvelope]) -> list[ConsoleCommandResult]:
+        self._results.clear()
+        for operation in operations:
+            handler = self._handlers.get(operation.name)
+            if handler is None:
+                continue
+            self._results.append(handler(operation))
+        return list(self._results)
+
+    def record_result(self, result: ConsoleCommandResult) -> None:
+        self._results.append(result)
+
+
 class _DummyWorldContext:
     """Stubbed world context providing DTO exports for the loop."""
 
-    def __init__(self, state: _DummyWorldState) -> None:
+    def __init__(self, state: _DummyWorldState, console: _DummyConsoleService) -> None:
         self.state = state
         self.state.context = self
         self.observation_service = _DummyObservationService()
         self.rng_manager = None
+        self.console = console
         self.queue_metrics: dict[str, int] = {"pending": 0}
         self.queue_state: dict[str, Any] = {"queues": {}}
         self.employment_snapshot: dict[str, Any] = {"pending_count": 0}
@@ -408,6 +439,7 @@ class DummyLoopHarness:
     policy: _DummyPolicyHarness
     console_router: Any
     health_monitor: Any
+    console_service: _DummyConsoleService
 
 
 def build_dummy_loop(
@@ -420,7 +452,8 @@ def build_dummy_loop(
     loop = SimulationLoop(config)
 
     world_state = _DummyWorldState(agent_ids)
-    context = _DummyWorldContext(world_state)
+    console_service = _DummyConsoleService()
+    context = _DummyWorldContext(world_state, console_service)
     runtime = _LoopDummyWorldRuntime(world_state, context)
     lifecycle = _DummyLifecycleManager()
     perturbations = _DummyPerturbationScheduler()
@@ -441,6 +474,7 @@ def build_dummy_loop(
             world_port=runtime,
             ticks_per_day=1440,
             provider="dummy",
+            console_service=console_service,
         )
 
     def _policy_builder(_loop: SimulationLoop) -> PolicyComponents:
@@ -477,6 +511,7 @@ def build_dummy_loop(
         policy=policy_harness,
         console_router=getattr(loop, "_console_router", None),
         health_monitor=getattr(loop, "_health_monitor", None),
+        console_service=console_service,
     )
 
 
