@@ -62,10 +62,13 @@ chip away at the remaining legacy surfaces.
 - [x] Add regression tests to ensure queue/employment metrics remain stable.
 
 ## Batch D — Telemetry & Event Hardening
-1. Delete alias ingestion fallbacks in `TelemetryPublisher` and related
-   transports once the above batches land.
-2. Strengthen guard tests (`tests/test_telemetry_surface_guard.py`,
-   `tests/telemetry/test_event_dispatcher.py`) to fail if legacy keys reappear.
+- [x] Delete alias/legacy ingestion fallbacks in `TelemetryPublisher` and
+  related transports now that DTO-only payloads are the norm. *(2025-10-11)*
+  Health/failure ingest no longer rewrites `tick_duration_ms`, `worker_alive`,
+  or `worker_error`; summary metrics derive solely from the structured payloads.
+- [x] Strengthen guard tests (`tests/test_telemetry_surface_guard.py`,
+  `tests/telemetry/test_event_dispatcher.py`) so any attempt to reintroduce
+  legacy keys fails immediately. *(2025-10-11)*
 
 ## Execution Notes
 - Each batch should land with focused commits plus regression commands recorded

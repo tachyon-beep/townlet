@@ -793,6 +793,23 @@ class TelemetryPublisher:
     def _store_loop_failure(self, payload: Mapping[str, object]) -> None:
         failure_data = dict(payload)
         failure_data.setdefault("status", "error")
+        summary_payload = failure_data.get("summary")
+        if not isinstance(summary_payload, Mapping):
+            summary_payload = {}
+        transport_payload = failure_data.get("transport")
+        if isinstance(transport_payload, Mapping):
+            summary_payload.setdefault(
+                "queue_length",
+                transport_payload.get("queue_length"),
+            )
+            summary_payload.setdefault(
+                "dropped_messages",
+                transport_payload.get("dropped_messages"),
+            )
+        duration = failure_data.get("duration_ms")
+        if duration is not None:
+            summary_payload.setdefault("duration_ms", duration)
+        failure_data["summary"] = summary_payload
         self._latest_health_status = failure_data
         event = {
             "kind": "loop_failure",
@@ -802,28 +819,6 @@ class TelemetryPublisher:
         self._latest_events.append(event)
         if len(self._latest_events) > 128:
             self._latest_events = self._latest_events[-128:]
-        transport_snapshot = failure_data.get("transport")
-        queue_length: object | None = None
-        dropped_messages: object | None = None
-        if isinstance(transport_snapshot, Mapping):
-            queue_length = transport_snapshot.get("queue_length")
-            dropped_messages = transport_snapshot.get("dropped_messages")
-        summary_payload = failure_data.get("summary")
-        if isinstance(summary_payload, Mapping):
-            queue_length = summary_payload.get("queue_length", queue_length)
-            dropped_messages = summary_payload.get("dropped_messages", dropped_messages)
-        else:
-            summary_payload = {}
-            if queue_length is not None:
-                summary_payload["queue_length"] = queue_length
-            if dropped_messages is not None:
-                summary_payload["dropped_messages"] = dropped_messages
-            duration = failure_data.get("duration_ms") or failure_data.get("tick_duration_ms")
-            if duration is not None:
-                summary_payload["duration_ms"] = duration
-            if summary_payload:
-                failure_data.setdefault("summary", summary_payload)
-        failure_data.pop("aliases", None)
         logger.error(
             "simulation_loop_failure tick=%s error=%s queue=%s dropped=%s snapshot=%s",
             failure_data.get("tick"),
@@ -840,24 +835,16 @@ class TelemetryPublisher:
         transport_payload = payload.get("transport")
         if isinstance(transport_payload, Mapping):
             worker_payload = transport_payload.get("worker")
-            worker_alive = bool(
-                worker_payload.get("alive", transport_payload.get("worker_alive", False))
-                if isinstance(worker_payload, Mapping)
-                else transport_payload.get("worker_alive", False)
-            )
-            worker_error = (
-                worker_payload.get("error", transport_payload.get("worker_error"))
-                if isinstance(worker_payload, Mapping)
-                else transport_payload.get("worker_error")
-            )
+            worker_alive = False
+            worker_error = None
+            worker_restart_count = 0
             if isinstance(worker_payload, Mapping):
-                worker_restart_source = worker_payload.get("restart_count", 0)
-            else:
-                worker_restart_source = transport_payload.get("worker_restart_count", 0)
-            try:
-                worker_restart_count = int(worker_restart_source or 0)
-            except (TypeError, ValueError):
-                worker_restart_count = 0
+                worker_alive = bool(worker_payload.get("alive", False))
+                worker_error = worker_payload.get("error")
+                try:
+                    worker_restart_count = int(worker_payload.get("restart_count", 0) or 0)
+                except (TypeError, ValueError):
+                    worker_restart_count = 0
             payload["transport"] = {
                 "provider": transport_payload.get("provider"),
                 "queue_length": int(transport_payload.get("queue_length", 0) or 0),
@@ -875,7 +862,6 @@ class TelemetryPublisher:
         context_payload = payload.get("global_context")
         if isinstance(context_payload, Mapping):
             payload["global_context"] = copy.deepcopy(dict(context_payload))
-        payload.pop("aliases", None)
         summary_payload = payload.get("summary")
         if isinstance(summary_payload, Mapping):
             payload["summary"] = dict(summary_payload)

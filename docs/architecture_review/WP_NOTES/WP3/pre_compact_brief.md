@@ -63,6 +63,10 @@ Latest context snapshot so we can resume quickly after memory compaction.
   to the coordinator when services are missing, and observation payloads read
   directly from `EmploymentService`. New tests guard round-robin job assignment
   and service-backed context lookups.
+- Telemetry Batch D complete: `_ingest_health_metrics`/`_store_loop_failure` no
+  longer accept legacy alias fields (`worker_alive`, `tick_duration_ms`,
+  `worker_error`); guard suites enforce DTO-only payloads and the regression run
+  verifies the event pipeline.
 - `WorldState` no longer instantiates its own `ConsoleService`; the default world
   factory builds the service and attaches it via `WorldState.attach_console_service`,
   paving the way for orchestration-level ownership.

@@ -85,6 +85,9 @@ systems, DTO observation envelopes, and dispatcher-driven telemetry.
   fields (`worker_alive`, `tick_duration_ms`, `aliases`) and coerce them into
   the structured schema.  
   ↳ Lines ~780–880.
+  - **Update 2025-10-11:** Alias coercion removed; telemetry now expects DTO
+    structured payloads (`transport.worker`, `summary.duration_ms`, etc.) and
+    tests enforce DTO-only ingestion.
 - Console history flushing previously relied on `_console_results_history`; the
   publisher now derives results from dispatcher events, but history retention
   still needs validation once transports migrate fully.

@@ -47,8 +47,10 @@
   entirely through `AffordanceEnvironment` services instead of mutating legacy
   state. Batch C kicked off with job roster ownership moved into the employment
   service, manifest loading rebuilt around `_reset_object_registry`, and new
-  lifecycle tests covering round-robin job assignment; remaining work targets
-  the telemetry adapters slated for Batch D.
+  lifecycle tests covering round-robin job assignment. Batch D is now complete:
+  telemetry ingest no longer tolerates alias fields (`worker_alive`,
+  `tick_duration_ms`, etc.) and guard tests enforce DTO-only payloads across the
+  event pipeline.
 
 **Dependencies**
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).
