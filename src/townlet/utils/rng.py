@@ -16,7 +16,10 @@ def encode_rng_state(state: tuple[object, ...]) -> str:
 def decode_rng_state(payload: str) -> tuple[object, ...]:
     """Decode a base64-encoded RNG state back into a Python tuple."""
 
-    return pickle.loads(base64.b64decode(payload.encode("ascii")))
+    state = pickle.loads(base64.b64decode(payload.encode("ascii")))
+    if not isinstance(state, tuple):
+        raise TypeError("decoded RNG state must be a tuple")
+    return tuple(state)
 
 
 def encode_rng(rng: random.Random) -> str:

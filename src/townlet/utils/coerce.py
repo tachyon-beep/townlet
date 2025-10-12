@@ -20,7 +20,7 @@ def coerce_int(value: object, *, default: int = 0) -> int:
             return default
     if isinstance(value, SupportsInt):
         try:
-            return int(value)  # type: ignore[arg-type]
+            return int(value)
         except (TypeError, ValueError):
             return default
     return default
@@ -41,7 +41,7 @@ def coerce_float(value: object, *, default: float | None = None) -> float:
             raise
     if isinstance(value, SupportsFloat):
         try:
-            return float(value)  # type: ignore[arg-type]
+            return float(value)
         except (TypeError, ValueError):
             if default is not None:
                 return default

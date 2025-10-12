@@ -138,7 +138,7 @@ class ConsoleCommandResult:
     ) -> ConsoleCommandResult:
         """Build a successful result payload from an executed envelope."""
 
-        result_payload = dict(payload) if payload is not None else {}
+        result_payload: dict[str, Any] = dict(payload) if payload is not None else {}
         return cls(
             name=envelope.name,
             status="ok",
@@ -162,7 +162,7 @@ class ConsoleCommandResult:
     ) -> ConsoleCommandResult:
         """Return an error result describing why the command failed."""
 
-        error_payload = {"code": code, "message": message}
+        error_payload: dict[str, Any] = {"code": code, "message": message}
         if details is not None:
             error_payload["details"] = dict(details)
         return cls(
