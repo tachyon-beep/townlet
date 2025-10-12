@@ -37,6 +37,11 @@
 - Remaining work packages:
   - **WP3C – DTO Parity Expansion & ML Validation**: expand the parity harness, migrate ML adapters, retire legacy observation payloads.
 - WP1 telemetry blockers cleared; the remaining dependency is tightening failure/snapshot handling once DTO parity lands. WP2 still depends on DTO-only policy adapters before default providers can drop legacy handles.
+- Legacy cleanup tracking: `legacy_grid_audit.md` documents the remaining
+  `WorldState`/hook/adapter fallbacks and `legacy_grid_cleanup_plan.md` breaks the
+  remediation into batches (Batch A kicked off by hardening `agent_context` to
+  require DTO-capable adapters). Subsequent batches will delete the console
+  buffer, hook mutations, and telemetry alias guards.
 
 **Dependencies**
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).

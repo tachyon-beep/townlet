@@ -1,55 +1,10 @@
 from pathlib import Path
-from types import MappingProxyType
 
 import pytest
 
 from townlet.config import SimulationConfig, load_config
 from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
-
-
-class StubSnapshot:
-    def __init__(self, needs: dict[str, float], wallet: float) -> None:
-        self.needs = dict(needs)
-        self.wallet = wallet
-
-
-class StubWorld:
-    def __init__(
-        self,
-        config,
-        snapshot: StubSnapshot,
-        context: dict[str, float],
-    ) -> None:
-        self.config = config
-        self.tick = 0
-        snapshot.agent_id = "alice"
-        snapshot.wages_paid = context.get("wages_paid", 0.0)
-        snapshot.punctuality_bonus = context.get("punctuality_bonus", 0.0)
-        self.agents = {"alice": snapshot}
-        self._snapshots = {"alice": snapshot}
-        self._context = context
-
-    def agent_snapshots_view(self):
-        return MappingProxyType(self._snapshots)
-
-    def consume_chat_events(self):
-        return []
-
-    def agent_context(self, agent_id: str) -> dict[str, float]:
-        return self._context
-
-    def _employment_context_wages(self, agent_id: str) -> float:
-        return float(self._context.get("wages_paid", 0.0))
-
-    def _employment_context_punctuality(self, agent_id: str) -> float:
-        return float(self._context.get("punctuality_bonus", 0.0))
-
-    def relationship_tie(self, subject: str, target: str):
-        return None
-
-    def rivalry_top(self, agent_id: str, limit: int):
-        return []
 
 
 def _make_world(hunger: float = 0.5) -> WorldState:
@@ -264,7 +219,7 @@ def test_episode_clip_enforced() -> None:
     assert next_reward >= -world.config.rewards.clip.clip_per_tick
 
 
-def test_wage_and_punctuality_bonus() -> None:
+def test_wage_and_punctuality_bonus(monkeypatch: pytest.MonkeyPatch) -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     context = {
         "needs": {"hunger": 1.0, "hygiene": 1.0, "energy": 1.0},
@@ -280,8 +235,23 @@ def test_wage_and_punctuality_bonus() -> None:
         "wages_paid": 0.1,
         "punctuality_bonus": 0.5,
     }
-    snapshot = StubSnapshot(needs=context["needs"], wallet=context["wallet"])
-    world = StubWorld(config, snapshot, context)
+    world = WorldState.from_config(config)
+    world.agents["alice"] = AgentSnapshot(
+        agent_id="alice",
+        position=(0, 0),
+        needs=context["needs"],
+        wallet=context["wallet"],
+    )
+
+    def _fake_agent_context(world_input, agent_id: str) -> dict[str, float]:
+        assert agent_id == "alice"
+        return dict(context)
+
+    monkeypatch.setattr(
+        "townlet.rewards.engine.observation_agent_context",
+        _fake_agent_context,
+        raising=False,
+    )
 
     engine = RewardEngine(config)
     reward = engine.compute(world, terminated={})["alice"]

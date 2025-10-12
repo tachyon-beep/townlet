@@ -133,7 +133,7 @@ class WorldState:
         """Record a domain event for downstream consumers."""
 
         return self._events.emit(
-            type=event_type,
+            event_type=event_type,
             payload=dict(payload or {}),
             tick=self.tick if tick is None else tick,
             ts=ts,

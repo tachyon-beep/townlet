@@ -31,6 +31,11 @@ Latest context snapshot so we can resume quickly after memory compaction.
   regression `tests/test_telemetry_stub_compat.py` covers stub/stdout parity for
   console snapshots, snapshot save/load, and demo seeding. Remaining Stage 6
   items are the documentation refresh, ruff/mypy sweep, and release notes.
+- Legacy sweep prep: `legacy_grid_audit.md` captures the remaining hot spots
+  (`world/grid.py`, hooks, observation shims, adapters, telemetry fallbacks) and
+  `legacy_grid_cleanup_plan.md` sequences the remediation into batches. Batch A
+  started with the observation context hardening (`agent_context` now requires a
+  DTO-capable adapter and fails loudly when employment hooks are missing).
 
 ## Outstanding Work (DTO Rollout)
 1. Run the remaining Stage 6 close-out tasks (`ruff`, `mypy`) and capture results in the Stage 6 audit log (full `pytest` is already green).

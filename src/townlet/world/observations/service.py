@@ -13,7 +13,7 @@ from townlet.world.observations.interfaces import (
 
 
 class WorldObservationService(ObservationServiceProtocol):
-    """Observation service backed by the canonical ObservationBuilder."""
+    """Observation service backed by the standard observation pipeline."""
 
     def __init__(self, *, config: Any) -> None:
         self._builder = observations.create_observation_builder(config=config)

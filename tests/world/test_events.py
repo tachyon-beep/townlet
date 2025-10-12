@@ -18,7 +18,7 @@ def test_dispatcher_buffers_and_drains_events() -> None:
     seen: list[Event] = []
     dispatcher.register(seen.append)
 
-    created = dispatcher.emit(type="system.tick", payload={"tick": 10}, tick=10, ts=2.0)
+    created = dispatcher.emit(event_type="system.tick", payload={"tick": 10}, tick=10, ts=2.0)
 
     assert len(dispatcher) == 1
     assert seen == [created]
@@ -30,7 +30,7 @@ def test_dispatcher_buffers_and_drains_events() -> None:
 
 def test_dispatcher_clear_discards_events() -> None:
     dispatcher = EventDispatcher()
-    dispatcher.emit(type="console.result", payload={"result": "ok"})
+    dispatcher.emit(event_type="console.result", payload={"result": "ok"})
 
     dispatcher.clear()
     assert dispatcher.drain() == []

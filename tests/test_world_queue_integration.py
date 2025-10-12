@@ -10,7 +10,6 @@ from townlet.world.grid import AgentSnapshot, WorldState
 
 def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    config.employment.enforce_job_loop = False
     world = ModularTestWorld.from_config(config)
     world.register_object(object_id="shower", object_type="shower")
     world.register_object(object_id="fridge_1", object_type="fridge")
@@ -243,13 +242,16 @@ def test_wage_income_applied_on_shift() -> None:
     alice = world.agents["alice"]
     alice.position = (0, 0)
     initial_wallet = alice.wallet
-    world.tick = 200
+    job_id = next(iter(world.config.jobs.keys()))
+    start_tick = world.config.jobs[job_id].start_tick
+    end_tick = world.config.jobs[job_id].end_tick or start_tick
+    world.tick = int(start_tick)
     world.resolve_affordances(current_tick=world.tick)
     assert alice.on_shift is True
     assert alice.wallet > initial_wallet
 
     # Advance beyond shift end
-    world.tick = 401
+    world.tick = int(end_tick + 1)
     world.resolve_affordances(current_tick=world.tick)
     assert alice.on_shift is False
 

@@ -206,7 +206,7 @@ class WorldState:
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
     _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
     _event_dispatcher: EventDispatcher = field(init=False, repr=False)
-    _compat_rng_manager: RngStreamManager | None = field(init=False, default=None, repr=False)
+    _system_rng_manager: RngStreamManager | None = field(init=False, default=None, repr=False)
 
     @classmethod
     def from_config(
@@ -291,7 +291,7 @@ class WorldState:
         self._rng_state = self._rng.getstate()
         if self._rng_seed is None:
             self._rng_seed = _derive_seed_from_state(self._rng_state)
-        self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
+        self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
         self._console = ConsoleService(
             world=self,
             history_limit=_CONSOLE_HISTORY_LIMIT,
@@ -509,7 +509,7 @@ class WorldState:
         self._rng_state = rng.getstate()
         if self._rng_seed is None:
             self._rng_seed = _derive_seed_from_state(self._rng_state)
-        self._compat_rng_manager = RngStreamManager.from_seed(self._rng_seed)
+        self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
 
     @property
     def rng(self) -> random.Random:
@@ -854,9 +854,10 @@ class WorldState:
         affordance_system.process_actions(self, actions, tick=self.tick)
 
     def resolve_affordances(self, current_tick: int) -> None:
-        """Resolve queued affordances and hooks."""
+        """Resolve queued affordances and hooks via modular systems."""
+
         self.tick = current_tick
-        ctx = self._legacy_system_context()
+        ctx = self._system_context()
         queue_system.step(ctx)
         affordance_system.step(ctx)
         employment_system.step(ctx)
@@ -869,13 +870,13 @@ class WorldState:
 
         return self._affordance_service.running_snapshot()
 
-    def _legacy_system_context(self) -> SystemContext:
-        if self._compat_rng_manager is None:
+    def _system_context(self) -> SystemContext:
+        if self._system_rng_manager is None:
             seed = getattr(self, "_rng_seed", None)
-            self._compat_rng_manager = RngStreamManager.from_seed(seed)
+            self._system_rng_manager = RngStreamManager.from_seed(seed)
         return SystemContext(
             state=self,
-            rng=self._compat_rng_manager,
+            rng=self._system_rng_manager,
             events=self._event_dispatcher,
         )
 
@@ -1434,12 +1435,9 @@ class WorldState:
         coordinator = getattr(self, "employment", None)
         if coordinator is not None:
             try:
-                coordinator._apply_job_state_legacy(self)  # type: ignore[attr-defined]
+                coordinator.apply_job_state(self)
             except AttributeError:
                 pass
-
-    def _apply_job_state_legacy(self) -> None:
-        self.employment._apply_job_state_legacy(self)
 
     def _apply_job_state_enforced(self) -> None:
         self.employment._apply_job_state_enforced(self)
