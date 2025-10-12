@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Mapping
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from townlet.world.affordances.core import AffordanceEnvironment, HookPayload
 from townlet.world.agents.snapshot import AgentSnapshot

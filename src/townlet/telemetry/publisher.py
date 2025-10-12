@@ -810,6 +810,8 @@ class TelemetryPublisher:
         if duration is not None:
             summary_payload.setdefault("duration_ms", duration)
         failure_data["summary"] = summary_payload
+        queue_length = summary_payload.get("queue_length")
+        dropped_messages = summary_payload.get("dropped_messages")
         self._latest_health_status = failure_data
         event = {
             "kind": "loop_failure",

@@ -20,13 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
+from townlet.console.service import ConsoleService
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
 )
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.console.service import ConsoleService
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
 from townlet.policy.runner import PolicyRuntime
 from townlet.ports.world import WorldRuntime

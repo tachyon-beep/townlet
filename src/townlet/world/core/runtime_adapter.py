@@ -146,7 +146,7 @@ class WorldRuntimeAdapter(WorldRuntimeAdapterProtocol):
 
 
 def ensure_world_adapter(
-    world: WorldRuntimeAdapterProtocol | "WorldState" | "WorldContext",
+    world: WorldRuntimeAdapterProtocol | WorldState | WorldContext,
 ) -> WorldRuntimeAdapterProtocol:
     """Return a runtime adapter, wrapping ``world`` when necessary."""
 

@@ -8,9 +8,9 @@ import ssl
 import sys
 from collections import deque
 from contextlib import AbstractContextManager
-from types import TracebackType
-from typing import BinaryIO, IO, Optional, TypeVar, Literal
 from pathlib import Path
+from types import TracebackType
+from typing import IO, BinaryIO, Literal, TypeVar
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
