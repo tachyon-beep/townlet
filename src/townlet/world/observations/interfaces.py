@@ -9,10 +9,17 @@ migrates out of ``WorldState``.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, runtime_checkable
 
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.queue.manager import QueueManager
+
+if TYPE_CHECKING:
+    from townlet.world.core.context import WorldContext
+    from townlet.world.grid import WorldState
+else:  # pragma: no cover - runtime fallback to avoid import cycles
+    WorldContext = Any  # type: ignore[assignment]
+    WorldState = Any  # type: ignore[assignment]
 
 
 @runtime_checkable
@@ -130,8 +137,16 @@ class ObservationServiceProtocol(Protocol):
         ...
 
 
+AdapterSource: TypeAlias = (
+    WorldRuntimeAdapterProtocol
+    | WorldState
+    | WorldContext
+)
+
+
 __all__ = [
     "EmbeddingAllocatorProtocol",
     "ObservationServiceProtocol",
+    "AdapterSource",
     "WorldRuntimeAdapterProtocol",
 ]

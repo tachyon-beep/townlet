@@ -6,7 +6,7 @@ import hashlib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from math import cos, sin, tau
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -19,7 +19,7 @@ from townlet.world.observations.cache import (
 from townlet.world.observations.context import (
     agent_context as observation_agent_context,
 )
-from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
+from townlet.world.observations.interfaces import AdapterSource, WorldRuntimeAdapterProtocol
 from townlet.world.observations.views import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
 )
@@ -36,6 +36,20 @@ def _mapping_or_empty(value: object) -> Mapping[str, object]:
 
 def _string_or_empty(value: object) -> str:
     return value if isinstance(value, str) else ""
+
+
+def _float_or_default(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _bool_flag(value: object) -> float:
+    return 1.0 if bool(value) else 0.0
+
+
+ObservationPayload = dict[str, np.ndarray | dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -210,24 +224,25 @@ class ObservationBuilder:
 
     def build_batch(
         self,
-        world: WorldRuntimeAdapterProtocol | object,
+        world: AdapterSource,
         terminated: Mapping[str, bool],
-    ) -> dict[str, dict[str, np.ndarray]]:
+    ) -> dict[str, ObservationPayload]:
         """Return a mapping from agent_id to observation payloads."""
         adapter = ensure_world_adapter(world)
-        observations: dict[str, dict[str, np.ndarray]] = {}
+        observations: dict[str, ObservationPayload] = {}
         snapshots = dict(adapter.agent_snapshots_view())
-        pending_resets = adapter.consume_ctx_reset_requests()
+        pending_resets = set(adapter.consume_ctx_reset_requests())
 
         cache = self._build_local_cache(adapter, snapshots)
         for agent_id, snapshot in snapshots.items():
             slot = adapter.embedding_allocator.allocate(agent_id, adapter.tick)
             obs = self._build_single(adapter, snapshot, slot, cache)
+            features = cast(np.ndarray, obs["features"])
             if agent_id in pending_resets:
-                obs["features"][self._feature_index["ctx_reset_flag"]] = 1.0
+                features[self._feature_index["ctx_reset_flag"]] = 1.0
                 pending_resets.discard(agent_id)
             if terminated.get(agent_id, False):
-                obs["features"][self._feature_index["ctx_reset_flag"]] = 1.0
+                features[self._feature_index["ctx_reset_flag"]] = 1.0
                 adapter.embedding_allocator.release(agent_id, adapter.tick)
             observations[agent_id] = obs
         return observations
@@ -252,26 +267,32 @@ class ObservationBuilder:
         world_tick: int,
     ) -> None:
         needs = _mapping_or_empty(context.get("needs"))
-        features[self._feature_index["need_hunger"]] = float(needs.get("hunger", 0.0))
-        features[self._feature_index["need_hygiene"]] = float(needs.get("hygiene", 0.0))
-        features[self._feature_index["need_energy"]] = float(needs.get("energy", 0.0))
-        features[self._feature_index["wallet"]] = float(context.get("wallet", 0.0))
-        features[self._feature_index["lateness_counter"]] = float(
+        features[self._feature_index["need_hunger"]] = _float_or_default(
+            needs.get("hunger", 0.0)
+        )
+        features[self._feature_index["need_hygiene"]] = _float_or_default(
+            needs.get("hygiene", 0.0)
+        )
+        features[self._feature_index["need_energy"]] = _float_or_default(
+            needs.get("energy", 0.0)
+        )
+        features[self._feature_index["wallet"]] = _float_or_default(
+            context.get("wallet", 0.0)
+        )
+        features[self._feature_index["lateness_counter"]] = _float_or_default(
             context.get("lateness_counter", 0.0)
         )
-        features[self._feature_index["on_shift"]] = (
-            1.0 if context.get("on_shift") else 0.0
-        )
+        features[self._feature_index["on_shift"]] = _bool_flag(context.get("on_shift"))
 
         ticks_per_day = self.hybrid_cfg.time_ticks_per_day
         phase = (world_tick % ticks_per_day) / ticks_per_day
         features[self._feature_index["time_sin"]] = sin(tau * phase)
         features[self._feature_index["time_cos"]] = cos(tau * phase)
 
-        features[self._feature_index["attendance_ratio"]] = float(
+        features[self._feature_index["attendance_ratio"]] = _float_or_default(
             context.get("attendance_ratio", 0.0)
         )
-        features[self._feature_index["wages_withheld"]] = float(
+        features[self._feature_index["wages_withheld"]] = _float_or_default(
             context.get("wages_withheld", 0.0)
         )
 
@@ -282,10 +303,10 @@ class ObservationBuilder:
         else:
             value = 0.0
         features[self._feature_index["last_action_id_hash"]] = float(value)
-        features[self._feature_index["last_action_success"]] = (
-            1.0 if context.get("last_action_success") else 0.0
+        features[self._feature_index["last_action_success"]] = _bool_flag(
+            context.get("last_action_success")
         )
-        features[self._feature_index["last_action_duration"]] = float(
+        features[self._feature_index["last_action_duration"]] = _float_or_default(
             context.get("last_action_duration", 0.0)
         )
 
@@ -692,7 +713,7 @@ class ObservationBuilder:
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
-    ) -> dict[str, np.ndarray | dict[str, object]]:
+    ) -> ObservationPayload:
         if self.variant == "hybrid":
             return self._build_hybrid(world, snapshot, slot, cache)
         if self.variant == "full":
@@ -707,7 +728,7 @@ class ObservationBuilder:
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
-    ) -> dict[str, np.ndarray | dict[str, object]]:
+    ) -> ObservationPayload:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         map_tensor, local_summary = self._map_with_summary(
@@ -744,7 +765,7 @@ class ObservationBuilder:
         snapshot: AgentSnapshot,
         slot: int,
         cache: _LocalCache,
-    ) -> dict[str, np.ndarray | dict[str, object]]:
+    ) -> ObservationPayload:
         window = self.hybrid_cfg.local_window
         radius = window // 2
         map_tensor, local_summary = self._map_with_summary(
@@ -838,24 +859,28 @@ class ObservationBuilder:
         slot_values, slot_context = self._collect_social_slots(world, snapshot)
         offset = 0
         for slot in slot_values:
-            embed_vector = slot["embedding"]
+            embed_vector = np.asarray(
+                slot.get("embedding", ()), dtype=np.float32
+            )
+            if embed_vector.shape[0] != self.social_cfg.embed_dim:
+                embed_vector = np.resize(embed_vector, self.social_cfg.embed_dim)
             vector[offset : offset + self.social_cfg.embed_dim] = embed_vector
             offset += self.social_cfg.embed_dim
-            vector[offset] = float(slot.get("trust", 0.0))
+            vector[offset] = _float_or_default(slot.get("trust", 0.0))
             offset += 1
-            vector[offset] = float(slot.get("familiarity", 0.0))
+            vector[offset] = _float_or_default(slot.get("familiarity", 0.0))
             offset += 1
-            vector[offset] = float(slot.get("rivalry", 0.0))
+            vector[offset] = _float_or_default(slot.get("rivalry", 0.0))
             offset += 1
 
         if self._social_aggregate_names:
             trust_values = [
-                float(slot.get("trust", 0.0))
+                _float_or_default(slot.get("trust", 0.0))
                 for slot in slot_values
                 if bool(slot.get("valid"))
             ]
             rivalry_values = [
-                float(slot.get("rivalry", 0.0))
+                _float_or_default(slot.get("rivalry", 0.0))
                 for slot in slot_values
                 if bool(slot.get("valid"))
             ]
@@ -892,12 +917,13 @@ class ObservationBuilder:
         context["relation_source"] = relation_source
         friend_candidates = sorted(
             relations,
-            key=lambda entry: entry["trust"] + entry["familiarity"],
+            key=lambda entry: _float_or_default(entry.get("trust", 0.0))
+            + _float_or_default(entry.get("familiarity", 0.0)),
             reverse=True,
         )
         rival_candidates = sorted(
             relations,
-            key=lambda entry: entry["rivalry"],
+            key=lambda entry: _float_or_default(entry.get("rivalry", 0.0)),
             reverse=True,
         )
 
@@ -935,14 +961,12 @@ class ObservationBuilder:
 
         entries: list[dict[str, object]] = []
         for other_id, metrics in relationships.items():
-            if not isinstance(metrics, dict):
-                continue
             entries.append(
                 {
                     "other_id": str(other_id),
-                    "trust": float(metrics.get("trust", 0.0)),
-                    "familiarity": float(metrics.get("familiarity", 0.0)),
-                    "rivalry": float(metrics.get("rivalry", 0.0)),
+                    "trust": _float_or_default(metrics.get("trust", 0.0)),
+                    "familiarity": _float_or_default(metrics.get("familiarity", 0.0)),
+                    "rivalry": _float_or_default(metrics.get("rivalry", 0.0)),
                 }
             )
 
@@ -998,9 +1022,9 @@ class ObservationBuilder:
         embedding = self._embed_agent_id(other_id)
         return {
             "embedding": embedding,
-            "trust": float(entry.get("trust", 0.0)),
-            "familiarity": float(entry.get("familiarity", 0.0)),
-            "rivalry": float(entry.get("rivalry", 0.0)),
+            "trust": _float_or_default(entry.get("trust", 0.0)),
+            "familiarity": _float_or_default(entry.get("familiarity", 0.0)),
+            "rivalry": _float_or_default(entry.get("rivalry", 0.0)),
             "valid": True,
         }
 

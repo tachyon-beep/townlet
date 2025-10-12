@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from townlet.world.core.runtime_adapter import ensure_world_adapter
-from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
+from townlet.world.observations.interfaces import AdapterSource
 
 
 def local_view(
-    world: WorldRuntimeAdapterProtocol | object,
+    world: AdapterSource,
     agent_id: str,
     radius: int,
     *,
@@ -106,7 +107,7 @@ def local_view(
 
 
 def find_nearest_object_of_type(
-    world: WorldRuntimeAdapterProtocol | object,
+    world: AdapterSource,
     object_type: str,
     origin: tuple[int, int],
 ) -> tuple[int, int] | None:
@@ -114,26 +115,32 @@ def find_nearest_object_of_type(
 
     adapter = ensure_world_adapter(world)
 
-    try:
-        snapshot = adapter.objects_snapshot()
-    except AttributeError:  # pragma: no cover - defensive fallback
-        snapshot = {}
-
-    if not snapshot:
-        objects = getattr(adapter, "objects", {})
-        snapshot = {
-            object_id: {
-                "object_type": getattr(obj, "object_type", None),
-                "position": getattr(obj, "position", None),
-            }
-            for object_id, obj in objects.items()
-        }
-
-    targets = [
-        payload.get("position")
-        for payload in snapshot.values()
-        if payload.get("object_type") == object_type and payload.get("position") is not None
-    ]
+    snapshot = adapter.objects_snapshot()
+    targets: list[tuple[int, int]] = []
+    if snapshot:
+        for payload in snapshot.values():
+            if payload.get("object_type") != object_type:
+                continue
+            position = payload.get("position")
+            if not isinstance(position, tuple) or len(position) != 2:
+                continue
+            x, y = position
+            if not isinstance(x, int) or not isinstance(y, int):
+                continue
+            targets.append((x, y))
+    if not targets:
+        legacy_objects = getattr(adapter, "objects", None)
+        if isinstance(legacy_objects, Mapping):
+            for obj in legacy_objects.values():
+                if getattr(obj, "object_type", None) != object_type:
+                    continue
+                position_value = getattr(obj, "position", None)
+                if (
+                    isinstance(position_value, tuple)
+                    and len(position_value) == 2
+                    and all(isinstance(coord, int) for coord in position_value)
+                ):
+                    targets.append((position_value[0], position_value[1]))
     if not targets:
         return None
     ox, oy = origin

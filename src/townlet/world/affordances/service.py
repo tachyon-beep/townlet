@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, cast
 
 from .core import (
     AffordanceEnvironment,
@@ -17,6 +17,9 @@ from .core import (
     build_hook_payload,
 )
 from .runtime import AffordanceCoordinator
+
+
+HookHandler = Callable[[HookPayload], object | None]
 
 
 @dataclass
@@ -31,14 +34,17 @@ class AffordanceRuntimeService:
     # ------------------------------------------------------------------
     # Hook management
     # ------------------------------------------------------------------
-    def register_hook(self, name: str, handler) -> None:
+    def register_hook(self, name: str, handler: HookHandler) -> None:
         self.hook_registry.register(name, handler)
 
     def clear_hooks(self, name: str | None = None) -> None:
         self.hook_registry.clear(name)
 
-    def handlers_for(self, hook_name: str) -> tuple:
-        return self.hook_registry.handlers_for(hook_name)
+    def handlers_for(self, hook_name: str) -> tuple[HookHandler, ...]:
+        handlers: Sequence[HookHandler] = cast(
+            Sequence[HookHandler], self.hook_registry.handlers_for(hook_name)
+        )
+        return tuple(handlers)
 
     # ------------------------------------------------------------------
     # Runtime accessors
@@ -92,18 +98,18 @@ class AffordanceRuntimeService:
     # ------------------------------------------------------------------
     def dispatch_hooks(
         self,
-        stage: str,
+        stage: Literal["before", "after", "fail"],
         hook_names: Iterable[str],
         *,
         agent_id: str,
         object_id: str,
-        spec,
+        spec: Any,
         extra: Mapping[str, Any] | None = None,
         debug_enabled: bool = False,
     ) -> bool:
         continue_execution = True
         for hook_name in hook_names:
-            handlers = self.hook_registry.handlers_for(hook_name)
+            handlers = self.handlers_for(hook_name)
             if not handlers:
                 continue
             hook_timer = None

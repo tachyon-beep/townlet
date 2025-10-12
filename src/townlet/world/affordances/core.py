@@ -6,7 +6,7 @@ import logging
 import time
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, cast
 
 from townlet.config import SimulationConfig
 from townlet.world.agents.interfaces import (
@@ -21,7 +21,7 @@ logger = logging.getLogger("townlet.world.grid")
 
 
 if TYPE_CHECKING:  # pragma: no cover - type hint guard
-    from townlet.world.grid import AgentSnapshot
+    from townlet.world.agents.snapshot import AgentSnapshot
 
 
 @dataclass(slots=True)
@@ -83,14 +83,32 @@ class HookPayload(TypedDict, total=False):
     tick: int
     agent_id: str
     object_id: str
-    affordance_id: str
+    affordance_id: str | None
     environment: AffordanceEnvironment
     world: Any
     spec: Any
     effects: dict[str, float]
-    reason: str
-    condition: str
+    reason: str | None
+    condition: str | None
     context: dict[str, object]
+    cancel: bool
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    """Best-effort conversion of ``value`` to ``int``."""
+
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
 
 
 def snapshot_running_affordance(
@@ -119,7 +137,7 @@ def build_hook_payload(
     tick: int,
     agent_id: str,
     object_id: str,
-    affordance_id: str,
+    affordance_id: str | None,
     environment: AffordanceEnvironment,
     spec: Any,
     extra: Mapping[str, object] | None = None,
@@ -139,8 +157,28 @@ def build_hook_payload(
     if environment.world_ref is not None:
         payload["world"] = environment.world_ref
     if extra:
-        payload.update(extra)
+        _apply_hook_extra(payload, extra)
     return payload
+
+
+def _apply_hook_extra(payload: HookPayload, extra: Mapping[str, object]) -> None:
+    """Merge validated hook extras into the payload."""
+
+    for key, value in extra.items():
+        if key == "effects" and isinstance(value, Mapping):
+            payload["effects"] = {
+                str(effect): float(amount) for effect, amount in value.items()
+            }
+        elif key == "context" and isinstance(value, Mapping):
+            payload["context"] = {str(k): v for k, v in value.items()}
+        elif key == "reason":
+            payload["reason"] = None if value is None else str(value)
+        elif key == "condition":
+            payload["condition"] = None if value is None else str(value)
+        elif key == "cancel":
+            payload["cancel"] = bool(value)
+        else:
+            logger.debug("Ignoring unsupported hook extra key '%s'", key)
 
 
 @dataclass(slots=True)
@@ -180,14 +218,14 @@ def apply_affordance_outcome(
     if outcome.metadata:
         history_entry["metadata"] = dict(outcome.metadata)
 
-    stored = snapshot.inventory.setdefault("_affordance_outcomes", [])
-    if not isinstance(stored, list):
-        stored = []
-        snapshot.inventory["_affordance_outcomes"] = stored
-    outcome_log = stored
+    inventory = cast("MutableMapping[str, object]", snapshot.inventory)
+    history = inventory.get("_affordance_outcomes")
+    if isinstance(history, list):
+        outcome_log = cast("list[dict[str, object]]", history)
+    else:
+        outcome_log = []
+        inventory["_affordance_outcomes"] = outcome_log
     outcome_log.append(history_entry)
-    if len(outcome_log) > 10:
-        del outcome_log[0]
     if len(outcome_log) > 10:
         del outcome_log[0]
 
@@ -239,7 +277,7 @@ class DefaultAffordanceRuntime:
 
     @property
     def running_affordances(self) -> MutableMapping[str, Any]:
-        return self._ctx.running_affordances
+        return self._ctx.environment.running_affordances
 
     @property
     def instrumentation_level(self) -> str:
@@ -567,7 +605,7 @@ class DefaultAffordanceRuntime:
             affordance_id = str(entry.get("affordance_id", ""))
             if not agent_id or not affordance_id:
                 continue
-            duration = int(entry.get("duration_remaining", 0))
+            duration = _coerce_int(entry.get("duration_remaining"), 0)
             effects_payload = entry.get("effects", {})
             if isinstance(effects_payload, Mapping):
                 effects = {str(k): float(v) for k, v in effects_payload.items()}
@@ -589,7 +627,7 @@ class DefaultAffordanceRuntime:
 
 
 def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int) -> None:
-    ctx = runtime._ctx  # type: ignore[attr-defined]
+    ctx = runtime._ctx
     queue_manager = ctx.queue_manager
     objects = ctx.objects
     record_queue_conflict = ctx.record_queue_conflict
@@ -689,46 +727,3 @@ def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int)
         )
 
     ctx.apply_need_decay()
-    def clear(self) -> None:
-        self.running_affordances.clear()
-
-    def export_state(self) -> dict[str, object]:
-        state: dict[str, object] = {}
-        for object_id, running in self.running_affordances.items():
-            state[object_id] = {
-                "agent_id": running.agent_id,
-                "affordance_id": running.affordance_id,
-                "duration_remaining": int(running.duration_remaining),
-                "effects": {key: float(value) for key, value in running.effects.items()},
-            }
-        return state
-
-    def import_state(self, payload: Mapping[str, Mapping[str, object]]) -> None:
-        ctx = self._ctx
-        objects = ctx.objects
-        queue_manager = ctx.queue_manager
-        self.clear()
-        for object_id, entry in payload.items():
-            agent_id = str(entry.get("agent_id", ""))
-            affordance_id = str(entry.get("affordance_id", ""))
-            if not agent_id or not affordance_id:
-                continue
-            duration = int(entry.get("duration_remaining", 0))
-            effects_payload = entry.get("effects", {})
-            if isinstance(effects_payload, Mapping):
-                effects = {str(k): float(v) for k, v in effects_payload.items()}
-            else:
-                effects = {}
-            running = self._running_cls(
-                agent_id=agent_id,
-                affordance_id=affordance_id,
-                duration_remaining=max(0, duration),
-                effects=effects,
-            )
-            self.running_affordances[object_id] = running
-            obj = objects.get(object_id)
-            if obj is not None:
-                obj.occupied_by = agent_id
-            # Ensure queue manager active reservation aligns with imported state.
-            if queue_manager.active_agent(object_id) != agent_id and agent_id:
-                ctx.active_reservations[object_id] = agent_id

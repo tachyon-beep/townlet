@@ -98,3 +98,18 @@ Latest context snapshot so we can resume quickly after memory compaction.
 - Stage 6 lint/type close-out in progress: focus shifting to remaining
   legacy modules (employment, affordances, economy) before running
   the final `ruff`/`mypy`/docs sweep.
+- Affordance/economy batch follow-up (2025-10-12 PM):
+  * Normalised hook payload handling (`HookPayload`) so extras are validated and
+    typed, and removed the legacy `_affordance_outcomes` list/setdefault clash by
+    funnelling history updates through a casted inventory wrapper (with bounded
+    history trimming). Duplicated nested methods left in `advance_running_affordances`
+    were stripped.
+  * Economy service now tracks basket-cost metrics centrally (`PriceSpikeEvent`
+    dataclass + `_agent_basket_costs` cache) and exposes typed accessors for the
+    context/telemetry fallbacks. DTO job snapshots pull cost data from the
+    service, and telemetry fallbacks rely on the runtime adapter rather than
+    mutating agent inventories.
+  * `AffordanceRuntimeService` hook registration/dispatch is fully typed; tests
+    (`tests/test_affordance_hooks.py`, `tests/test_affordance_telemetry.py`,
+    basket/console smoke) re-run clean. Outstanding mypy debt now concentrates on
+    the observation builders and legacy `observe.py` shims.

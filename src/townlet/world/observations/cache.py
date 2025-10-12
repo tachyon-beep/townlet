@@ -10,11 +10,11 @@ from collections.abc import Mapping
 
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.core.runtime_adapter import ensure_world_adapter
-from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
+from townlet.world.observations.interfaces import AdapterSource
 
 
 def build_local_cache(
-    world: WorldRuntimeAdapterProtocol | object,
+    world: AdapterSource,
     snapshots: Mapping[str, AgentSnapshot],
 ) -> tuple[
     dict[tuple[int, int], list[str]],
