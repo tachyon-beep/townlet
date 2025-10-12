@@ -18,7 +18,7 @@ from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.observations.context import (
     agent_context as observation_agent_context,
 )
-from townlet.world.rng import RngStreamManager
+from townlet.world.rng import RngStreamManager, seed_from_state
 from townlet.world.systems import default_systems
 from townlet.world.systems.affordances import process_actions
 from townlet.world.systems.base import SystemContext, SystemStep
@@ -75,7 +75,7 @@ class WorldContext:
         if self.rng_manager is None:
             seed = getattr(self.state, "rng_seed", None)
             if seed is None:
-                seed = _derive_seed_from_state(self.state.get_rng_state())
+                seed = seed_from_state(self.state.get_rng_state())
             self.rng_manager = RngStreamManager.from_seed(seed)
 
     # ------------------------------------------------------------------
@@ -127,7 +127,7 @@ class WorldContext:
         self._pending_actions.clear()
         seed_value = getattr(self.state, "rng_seed", None)
         if seed_value is None:
-            seed_value = _derive_seed_from_state(self.state.get_rng_state())
+            seed_value = seed_from_state(self.state.get_rng_state())
         self.rng_manager = RngStreamManager.from_seed(seed_value)
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
@@ -173,16 +173,18 @@ class WorldContext:
             for agent_id in raw_batch.keys()
         }
 
-        target_ids = set(agent_ids) if agent_ids is not None else raw_batch.keys()
-        filtered_batch = {
-            agent_id: raw_batch[agent_id]
-            for agent_id in target_ids
-            if agent_id in raw_batch
-        }
-        filtered_contexts = {
-            agent_id: contexts.get(agent_id, {})
-            for agent_id in filtered_batch.keys()
-        }
+        if agent_ids is None:
+            ordered_targets = list(raw_batch.keys())
+        else:
+            ordered_targets: list[str] = []
+            seen: set[str] = set()
+            for agent in agent_ids:
+                if agent in raw_batch and agent not in seen:
+                    ordered_targets.append(agent)
+                    seen.add(agent)
+
+        filtered_batch = {agent_id: raw_batch[agent_id] for agent_id in ordered_targets}
+        filtered_contexts = {agent_id: contexts.get(agent_id, {}) for agent_id in ordered_targets}
 
         filtered_actions = {}
         if actions:

@@ -70,7 +70,7 @@ from townlet.world.preconditions import (
 )
 from townlet.world.queue import QueueConflictTracker, QueueManager
 from townlet.world.relationships import RelationshipTie
-from townlet.world.rng import RngStreamManager
+from townlet.world.rng import RngStreamManager, seed_from_state
 from townlet.world.spatial import WorldSpatialIndex
 from townlet.world.systems import affordances as affordance_system
 from townlet.world.systems import economy as economy_system
@@ -81,11 +81,6 @@ from townlet.world.systems import relationships as relationship_system
 from townlet.world.systems.base import SystemContext
 
 logger = logging.getLogger(__name__)
-
-def _derive_seed_from_state(state: tuple[Any, ...]) -> int:
-    payload = pickle.dumps(state)
-    digest = hashlib.sha256(payload).digest()
-    return int.from_bytes(digest[:8], "big", signed=False)
 
 _CONSOLE_HISTORY_LIMIT = 512
 _CONSOLE_RESULT_BUFFER_LIMIT = 256
@@ -296,7 +291,7 @@ class WorldState:
             self._rng = random.Random()
         self._rng_state = self._rng.getstate()
         if self._rng_seed is None:
-            self._rng_seed = _derive_seed_from_state(self._rng_state)
+            self._rng_seed = seed_from_state(self._rng_state)
         self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
         self._queue_conflicts = QueueConflictTracker(
             world=self,
@@ -494,7 +489,7 @@ class WorldState:
         self._rng = rng
         self._rng_state = rng.getstate()
         if self._rng_seed is None:
-            self._rng_seed = _derive_seed_from_state(self._rng_state)
+            self._rng_seed = seed_from_state(self._rng_state)
         self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
 
     def attach_console_service(self, console: ConsoleService) -> None:

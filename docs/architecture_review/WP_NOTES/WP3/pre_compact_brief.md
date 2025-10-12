@@ -119,3 +119,6 @@ Latest context snapshot so we can resume quickly after memory compaction.
   `running_snapshot` API. Targeted tests (`pytest tests/test_world_context.py -q`)
   and mypy on `world/core/context.py` are green, narrowing the remaining debt to
   dashboard/grid legacy surfaces.
+- RNG seed derivation hardened: replaced duplicated pickle-based helpers with
+  `RngStreamManager.seed_from_state`, which serialises RNG state via a stable
+  repr-based normaliser to keep seeds deterministic across Python versions.

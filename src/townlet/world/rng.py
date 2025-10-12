@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import pickle
 import random
 from dataclasses import dataclass, field
+from typing import Any
 
 
 def make(seed: int | None = None) -> random.Random:
@@ -45,4 +47,20 @@ class RngStreamManager:
         return int.from_bytes(digest[:8], "big", signed=False)
 
 
-__all__ = ["RngStreamManager", "make"]
+def seed_from_state(state: tuple[Any, ...]) -> int:
+    """Derive a deterministic seed from a Python RNG state tuple."""
+
+    def _normalise(obj: Any) -> Any:
+        if isinstance(obj, tuple):
+            return tuple(_normalise(item) for item in obj)
+        if isinstance(obj, list):
+            return tuple(_normalise(item) for item in obj)
+        return obj
+
+    normalised = _normalise(state)
+    payload = repr(normalised).encode("utf-8")
+    digest = hashlib.sha256(payload).digest()
+    return int.from_bytes(digest[:8], "big", signed=False)
+
+
+__all__ = ["RngStreamManager", "make", "seed_from_state"]
