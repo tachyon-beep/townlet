@@ -53,12 +53,15 @@ class ModularTestWorld:
         if context is None:
             raise RuntimeError("WorldState did not initialise WorldContext")
         adapter = create_world(world=state, config=config)
-        lifecycle = adapter.lifecycle_manager
-        perturbations = adapter.perturbation_scheduler
+        # Use new component accessor pattern
+        comp = adapter.components()
+        lifecycle = comp["lifecycle"]
+        perturbations = comp["perturbations"]
+        adapter_context = comp["context"]
         return cls(
             config=config,
             state=state,
-            context=adapter.context,
+            context=adapter_context,
             lifecycle=lifecycle,
             perturbations=perturbations,
             ticks_per_day=_ticks_per_day(config),
@@ -94,7 +97,9 @@ class ModularTestWorld:
     # ------------------------------------------------------------------
     def world_components(self) -> WorldComponents:
         adapter = create_world(world=self.state, config=self.config)
-        context = getattr(adapter, "context", None)
+        # Use new component accessor pattern
+        comp = adapter.components()
+        context = comp.get("context")
         if context is None:
             raise RuntimeError("World adapter missing context")
         observation_service = getattr(context, "observation_service", None)
@@ -106,8 +111,8 @@ class ModularTestWorld:
         self.context = context
         return WorldComponents(
             world=self.state,
-            lifecycle=adapter.lifecycle_manager,
-            perturbations=adapter.perturbation_scheduler,
+            lifecycle=comp["lifecycle"],
+            perturbations=comp["perturbations"],
             observation_service=observation_service,
             world_port=adapter,
             ticks_per_day=self.ticks_per_day,

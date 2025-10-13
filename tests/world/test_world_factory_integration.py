@@ -24,7 +24,9 @@ def test_create_world_instantiates_context_from_config() -> None:
     assert isinstance(snapshot, SnapshotState)
     assert snapshot.tick == 1
     assert isinstance(result.console_results, list)
-    assert world_runtime.lifecycle_manager.config is config
+    # Use new component accessor pattern
+    comp = world_runtime.components()
+    assert comp["lifecycle"].config is config
 
 
 def test_world_context_observe_produces_dto_envelope() -> None:
@@ -36,7 +38,9 @@ def test_world_context_observe_produces_dto_envelope() -> None:
     )
 
     world_runtime.tick(tick=1, policy_actions={})
-    context = world_runtime.context
+    # Use new component accessor pattern
+    comp = world_runtime.components()
+    context = comp["context"]
     envelope = context.observe()
     assert isinstance(envelope, ObservationEnvelope)
     assert envelope.schema_version.startswith("0.")

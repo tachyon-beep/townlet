@@ -36,8 +36,10 @@ def test_create_world_returns_context_adapter(base_config):
     assert isinstance(envelope, ObservationEnvelope)
     assert envelope.tick == 1
     assert isinstance(envelope.global_context, GlobalObservationDTO)
-    assert adapter.lifecycle_manager.config is base_config
-    assert adapter.perturbation_scheduler.config is base_config
+    # Use new component accessor pattern
+    comp = adapter.components()
+    assert comp["lifecycle"].config is base_config
+    assert comp["perturbations"].config is base_config
 
 
 def test_create_world_requires_config_or_world(base_config):
