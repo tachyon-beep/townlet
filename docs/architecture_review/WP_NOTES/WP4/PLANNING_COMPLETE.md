@@ -12,6 +12,10 @@ All planning documents have been created and reviewed:
 3. ✅ **approach.md** — 8-phase implementation plan with decision log
 4. ✅ **strategy_interface.md** — TrainingStrategy protocol and context design
 5. ✅ **dto_design.md** — Complete DTO schemas for all training results
+6. ✅ **ppo_loop_structure.md** — Risk reduction: PPO training loop extraction plan (470 lines)
+7. ✅ **torch_dependency_map.md** — Risk reduction: Torch isolation strategy and dependency mapping
+8. ✅ **dto_validation.md** — Risk reduction: DTO schema completeness validation
+9. ✅ **extraction_strategy.md** — Risk reduction: Final synthesis with test plans
 
 ## Key Decisions Made
 
@@ -41,9 +45,14 @@ All planning documents have been created and reviewed:
 ## Implementation Sequence
 
 ### Phase 0: Analysis & Design ✅ COMPLETE
-- ✅ Code analysis
-- ✅ Strategy interface design
-- ✅ DTO schema design
+- ✅ Code analysis (orchestrator_analysis.md)
+- ✅ Strategy interface design (strategy_interface.md)
+- ✅ DTO schema design (dto_design.md)
+- ✅ Risk reduction research:
+  - ✅ PPO loop structure analysis (ppo_loop_structure.md)
+  - ✅ Torch dependency mapping (torch_dependency_map.md)
+  - ✅ DTO validation (dto_validation.md)
+  - ✅ Extraction strategy & test plans (extraction_strategy.md)
 
 ### Phase 1: Package Structure & DTOs (Next)
 - Create `townlet/policy/training/` package
@@ -157,6 +166,10 @@ Breakdown:
 - approach.md — Implementation phases
 - strategy_interface.md — Protocol design
 - dto_design.md — DTO schemas
+- ppo_loop_structure.md — PPO extraction plan (risk reduction)
+- torch_dependency_map.md — Torch isolation strategy (risk reduction)
+- dto_validation.md — DTO completeness validation (risk reduction)
+- extraction_strategy.md — Final synthesis with test plans (risk reduction)
 
 **Architecture Documents**:
 - `docs/architecture_review/WP_TASKINGS/WP4.md` — Official tasking
