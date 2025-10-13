@@ -1,15 +1,8 @@
-"""Observation builders and utilities."""
+"""Observation encoding (legacy module - functionality moved to world.observations)."""
 
 from __future__ import annotations
 
-from townlet.config import SimulationConfig
+# ObservationBuilder has been retired and replaced with encoder functions
+# in townlet.world.observations.encoders
 
-from .builder import ObservationBuilder
-
-__all__ = ["ObservationBuilder", "create_observation_builder"]
-
-
-def create_observation_builder(*, config: SimulationConfig) -> ObservationBuilder:
-    """Factory returning the standard observation builder implementation."""
-
-    return ObservationBuilder(config=config)
+__all__: list[str] = []
