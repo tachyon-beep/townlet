@@ -1,5 +1,8 @@
 # Console Queue Retirement Plan
 
+**Status**: ✅ COMPLETE (2025-10-13)
+**Execution Log**: See `stage6_recovery_log.md` for detailed execution notes
+
 ## Background
 Console routing is intended to flow through `TelemetryEventDispatcher` events (`console.result`, `console.command`). Stage 6 notes claim the legacy `queue_console_command` path was removed, but the repository still depends on it via the telemetry contract and tests.
 
