@@ -13,11 +13,12 @@ from townlet.console.command import (
     ConsoleCommandResult,
 )
 from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.dto.world import SimulationSnapshot
 from townlet.ports.telemetry import TelemetrySink
 from townlet.ports.world import WorldRuntime
 from townlet.snapshots.state import SnapshotState
 
-ConsoleHandler = Callable[[ConsoleCommandEnvelope], Mapping[str, Any]]
+ConsoleHandler = Callable[[ConsoleCommandEnvelope], Any]
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +97,10 @@ class ConsoleRouter:
     # Default handlers
     # ------------------------------------------------------------------
     def _handle_snapshot(self, command: ConsoleCommandEnvelope) -> Mapping[str, Any]:
+        """Handle snapshot command by returning snapshot as dict."""
         _ = command
-        return self._world.snapshot()
+        snapshot = self._world.snapshot()
+        return snapshot.model_dump()
 
     def _handle_help(self, command: ConsoleCommandEnvelope) -> Mapping[str, Any]:  # pragma: no cover - deterministic
         _ = command
@@ -177,7 +180,10 @@ class ConsoleRouter:
                 message=str(exc),
                 tick=tick,
             )
-        if isinstance(payload, SnapshotState):
+        # Convert snapshot DTOs to dict for console result serialization
+        if isinstance(payload, SimulationSnapshot):
+            payload = payload.model_dump()
+        elif isinstance(payload, SnapshotState):
             payload = payload.as_dict()
         return ConsoleCommandResult.ok(envelope, payload, tick=tick)
 
