@@ -14,18 +14,45 @@ from __future__ import annotations
 from .observations import AgentObservationDTO, ObservationEnvelope, ObservationMetadata
 from .rewards import RewardBreakdown, RewardComponent
 from .telemetry import ConsoleEventDTO, TelemetryEventDTO, TelemetryMetadata
-from .world import AgentSummary, EmploymentSnapshot, QueueSnapshot, WorldSnapshot
+from .world import (
+    AffordanceSnapshot,
+    AgentSummary,
+    EmbeddingSnapshot,
+    EmploymentSnapshot,
+    IdentitySnapshot,
+    LifecycleSnapshot,
+    MigrationSnapshot,
+    PerturbationSnapshot,
+    PromotionSnapshot,
+    QueueSnapshot,
+    SimulationSnapshot,
+    StabilitySnapshot,
+    TelemetrySnapshot,
+    WorldSnapshot,  # Legacy alias
+)
 
 __all__ = [
     # Observations
     "ObservationEnvelope",
     "AgentObservationDTO",
     "ObservationMetadata",
-    # World
-    "WorldSnapshot",
+    # Simulation Snapshot (primary)
+    "SimulationSnapshot",
+    # World components
     "AgentSummary",
     "QueueSnapshot",
     "EmploymentSnapshot",
+    # Subsystem snapshots
+    "LifecycleSnapshot",
+    "PerturbationSnapshot",
+    "AffordanceSnapshot",
+    "EmbeddingSnapshot",
+    "StabilitySnapshot",
+    "PromotionSnapshot",
+    "TelemetrySnapshot",
+    # Metadata
+    "IdentitySnapshot",
+    "MigrationSnapshot",
     # Rewards
     "RewardBreakdown",
     "RewardComponent",
@@ -33,4 +60,6 @@ __all__ = [
     "TelemetryEventDTO",
     "TelemetryMetadata",
     "ConsoleEventDTO",
+    # Legacy (deprecated)
+    "WorldSnapshot",
 ]
