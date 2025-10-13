@@ -7,14 +7,14 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.world.grid import AgentSnapshot
 
 
 def make_compact_world(*, object_channels: list[str] | None = None) -> SimulationLoop:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.features.systems.observations = "compact"
-    config.observations_config.hybrid.include_targets = True
+    config.observations_config.compact.include_targets = True
     if object_channels is not None:
         config.observations_config.compact.object_channels = list(object_channels)
     loop = SimulationLoop(config)
@@ -33,16 +33,16 @@ def make_compact_world(*, object_channels: list[str] | None = None) -> Simulatio
 
 def test_compact_observation_features_only() -> None:
     loop = make_compact_world()
-    builder: ObservationBuilder = ObservationBuilder(loop.config)
+    service = WorldObservationService(config=loop.config)
     world = loop.world
-    obs = builder.build_batch(world, terminated={})["alice"]
+    obs = service.build_batch(world, terminated={})["alice"]
 
     map_tensor = obs["map"]
     features = obs["features"]
     metadata = obs["metadata"]
 
-    window = builder.compact_cfg.map_window
-    channels = builder.compact_map_channels
+    window = service.compact_cfg.map_window
+    channels = service.compact_map_channels
     radius = window // 2
     assert map_tensor.shape == (len(channels), window, window)
     assert metadata["map_shape"] == (len(channels), window, window)
@@ -60,7 +60,7 @@ def test_compact_observation_features_only() -> None:
         "map_window": window,
         "object_channels": [],
         "normalize_counts": True,
-        "include_targets": False,
+        "include_targets": True,
     }
 
     feature_names = metadata["feature_names"]
@@ -110,9 +110,9 @@ def test_compact_observation_features_only() -> None:
 
 def test_compact_object_channels() -> None:
     loop = make_compact_world(object_channels=["stove"])
-    builder: ObservationBuilder = ObservationBuilder(loop.config)
+    service = WorldObservationService(config=loop.config)
     world = loop.world
-    obs = builder.build_batch(world, terminated={})["alice"]
+    obs = service.build_batch(world, terminated={})["alice"]
 
     map_tensor = obs["map"]
     metadata = obs["metadata"]
@@ -122,7 +122,7 @@ def test_compact_object_channels() -> None:
 
     channel_index = {name: idx for idx, name in enumerate(channels)}
     stove_idx = channel_index["object:stove"]
-    radius = builder.compact_cfg.map_window // 2
+    radius = service.compact_cfg.map_window // 2
     stove_x = radius + 2
     stove_y = radius
     assert map_tensor[stove_idx, stove_y, stove_x] == pytest.approx(1.0)

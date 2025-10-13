@@ -6,7 +6,7 @@ import pytest
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 
 
 @pytest.fixture()
@@ -29,7 +29,7 @@ def test_telemetry_publish_uses_adapter(short_loop: SimulationLoop) -> None:
 
 def test_policy_observations_via_adapter(short_loop: SimulationLoop) -> None:
     loop = short_loop
-    builder = ObservationBuilder(loop.config)
-    batch = builder.build_batch(loop.world_adapter, terminated={})
+    service = WorldObservationService(config=loop.config)
+    batch = service.build_batch(loop.world_adapter, terminated={})
     assert isinstance(batch, dict)
     loop.close()

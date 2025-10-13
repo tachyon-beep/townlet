@@ -5,12 +5,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = PROJECT_ROOT / "src" / "townlet"
 
-WHITELIST_PATHS = {
-    (SRC_ROOT / "core" / "sim_loop.py").resolve(),
-    (SRC_ROOT / "factories" / "world_factory.py").resolve(),
-    (SRC_ROOT / "adapters" / "world_default.py").resolve(),
-    (SRC_ROOT / "config" / "observations.py").resolve(),
-}
+# ObservationBuilder has been fully retired - no whitelist needed
+WHITELIST_PATHS: set[Path] = set()
 
 EXCLUDED_DIRS = {
     (SRC_ROOT / "observations").resolve(),

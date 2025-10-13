@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from townlet.config import load_config
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.stability.monitor import StabilityMonitor
 from townlet.telemetry.publisher import TelemetryPublisher
@@ -66,16 +66,16 @@ def test_observation_builder_releases_on_termination() -> None:
         position=(0, 0),
         needs={"hunger": 0.5},
     )
-    builder = ObservationBuilder(config)
+    service = WorldObservationService(config=config)
 
-    obs = builder.build_batch(world, terminated={})
+    obs = service.build_batch(world, terminated={})
     alice_obs = obs["alice"]
     assert alice_obs["metadata"]["embedding_slot"] == 0
     assert alice_obs["features"].ndim == 1
     assert world.embedding_allocator.has_assignment("alice")
 
     world.tick = 3
-    builder.build_batch(world, terminated={"alice": True})
+    service.build_batch(world, terminated={"alice": True})
     assert not world.embedding_allocator.has_assignment("alice")
 
 

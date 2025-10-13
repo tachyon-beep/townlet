@@ -8,7 +8,7 @@ import pytest
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 
 torch = pytest.importorskip("torch")
@@ -39,7 +39,7 @@ def test_dto_ml_smoke_parity() -> None:
     dto_history = []
     reward_history = []
     legacy_batches = []
-    observation_builder = ObservationBuilder(config=config)
+    service = WorldObservationService(config=config)
     try:
         for _ in range(5):
             artifacts = loop.step()
@@ -47,7 +47,7 @@ def test_dto_ml_smoke_parity() -> None:
             dto_history.append(envelope)
             reward_history.append(dict(artifacts.rewards))
             adapter = ensure_world_adapter(loop.world)
-            legacy_batch = observation_builder.build_batch(adapter, {})
+            legacy_batch = service.build_batch(adapter, {})
             legacy_batches.append(legacy_batch)
     finally:
         loop.close()
