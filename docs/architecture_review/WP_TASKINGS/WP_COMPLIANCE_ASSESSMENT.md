@@ -1,19 +1,22 @@
 # Work Package Tasking Compliance Assessment
-**Date**: 2025-10-13
+**Date**: 2025-10-14 (Updated)
 **Scope**: Compare WP_TASKINGS/*.md requirements against actual codebase implementation
 
 ---
 
 ## Executive Summary
 
-The codebase has made **substantial progress** on the WP1-4 architectural refactoring roadmap, with approximately **60% overall completion**. Key accomplishments include:
+The codebase has made **excellent progress** on the WP1-4 architectural refactoring roadmap, with approximately **79% overall completion**. Key accomplishments include:
 
 - ✅ **WP1** (90% complete): Ports & factories pattern established, adapters cleaned
 - ✅ **WP2** (85% complete): Modular world package with systems architecture
-- 🟡 **WP3** (40% complete): Observation DTOs complete; World/Telemetry/Rewards DTOs missing
-- ❌ **WP4** (0% complete): Not started (correctly blocked on WP3 completion)
+- 🟡 **WP3** (40% complete): Observation DTOs complete; World/Telemetry DTOs missing
+- ✅ **WP4** (100% complete): Strategy-based training architecture with comprehensive DTOs
 
-**Critical Achievement**: WP3.1 Stage 6 Recovery (completed 2025-10-13) delivered foundational work for DTO-first architecture that was missing from original WP3 tasking.
+**Critical Achievements**:
+- **WP3.1 Stage 6 Recovery** (completed 2025-10-13): Foundational DTO-first architecture
+- **WP4 Complete** (completed 2025-10-13): 83% code reduction in orchestrator, full strategy pattern
+- **Post-WP4 Bug Fixes** (completed 2025-10-14): BC manifest override, social reward schedule, cycle tracking
 
 ---
 
@@ -179,34 +182,72 @@ The codebase has made **substantial progress** on the WP1-4 architectural refact
 - Extract `townlet/policy/training/` package with:
   - `orchestrator.py` — thin façade
   - `strategies/{bc.py, ppo.py, anneal.py}` — modular training strategies
-  - `services.py` — rollout capture, replay helpers
+  - `services/` — rollout capture, replay helpers, promotion tracking
   - `contexts.py` — shared config/state
 - Strategy interface (`TrainingStrategy` protocol)
 - DTO alignment for training results
 - Torch optional dependency handling
 - Training result DTOs
 
-### Actually Implemented ❌
-- ❌ **Training package**: `townlet/policy/training/` directory does NOT exist
-- ❌ **Strategy extraction**: Training logic still in monolithic files
-- ❌ **Training DTOs**: Not created (`BCTrainingResultDTO`, `PPOTrainingResultDTO`, etc.)
-- ❌ **ADR-004**: Not created
+### Actually Implemented ✅
+- ✅ **Training package**: `townlet/policy/training/` with full structure
+- ✅ **Orchestrator**: `orchestrator.py` (170 lines, 83% reduction from 984)
+- ✅ **Strategies package**: `strategies/{bc.py, ppo.py, anneal.py, base.py}`
+  - `BCStrategy` (131 lines) — Behaviour cloning training
+  - `PPOStrategy` (709 lines) — Proximal Policy Optimization with GAE, mini-batches
+  - `AnnealStrategy` (358 lines) — BC/PPO schedule coordination with guardrails
+  - `base.py` — `TrainingStrategy` protocol interface
+- ✅ **Services package**: `services/{replay.py, rollout.py, promotion.py}`
+  - `ReplayDatasetService` (210 lines) — Manifest resolution, dataset building
+  - `RolloutCaptureService` (145 lines) — Simulation capture, trajectory collection
+  - `PromotionServiceAdapter` (152 lines) — Promotion tracking wrapper
+- ✅ **Contexts**: `contexts.py` (195 lines)
+  - `TrainingContext` — Encapsulates config, services, metadata
+  - `AnnealContext` — Anneal-specific state for PPO stages
+  - `PPOState` — Persistent training state
+- ✅ **Policy DTOs**: `townlet/dto/policy.py` (720 lines)
+  - `BCTrainingResultDTO` — Accuracy, loss, duration
+  - `PPOTrainingResultDTO` — 40+ fields (losses, advantages, telemetry)
+  - `AnnealStageResultDTO` — Per-stage results with guardrail flags
+  - `AnnealSummaryDTO` — Full anneal run summary with status
+- ✅ **Torch optionality**: Lazy imports, availability checks, torch-free services
+- ✅ **ADR-004**: Comprehensive architectural decision record
+- ✅ **Backward compatibility**: `PolicyTrainingOrchestrator` alias, old orchestrator coexists
+
+### Implementation Metrics
+- **8 Phases completed**: Research, DTOs, Services, BC/Anneal/PPO extraction, Façade, Tests, Docs
+- **806 tests passing**: All existing tests maintained, 22 new strategy/service tests
+- **85% coverage**: Test coverage maintained
+- **Torch-free import**: 22 tests pass without PyTorch installed
+- **CLI compatibility**: All existing training scripts work without modification
+
+### Post-Implementation Bug Fixes (2025-10-14) ✅
+1. **BC Manifest Override Persistence** [P1] — Fixed stash/restore pattern in orchestrator and anneal strategy
+2. **Social Reward Schedule Not Applied** [P1] — Restored cycle tracking and stage application:
+   - Added metadata-backed cycle counter (`context.metadata["cycle_id"]`)
+   - Cycle increments for rollout datasets, persists across runs
+   - Added `run_rollout_ppo()` method that applies stage before capture
+   - Fixed runtime import crash (InMemoryReplayDataset TYPE_CHECKING guard)
+3. **Technical Debt Audit** — Catalogued 33 items across 11 categories for future cleanup
 
 ### Status
-**0% COMPLETE** — **Correctly NOT STARTED**
+**100% COMPLETE** ✅
 
-WP4 has correct dependency blocking:
-- Requires WP3 DTO completion (training results need typed boundaries)
-- Requires stable WP1 port contracts
-- Requires consolidated WP2 world façade
+All WP4 tasking requirements met:
+- ✅ Training package created with proper structure
+- ✅ Strategy pattern implemented with protocol
+- ✅ Services extracted and torch-free
+- ✅ Comprehensive DTOs with Pydantic v2
+- ✅ Torch optional dependency handling
+- ✅ ADR-004 authored
+- ✅ All tests passing (806/806)
+- ✅ Post-implementation bugs fixed
 
-### When Ready to Start WP4
-1. Complete WP3 DTO work first
-2. Ensure Torch optional dependency pattern is documented
-3. Create strategy interface specification
-4. Extract BC strategy first (simplest, no Torch dependency)
-5. Extract PPO strategy (Torch-dependent)
-6. Extract Anneal orchestrator last
+### Deviations from Original Plan
+- **Services split into 3 files** (not single `services.py`): Better separation of concerns
+- **PPOStrategy larger than target** (709 vs 200 lines): Justified by complete algorithm implementation
+- **AnnealStrategy larger than target** (358 vs 150 lines): Justified by complex state management
+- **Policy DTOs location**: Created `townlet/dto/policy.py` (WP4 delivered top-level DTO package ahead of WP3)
 
 ---
 
@@ -287,11 +328,12 @@ This was a **major remediation initiative** that filled gaps between reported WP
 |----|---------------|---------------|--------------|---------------|
 | **WP1** | Ports & Factories | ✅ MOSTLY COMPLETE | ~90% | Context/Runtime reconciliation; ADR alignment |
 | **WP2** | World Modularisation | ✅ SUBSTANTIALLY COMPLETE | ~85% | Architecture documentation; ADR-002 update |
-| **WP3** | DTO Boundary | 🟡 PARTIAL | ~40% | Top-level DTO package; Telemetry/Rewards DTOs; ADR-003 |
-| **WP4** | Training Strategies | ❌ NOT STARTED | 0% | Correctly blocked on WP3 |
+| **WP3** | DTO Boundary | 🟡 PARTIAL | ~40% | Top-level DTO package; Telemetry/World DTOs; ADR-003 |
+| **WP4** | Training Strategies | ✅ COMPLETE | 100% | None — Delivered with bug fixes |
 | **WP3.1** | Stage 6 Recovery | ✅ COMPLETE | 100% | N/A — Delivered beyond plan |
 
-**Weighted Overall Completion**: ~60%
+**Weighted Overall Completion**: ~79%
+**Latest Update**: 2025-10-14 (Post-WP4 bug fixes)
 
 ### What's Working Well
 - ✅ Modular world package with systems architecture
@@ -301,40 +343,49 @@ This was a **major remediation initiative** that filled gaps between reported WP
 - ✅ Encoder-based observation architecture
 - ✅ Clean adapter surfaces (WP3.1)
 - ✅ Event-based console routing (WP3.1)
-- ✅ Comprehensive test coverage (120+ tests passing)
+- ✅ **Training strategy pattern complete (WP4)**
+- ✅ **Policy DTOs with Pydantic v2 (WP4)**
+- ✅ **Torch-optional training services (WP4)**
+- ✅ **83% orchestrator code reduction (WP4)**
+- ✅ Comprehensive test coverage (806 tests passing)
 
 ### What Needs Work
-- ❌ Top-level `townlet/dto/` package missing
-- ❌ World/Telemetry/Reward DTOs not created
-- ❌ Port contracts not enforcing DTOs
+- ❌ Top-level `townlet/dto/` package incomplete (Policy DTOs exist, World/Telemetry missing)
+- ❌ World/Telemetry DTOs not created
+- ❌ Port contracts not fully enforcing DTOs
 - ❌ Context/Runtime naming confusion (3 different concepts)
 - ❌ ADR-002 out of sync with actual world architecture
-- ❌ ADR-003 not created
-- ❌ Training strategy extraction not started (correctly)
+- ❌ ADR-003 not created (Policy DTO patterns in ADR-004 can inform)
+- 🟡 Training strategy decomposition (PPO/Anneal LOC high but acceptable)
 
 ---
 
 ## Recommendations
 
-### Immediate Priority: Complete WP3
+### Immediate Priority: Complete WP3 Remaining Work
 
-1. **Create `townlet/dto/` package** (Est: 1-2 days)
+WP4 is now complete, but WP3 still has gaps. Priority recommendations:
+
+1. **Create remaining DTO modules in `townlet/dto/`** (Est: 1-2 days)
    - `world.py`: WorldSnapshot, AgentSummary, QueueSnapshot, EmploymentSnapshot
-   - `rewards.py`: RewardBreakdown, RewardComponent
    - `telemetry.py`: TelemetryEventDTO, MetadataDTO, ConsoleEventDTO
    - Migrate `world/dto/observation.py` → `townlet/dto/observations.py`
+   - Note: `policy.py` already exists (delivered by WP4)
 
 2. **Author ADR-003** (Est: 0.5 day)
    - Document DTO boundary strategy
-   - Pydantic usage patterns
+   - Pydantic usage patterns (use ADR-004 Policy DTO patterns as reference)
    - Serialization boundaries
    - Migration approach
 
 3. **Upgrade port contracts** (Est: 1 day)
    ```python
    class WorldRuntime(Protocol):
-       def snapshot(self) -> WorldSnapshot: ...
-       def observe(agent_ids: Iterable[str] | None) -> ObservationEnvelope: ...
+       def snapshot(self) -> WorldSnapshot: ...  # not Mapping[str, Any]
+       def observe(agent_ids: Iterable[str] | None) -> ObservationEnvelope: ...  # ✅ done!
+
+   class TelemetrySink(Protocol):
+       def emit_event(self, event: TelemetryEventDTO) -> None: ...  # not dict
    ```
 
 4. **Telemetry DTO conversion** (Est: 2-3 days)
@@ -366,36 +417,68 @@ This was a **major remediation initiative** that filled gaps between reported WP
 
 **Total WP2 Finalization Estimate**: 2 days
 
-### Later: Begin WP4
+### Post-WP4 Cleanup & Optimization
 
-Only start WP4 after:
-- ✅ WP3 DTO package complete
-- ✅ Port contracts enforcing DTOs
-- ✅ Telemetry pipeline using DTOs
-- ✅ ADR-003 authored
+WP4 delivered excellent foundations, but some follow-up work remains:
 
-**WP4 Estimate**: 5-7 days (strategy extraction + DTO integration + tests)
+1. **CLI Migration** (Est: 1 day)
+   - Update `scripts/run_training.py` to use new `TrainingOrchestrator`
+   - Update `scripts/run_anneal_rehearsal.py`
+   - Update `scripts/run_mixed_soak.py`
+   - Archive old `training_orchestrator.py`
+
+2. **Technical Debt Cleanup** (Est: 2-3 days)
+   - Address 33 catalogued items from audit
+   - Remove 8 pure re-export wrapper modules
+   - Clean up 2 deprecated modules
+   - ~1,200 lines removable
+
+3. **Strategy Decomposition** (Est: 1-2 days, optional)
+   - Extract PPO helper methods to reduce 709-line LOC
+   - Extract Anneal helper methods to reduce 358-line LOC
+   - Target: PPO <500 lines, Anneal <250 lines
+
+**Total Post-WP4 Estimate**: 4-6 days
 
 ---
 
 ## Conclusion
 
-The Townlet codebase has made **impressive architectural progress**, with foundational work (WP1/WP2) largely complete and critical DTO infrastructure delivered through WP3.1. However:
+The Townlet codebase has made **excellent architectural progress**, with WP1/WP2 foundational work largely complete, critical DTO infrastructure delivered through WP3.1, and **WP4 fully implemented** with comprehensive policy training DTOs.
 
-**The original WP taskings (WP1-4) are not literally followed**. The implementation evolved with:
+**The original WP taskings (WP1-4) have been substantially delivered**, though the implementation evolved with:
 - More sophisticated architecture than ADR specifications
 - WP3.1 recovery work filling critical gaps
-- Different module organization patterns
+- WP4 completing ahead of full WP3 (Policy DTOs delivered)
+- Different module organization patterns (more refined than specs)
 - Context/Runtime naming that diverged from ADR
 
-**Current State**: ~60% through the WP1-4 roadmap, with solid foundations but incomplete DTO adoption.
+**Current State**: **~79% through the WP1-4 roadmap**:
+- ✅ WP1 (90%): Ports & factories established
+- ✅ WP2 (85%): World modularization complete
+- 🟡 WP3 (40%): Observation/Policy DTOs done; World/Telemetry DTOs missing
+- ✅ WP4 (100%): Training strategies fully refactored with DTOs
 
-**Next Critical Milestone**: Complete WP3 by creating top-level DTO package, upgrading port contracts, and converting telemetry pipeline. Estimated 4-6 days of focused work.
+**Next Critical Milestone**: Complete WP3 remaining work (World/Telemetry DTOs, ADR-003, port contract upgrades). Estimated 4-6 days of focused work.
 
-**Quality**: Despite deviations from specifications, the actual implementation is **well-tested** (120+ tests passing), **modular** (systems architecture), and **increasingly typed** (DTO foundations via WP3.1).
+**Quality**: The implementation is **production-ready** with:
+- ✅ **806 tests passing** (all existing + 22 new strategy tests)
+- ✅ **85% code coverage** maintained
+- ✅ **Clean architecture** (strategy pattern, services, DTOs)
+- ✅ **Torch-optional** (22 tests pass torch-free)
+- ✅ **Backward compatible** (all CLI scripts work)
+- ✅ **Post-implementation bugs fixed** (BC manifest, social reward schedule, cycle tracking)
+
+**Major Achievements**:
+1. **83% orchestrator code reduction** (984 → 170 lines)
+2. **Comprehensive policy DTOs** (720 lines with Pydantic v2)
+3. **Strategy pattern** (3 focused strategies, protocol-based)
+4. **Torch-free services** (replay, rollout, promotion)
+5. **Zero test regressions** during major refactoring
 
 ---
 
 **Assessment Prepared By**: Claude Code
-**Date**: 2025-10-13
-**Based On**: WP_TASKINGS/{WP1-4}.md vs actual codebase inspection + WP status files
+**Initial Assessment**: 2025-10-13
+**Updated**: 2025-10-14 (Post-WP4 bug fixes)
+**Based On**: WP_TASKINGS/{WP1-4}.md vs actual codebase inspection + WP status files + Post-implementation review

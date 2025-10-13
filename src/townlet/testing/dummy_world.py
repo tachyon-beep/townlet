@@ -5,12 +5,12 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from townlet.console.command import ConsoleCommandEnvelope
-from townlet.snapshots.state import SnapshotState
 from townlet.dto.observations import (
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
