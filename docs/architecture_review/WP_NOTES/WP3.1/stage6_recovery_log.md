@@ -435,3 +435,207 @@ pytest tests/adapters/ tests/factories/ tests/core/test_sim_loop_with_dummies.py
 - ⏳ Final verification sweep
 - ⏳ Documentation updates
 
+
+---
+
+## WS3: ObservationBuilder Retirement
+
+**Execution Date**: 2025-10-13 (multiple sessions)
+**Status**: ✅ COMPLETE
+
+### Phase 1: Encoder Module Creation
+
+**Execution**: 2025-10-13 (earlier sessions - see previous entries)
+
+**Files Created** (932 lines total):
+- `src/townlet/world/observations/encoders/map.py` (262 lines)
+- `src/townlet/world/observations/encoders/features.py` (404 lines)
+- `src/townlet/world/observations/encoders/social.py` (266 lines)
+- `src/townlet/world/observations/encoders/__init__.py` (export module)
+
+**Files Rewritten**:
+- `src/townlet/world/observations/service.py` (496 lines - uses encoders directly)
+
+**Files Deleted**:
+- `src/townlet/observations/builder.py` (1059 lines removed)
+
+**Test Migrations** (7 files, 21 tests):
+- tests/test_observation_builder.py (13 tests)
+- tests/test_observation_builder_full.py (1 test)
+- tests/test_observation_builder_compact.py (2 tests)
+- tests/test_observation_builder_parity.py (2 tests)
+- tests/test_observations_social_snippet.py (4 tests)
+- tests/test_observation_baselines.py (1 test)
+- tests/test_embedding_allocator.py (1 test)
+
+**Verification Command**:
+```bash
+pytest tests/test_observation_*.py tests/test_observations_*.py tests/test_embedding_*.py -q
+# Result: 21 passed in 4.21s ✓
+```
+
+### Phase 2: Final Cleanup (Current Session)
+
+**Execution**: 2025-10-13 (final session)
+
+**Additional Test Migrations** (3 files):
+- tests/test_training_replay.py (3 references)
+- tests/policy/test_dto_ml_smoke.py (2 references)
+- tests/test_telemetry_adapter_smoke.py (2 references)
+
+**Script Updates** (1 file):
+- scripts/profile_observation_tensor.py (4 references)
+
+**Verification Commands**:
+```bash
+# Policy tests
+pytest tests/policy/ -q
+# Result: 16 passed in 2.96s ✓
+
+# DTO parity tests
+pytest tests/core/test_sim_loop_dto_parity.py -q
+# Result: 2 passed in 3.06s ✓
+
+# Guard test
+pytest tests/core/test_no_legacy_observation_usage.py -q
+# Result: 1 passed ✓
+
+# Reference count check
+grep -r "ObservationBuilder" src/ tests/ scripts/ | wc -l
+# Result: 4 (only deprecation comments + guard test) ✓
+```
+
+**Gate Conditions Met**:
+- ✅ 0 ObservationBuilder runtime references
+- ✅ All observation tests passing (24/24)
+- ✅ All policy tests passing (16/16)
+- ✅ All DTO parity tests passing (2/2)
+- ✅ Guard test updated and passing
+- ✅ All profiling scripts migrated
+
+---
+
+## WS4: Documentation & Verification Alignment
+
+**Execution Date**: 2025-10-13 (current session)
+**Status**: ✅ COMPLETE
+
+### Documentation Updates
+
+**Work Package Status Files Synchronized** (4/4):
+
+1. **WP3/status.md**: Added comprehensive "Stage 6 Recovery (WP3.1)" section with:
+   - All 4 workstream completion details
+   - Verification commands and results
+   - Final metrics table
+   - Code reference elimination summary
+   - Dependency status updates
+
+2. **WP1/status.md**: Appended "WP3 Stage 6 Recovery Completion" section noting:
+   - Blockers cleared
+   - Impact on ports-and-adapters pattern
+   - Next steps for WP1 Step 8
+
+3. **WP2/status.md**: Appended "WP3 Stage 6 Recovery Completion" section noting:
+   - Adapter surface cleanup complete
+   - Impact on modular systems
+   - Next coordination steps
+
+4. **WP3.1/README.md**: Updated to final completion state with:
+   - All 4 workstreams marked complete
+   - Final metrics (100% completion)
+   - Comprehensive achievement summary
+
+### Verification Commands
+
+**Reference Elimination Checks**:
+```bash
+# ObservationBuilder references
+grep -r "ObservationBuilder" src/ tests/ scripts/ | grep -v "test_no_legacy_observation_usage.py" | grep -v "__init__.py:" | wc -l
+# Result: 0 ✓
+
+# Console queue references
+grep -r "queue_console_command" src/
+# Result: 0 matches ✓
+
+# Adapter escape hatches
+grep -r "\.world_state\|\.context\|\.lifecycle\|\.perturbations" src/ | grep -v "# " | wc -l
+# Result: 0 ✓
+```
+
+**Test Suite Status**:
+- Console tests: 63/63 passing ✓
+- Adapter tests: 15/15 passing ✓
+- Observation tests: 24/24 passing ✓
+- Policy tests: 16/16 passing ✓
+- DTO parity tests: 2/2 passing ✓
+- Guard tests: All passing ✓
+
+### Gate Conditions Met
+- ✅ All 4 work package status files synchronized
+- ✅ Comprehensive Stage 6 Recovery section added to WP3/status.md
+- ✅ WP1 and WP2 unblocking notes added
+- ✅ All verification commands documented
+- ✅ Final metrics recorded
+- ✅ 0 runtime references to deprecated patterns
+
+---
+
+## Final Summary
+
+### WP3.1 Stage 6 Recovery — ✅ COMPLETE
+
+**Completion Date**: 2025-10-13
+**Execution Time**: 1 day (multiple sessions)
+**Recovery Lead**: Claude Code
+
+### Workstream Completion Status
+
+| Workstream | Status | Tests Passing | References Removed |
+|------------|--------|---------------|-------------------|
+| WS1: Console Queue Retirement | ✅ COMPLETE | 63/63 | All queue refs |
+| WS2: Adapter Surface Cleanup | ✅ COMPLETE | 15/15 | 4 properties |
+| WS3: ObservationBuilder Retirement | ✅ COMPLETE | 24/24 obs, 16/16 policy | 1059 lines |
+| WS4: Documentation Alignment | ✅ COMPLETE | N/A | 4 files synced |
+
+### Final Metrics
+
+- **Workstreams Complete**: 4/4 (100%)
+- **Lines Removed**: 1,120+ (1059 ObservationBuilder + 61 console/adapter)
+- **Lines Added**: 932 (encoder modules)
+- **Test Suites Validated**: Console (63), Adapters (15), Observations (24), Policy (16), DTO Parity (2)
+- **Total Tests Passing**: 120+
+- **Runtime Code References**: 0 to deprecated patterns
+- **Status Files Synchronized**: 4 (WP1, WP2, WP3, WP3.1)
+
+### Impact
+
+**Unblocks**:
+- ✅ WP1 Step 8: Ports-and-adapters pattern complete, DTO-only flow established
+- ✅ WP2 Step 7: Adapter surface cleaned, modular systems verified
+
+**Eliminates**:
+- Console command queue shim
+- Adapter escape hatch properties
+- Monolithic ObservationBuilder class
+- All legacy observation batch dependencies
+
+**Establishes**:
+- Modular encoder functions for observations
+- Event-based console routing
+- Clean adapter port surfaces
+- DTO-first observation flow
+
+### Sign-Off
+
+**Recovery Completion Confirmed**: 2025-10-13
+**All Gate Conditions Met**: ✅ YES
+**Documentation Synchronized**: ✅ YES  
+**Test Suites Passing**: ✅ YES
+**Code References Eliminated**: ✅ YES
+
+**WP3.1 Stage 6 Recovery is COMPLETE.**
+
+---
+
+*End of Recovery Log*

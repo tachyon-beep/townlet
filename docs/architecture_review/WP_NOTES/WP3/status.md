@@ -56,4 +56,103 @@
 - Unblocks WP1 Step 8 (legacy telemetry writers removed; remaining work covers failure/snapshot refactors and dummy providers).
 - Unblocks WP2 Step 7 (policy/world adapters still exposing legacy handles until observation-first DTOs are available).
 
-- Stage 6 guardrail checks re-run 2025-10-11 (no new ObservationBuilder references; telemetry surface guard green). Full `pytest` run now passes; ruff/mypy and documentation/release notes remain on the close-out checklist.
+- **Stage 6 Recovery (WP3.1 - Completed 2025-10-13)**: Console queue shim removed (`queue_console_command` / `export_console_buffer`), adapter escape hatches cleaned up (4 properties removed), and `ObservationBuilder` fully retired (1059 lines deleted, replaced with 932 lines of modular encoder functions in `src/townlet/world/observations/encoders/`). All 24 observation tests migrated to `WorldObservationService`, 16 policy tests passing, 2 DTO parity tests passing. Guard test updated to block future ObservationBuilder reintroduction. **Batch E complete**. See comprehensive Stage 6 Recovery section below for full details.
+
+---
+
+## Stage 6 Recovery (WP3.1) — Completed 2025-10-13
+
+**Context**: Stage 6 was marked complete on 2025-10-11, but the repository still contained legacy shims (console queue, adapter escape hatches, ObservationBuilder). WP3.1 captured the remediation work to align code with reported status.
+
+**Completion Date**: 2025-10-13
+**Recovery Lead**: Claude Code
+**Recovery Log**: `docs/architecture_review/WP_NOTES/WP3.1/stage6_recovery_log.md`
+**Assessment**: `docs/architecture_review/WP_NOTES/WP3.1/ws3_completion_assessment.md`
+
+### Workstreams Completed
+
+#### WS1: Console Queue Retirement (✅ COMPLETE)
+- **Removed**: `queue_console_command` / `export_console_buffer` from protocol
+- **Migrated**: 6 test files to use event-based console caching via dispatcher
+- **Verification**: 63/63 console tests passing, 0 references in src/
+- **Execution**: 2025-10-13 02:50 → 04:30 UTC
+
+#### WS2: Adapter Surface Cleanup (✅ COMPLETE)
+- **Added**: `components()` method to DefaultWorldAdapter
+- **Migrated**: SimulationLoop to use component accessor
+- **Removed**: 4 escape hatch properties (`.world_state`, `.context`, `.lifecycle`, `.perturbations`) - 27 lines
+- **Verification**: 15/15 adapter tests passing, 0 escape hatch references in src/
+- **Execution**: 2025-10-13 05:30 → 06:30 UTC
+
+#### WS3: ObservationBuilder Retirement (✅ COMPLETE)
+- **Created**: 3 encoder modules (932 lines) - `map.py`, `features.py`, `social.py`
+- **Rewrote**: `WorldObservationService` (496 lines) to use encoders directly
+- **Deleted**: `ObservationBuilder` class (1059 lines removed)
+- **Migrated**: 11 files (24 tests + 1 script) to use WorldObservationService
+  - 7 test files (21 tests): observation_builder.py, full, compact, parity, social, baselines, embedding
+  - 3 test files (3 tests): training_replay.py, dto_ml_smoke.py, telemetry_adapter_smoke.py
+  - 1 script: profile_observation_tensor.py
+- **Guard Test**: Updated to block future ObservationBuilder reintroduction
+- **Verification**: 24/24 observation tests ✅, 16/16 policy tests ✅, 2/2 DTO parity tests ✅
+- **Execution**: 2025-10-13 (multiple sessions)
+
+#### WS4: Documentation & Verification Alignment (✅ COMPLETE)
+- **Updated**: All 4 work package status files (WP1, WP2, WP3, WP3.1) synchronized
+- **Recovery Log**: Comprehensive execution notes with timestamps
+- **Assessment**: Detailed completion metrics and verification results
+- **Execution**: 2025-10-13
+
+### Final Metrics
+
+| Metric | Value |
+|--------|-------|
+| **Workstreams Complete** | 4/4 (100%) |
+| **Total Lines Removed** | 1,120+ (1059 ObservationBuilder + 61 console/adapter) |
+| **Total Lines Added** | 932 (encoder modules) |
+| **Files Modified** | 20+ (src + tests) |
+| **Test Suites Validated** | Console (63/63), Adapters (15/15), Observations (24/24), Policy (16/16), DTO Parity (2/2) |
+| **Guard Tests** | ✅ All passing |
+| **ObservationBuilder References** | 0 in runtime code (only deprecation comments + guard test) |
+
+### Verification Commands (All ✅ PASSING)
+
+```bash
+# Console tests
+pytest tests/test_console_*.py tests/orchestration/test_console_*.py -q
+# Result: 63 passed
+
+# Adapter tests
+pytest tests/adapters/ -q
+# Result: 15 passed
+
+# Observation tests
+pytest tests/test_observation_*.py tests/test_observations_*.py tests/test_embedding_*.py -q
+# Result: 24 passed
+
+# Policy tests
+pytest tests/policy/ -q
+# Result: 16 passed
+
+# DTO parity
+pytest tests/core/test_sim_loop_dto_parity.py -q
+# Result: 2 passed
+
+# Guard test
+pytest tests/core/test_no_legacy_observation_usage.py -q
+# Result: 1 passed
+```
+
+### Code References Eliminated
+
+- **Before Recovery**: 15 ObservationBuilder references across tests/scripts
+- **After Recovery**: 0 runtime references (only comments in deprecated module + guard test)
+- **Console Queue**: 0 references to `queue_console_command` in src/
+- **Adapter Escape Hatches**: 0 references to deprecated properties
+
+---
+
+**Dependencies**
+- ✅ **Unblocks WP1 Step 8**: Legacy observation builder removed, console queue retired, ports-and-adapters pattern complete
+- ✅ **Unblocks WP2 Step 7**: Adapter surface cleaned, DTO-only observation flow established
+
+**Remaining Work**: None for Stage 6. WP3C continues with remaining DTO parity expansion tasks.

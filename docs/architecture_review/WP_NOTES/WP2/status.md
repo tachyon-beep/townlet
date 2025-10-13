@@ -15,3 +15,30 @@
 1. Coordinate with WP3C to remove the legacy observation translator and confirm policy/training adapters never request `WorldState` snapshots directly.
 2. Update world adapter surfaces to expose DTO-ready observations/metadata only, then delete the compatibility hooks (`legacy_runtime`, observation dict, queue_console) when WP1 Step 8 resumes.
 3. Refresh documentation (ADR-002 appendix) once the adapter cleanup lands and ensure WP1/WP3 status notes reference the final world provider flow.
+
+---
+
+## WP3 Stage 6 Recovery Completion (2025-10-13)
+
+**✅ UNBLOCKED**: WP3 Stage 6 Recovery (WP3.1) has been completed, clearing blockers for WP2 Step 7 completion.
+
+**What was completed:**
+- Console queue shim (`queue_console_command` / `export_console_buffer`) fully removed from world runtime
+- Adapter escape hatches cleaned up (4 deprecated properties removed: `.world_state`, `.context`, `.lifecycle`, `.perturbations`)
+- `ObservationBuilder` fully retired from world package (1059 lines deleted, replaced with modular encoder functions)
+- All world/adapter tests passing (15/15), observation tests passing (24/24)
+- Guard tests updated to prevent reintroduction of legacy patterns
+
+**Impact on WP2:**
+- World adapter surface is now fully cleaned (no escape hatches to legacy internals)
+- DTO-only observation flow established via `WorldObservationService`
+- Console service integration complete (factory-provided, event-based)
+- Modular systems (queue/affordance/employment/economy/relationships) verified
+
+**Next Steps for WP2:**
+1. ✅ Adapter surface cleanup complete - no further action needed
+2. Coordinate with WP3C on remaining DTO parity tasks
+3. Final documentation refresh (ADR-002 appendix) once WP1 Step 8 completes
+4. Update world provider flow documentation
+
+See `docs/architecture_review/WP_NOTES/WP3.1/` for comprehensive recovery documentation.

@@ -16,7 +16,7 @@
 |---|------------|-------------|--------|
 | 1 | Console Queue Retirement | `console_queue_retirement.md` | ✅ COMPLETE |
 | 2 | Adapter Surface Cleanup | `adapter_surface_cleanup.md` | ✅ COMPLETE |
-| 3 | ObservationBuilder Retirement | `observationbuilder_retirement.md` | ⏳ PENDING |
+| 3 | ObservationBuilder Retirement | `observationbuilder_retirement.md` | ✅ COMPLETE (Core) / 🔄 Final cleanup |
 | 4 | Documentation & Verification Alignment | `documentation_alignment.md` | 🔄 IN PROGRESS |
 
 Each workstream document contains numbered implementation steps with explicit
@@ -41,7 +41,7 @@ file targets, commands, and acceptance criteria.
 
 ## Progress Summary
 
-**Last Updated**: 2025-10-13 06:45 UTC
+**Last Updated**: 2025-10-13 (Current Session - Post WS3 Core Completion)
 
 ### Completed ✅
 
@@ -58,30 +58,60 @@ file targets, commands, and acceptance criteria.
 - Removed 4 escape hatch properties (27 lines)
 - **Result**: 15/15 adapter tests passing, 0 escape hatch references in src/
 
-### In Progress 🔄
+**WS3: ObservationBuilder Retirement - CORE COMPLETE** (2025-10-13 Current Session)
+- **Created 3 encoder modules** (932 lines): map.py, features.py, social.py
+- **Rewrote WorldObservationService** (496 lines) to use encoders directly
+- **Deleted ObservationBuilder** (1059 lines removed)
+- **Migrated 7 test files** (21 tests): All PASSING ✅
+- **Updated guard test** to block future ObservationBuilder reintroduction
+- **Result**: Core implementation 100% complete, 21/21 observation tests passing
+- **Remaining**: 3 test files + 1 script still reference ObservationBuilder (11 references)
 
-**WS4: Documentation & Verification Alignment**
-- Updating WP3.1 documentation to reflect WS1/WS2 completion
-- Recovery log updated with detailed execution notes
-- Remaining: Update WP3 status.md, verification sweep
+### Completed ✅
 
-### Pending ⏳
+**WS3: ObservationBuilder Retirement - FINAL CLEANUP COMPLETE** (2025-10-13)
+- ✅ Migrated: test_training_replay.py, test_dto_ml_smoke.py, test_telemetry_adapter_smoke.py
+- ✅ Updated: scripts/profile_observation_tensor.py
+- ✅ Validation tests: Policy (16/16 ✅), DTO Parity (2/2 ✅)
+- **Result**: WS3 100% COMPLETE, 0 runtime ObservationBuilder references
 
-**WS3: ObservationBuilder Retirement**
-- 40 references across 14+ files
-- High complexity migration
-- Blocked pending WS1/WS2 completion (now unblocked)
+**WS4: Documentation & Verification Alignment - COMPLETE** (2025-10-13)
+- ✅ All 4 work package status files synchronized (WP1, WP2, WP3, WP3.1)
+- ✅ WP3/status.md updated with comprehensive Stage 6 Recovery section
+- ✅ WP1/status.md updated (blockers cleared, next steps defined)
+- ✅ WP2/status.md updated (adapter cleanup acknowledged)
+- ✅ Assessment complete (see `ws3_completion_assessment.md`)
+- ✅ Recovery log updated with all execution notes
 
-### Metrics
+### Final Metrics
 
 | Metric | Value |
 |--------|-------|
-| Workstreams Complete | 2/4 (50%) |
-| Commits Made | 8 total (4 WS1 + 4 WS2) |
-| Test Suites Validated | Console (63/63), Adapters (15/15) |
-| Lines Removed | 61 (34 WS1 + 27 WS2) |
-| Files Modified | 13 (src + tests) |
+| **Workstreams Complete** | 4/4 (100% ✅) |
+| **Lines Added** | 932 (encoder modules) |
+| **Lines Removed** | 1120+ (1059 ObservationBuilder + 61 console/adapter) |
+| **Test Suites Validated** | Console (63/63), Adapters (15/15), Observations (24/24), Policy (16/16), DTO Parity (2/2) |
+| **Files Modified** | 20+ (src + tests + docs) |
+| **ObservationBuilder References** | 0 in runtime code ✅ |
+| **Status Files Synchronized** | 4/4 (WP1, WP2, WP3, WP3.1) ✅ |
 
 ---
 
-**Next Action**: Consider WS3 (ObservationBuilder Retirement) or pause for review assessment.
+## WP3.1 Stage 6 Recovery — ✅ COMPLETE
+
+**Completion Date**: 2025-10-13
+**Status**: All 4 workstreams complete, all validation passing, documentation synchronized
+
+**Achievements:**
+- Console queue shim completely removed (0 references)
+- Adapter escape hatches eliminated (clean port surface)
+- ObservationBuilder fully retired (1059 lines → modular encoders)
+- 120+ tests passing across all affected areas
+- All 4 work package status files brought into sync
+
+**Impact:**
+- ✅ Unblocks WP1 Step 8 (ports-and-adapters pattern complete)
+- ✅ Unblocks WP2 Step 7 (adapter surface cleaned)
+- ✅ Stage 6 alignment complete (reported status matches reality)
+
+See `ws3_completion_assessment.md` and `stage6_recovery_log.md` for comprehensive details.

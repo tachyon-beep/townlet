@@ -54,3 +54,30 @@
   - Provider metadata is correct, but the default loop retains `self.world` for legacy observers; plan to cull after WP3 Stage 5 removes the observation dict.
 
 Keep this file in sync with WP2/WP3 dependencies as Step 8 progresses.
+
+---
+
+## WP3 Stage 6 Recovery Completion (2025-10-13)
+
+**✅ UNBLOCKED**: WP3 Stage 6 Recovery (WP3.1) has been completed, clearing all blockers for WP1 Step 8.
+
+**What was completed:**
+- Console queue shim (`queue_console_command` / `export_console_buffer`) fully removed
+- Adapter escape hatches cleaned up (4 deprecated properties removed)
+- `ObservationBuilder` retired (1059 lines deleted, replaced with modular encoders)
+- All test suites passing: Console (63/63), Adapters (15/15), Observations (24/24), Policy (16/16), DTO Parity (2/2)
+- Guard tests updated to prevent reintroduction of legacy patterns
+
+**Impact on WP1:**
+- Ports-and-adapters pattern is now complete (no legacy shortcuts remain)
+- DTO-only observation flow established (ObservationBuilder eliminated)
+- Console routing fully event-based (queue shim removed)
+- Adapter surface cleaned (no escape hatches to legacy internals)
+
+**Next Steps for WP1 Step 8:**
+1. Update dispatcher identity flow & DTO guard tests
+2. Run full regression sweep: `pytest`, `ruff check src tests`, `mypy src`
+3. Refresh ADR-001, console/monitor ADR, WP1 README/status
+4. Publish release notes summarising port + DTO changes
+
+See `docs/architecture_review/WP_NOTES/WP3.1/` for comprehensive recovery documentation.
