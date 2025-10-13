@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
@@ -17,7 +18,7 @@ class StubTelemetrySink(TelemetrySinkProtocol):
     def __init__(self, config: Any | None = None, publisher: Any | None = None) -> None:
         self.config = config
         self.publisher = publisher
-        self._console_buffer: list[object] = []
+        self._latest_console_events: deque[Mapping[str, object]] = deque(maxlen=50)
         logger.warning("telemetry_stub_active provider=stub message='Telemetry transport disabled; install extras or configure stdout.'")
 
     # ---------------------------
@@ -33,19 +34,16 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         _ = identity
 
     def drain_console_buffer(self) -> Iterable[object]:
-        drained = list(self._console_buffer)
-        self._console_buffer.clear()
+        # Drain console events cached from dispatcher emissions
+        drained = list(self._latest_console_events)
+        self._latest_console_events.clear()
         return drained
-
-    def export_console_buffer(self) -> list[object]:
-        return list(self._console_buffer)
-
-    def queue_console_command(self, command: object) -> None:
-        # Accept commands for parity; no auth in stub.
-        self._console_buffer.append(command)
 
     def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
         logger.debug("telemetry_stub_event name=%s payload=%s", name, dict(payload or {}))
+        # Cache console.result events for snapshot restore
+        if name == "console.result" and payload:
+            self._latest_console_events.append(payload)
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         logger.debug("telemetry_stub_metric name=%s value=%s tags=%s", name, value, tags)
@@ -146,7 +144,10 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         _ = payload
 
     def import_console_buffer(self, payload: Iterable[object]) -> None:
-        self._console_buffer.extend(payload)
+        # Import from snapshot - convert to event format if needed
+        for item in payload:
+            if isinstance(item, Mapping):
+                self._latest_console_events.append(item)
 
     def update_relationship_metrics(self, metrics: Mapping[str, object]) -> None:
         _ = metrics
@@ -158,7 +159,7 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         return {}
 
     def latest_console_results(self) -> Iterable[Mapping[str, object]]:
-        return []
+        return list(self._latest_console_events)
 
     def console_history(self) -> Iterable[Mapping[str, object]]:
         return []
@@ -190,4 +191,4 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         _ = subscriber
 
     def close(self) -> None:
-        self._console_buffer.clear()
+        self._latest_console_events.clear()
