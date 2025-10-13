@@ -367,7 +367,19 @@ class SimulationLoop:
             affordance_runtime_factory=self._affordance_runtime_factory,
             affordance_runtime_config=self._runtime_config,
         )
-        context = getattr(world_port, "context", None)
+        # Try new component accessor pattern first, fall back to legacy properties
+        components_method = getattr(world_port, "components", None)
+        if callable(components_method):
+            comp_dict = components_method()
+            context = comp_dict.get("context")
+            lifecycle = comp_dict.get("lifecycle")
+            perturbations = comp_dict.get("perturbations")
+        else:
+            # Fallback to legacy property access for compatibility
+            context = getattr(world_port, "context", None)
+            lifecycle = getattr(world_port, "lifecycle_manager", None)
+            perturbations = getattr(world_port, "perturbation_scheduler", None)
+
         if context is None:
             raise RuntimeError("World provider did not supply a context-backed adapter")
         observation_service = getattr(context, "observation_service", None)
@@ -377,10 +389,8 @@ class SimulationLoop:
         if console_service is None:
             raise RuntimeError("World context missing console service")
         world = context.state
-        lifecycle = getattr(world_port, "lifecycle_manager", None)
         if lifecycle is None:
             raise RuntimeError("World provider did not expose lifecycle manager")
-        perturbations = getattr(world_port, "perturbation_scheduler", None)
         if perturbations is None:
             raise RuntimeError("World provider did not expose perturbation scheduler")
         self._world_context = context
@@ -403,12 +413,10 @@ class SimulationLoop:
             **self._policy_options,
         )
         controller: PolicyController | None = None
-        backend_attr = getattr(policy_port, "backend", None)
-        if backend_attr is not None:
-            decision_backend = backend_attr
-            controller = PolicyController(backend=decision_backend, port=policy_port)
-        else:
-            decision_backend = policy_port
+        # Use the policy_backend we already have instead of extracting via .backend property
+        # The adapter wraps it, but we can use the original reference directly
+        decision_backend = policy_backend
+        controller = PolicyController(backend=decision_backend, port=policy_port)
         return PolicyComponents(
             port=policy_port,
             controller=controller,
