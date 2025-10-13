@@ -346,8 +346,8 @@ def test_world_relationship_snapshot_round_trip(
     restored_state.pop("relationship_metrics", None)
     baseline_state.pop("relationship_metrics", None)
     assert restored_state == baseline_state
-    assert (
-        list(restored_telemetry.drain_console_buffer()) == list(telemetry.drain_console_buffer())
-    )
+    # Drain console buffer from restored telemetry and verify it matches what we imported
+    restored_console = list(restored_telemetry.drain_console_buffer())
+    assert restored_console == [{"cmd": "foo"}]
     # Perturbation scheduler runs outside the manager in this test; ensure state
     # persists via the scheduler snapshot payload.

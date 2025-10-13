@@ -336,10 +336,9 @@ def snapshot_from_world(
         else:
             if hasattr(telemetry, "export_state"):
                 telemetry_payload = telemetry.export_state()
-            if hasattr(telemetry, "latest_console_results"):
-                # Use event-based console results for snapshot
-                exported = telemetry.latest_console_results()
-                console_buffer = list(exported or [])
+            # Capture the console buffer (pending commands) without draining it
+            if hasattr(telemetry, "_latest_console_events"):
+                console_buffer = list(telemetry._latest_console_events)
 
     perturbations_payload = {}
     if perturbations is not None:

@@ -39,8 +39,14 @@ def telemetry_provider_name(loop: _ProviderCarrier) -> str:
 
 
 def is_stub_policy(policy: PolicyBackendProtocol, provider: str | None = None) -> bool:
+    # Check if policy is directly a stub
     if isinstance(policy, StubPolicyBackend):
         return True
+    # Check if policy is an adapter wrapping a stub backend
+    backend = getattr(policy, "_backend", None)
+    if backend is not None and isinstance(backend, StubPolicyBackend):
+        return True
+    # Check if provider name indicates stub
     if provider is None:
         return False
     return provider == "stub"

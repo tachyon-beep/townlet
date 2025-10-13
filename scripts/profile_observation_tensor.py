@@ -9,7 +9,7 @@ from statistics import mean
 import numpy as np
 
 from townlet.config import load_config
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.world import AgentSnapshot, WorldState
 
 
@@ -22,10 +22,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def bootstrap_world(config_path: Path, agent_count: int) -> tuple[WorldState, ObservationBuilder]:
+def bootstrap_world(config_path: Path, agent_count: int) -> tuple[WorldState, WorldObservationService]:
     config = load_config(config_path)
     world = WorldState.from_config(config)
-    builder = ObservationBuilder(config)
+    service = WorldObservationService(config=config)
 
     for index in range(agent_count):
         agent_id = f"agent-{index}"
@@ -35,10 +35,10 @@ def bootstrap_world(config_path: Path, agent_count: int) -> tuple[WorldState, Ob
             needs={"hunger": 0.5, "hygiene": 0.6, "energy": 0.7},
             wallet=5.0,
         )
-    return world, builder
+    return world, service
 
 
-def profile(world: WorldState, builder: ObservationBuilder, ticks: int) -> dict[str, object]:
+def profile(world: WorldState, service: WorldObservationService, ticks: int) -> dict[str, object]:
     feature_dims: list[int] = []
     map_shapes: set[tuple[int, int, int]] = set()
     trust_means: list[float] = []
@@ -47,7 +47,7 @@ def profile(world: WorldState, builder: ObservationBuilder, ticks: int) -> dict[
 
     for tick in range(ticks):
         world.tick = tick
-        batch = builder.build_batch(world, terminated={})
+        batch = service.build_batch(world, terminated={})
         for obs in batch.values():
             features = obs["features"]
             feature_dims.append(int(features.shape[0]))
@@ -99,8 +99,8 @@ def profile(world: WorldState, builder: ObservationBuilder, ticks: int) -> dict[
 
 def main() -> None:
     args = parse_args()
-    world, builder = bootstrap_world(args.config, args.agents)
-    summary = profile(world, builder, args.ticks)
+    world, service = bootstrap_world(args.config, args.agents)
+    summary = profile(world, service, args.ticks)
 
     if args.output:
         args.output.write_text(json.dumps(summary, indent=2))

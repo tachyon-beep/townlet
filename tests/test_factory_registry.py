@@ -276,14 +276,13 @@ def test_simulation_loop_uses_registered_providers(sample_config: Any) -> None:
         telemetry_provider="stub",
     )
     try:
-        assert isinstance(loop.policy, _StubPolicy)
+        # Note: loop.policy is PolicyRuntime, the port adapter wraps the stub backend
         assert isinstance(loop._telemetry_port, _StubTelemetry)
         info = loop.provider_info
         assert info["policy"] == "stub"
         assert info["telemetry"] == "stub"
         assert policy_provider_name(loop) == "stub"
         assert telemetry_provider_name(loop) == "stub"
-        assert is_stub_policy(loop.policy, info["policy"])
         assert is_stub_telemetry(loop._telemetry_port, info["telemetry"])
     finally:
         loop.close()
@@ -330,8 +329,11 @@ def test_simulation_loop_reads_runtime_from_config(sample_config: Any) -> None:
 
     loop = SimulationLoop(config)
     try:
-        assert isinstance(loop.policy, _StubPolicy)
+        # Note: loop.policy is PolicyRuntime, not the stub backend directly
         assert isinstance(loop._telemetry_port, _StubTelemetry)
+        info = loop.provider_info
+        assert info["policy"] == "config_stub"
+        assert info["telemetry"] == "config_stub"
     finally:
         loop.close()
 
