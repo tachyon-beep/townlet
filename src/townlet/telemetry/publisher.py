@@ -69,7 +69,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
         self.schema_version = "0.9.7"
         self._relationship_narration_cfg = self.config.telemetry.relationship_narration
         self._personality_narration_cfg = self.config.telemetry.personality_narration
-        self._console_buffer: list[object] = []
+        self._latest_console_events: deque[object] = deque(maxlen=50)
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
         self._latest_events: list[dict[str, object]] = []
@@ -330,45 +330,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
 
         raise ValueError(f"Unsupported telemetry transform id '{transform_id}'")
 
-    def queue_console_command(self, command: object) -> None:
-        """Authorise and enqueue an incoming console command payload."""
-        try:
-            sanitized, _principal = self._console_auth.authorise(command)
-        except ConsoleAuthenticationError as exc:
-            identity = exc.identity
-            envelope = ConsoleCommandEnvelope(
-                name=identity.get("name") or "unknown",
-                args=[],
-                kwargs={},
-                cmd_id=identity.get("cmd_id"),
-                issuer=identity.get("issuer"),
-            )
-            result = ConsoleCommandResult.from_error(
-                envelope,
-                code="unauthorized",
-                message=exc.message,
-                details={"reason": "auth_failed"},
-            )
-            self.emit_event("console.result", result.to_dict())
-            logger.warning(
-                "Rejected console command due to authentication failure: name=%s issuer=%s",
-                identity.get("name"),
-                identity.get("issuer"),
-            )
-            return
-        except TypeError as exc:
-            logger.warning("Rejected malformed console command: %s", exc)
-            return
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Unexpected error while authenticating console command")
-            return
-
-        self._console_buffer.append(sanitized)
-
     def drain_console_buffer(self) -> Iterable[object]:
-        """Return queued console commands and clear the buffer."""
-        drained = list(self._console_buffer)
-        self._console_buffer.clear()
+        """Return cached console events and clear for snapshot operations."""
+        drained = list(self._latest_console_events)
+        self._latest_console_events.clear()
         return drained
 
     def export_state(self) -> dict[str, object]:
@@ -726,11 +691,11 @@ class TelemetryPublisher(_TelemetrySinkBase):
 
         self._payload_builder.reset()
 
-    def export_console_buffer(self) -> list[object]:
-        return list(self._console_buffer)
-
     def import_console_buffer(self, buffer: Iterable[object]) -> None:
-        self._console_buffer = list(buffer)
+        """Restore console events from snapshot."""
+        self._latest_console_events.clear()
+        for item in buffer:
+            self._latest_console_events.append(item)
 
     def _ingest_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         """Persist console results for audit logs and downstream subscribers."""
@@ -2000,6 +1965,8 @@ class TelemetryPublisher(_TelemetrySinkBase):
             self._latest_events.append({"type": "console.result", "payload": result_payload})
             if len(self._latest_events) > 128:
                 self._latest_events = self._latest_events[-128:]
+            # Also cache for snapshot/restore compatibility
+            self._latest_console_events.append(result_payload)
             return
         if name == "stability.metrics":
             self._ingest_stability_metrics(payload)

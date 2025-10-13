@@ -336,9 +336,9 @@ def snapshot_from_world(
         else:
             if hasattr(telemetry, "export_state"):
                 telemetry_payload = telemetry.export_state()
-            if hasattr(telemetry, "export_console_buffer"):
-                # Defensive: ensure a list even if a faulty provider returns None.
-                exported = telemetry.export_console_buffer()
+            if hasattr(telemetry, "latest_console_results"):
+                # Use event-based console results for snapshot
+                exported = telemetry.latest_console_results()
                 console_buffer = list(exported or [])
 
     perturbations_payload = {}
