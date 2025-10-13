@@ -154,6 +154,22 @@ class DefaultWorldAdapter(WorldRuntime):
         self._last_events = []
         return state
 
+    def components(self) -> dict[str, Any]:
+        """Return adapter components for loop initialization.
+
+        This method provides structured access to the adapter's internal
+        components without requiring direct property access. Supports the
+        migration away from escape hatch properties.
+
+        Returns:
+            Dictionary containing 'context', 'lifecycle', and 'perturbations'.
+        """
+        return {
+            "context": self._context,
+            "lifecycle": self._lifecycle,
+            "perturbations": self._perturbations,
+        }
+
     # ------------------------------------------------------------------
     # Transitional helpers
     # ------------------------------------------------------------------
