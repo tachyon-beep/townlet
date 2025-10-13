@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
+from townlet.dto.observations import ObservationEnvelope
+from townlet.dto.world import SimulationSnapshot
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots import snapshot_from_world
-from townlet.snapshots.state import SnapshotState
-from townlet.dto.observations import ObservationEnvelope
 from townlet.world.core.context import WorldContext
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.grid import WorldState
@@ -43,7 +43,7 @@ class DefaultWorldAdapter(WorldRuntime):
         self._ticks_per_day = max(0, int(ticks_per_day))
         self._last_result: RuntimeStepResult | None = None
         self._last_events: list[Mapping[str, Any]] = []
-        self._last_snapshot: SnapshotState | None = None
+        self._last_snapshot: SimulationSnapshot | None = None
         self._last_envelope: ObservationEnvelope | None = None
 
         self._world_adapter = ensure_world_adapter(context.state)
@@ -142,7 +142,7 @@ class DefaultWorldAdapter(WorldRuntime):
         promotion: PromotionManager | None = None,
         rng_streams: Mapping[str, Any] | None = None,
         identity: Mapping[str, Any] | None = None,
-    ) -> SnapshotState:
+    ) -> SimulationSnapshot:
         world_config = config or getattr(self._context, "config", None)
         if world_config is None:
             raise RuntimeError("WorldContext missing configuration for snapshot export")

@@ -20,8 +20,8 @@ from townlet.scheduler.perturbations import PerturbationScheduler
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig
     from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.dto.world import SimulationSnapshot
     from townlet.lifecycle.manager import LifecycleManager
-    from townlet.snapshots.state import SnapshotState
     from townlet.stability.monitor import StabilityMonitor
     from townlet.stability.promotion import PromotionManager
     from townlet.world.grid import WorldState
@@ -136,7 +136,7 @@ class WorldRuntime:
         promotion: PromotionManager | None = None,
         rng_streams: Mapping[str, random.Random] | None = None,
         identity: Mapping[str, object] | None = None,
-    ) -> SnapshotState:  # pragma: no cover - thin pass-through
+    ) -> SimulationSnapshot:  # pragma: no cover - thin pass-through
         """Expose the underlying world snapshot for diagnostics/tests."""
 
         target_config = config or getattr(self._world, "config", None)

@@ -18,7 +18,7 @@ from townlet.dto.observations import ObservationEnvelope
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.console.command import ConsoleCommandEnvelope
     from townlet.core.interfaces import TelemetrySinkProtocol
-    from townlet.snapshots.state import SnapshotState
+    from townlet.dto.world import SimulationSnapshot
     from townlet.world.grid import WorldState
     from townlet.world.runtime import RuntimeStepResult
 
@@ -92,7 +92,7 @@ class WorldRuntime(Protocol):
         promotion: Any | None = None,
         rng_streams: Mapping[str, Any] | None = None,
         identity: Mapping[str, Any] | None = None,
-    ) -> SnapshotState:
+    ) -> SimulationSnapshot:
         """Return a diagnostic snapshot of the underlying world state."""
 
 

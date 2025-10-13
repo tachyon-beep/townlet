@@ -10,7 +10,12 @@ from townlet.dto.observations import (
     GlobalObservationDTO,
     ObservationEnvelope,
 )
-from townlet.snapshots.state import SnapshotState
+from townlet.dto.world import (
+    EmploymentSnapshot,
+    IdentitySnapshot,
+    QueueSnapshot,
+    SimulationSnapshot,
+)
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
@@ -100,8 +105,17 @@ class DummyWorldRuntime:
         promotion: Any | None = None,
         rng_streams: Mapping[str, Any] | None = None,
         identity: Mapping[str, Any] | None = None,
-    ) -> SnapshotState:
-        return SnapshotState(config_id=self.config_id, tick=self._tick)
+    ) -> SimulationSnapshot:
+        """Return a minimal SimulationSnapshot for testing."""
+        return SimulationSnapshot(
+            config_id=self.config_id,
+            tick=self._tick,
+            agents={},
+            objects={},
+            queues=QueueSnapshot(),
+            employment=EmploymentSnapshot(),
+            identity=IdentitySnapshot(config_id=self.config_id),
+        )
 
 
 
