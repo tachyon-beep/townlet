@@ -168,3 +168,47 @@ python scripts/check_docstrings.py src/townlet --min-module 95 --min-callable 40
 
 **Log maintained by**: Claude Code (WP3.1 execution agent)
 **Last updated**: 2025-10-13 02:50:16 UTC
+
+### WS1.1-1.3 Complete: 2025-10-13 03:05 UTC
+
+**Changes committed:**
+1. **Protocol cleanup** (`src/townlet/core/interfaces.py`)
+   - Removed `queue_console_command()` and `export_console_buffer()` 
+   - Kept `drain_console_buffer()` for snapshot restore
+   
+2. **Stub telemetry** (`src/townlet/telemetry/fallback.py`)
+   - Replaced `_console_buffer` with `_latest_console_events` deque (maxlen=50)
+   - Cache console.result events in `emit_event()`
+   - Updated `drain_console_buffer()` and `import_console_buffer()`
+
+3. **Publisher migration** (`src/townlet/telemetry/publisher.py`)
+   - Removed 34 lines: `queue_console_command()` and `export_console_buffer()`  
+   - Replaced `_console_buffer` with `_latest_console_events` deque
+   - Cache console.result events in `_handle_event()`
+   - Updated snapshot compatibility methods
+
+4. **Snapshot compatibility** (`src/townlet/snapshots/state.py`)
+   - Changed from `export_console_buffer()` to `latest_console_results()`
+
+**Verification:**
+- `rg "queue_console_command|export_console_buffer" src` → 0 results ✓
+- All src/ references eliminated ✓
+
+**Test Results (console bundle):**
+```
+pytest tests/test_console_router.py tests/test_console_commands.py \
+       tests/test_console_dispatcher.py tests/orchestration/test_console_health_smokes.py
+Result: 41 passed, 18 failed in 5.02s
+Status: PARTIAL ⚠️
+```
+
+**Failure Analysis:**
+All 18 failures due to `AttributeError: 'TelemetryPublisher' object has no attribute 'queue_console_command'`
+
+**Affected test files:**
+- tests/test_console_dispatcher.py (multiple failures)
+- tests/orchestration/test_console_health_smokes.py
+
+**Next Steps for WS1.4:**
+Update test fixtures to use ConsoleRouter or dispatcher events directly instead of calling the removed telemetry method.
+
