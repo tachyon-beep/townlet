@@ -24,10 +24,15 @@ def step(ctx: SystemContext) -> None:
 
     if service is None:
         coordinator = getattr(state, "employment", None)
-        if coordinator is not None and hasattr(coordinator, "apply_job_state"):
-            coordinator.apply_job_state(state)  # type: ignore[call-arg]
-        else:
-            logger.debug("employment_step_skipped service_missing state=%s", type(state).__name__)
+        if coordinator is not None:
+            apply_fn = getattr(coordinator, "apply_job_state", None)
+            if callable(apply_fn):
+                apply_fn(state)
+                return
+        logger.debug(
+            "employment_step_skipped service_missing state=%s",
+            type(state).__name__,
+        )
         return
 
     assign_jobs(service)

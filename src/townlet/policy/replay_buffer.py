@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from typing import TypeAlias
 
 from townlet.policy.replay import (
     TRAINING_ARRAY_FIELDS,
@@ -49,8 +50,9 @@ class InMemoryReplayDataset:
         self.chat_success_count = 0
         self.chat_failure_count = 0
         self.chat_quality_mean = 0.0
+        self.baseline_metrics: dict[str, float] = {}
 
-    def _signature(self, sample: ReplaySample) -> tuple:
+    def _signature(self, sample: ReplaySample) -> Signature:
         return (
             tuple(sample.map.shape),
             tuple(sample.features.shape),
@@ -58,7 +60,7 @@ class InMemoryReplayDataset:
         )
 
     def _build_buckets(self, samples: list[ReplaySample]) -> list[list[ReplaySample]]:
-        buckets: dict[tuple, list[ReplaySample]] = {}
+        buckets: dict[Signature, list[ReplaySample]] = {}
         for s in samples:
             buckets.setdefault(self._signature(s), []).append(s)
         # Keep deterministic ordering by signature
@@ -83,3 +85,6 @@ class InMemoryReplayDataset:
                 batches += 1
             total_batches += batches
         return total_batches
+
+Shape: TypeAlias = tuple[int, ...]
+Signature: TypeAlias = tuple[Shape, Shape, tuple[Shape, ...]]

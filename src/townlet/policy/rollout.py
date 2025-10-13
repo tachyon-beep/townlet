@@ -22,9 +22,9 @@ from townlet.world.dto.observation import DTO_SCHEMA_VERSION
 @dataclass
 class AgentRollout:
     agent_id: str
-    frames: list[dict[str, object]] = field(default_factory=list)
+    frames: list[dict[str, Any]] = field(default_factory=list)
 
-    def append(self, frame: dict[str, object]) -> None:
+    def append(self, frame: dict[str, Any]) -> None:
         self.frames.append(frame)
 
     def to_replay_sample(self) -> ReplaySample:
@@ -38,7 +38,7 @@ class RolloutBuffer:
     """Collects trajectory frames and exposes helpers to save or replay them."""
 
     def __init__(self) -> None:
-        self._frames: list[dict[str, object]] = []
+        self._frames: list[dict[str, Any]] = []
         self._tick_count = 0
         self._queue_conflict_count = 0
         self._queue_conflict_intensity = 0.0
@@ -49,35 +49,33 @@ class RolloutBuffer:
         self._chat_failure_count = 0
         self._chat_quality_sum = 0.0
 
-    def record_events(self, events: Iterable[dict[str, object]]) -> None:
+    def record_events(self, events: Iterable[Mapping[str, Any]]) -> None:
         for event in events:
-            if event.get("event") == "queue_conflict":
+            event_name = event.get("event")
+            if event_name == "queue_conflict":
                 self._queue_conflict_count += 1
                 intensity = event.get("intensity")
-                try:
+                if isinstance(intensity, (int, float)):
                     self._queue_conflict_intensity += float(intensity)
-                except (TypeError, ValueError):
-                    continue
-            elif event.get("event") == "queue_interaction":
+            elif event_name == "queue_interaction":
                 continue
-            elif event.get("event") == "shared_meal":
+            elif event_name == "shared_meal":
                 self._shared_meal_count += 1
-            elif event.get("event") == "employment_helped_when_late":
+            elif event_name == "employment_helped_when_late":
                 self._late_help_count += 1
-            elif event.get("event") == "employment_took_my_shift":
+            elif event_name == "employment_took_my_shift":
                 self._shift_takeover_count += 1
-            elif event.get("event") == "chat_success":
+            elif event_name == "chat_success":
                 self._chat_success_count += 1
-                try:
-                    self._chat_quality_sum += float(event.get("quality", 0.0))
-                except (TypeError, ValueError):
-                    pass
-            elif event.get("event") == "chat_failure":
+                quality = event.get("quality", 0.0)
+                if isinstance(quality, (int, float)):
+                    self._chat_quality_sum += float(quality)
+            elif event_name == "chat_failure":
                 self._chat_failure_count += 1
 
-    def extend(self, frames: Iterable[dict[str, object]]) -> None:
+    def extend(self, frames: Iterable[Mapping[str, Any]]) -> None:
         for frame in frames:
-            self._frames.append(frame)
+            self._frames.append(dict(frame))
 
     def __len__(self) -> int:
         return len(self._frames)
@@ -192,8 +190,6 @@ class RolloutBuffer:
         counts: dict[str, int] = {}
         for metrics in metrics_sources:
             for key, value in metrics.items():
-                if not isinstance(value, (int, float)):
-                    continue
                 totals[key] = totals.get(key, 0.0) + float(value)
                 counts[key] = counts.get(key, 0) + 1
 
@@ -214,7 +210,7 @@ class RolloutBuffer:
         return aggregate
 
 
-def build_dto_rollout_artifact(agent_id: str, frames: Sequence[dict[str, object]]) -> dict[str, Any]:
+def build_dto_rollout_artifact(agent_id: str, frames: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Normalise rollout frames into a DTO-native export payload."""
 
     if not frames:

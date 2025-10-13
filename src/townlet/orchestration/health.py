@@ -19,8 +19,12 @@ class HealthMonitor:
 
     def on_tick(self, snapshot: Mapping[str, Any], telemetry: TelemetrySink) -> None:
         tick = int(snapshot.get("tick", 0))
-        events: Iterable[Mapping[str, Any]] = snapshot.get("events", [])  # type: ignore[assignment]
-        event_list = list(events)
+        events_obj = snapshot.get("events", [])
+        event_list: list[Mapping[str, Any]] = []
+        if isinstance(events_obj, Iterable):
+            for entry in events_obj:
+                if isinstance(entry, Mapping):
+                    event_list.append(entry)
         self._event_counts.append(len(event_list))
 
         metrics = snapshot.get("metrics", {})

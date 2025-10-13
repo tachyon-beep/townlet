@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from townlet.agents.models import PersonalityProfile, PersonalityProfiles
 from townlet.config import SimulationConfig
 from townlet.world.grid import WorldState
 from townlet.world.observations.context import agent_context as observation_agent_context
+from townlet.utils.coerce import coerce_float
 
 
 class RewardEngine:
@@ -27,6 +28,7 @@ class RewardEngine:
         self._latest_breakdown: dict[str, dict[str, float]] = {}
         self._reward_scaling_enabled = config.reward_personality_scaling_enabled()
         self._profile_cache: dict[str, PersonalityProfile] = {}
+        self._latest_social_events: list[dict[str, object]] = []
 
     def compute(
         self,
@@ -72,7 +74,7 @@ class RewardEngine:
             needs_penalty = 0.0
             for need, value in snapshot.needs.items():
                 weight = getattr(weights, need, 0.0)
-                deficit = 1.0 - float(value)
+                deficit = 1.0 - coerce_float(value, default=1.0)
                 needs_penalty += weight * max(0.0, deficit) ** 2
             total -= needs_penalty
             components["needs_penalty"] = -needs_penalty
@@ -153,23 +155,23 @@ class RewardEngine:
     def _consume_chat_events(self, world: WorldState) -> Iterable[dict[str, object]]:
         consumer = getattr(world, "consume_chat_events", None)
         if callable(consumer):
-            return consumer()
-        return []
+            return self._normalise_event_iterable(consumer())
+        return ()
 
     def _consume_avoidance_events(
         self, world: WorldState
     ) -> Iterable[dict[str, object]]:
         consumer = getattr(world, "consume_relationship_avoidance_events", None)
         if callable(consumer):
-            return consumer()
-        return []
+            return self._normalise_event_iterable(consumer())
+        return ()
 
     def _social_stage_value(self) -> int:
         stage = getattr(self.config.features.stages, "social_rewards", "OFF")
         order = {"OFF": 0, "C1": 1, "C2": 2, "C3": 3}
         return order.get(stage, 0)
 
-    def _profile_for(self, snapshot) -> PersonalityProfile | None:
+    def _profile_for(self, snapshot: Any) -> PersonalityProfile | None:
         if not self._reward_scaling_enabled:
             return None
         name = getattr(snapshot, "personality_profile", None)
@@ -251,11 +253,8 @@ class RewardEngine:
             listener = str(event.get("listener")) if event.get("listener") else None
             if not speaker or not listener:
                 continue
-            quality = event.get("quality", 1.0)
-            try:
-                quality_factor = max(0.0, min(1.0, float(quality)))
-            except (TypeError, ValueError):
-                quality_factor = 1.0
+            quality = coerce_float(event.get("quality", 1.0), default=1.0)
+            quality_factor = max(0.0, min(1.0, quality))
 
             for subject, target in ((speaker, listener), (listener, speaker)):
                 snapshot = world.agents.get(subject)
@@ -318,12 +317,9 @@ class RewardEngine:
             )
         return log
 
-    def _needs_override(self, snapshot) -> bool:
+    def _needs_override(self, snapshot: Any) -> bool:
         for value in snapshot.needs.values():
-            try:
-                deficit = 1.0 - float(value)
-            except (TypeError, ValueError):
-                continue
+            deficit = 1.0 - coerce_float(value, default=1.0)
             if deficit > 0.85:
                 return True
         return False
@@ -357,8 +353,8 @@ class RewardEngine:
         if wage_rate <= 0.0:
             return 0.0
         ctx = observation_agent_context(world, agent_id)
-        wages_paid = float(ctx.get("wages_paid", 0.0))
-        wages_withheld = float(ctx.get("wages_withheld", 0.0))
+        wages_paid = coerce_float(ctx.get("wages_paid", 0.0), default=0.0)
+        wages_withheld = coerce_float(ctx.get("wages_withheld", 0.0), default=0.0)
         return wages_paid - wages_withheld
 
     def _compute_punctuality_bonus(
@@ -370,7 +366,7 @@ class RewardEngine:
         if bonus_rate <= 0.0:
             return 0.0
         ctx = observation_agent_context(world, agent_id)
-        punctuality = float(ctx.get("punctuality_bonus", 0.0))
+        punctuality = coerce_float(ctx.get("punctuality_bonus", 0.0), default=0.0)
         return bonus_rate * punctuality
 
     def _compute_terminal_penalty(
@@ -407,3 +403,14 @@ class RewardEngine:
 
     def latest_social_events(self) -> list[dict[str, object]]:
         return [dict(event) for event in self._latest_social_events]
+
+    def _normalise_event_iterable(
+        self, events: object
+    ) -> list[dict[str, object]]:
+        if not isinstance(events, Iterable):
+            return []
+        normalised: list[dict[str, object]] = []
+        for event in events:
+            if isinstance(event, Mapping):
+                normalised.append({str(key): value for key, value in event.items()})
+        return normalised

@@ -19,12 +19,11 @@ def _provider_lookup(loop: object, key: str, fallback_attr: str) -> str:
     if isinstance(info, dict):
         return str(info.get(key, "unknown") or "unknown")
     if info is not None:
-        try:
-            value = info.get(key, "unknown")  # type: ignore[attr-defined]
+        getter = getattr(info, "get", None)
+        if callable(getter):
+            value = getter(key, "unknown")
             if value:
                 return str(value)
-        except AttributeError:
-            pass
     attr_value = getattr(loop, fallback_attr, None)
     if attr_value:
         return str(attr_value)

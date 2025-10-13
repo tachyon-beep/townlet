@@ -79,6 +79,9 @@ class WorldRuntimeAdapterProtocol(Protocol):
     def relationships_snapshot(self) -> Mapping[str, Mapping[str, Mapping[str, float]]]:
         ...
 
+    def relationship_metrics_snapshot(self) -> Mapping[str, Any]:
+        ...
+
     def rivalry_top(self, agent_id: str, limit: int) -> Iterable[tuple[str, float]]:
         ...
 

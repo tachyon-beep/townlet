@@ -2,26 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from townlet.adapters.policy_scripted import ScriptedPolicyAdapter
-from townlet.core import factory_registry as core_registry
+from townlet.core.interfaces import PolicyBackendProtocol
+from townlet.ports.policy import PolicyBackend
 from townlet.policy.fallback import StubPolicyBackend
+from townlet.policy.models import torch_available
 from townlet.policy.runner import PolicyRuntime
 from townlet.testing import DummyPolicyBackend
 
 from .registry import register, resolve
 
 
-def create_policy(provider: str = "scripted", **kwargs: Any):
-    return resolve("policy", provider, **kwargs)
+def create_policy(provider: str = "scripted", **kwargs: Any) -> PolicyBackend:
+    return cast(PolicyBackend, resolve("policy", provider, **kwargs))
 
 
 @register("policy", "scripted")
 @register("policy", "default")
 def _build_scripted_policy(
     *,
-    backend: PolicyRuntime,
+    backend: PolicyBackendProtocol,
 ) -> ScriptedPolicyAdapter:
     adapter = ScriptedPolicyAdapter(backend)
     return adapter
@@ -34,10 +36,10 @@ def _build_stub_policy(**kwargs: Any) -> StubPolicyBackend:
 @register("policy", "pytorch")
 def _build_pytorch_policy(
     *,
-    backend: PolicyRuntime,
+    backend: PolicyBackendProtocol,
     **kwargs: Any,
 ) -> ScriptedPolicyAdapter:
-    if not core_registry.torch_available():
+    if not torch_available():
         stub_backend = StubPolicyBackend(
             config=getattr(backend, "config", None),
             backend=backend,

@@ -18,6 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
 ObservationBatch: TypeAlias = Mapping[str, object]
 RewardMapping: TypeAlias = Mapping[str, float]
 TerminationMapping: TypeAlias = Mapping[str, bool]
+TransitionFrames: TypeAlias = list[dict[str, object]]
 
 @runtime_checkable
 class PolicyBackendProtocol(Protocol):
@@ -58,7 +59,7 @@ class PolicyBackendProtocol(Protocol):
         self,
         *,
         envelope: ObservationEnvelope,
-    ) -> None:
+    ) -> Mapping[str, object] | TransitionFrames | None:
         """Flush buffered transitions once the DTO envelope is available."""
 
     def latest_policy_snapshot(self) -> Mapping[str, Mapping[str, object]]:

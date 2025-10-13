@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from townlet.config import SimulationConfig
+from townlet.utils.coerce import coerce_int
 
 
 class PromotionManager:
@@ -42,11 +43,13 @@ class PromotionManager:
         promotion_block = metrics.get("promotion")
         if not isinstance(promotion_block, Mapping):
             return
-        self._pass_streak = int(promotion_block.get("pass_streak", 0))
+        self._pass_streak = coerce_int(promotion_block.get("pass_streak"), default=0)
         last_result = promotion_block.get("last_result")
         self._last_result = str(last_result) if last_result is not None else None
         last_tick = promotion_block.get("last_evaluated_tick")
-        self._last_evaluated_tick = int(last_tick) if last_tick is not None else None
+        self._last_evaluated_tick = (
+            coerce_int(last_tick) if last_tick is not None else None
+        )
 
         candidate_ready = bool(promotion_block.get("candidate_ready", False))
         if candidate_ready:
@@ -158,21 +161,21 @@ class PromotionManager:
 
     def import_state(self, payload: Mapping[str, object]) -> None:
         self._state = str(payload.get("state", "monitoring"))
-        self._pass_streak = int(payload.get("pass_streak", 0))
-        self._required_passes = int(payload.get("required_passes", self._required_passes))
+        self._pass_streak = coerce_int(payload.get("pass_streak"), default=0)
+        self._required_passes = coerce_int(
+            payload.get("required_passes"), default=self._required_passes
+        )
         self._candidate_ready = bool(payload.get("candidate_ready", False))
         ready_tick = payload.get("candidate_ready_tick")
-        if isinstance(ready_tick, (int, float, str)):
-            self._candidate_ready_tick = int(ready_tick)
-        else:
-            self._candidate_ready_tick = None
+        self._candidate_ready_tick = (
+            coerce_int(ready_tick) if ready_tick is not None else None
+        )
         last_result = payload.get("last_result")
         self._last_result = str(last_result) if last_result is not None else None
         last_tick = payload.get("last_evaluated_tick")
-        if isinstance(last_tick, (int, float, str)):
-            self._last_evaluated_tick = int(last_tick)
-        else:
-            self._last_evaluated_tick = None
+        self._last_evaluated_tick = (
+            coerce_int(last_tick) if last_tick is not None else None
+        )
         initial_release = payload.get("initial_release")
         if isinstance(initial_release, Mapping):
             self._initial_release = dict(initial_release)

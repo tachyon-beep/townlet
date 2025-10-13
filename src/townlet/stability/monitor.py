@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+
+from townlet.utils.coerce import coerce_float, coerce_int
 
 from townlet.config import SimulationConfig
 
@@ -106,15 +108,15 @@ class StabilityMonitor:
         self.last_embedding_metrics = embedding_metrics
         alerts: list[str] = []
 
-        fairness_delta = {
+        fairness_delta: dict[str, int] = {
             "cooldown_events": 0,
             "ghost_step_events": 0,
             "rotation_events": 0,
         }
         if queue_metrics:
             for key in fairness_delta:
-                new_value = int(queue_metrics.get(key, 0))
-                old_value = int(previous_queue_metrics.get(key, 0))
+                new_value = coerce_int(queue_metrics.get(key))
+                old_value = coerce_int(previous_queue_metrics.get(key))
                 fairness_delta[key] = max(0, new_value - old_value)
             if (
                 fairness_delta["ghost_step_events"] >= self._fairness_alert_limit
@@ -138,13 +140,13 @@ class StabilityMonitor:
                     late_value = agent_info.get("late_ticks_today", 0)
                 else:
                     late_value = agent_info.get("lateness_counter", 0)
-                lateness_total += int(late_value)
+                lateness_total += coerce_int(late_value)
             if lateness_total > self.lateness_threshold:
                 alerts.append("lateness_spike")
 
         if employment_metrics is not None:
-            pending = int(employment_metrics.get("pending_count", 0))
-            limit = int(employment_metrics.get("queue_limit", 0))
+            pending = coerce_int(employment_metrics.get("pending_count"))
+            limit = coerce_int(employment_metrics.get("queue_limit"))
             if limit and pending > limit:
                 alerts.append("employment_exit_queue_overflow")
             elif pending and not alerts:
@@ -167,11 +169,15 @@ class StabilityMonitor:
             active_agent_count=len(hunger_levels or {}),
         )
 
-        rivalry_events_list = list(rivalry_events or [])
+        rivalry_events_list = [
+            {str(key): value for key, value in event.items()}
+            for event in (rivalry_events or [])
+            if isinstance(event, Mapping)
+        ]
         high_intensity = [
             event
             for event in rivalry_events_list
-            if float(event.get("intensity", 0.0))
+            if coerce_float(event.get("intensity"), default=0.0)
             >= self.config.conflict.rivalry.avoid_threshold
         ]
         if len(high_intensity) >= self._fairness_alert_limit:
@@ -223,10 +229,14 @@ class StabilityMonitor:
             "starvation_streaks": dict(self._starvation_streaks),
             "starvation_active": list(self._starvation_active),
             "starvation_incidents": [
-                list(entry) for entry in self._starvation_incidents
+                [tick, agent] for tick, agent in self._starvation_incidents
             ],
-            "reward_samples": [list(entry) for entry in self._reward_samples],
-            "option_samples": [list(entry) for entry in self._option_samples],
+            "reward_samples": [
+                [tick, value] for tick, value in self._reward_samples
+            ],
+            "option_samples": [
+                [tick, value] for tick, value in self._option_samples
+            ],
             "latest_metrics": dict(self._latest_metrics),
             "promotion": {
                 "window_start": self._promotion_window_start,
@@ -238,11 +248,11 @@ class StabilityMonitor:
             },
         }
 
-    def import_state(self, payload: dict[str, object]) -> None:
+    def import_state(self, payload: Mapping[str, object]) -> None:
         streaks = payload.get("starvation_streaks", {})
         if isinstance(streaks, dict):
             self._starvation_streaks = {
-                str(agent): int(value) for agent, value in streaks.items()
+                str(agent): coerce_int(value) for agent, value in streaks.items()
             }
         else:
             self._starvation_streaks = {}
@@ -259,7 +269,7 @@ class StabilityMonitor:
             for entry in incidents:
                 if isinstance(entry, (list, tuple)) and len(entry) == 2:
                     tick, agent = entry
-                    self._starvation_incidents.append((int(tick), str(agent)))
+                    self._starvation_incidents.append((coerce_int(tick), str(agent)))
 
         reward_samples = payload.get("reward_samples", [])
         self._reward_samples = deque()
@@ -267,7 +277,9 @@ class StabilityMonitor:
             for entry in reward_samples:
                 if isinstance(entry, (list, tuple)) and len(entry) == 2:
                     tick, value = entry
-                    self._reward_samples.append((int(tick), float(value)))
+                    self._reward_samples.append(
+                        (coerce_int(tick), coerce_float(value, default=0.0))
+                    )
 
         option_samples = payload.get("option_samples", [])
         self._option_samples = deque()
@@ -275,20 +287,28 @@ class StabilityMonitor:
             for entry in option_samples:
                 if isinstance(entry, (list, tuple)) and len(entry) == 2:
                     tick, value = entry
-                    self._option_samples.append((int(tick), float(value)))
+                    self._option_samples.append(
+                        (coerce_int(tick), coerce_float(value, default=0.0))
+                    )
         promotion = payload.get("promotion", {})
         if isinstance(promotion, dict):
-            self._promotion_window_start = int(promotion.get("window_start", 0))
+            self._promotion_window_start = coerce_int(
+                promotion.get("window_start"), default=0
+            )
             self._promotion_window_failed = bool(promotion.get("window_failed", False))
-            self._promotion_pass_streak = int(promotion.get("pass_streak", 0))
-            self._promotion_candidate_ready = bool(promotion.get("candidate_ready", False))
+            self._promotion_pass_streak = coerce_int(
+                promotion.get("pass_streak"), default=0
+            )
+            self._promotion_candidate_ready = bool(
+                promotion.get("candidate_ready", False)
+            )
             last_result = promotion.get("last_result")
             self._promotion_last_result = (
                 str(last_result) if last_result is not None else None
             )
             last_tick = promotion.get("last_evaluated_tick")
             self._promotion_last_evaluated_tick = (
-                int(last_tick) if last_tick is not None else None
+                coerce_int(last_tick) if last_tick is not None else None
             )
         else:
             self._promotion_window_start = 0
@@ -303,7 +323,10 @@ class StabilityMonitor:
         if "thresholds" not in self._latest_metrics:
             self._latest_metrics["thresholds"] = self._threshold_snapshot()
         self._latest_metrics["promotion"] = self._promotion_snapshot()
-        self.latest_alerts = list(self._latest_metrics.get("alerts", []))
+        alerts_obj = self._latest_metrics.get("alerts", [])
+        self.latest_alerts = (
+            list(alerts_obj) if isinstance(alerts_obj, Iterable) else []
+        )
         self.latest_alert = self.latest_alerts[0] if self.latest_alerts else None
 
     def reset_state(self) -> None:
@@ -341,7 +364,8 @@ class StabilityMonitor:
             return len(self._starvation_incidents)
 
         for agent_id, hunger in hunger_levels.items():
-            if hunger <= self._starvation_cfg.hunger_threshold:
+            hunger_value = coerce_float(hunger, default=1.0)
+            if hunger_value <= self._starvation_cfg.hunger_threshold:
                 streak = self._starvation_streaks.get(agent_id, 0) + 1
                 self._starvation_streaks[agent_id] = streak
                 if (
@@ -355,7 +379,7 @@ class StabilityMonitor:
                 self._starvation_active.discard(agent_id)
 
         for agent_id, was_terminated in terminated.items():
-            if was_terminated:
+            if bool(was_terminated):
                 self._starvation_streaks.pop(agent_id, None)
                 self._starvation_active.discard(agent_id)
 
@@ -372,7 +396,9 @@ class StabilityMonitor:
             self._reward_samples.popleft()
 
         for value in rewards.values():
-            self._reward_samples.append((tick, float(value)))
+            self._reward_samples.append(
+                (tick, coerce_float(value, default=0.0))
+            )
 
         if not self._reward_samples:
             return None, None, 0
@@ -406,7 +432,10 @@ class StabilityMonitor:
             self._option_samples.popleft()
 
         if option_switch_counts is not None:
-            total_switches = float(sum(option_switch_counts.values()))
+            total_switches = sum(
+                coerce_float(value, default=0.0)
+                for value in option_switch_counts.values()
+            )
             agents_considered = active_agent_count or len(option_switch_counts)
             if agents_considered <= 0:
                 agents_considered = 1

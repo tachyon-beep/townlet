@@ -366,7 +366,11 @@ class PolicyRuntime:
             return
         raise RuntimeError("WorldState.emit_event unavailable for guardrail event request")
 
-    def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
+    def post_step(
+        self,
+        rewards: Mapping[str, float],
+        terminated: Mapping[str, bool],
+    ) -> None:
         """Record rewards and termination signals into internal buffers."""
         for agent_id, reward in rewards.items():
             done = bool(terminated.get(agent_id, False))

@@ -30,10 +30,10 @@ from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
 )
-from townlet.ports.telemetry import TelemetrySink
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
+from townlet.ports.policy import PolicyBackend
 from townlet.ports.telemetry import TelemetrySink
 from townlet.policy.runner import PolicyRuntime
 from townlet.ports.world import WorldRuntime
@@ -74,9 +74,9 @@ class WorldComponents:
 
 @dataclass(slots=True)
 class PolicyComponents:
-    port: PolicyBackendProtocol
+    port: PolicyBackend
     controller: PolicyController | None
-    decision_backend: PolicyRuntime
+    decision_backend: PolicyBackendProtocol
     provider: str
 
 
@@ -174,7 +174,7 @@ class SimulationLoop:
         self._world_context: WorldContext | None = None
         self._world_port: WorldRuntime | None = None
         self._console_service: ConsoleService | None = None
-        self._policy_port: PolicyBackendProtocol | None = None
+        self._policy_port: PolicyBackend | None = None
         self._telemetry_port: TelemetrySink | None = None
         self.telemetry_publisher: TelemetryPublisher | None = None
         self._policy_controller: PolicyController | None = None

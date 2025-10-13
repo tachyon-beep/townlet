@@ -8,6 +8,7 @@ subsystems consume (policy, telemetry, rewards, etc.).
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -120,9 +121,11 @@ class WorldRuntime:
 
         context = getattr(self._world, "context", None)
         if context is not None:
-            context.apply_actions(actions)  # type: ignore[attr-defined]
-        else:
-            self._pending_actions = dict(actions)
+            apply_actions = getattr(context, "apply_actions", None)
+            if callable(apply_actions):
+                apply_actions(actions)
+                return
+        self._pending_actions = dict(actions)
 
     def snapshot(
         self,
@@ -131,7 +134,7 @@ class WorldRuntime:
         telemetry: TelemetrySinkProtocol | None = None,
         stability: StabilityMonitor | None = None,
         promotion: PromotionManager | None = None,
-        rng_streams: Mapping[str, object] | None = None,
+        rng_streams: Mapping[str, random.Random] | None = None,
         identity: Mapping[str, object] | None = None,
     ) -> SnapshotState:  # pragma: no cover - thin pass-through
         """Expose the underlying world snapshot for diagnostics/tests."""
