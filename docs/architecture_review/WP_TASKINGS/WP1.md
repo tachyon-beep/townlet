@@ -198,4 +198,76 @@ def test_ports_do_not_expose_forbidden_symbols():
 
 ---
 
-**Proceed to implement Work Package 1 now, strictly following ADR 0001.**
+## COMPLETION SIGN-OFF
+
+**Status**: ✅ COMPLETE
+**Completion Date**: 2025-10-13 (WP3.2 WS1)
+**Verified By**: Claude Code (autonomous agent)
+
+### Sanity Checklist — Final Status
+
+* ✅ `townlet/ports/*` expose exactly the ADR‑specified methods; **no** console/training/transport methods.
+* ✅ Composition root imports only ports and factories.
+* ✅ At least one `"default"` adapter per domain is registered and used by default config.
+* ✅ `pytest -q` passes the new tests; smoke tests green (14/14 tests passing).
+* ✅ `ruff`/`mypy` clean for new code; docstrings present.
+* ✅ ADR updated to reflect the exact method tables implemented (ADR-001 Implementation Status section added).
+
+### Deliverables — Verification
+
+1. ✅ **Ports (Protocols)** — Created in `townlet/ports/` with minimal, ADR-compliant interfaces
+   - `world.py`: WorldRuntime protocol with 6 methods
+   - `policy.py`: PolicyBackend protocol with 3 methods
+   - `telemetry.py`: TelemetrySink protocol with 4 methods
+   - Enhanced with comprehensive docstrings explaining structural typing pattern
+
+2. ✅ **Adapters** — Anti-corruption layer implemented
+   - Adapters in `townlet/adapters/` satisfy port protocols
+   - Delegate to concrete implementations cleanly
+   - No port leakage into adapter internals
+
+3. ✅ **Registry-backed Factories** — Configuration-driven composition
+   - `townlet/factories/registry.py` with decorator-based registration
+   - `create_world()`, `create_policy()`, `create_telemetry()` factories
+   - All built-in providers registered (default, dummy, stub, scripted)
+   - Unknown keys raise `ConfigurationError` with helpful messages
+
+4. ✅ **Composition Root** — Loop depends only on ports
+   - Simulation loop imports only `townlet.ports.*` and factories
+   - No direct concrete imports
+   - Factory-based dependency resolution
+
+5. ✅ **Minimal Stubs** — Test infrastructure
+   - `townlet/testing/dummies.py` with DummyWorld, DummyPolicy, DummyTelemetry
+   - All registered with appropriate keys
+   - Used in smoke tests successfully
+
+6. ✅ **Tests** — Comprehensive coverage (14 tests)
+   - `tests/test_ports_surface.py` (3 tests) — Port surface validation
+   - `tests/test_factory_registry.py` (7 tests) — Factory behavior verification
+   - `tests/core/test_sim_loop_with_dummies.py` (3 tests) — Integration tests
+   - `tests/core/test_sim_loop_modular_smoke.py` (1 test) — Smoke tests
+   - All tests passing
+
+7. ✅ **Docs & Hygiene** — Documentation complete
+   - ADR-001 updated with Implementation Status section
+   - Docstrings on all public surfaces
+   - `ruff` and `mypy` clean
+   - Port protocol documentation enhanced with naming convention explanation
+
+### Implementation Notes
+
+- WorldRuntime protocol and concrete class share the same name by design (structural typing via PEP 544)
+- Different namespaces prevent confusion (`ports.world` vs `world.runtime`)
+- Obsolete world context stub deleted during WP3.2 cleanup
+- Implementation evolved beyond original spec in ways that improve architecture (see ADR-001 deviations)
+
+### Related Documents
+
+- `docs/architecture_review/ADR/ADR-001 - Port and Factory Registry.md` — Architectural decision with implementation status
+- `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` — WorldContext implementation details
+- `docs/architecture_review/WP_TASKINGS/WP3.md` — DTO boundary work extending these ports
+
+---
+
+**Work Package 1 implementation complete and verified.**

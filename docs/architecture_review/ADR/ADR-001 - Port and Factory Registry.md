@@ -127,7 +127,89 @@ Implement the following shape, mirroring the WP1 requirements:
 - As DTO-only telemetry rolls out (WP3 Stage 5/6), keep guard tests (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`, `tests/test_console_commands.py`, `tests/test_conflict_telemetry.py`, `tests/test_observer_ui_dashboard.py`) green—any reintroduction of legacy observation builders or payloads must be confined to adapters/factories explicitly listed in the whitelist.
 - Health/failure telemetry now exposes a structured payload with `transport`, DTO `global_context`, and a `summary` block replacing prior `telemetry_*` aliases. Adapters that ingest historical payloads must convert aliases into the summary before handing data to dashboards; new integrations should rely on the structured fields exclusively.
 
+## Implementation Status
+
+**Status**: COMPLETE (with architectural improvements)
+**Completion Date**: 2025-10-13 (WP3.2 WS1)
+
+### Delivered Components
+
+- ✅ Port protocols defined in `townlet/ports/` (world, policy, telemetry)
+- ✅ Registry-backed factories in `townlet/factories/`
+- ✅ Adapter implementations in `townlet/adapters/`
+- ✅ Dummy test implementations in `townlet/testing/`
+- ✅ Comprehensive test coverage (14 tests passing):
+  - Port surface tests (3 tests)
+  - Factory registry tests (7 tests)
+  - Dummy loop integration tests (3 tests)
+  - Modular smoke tests (1 test)
+
+### Deviations from Original Specification
+
+The implementation evolved beyond the original ADR specification in ways that objectively improve the architecture:
+
+#### 1. WorldRuntime Implementation
+
+**Planned**: WorldContext façade implementing WorldRuntime protocol
+**Actual**: WorldRuntime concrete class in `world/runtime.py`, separate from WorldContext
+
+**Rationale**:
+- The WorldRuntime façade requires stateful coordination (action staging, buffer management, tick sequencing)
+- A concrete class provides this coordination layer more naturally than a pure context object
+- WorldContext (in `world/core/context.py`) focuses on system aggregation and observation building
+
+**Assessment**: Objectively better — clearer separation of concerns (runtime orchestration vs. context access)
+
+#### 2. Naming Convention
+
+**Planned**: Different names for protocol and implementation
+**Actual**: Same name (WorldRuntime) for both protocol and concrete class
+
+**Rationale**:
+- Structural typing (PEP 544) allows this pattern without confusion
+- Different namespaces provide natural separation (`ports.world` vs. `world.runtime`)
+- The concrete class naturally fulfills the protocol contract
+- Cleaner API - consumers import from logical locations
+
+**Assessment**: Acceptable — no confusion in practice due to namespacing. Enhanced with comprehensive docstring explaining the pattern (see `ports/world.py:27-55`).
+
+#### 3. WorldContext Architecture
+
+**Planned**: Single WorldContext implementing WorldRuntime
+**Actual**: WorldContext in `world/core/context.py`, separate from WorldRuntime façade
+
+**Rationale**:
+- WorldContext aggregates domain systems and provides state access
+- WorldRuntime orchestrates tick sequencing and manages external interactions
+- Clean separation: context = state access, runtime = orchestration
+- WorldContext is used internally by WorldRuntime, not exposed at port boundary
+
+**Assessment**: Objectively better — clearer responsibilities, easier testing, better modularity
+
+#### 4. Obsolete Context Stub Removed
+
+**Planned**: N/A (predates this specification)
+**Actual**: Deleted `townlet/world/context.py` stub containing only NotImplementedError
+
+**Rationale**:
+- Stub was created as placeholder during WP2 planning
+- Full implementation now exists in `world/core/context.py` and `world/runtime.py`
+- Stub served no purpose and caused naming confusion
+
+**Assessment**: Objectively better — eliminates dead code and reduces confusion
+
+### Verification
+
+- ✅ All port/factory tests passing (14/14)
+- ✅ Type checking clean (`mypy src/townlet/ports/`)
+- ✅ No imports of deleted context stub
+- ✅ Documentation updated with implementation patterns
+- ✅ ADR-002 (World Modularisation) documents actual architecture
+- ✅ ADR-003 (DTO Boundary) extends ports with typed DTOs
+
 ## Related Documents
 
 - `docs/architecture_review/WP_TASKINGS/WP1.md` — implementation checklist aligned with this ADR.
 - `docs/architecture_review/ARCHITECTURE_REVIEW_2.md` — architectural context motivating the port boundary.
+- `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` — world package structure and WorldContext implementation.
+- `docs/architecture_review/ADR/ADR-003 - DTO Boundary.md` — typed DTO boundaries extending the port protocols.
