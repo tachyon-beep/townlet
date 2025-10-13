@@ -11,7 +11,7 @@ def test_simulation_loop_modular_smoke_emits_console_events() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     loop = SimulationLoop(config)
 
-    loop.telemetry.queue_console_command({"name": "snapshot"})
+    loop.telemetry.import_console_buffer([{"name": "snapshot"}])
 
     first = loop.step()
     second = loop.step()

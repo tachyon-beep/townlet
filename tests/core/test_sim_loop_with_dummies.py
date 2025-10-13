@@ -36,7 +36,7 @@ def test_dummy_loop_routes_console_commands(simulation_config) -> None:
     loop = harness.loop
     telemetry_sink = harness.telemetry_sink
 
-    loop.telemetry.queue_console_command({"name": "snapshot", "cmd_id": "snap-1"})
+    loop.telemetry.import_console_buffer([{"name": "snapshot", "cmd_id": "snap-1"}])
     loop.step()
 
     console_events = [entry for entry in telemetry_sink.events if entry[0] == "console.result"]

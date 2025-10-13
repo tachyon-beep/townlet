@@ -20,8 +20,10 @@ def test_console_router_smoke(simulation_config: SimulationConfig) -> None:
 
     assert harness.console_router is not None, "Console router should be initialised"
 
-    loop.telemetry.queue_console_command({"name": "snapshot", "cmd_id": "snap-1"})
-    loop.telemetry.queue_console_command({"name": "unknown", "cmd_id": "oops"})
+    loop.telemetry.import_console_buffer([
+        {"name": "snapshot", "cmd_id": "snap-1"},
+        {"name": "unknown", "cmd_id": "oops"}
+    ])
 
     loop.step()
 

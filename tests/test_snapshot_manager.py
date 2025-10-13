@@ -265,7 +265,7 @@ def test_world_relationship_snapshot_round_trip(
     telemetry._latest_economy_snapshot = {"fridge_1": {"stock": {"meals": 3}}}
     telemetry._latest_employment_metrics = {"pending": ["alice"]}
     telemetry._latest_events = [{"event": "test"}]
-    telemetry.queue_console_command({"cmd": "foo"})
+    telemetry.import_console_buffer([{"cmd": "foo"}])
 
     scheduler = PerturbationScheduler(sample_config, rng=events_rng)
     scheduler.enqueue(
@@ -347,7 +347,7 @@ def test_world_relationship_snapshot_round_trip(
     baseline_state.pop("relationship_metrics", None)
     assert restored_state == baseline_state
     assert (
-        restored_telemetry.export_console_buffer() == telemetry.export_console_buffer()
+        list(restored_telemetry.drain_console_buffer()) == list(telemetry.drain_console_buffer())
     )
     # Perturbation scheduler runs outside the manager in this test; ensure state
     # persists via the scheduler snapshot payload.

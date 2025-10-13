@@ -36,7 +36,7 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
     loop.world.register_object(object_id="fridge_1", object_type="fridge")
 
     loop.world.update_relationship("alice", "bob", trust=0.3, familiarity=0.1)
-    loop.telemetry.queue_console_command({"cmd": "noop"})
+    loop.telemetry.import_console_buffer([{"cmd": "noop"}])
     loop.perturbations.enqueue([{"event": "test"}])
     saved_path = loop.save_snapshot(tmp_path)
 
@@ -65,8 +65,8 @@ def test_simulation_loop_snapshot_round_trip(tmp_path: Path, base_config) -> Non
     ):
         assert restored_telemetry.get(key) == baseline_telemetry.get(key)
     assert (
-        restored.telemetry.export_console_buffer()
-        == loop.telemetry.export_console_buffer()
+        list(restored.telemetry.drain_console_buffer())
+        == list(loop.telemetry.drain_console_buffer())
     )
     assert restored.perturbations.export_state() == loop.perturbations.export_state()
 
@@ -127,7 +127,7 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     snapshot_root = tmp_path / "snapshots"
     snapshot_root.mkdir()
     saved_path = baseline.save_snapshot(snapshot_root)
-    baseline.telemetry.queue_console_command({"cmd": "pending"})
+    baseline.telemetry.import_console_buffer([{"cmd": "pending"}])
 
     baseline_snapshots: list[dict[str, object]] = []
     for _ in range(3):
@@ -144,7 +144,7 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
 
     resumed = SimulationLoop(base_config)
     resumed.load_snapshot(saved_path)
-    resumed.telemetry.queue_console_command({"cmd": "pending"})
+    resumed.telemetry.import_console_buffer([{"cmd": "pending"}])
 
     resumed_snapshots: list[dict[str, object]] = []
     for _ in range(3):
@@ -170,8 +170,8 @@ def test_simulation_resume_equivalence(tmp_path: Path, base_config) -> None:
     ):
         assert restored_telemetry.get(key) == baseline_telemetry.get(key)
     assert (
-        resumed.telemetry.export_console_buffer()
-        == baseline.telemetry.export_console_buffer()
+        list(resumed.telemetry.drain_console_buffer())
+        == list(baseline.telemetry.drain_console_buffer())
     )
 
 

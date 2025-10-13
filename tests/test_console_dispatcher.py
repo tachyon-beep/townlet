@@ -50,7 +50,9 @@ def _queue_command(loop: SimulationLoop, payload: dict[str, object]) -> None:
         if payload.get("mode") == "admin":
             token = ADMIN_TOKEN
         payload = {**payload, "auth": {"token": token}}
-    loop.telemetry.queue_console_command(payload)
+    # Directly append to avoid clearing the buffer on each call
+    # (import_console_buffer clears before importing)
+    loop.telemetry._latest_console_events.append(payload)
 
 
 def test_dispatcher_processes_employment_review(employment_loop: SimulationLoop) -> None:
