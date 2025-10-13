@@ -4,6 +4,7 @@ from pathlib import Path
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 
 
@@ -41,9 +42,10 @@ def test_employment_queue_snapshot_tracks_pending_agent() -> None:
     assert snapshot["pending"] == ["alice"]
     assert snapshot["pending_count"] == 1
 
-    loop.telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=loop.tick,
+        payload={
             "tick": loop.tick,
             "world": world,
             "rewards": {},
@@ -57,7 +59,9 @@ def test_employment_queue_snapshot_tracks_pending_agent() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
     metrics = loop.telemetry.latest_employment_metrics()
     assert metrics["pending"] == ["alice"]
     assert metrics["pending_count"] == 1
@@ -73,9 +77,10 @@ def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
     assert world.employment_defer_exit("alice") is True
 
     events = world.drain_events()
-    loop.telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=loop.tick,
+        payload={
             "tick": loop.tick,
             "world": world,
             "rewards": {},
@@ -89,7 +94,9 @@ def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
 
     metrics = loop.telemetry.latest_employment_metrics()
     assert metrics["pending_count"] == 0

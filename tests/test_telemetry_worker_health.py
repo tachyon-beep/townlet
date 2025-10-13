@@ -8,6 +8,7 @@ from pathlib import Path
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.publisher import TelemetryPublisher
 
 
@@ -163,7 +164,13 @@ def test_record_loop_failure_emits_pipeline_events(monkeypatch) -> None:
 
     monkeypatch.setattr(publisher, "_enqueue_stream_payload", capture)
     try:
-        publisher.emit_event("loop.failure", _failure_payload(7))
+        event = TelemetryEventDTO(
+            event_type="loop.failure",
+            tick=7,
+            payload=_failure_payload(7),
+            metadata=TelemetryMetadata(),
+        )
+        publisher.emit_event(event)
         assert emitted, "loop failure did not emit telemetry payload"
         payload, tick = emitted[0]
         assert tick == 7

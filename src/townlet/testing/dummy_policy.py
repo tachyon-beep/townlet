@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from townlet.world.dto.observation import ObservationEnvelope
+from townlet.dto.observations import ObservationEnvelope
 
 
 class DummyPolicyBackend:

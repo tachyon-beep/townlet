@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from townlet.policy.replay import frames_to_replay_sample
-from townlet.policy.trajectory_service import TrajectoryService
-from townlet.world.dto.observation import (
+from townlet.dto.observations import (
     DTO_SCHEMA_VERSION,
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+from townlet.policy.replay import frames_to_replay_sample
+from townlet.policy.trajectory_service import TrajectoryService
 
 
 def test_flush_transitions_with_dto_envelope() -> None:

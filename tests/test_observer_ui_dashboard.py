@@ -7,6 +7,7 @@ from rich.console import Console
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet_ui.dashboard import (
     PaletteState,
     _build_map_panel,
@@ -184,9 +185,10 @@ def test_narration_panel_shows_styled_categories() -> None:
         wallet=1.0,
     )
 
-    telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=loop.tick,
+        payload={
             "tick": loop.tick,
             "world": world,
             "rewards": {},
@@ -200,7 +202,9 @@ def test_narration_panel_shows_styled_categories() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
     _ = world.apply_console([])
 
@@ -223,9 +227,10 @@ def test_narration_panel_shows_styled_categories() -> None:
     world.resolve_affordances(world.tick)
     events.extend(world.drain_events())
 
-    telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=loop.tick + 1,
+        payload={
             "tick": loop.tick + 1,
             "world": world,
             "rewards": {},
@@ -239,7 +244,9 @@ def test_narration_panel_shows_styled_categories() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
     snapshot = TelemetryClient().from_console(router)
     assert snapshot.narrations, "Expected narrations to be populated"
@@ -294,9 +301,10 @@ def test_social_panel_renders_with_summary_and_events() -> None:
     world.update_relationship("alice", "bob", trust=0.6, familiarity=0.4)
     world.update_relationship("bob", "alice", trust=0.45, familiarity=0.3, rivalry=0.05)
 
-    telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=loop.tick,
+        payload={
             "tick": loop.tick,
             "world": world,
             "rewards": {},
@@ -318,7 +326,9 @@ def test_social_panel_renders_with_summary_and_events() -> None:
                 },
             ],
         },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
     snapshot = TelemetryClient().from_console(router)
     panels = list(

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop, TickArtifacts
-from townlet.world.dto.observation import DTO_SCHEMA_VERSION, ObservationEnvelope
+from townlet.dto.observations import DTO_SCHEMA_VERSION, ObservationEnvelope
 
 
 def test_simulation_loop_modular_smoke_emits_console_events() -> None:

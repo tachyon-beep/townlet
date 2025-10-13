@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from .factory import build_observation_envelope
-from .observation import (
+from townlet.dto.observations import (
     DTO_SCHEMA_VERSION,
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+
+from .factory import build_observation_envelope
 
 __all__ = [
     "DTO_SCHEMA_VERSION",

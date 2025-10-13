@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from townlet.config import SimulationConfig, load_config
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import WorldState
 
@@ -102,9 +103,10 @@ def test_affordance_manifest_checksum_exposed_in_telemetry(tmp_path: Path) -> No
     config = _configure_with_manifest(manifest)
     world = WorldState.from_config(config)
     publisher = TelemetryPublisher(config)
-    publisher.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=1,
+        payload={
             "tick": 1,
             "world": world,
             "rewards": {},
@@ -118,7 +120,9 @@ def test_affordance_manifest_checksum_exposed_in_telemetry(tmp_path: Path) -> No
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    publisher.emit_event(event)
     meta = publisher.latest_affordance_manifest()
     assert meta["path"] == str(manifest)
     assert meta["checksum"] == hashlib.sha256(manifest.read_bytes()).hexdigest()

@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from townlet.world.dto.observation import ObservationEnvelope
+from townlet.dto.observations import ObservationEnvelope
 
 
 @dataclass

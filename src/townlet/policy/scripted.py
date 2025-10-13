@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from townlet.world.dto.observation import ObservationEnvelope
+from townlet.dto.observations import ObservationEnvelope
 from townlet.world.grid import WorldState
 
 

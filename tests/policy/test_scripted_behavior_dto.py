@@ -8,13 +8,13 @@ from types import SimpleNamespace
 import pytest
 
 from townlet.config import SimulationConfig, load_config
-from townlet.policy.behavior import AgentIntent, ScriptedBehavior
-from townlet.policy.dto_view import DTOWorldView
-from townlet.world.dto.observation import (
+from townlet.dto.observations import (
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+from townlet.policy.behavior import AgentIntent, ScriptedBehavior
+from townlet.policy.dto_view import DTOWorldView
 
 CONFIG_PATH = Path("configs/examples/poc_hybrid.yaml")
 

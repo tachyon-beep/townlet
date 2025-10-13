@@ -2,6 +2,7 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.console.handlers import EventStream
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import WorldState
 
@@ -22,9 +23,10 @@ def test_event_stream_receives_published_events() -> None:
         }
     ]
 
-    publisher.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=0,
+        payload={
             "tick": 0,
             "world": world,
             "rewards": {},
@@ -38,7 +40,9 @@ def test_event_stream_receives_published_events() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    publisher.emit_event(event)
     latest = stream.latest()
     assert latest and latest[0]["event"] == "affordance_start"
 
@@ -50,9 +54,10 @@ def test_event_stream_handles_empty_batch() -> None:
     stream.connect(publisher)
 
     world = WorldState.from_config(config)
-    publisher.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=0,
+        payload={
             "tick": 0,
             "world": world,
             "rewards": {},
@@ -66,7 +71,9 @@ def test_event_stream_handles_empty_batch() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    publisher.emit_event(event)
     assert stream.latest() == []
 
 
@@ -92,7 +99,13 @@ def test_console_event_ingestion_handles_router_payload() -> None:
             "latency_ms": 3,
         },
     }
-    publisher.emit_event("console.result", payload)
+    event = TelemetryEventDTO(
+        event_type="console.result",
+        tick=5,
+        payload=payload,
+        metadata=TelemetryMetadata(),
+    )
+    publisher.emit_event(event)
 
     results = publisher.latest_console_results()
     assert results, "expected console result to be ingested"
@@ -117,7 +130,13 @@ def test_console_event_ingestion_handles_flat_payload() -> None:
         "issuer": "viewer",
         "tick": 9,
     }
-    publisher.emit_event("console.result", payload)
+    event = TelemetryEventDTO(
+        event_type="console.result",
+        tick=9,
+        payload=payload,
+        metadata=TelemetryMetadata(),
+    )
+    publisher.emit_event(event)
 
     results = publisher.latest_console_results()
     assert results, "expected console result to be ingested"

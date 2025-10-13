@@ -11,10 +11,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
 
 from townlet.console.command import ConsoleCommandEnvelope
+from townlet.dto.observations import ObservationEnvelope
 from townlet.world.actions import Action, apply_actions
 from townlet.world.core.runtime_adapter import ensure_world_adapter
 from townlet.world.dto import build_observation_envelope
-from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.observations.context import (
     agent_context as observation_agent_context,
 )

@@ -9,7 +9,7 @@ from townlet.core.interfaces import PolicyBackendProtocol
 from townlet.ports.policy import PolicyBackend
 
 if TYPE_CHECKING:  # pragma: no cover
-    from townlet.world.dto.observation import ObservationEnvelope
+    from townlet.dto.observations import ObservationEnvelope
 
 
 class ScriptedPolicyAdapter(PolicyBackend):

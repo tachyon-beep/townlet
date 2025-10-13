@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
 
-from townlet.world.dto.observation import AgentObservationDTO, ObservationEnvelope
+from townlet.dto.observations import AgentObservationDTO, ObservationEnvelope
 
 logger = logging.getLogger(__name__)
 

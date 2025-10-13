@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from townlet.config import load_config
+from townlet.dto.observations import GlobalObservationDTO, ObservationEnvelope
 from townlet.factories import create_world
-from townlet.world.dto.observation import GlobalObservationDTO, ObservationEnvelope
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 

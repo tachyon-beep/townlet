@@ -16,6 +16,7 @@ from townlet.config import (
 )
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.snapshots import SnapshotManager
 from townlet.snapshots.migrations import clear_registry, register_migration
 from townlet.snapshots.state import SnapshotState
@@ -193,9 +194,10 @@ def test_announce_story_command_enqueues_narration() -> None:
     assert any(entry.get("message") == "Welcome!" for entry in narrations)
 
     loop.world.tick = 1
-    loop.telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=1,
+        payload={
             "tick": 1,
             "world": loop.world,
             "rewards": {},
@@ -210,7 +212,9 @@ def test_announce_story_command_enqueues_narration() -> None:
             "social_events": [],
             "global_context": build_global_context(),
         },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
     narrations_next = loop.telemetry.latest_narrations()
     assert any(entry.get("message") == "Welcome!" for entry in narrations_next)
 

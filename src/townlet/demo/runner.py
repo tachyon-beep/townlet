@@ -11,6 +11,7 @@ from townlet.core.sim_loop import SimulationLoop
 from townlet.core.utils import is_stub_telemetry
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.agents.snapshot import AgentSnapshot
 
 if TYPE_CHECKING:
@@ -271,9 +272,10 @@ def seed_demo_state(
                     )
 
             if history_window and history_window > 0 and seeded and hasattr(telemetry_source, "emit_event"):
-                telemetry_source.emit_event(
-                    "loop.tick",
-                    {
+                event = TelemetryEventDTO(
+                    event_type="loop.tick",
+                    tick=world.tick,
+                    payload={
                         "tick": world.tick,
                         "world": world,
                         "rewards": {},
@@ -286,7 +288,9 @@ def seed_demo_state(
                         "policy_identity": {},
                         "possessed_agents": [],
                     },
+                    metadata=TelemetryMetadata(),
                 )
+                telemetry_source.emit_event(event)
 
 
 def run_demo_dashboard(

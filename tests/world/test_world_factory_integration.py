@@ -4,9 +4,9 @@ import random
 from pathlib import Path
 
 from townlet.config import load_config
+from townlet.dto.observations import ObservationEnvelope
 from townlet.factories import create_world
 from townlet.snapshots.state import SnapshotState
-from townlet.world.dto.observation import ObservationEnvelope
 
 
 def test_create_world_instantiates_context_from_config() -> None:

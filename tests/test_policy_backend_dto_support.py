@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from townlet.dto.observations import ObservationEnvelope
 from townlet.policy.api import resolve_policy_backend
 from townlet.policy.fallback import StubPolicyBackend
-from townlet.world.dto.observation import ObservationEnvelope
 
 
 def test_resolve_policy_backend_exposes_dto_capability() -> None:

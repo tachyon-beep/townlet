@@ -7,7 +7,7 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop, SimulationLoopError
-from townlet.world.dto.observation import ObservationEnvelope
+from townlet.dto.observations import ObservationEnvelope
 
 
 @pytest.fixture()

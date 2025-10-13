@@ -7,12 +7,12 @@ import pytest
 
 from townlet.adapters.world_default import DefaultWorldAdapter
 from townlet.console.command import ConsoleCommandEnvelope
-from townlet.snapshots.state import SnapshotState
-from townlet.world.dto.observation import (
+from townlet.dto.observations import (
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+from townlet.snapshots.state import SnapshotState
 from townlet.world.runtime import RuntimeStepResult
 
 

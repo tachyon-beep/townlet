@@ -10,7 +10,7 @@ import numpy as np
 
 from townlet.world.actions import Action
 
-from .observation import (
+from townlet.dto.observations import (
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,

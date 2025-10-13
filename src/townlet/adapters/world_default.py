@@ -10,9 +10,9 @@ from townlet.ports.world import WorldRuntime
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots import snapshot_from_world
 from townlet.snapshots.state import SnapshotState
+from townlet.dto.observations import ObservationEnvelope
 from townlet.world.core.context import WorldContext
 from townlet.world.core.runtime_adapter import ensure_world_adapter
-from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.grid import WorldState
 from townlet.world.runtime import RuntimeStepResult
 
@@ -109,7 +109,15 @@ class DefaultWorldAdapter(WorldRuntime):
     def agents(self) -> Iterable[str]:
         return tuple(self._context.agents_view().keys())
 
-    def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]:
+    def observe(self, agent_ids: Iterable[str] | None = None) -> ObservationEnvelope:
+        """Produce a DTO observation envelope for the requested agents.
+
+        Args:
+            agent_ids: Optional subset of agent IDs to observe. If None, observes all agents.
+
+        Returns:
+            ObservationEnvelope: Typed DTO containing agent observations and global context.
+        """
         terminated = self._last_result.terminated if self._last_result else {}
         termination_reasons = self._last_result.termination_reasons if self._last_result else {}
         actions = self._last_result.actions if self._last_result else {}

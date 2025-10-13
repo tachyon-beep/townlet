@@ -30,6 +30,7 @@ from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
 )
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
@@ -51,9 +52,9 @@ from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.utils.coerce import coerce_float, coerce_int
+from townlet.dto.observations import ObservationEnvelope
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
 from townlet.world.core import WorldContext, WorldRuntimeAdapter
-from townlet.world.dto.observation import ObservationEnvelope
 from townlet.world.grid import WorldState
 from townlet.world.observations.interfaces import ObservationServiceProtocol
 
@@ -570,10 +571,16 @@ class SimulationLoop:
             self.promotion.reset()
         stability_metrics = self.stability.latest_metrics()
         stability_metrics["promotion_state"] = self.promotion.snapshot()
+        event = TelemetryEventDTO(
+            event_type="stability.metrics",
+            tick=self.tick,
+            payload=stability_metrics,
+            metadata=TelemetryMetadata(),
+        )
         if self._telemetry_port is not None:
-            self._telemetry_port.emit_event("stability.metrics", stability_metrics)
+            self._telemetry_port.emit_event(event)
         else:  # pragma: no cover - defensive
-            self.telemetry.emit_event("stability.metrics", stability_metrics)
+            self.telemetry.emit_event(event)
         self.tick = state.tick
         rng_streams = dict(state.rng_streams)
         rng_streams.pop("context_seed", None)
@@ -672,13 +679,19 @@ class SimulationLoop:
                 self._console_router.run_pending(console_results, tick=self.tick)
 
             if console_results and self._console_router is None:
-                emitter = (
-                    self._telemetry_port.emit_event
+                port = (
+                    self._telemetry_port
                     if self._telemetry_port is not None
-                    else self.telemetry.emit_event  # pragma: no cover - defensive
+                    else self.telemetry  # pragma: no cover - defensive
                 )
                 for result in console_results:
-                    emitter("console.result", {"result": result.to_dict()})
+                    event = TelemetryEventDTO(
+                        event_type="console.result",
+                        tick=self.tick,
+                        payload={"result": result.to_dict()},
+                        metadata=TelemetryMetadata(),
+                    )
+                    port.emit_event(event)
             rewards = self.rewards.compute(self.world, terminated, termination_reasons)
             reward_breakdown = self.rewards.latest_reward_breakdown()
             if controller is not None:
@@ -844,11 +857,23 @@ class SimulationLoop:
                     "observations_dto": dto_envelope.model_dump(by_alias=True),
                     "global_context": global_context,
                 }
-                self._telemetry_port.emit_event("loop.tick", tick_event_payload)
+                tick_event = TelemetryEventDTO(
+                    event_type="loop.tick",
+                    tick=self.tick,
+                    payload=tick_event_payload,
+                    metadata=TelemetryMetadata(),
+                )
+                self._telemetry_port.emit_event(tick_event)
+            stability_event = TelemetryEventDTO(
+                event_type="stability.metrics",
+                tick=self.tick,
+                payload=stability_metrics,
+                metadata=TelemetryMetadata(),
+            )
             if self._telemetry_port is not None:
-                self._telemetry_port.emit_event("stability.metrics", stability_metrics)
+                self._telemetry_port.emit_event(stability_event)
             else:  # pragma: no cover - defensive
-                self.telemetry.emit_event("stability.metrics", stability_metrics)
+                self.telemetry.emit_event(stability_event)
             self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
             transport_status = self._build_transport_status(queue_length=len(console_results))
@@ -857,10 +882,16 @@ class SimulationLoop:
                 transport_status=transport_status,
                 global_context=global_context,
             )
+            health_event = TelemetryEventDTO(
+                event_type="loop.health",
+                tick=self.tick,
+                payload=health_payload,
+                metadata=TelemetryMetadata(),
+            )
             if self._telemetry_port is not None:
-                self._telemetry_port.emit_event("loop.health", health_payload)
+                self._telemetry_port.emit_event(health_event)
             else:  # pragma: no cover - defensive
-                self.telemetry.emit_event("loop.health", health_payload)
+                self.telemetry.emit_event(health_event)
             if logger.isEnabledFor(logging.INFO):
                 summary_mapping = health_payload.get("summary")
                 summary: Mapping[str, object]
@@ -929,10 +960,16 @@ class SimulationLoop:
             snapshot_path=snapshot_path,
             global_context=self._last_global_context,
         )
+        failure_event = TelemetryEventDTO(
+            event_type="loop.failure",
+            tick=tick,
+            payload=failure_payload,
+            metadata=TelemetryMetadata(),
+        )
         if self._telemetry_port is not None:
-            self._telemetry_port.emit_event("loop.failure", failure_payload)
+            self._telemetry_port.emit_event(failure_event)
         else:  # pragma: no cover - defensive
-            self.telemetry.emit_event("loop.failure", failure_payload)
+            self.telemetry.emit_event(failure_event)
         for handler in list(self._failure_handlers):
             try:
                 handler(self, tick, exc)
@@ -1242,7 +1279,13 @@ class SimulationLoop:
             "metadata": metadata_copy,
         }
         if metadata_payload != self._last_policy_metadata_event:
-            telemetry.emit_event("policy.metadata", metadata_payload)
+            metadata_event = TelemetryEventDTO(
+                event_type="policy.metadata",
+                tick=self.tick,
+                payload=metadata_payload,
+                metadata=TelemetryMetadata(),
+            )
+            telemetry.emit_event(metadata_event)
             self._last_policy_metadata_event = copy.deepcopy(metadata_payload)
 
         if (
@@ -1255,7 +1298,13 @@ class SimulationLoop:
                 "agents": list(sorted_agents),
                 "possessed_agents": list(sorted_agents),
             }
-            telemetry.emit_event("policy.possession", possession_payload)
+            possession_event = TelemetryEventDTO(
+                event_type="policy.possession",
+                tick=self.tick,
+                payload=possession_payload,
+                metadata=TelemetryMetadata(),
+            )
+            telemetry.emit_event(possession_event)
             self._last_policy_possession_agents = sorted_agents
 
         context_payload: dict[str, object] = {}
@@ -1268,7 +1317,13 @@ class SimulationLoop:
             "context": context_payload,
         }
         if anneal_payload != self._last_policy_anneal_event:
-            telemetry.emit_event("policy.anneal.update", anneal_payload)
+            anneal_event = TelemetryEventDTO(
+                event_type="policy.anneal.update",
+                tick=self.tick,
+                payload=anneal_payload,
+                metadata=TelemetryMetadata(),
+            )
+            telemetry.emit_event(anneal_event)
             self._last_policy_anneal_event = copy.deepcopy(anneal_payload)
 
     def _build_bootstrap_policy_envelope(self) -> ObservationEnvelope:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from townlet.dto.observations import ObservationEnvelope
 from townlet.policy.dto_view import DTOWorldView
-from townlet.world.dto.observation import ObservationEnvelope
 
 
 def _make_view() -> tuple[DTOWorldView, list[tuple[str, dict[str, object]]]]:

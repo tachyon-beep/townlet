@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from townlet.console.command import ConsoleCommandEnvelope
+from townlet.dto.telemetry import TelemetryEventDTO
 from townlet.orchestration import ConsoleRouter
 from townlet.ports.telemetry import TelemetrySink
 from townlet.ports.world import WorldRuntime
@@ -49,8 +50,8 @@ class _StubTelemetry(TelemetrySink):
     def stop(self) -> None:  # pragma: no cover - unused
         pass
 
-    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
-        self.events.append((name, payload or {}))
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        self.events.append((event.event_type, event.payload))
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         self.metrics.append((name, float(value), dict(tags)))

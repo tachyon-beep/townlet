@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from townlet.config import load_config
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.observations.service import WorldObservationService
 from townlet.observations.embedding import EmbeddingAllocator
 from townlet.stability.monitor import StabilityMonitor
@@ -84,9 +85,10 @@ def test_telemetry_exposes_allocator_metrics() -> None:
     world = WorldState.from_config(config)
     world.tick = 0
     telemetry = TelemetryPublisher(config)
-    telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=0,
+        payload={
             "tick": 0,
             "world": world,
             "rewards": {},
@@ -100,7 +102,9 @@ def test_telemetry_exposes_allocator_metrics() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
     queue_metrics = telemetry.latest_queue_metrics()
     embedding_metrics = telemetry.latest_embedding_metrics()
@@ -135,9 +139,10 @@ def test_telemetry_records_events() -> None:
             "affordance_id": "use_shower",
         }
     ]
-    telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=0,
+        payload={
             "tick": 0,
             "world": world,
             "rewards": {},
@@ -151,7 +156,9 @@ def test_telemetry_records_events() -> None:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
     latest = list(telemetry.latest_events())
     assert latest and latest[0]["event"] == "affordance_start"
 

@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.snapshots.state import SnapshotState
-from townlet.world.dto.observation import (
+from townlet.dto.observations import (
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,

@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 from townlet.config import load_config
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.publisher import TelemetryPublisher
 
 
@@ -44,7 +45,13 @@ def test_worker_flush_counters_increment() -> None:
     try:
         # Trigger a few small payloads via loop failure events
         for i in range(3):
-            pub.emit_event("loop.failure", _failure_payload(i + 1))
+            event = TelemetryEventDTO(
+                event_type="loop.failure",
+                tick=i + 1,
+                payload=_failure_payload(i + 1),
+                metadata=TelemetryMetadata(),
+            )
+            pub.emit_event(event)
         _sleep_brief()
     finally:
         pub.stop_worker(wait=True)
@@ -62,7 +69,13 @@ def test_backpressure_drop_increments_dropped_messages() -> None:
     config.telemetry.transport.buffer.max_buffer_bytes = 8
     pub = TelemetryPublisher(config)
     try:
-        pub.emit_event("loop.failure", _failure_payload(1, error="overflow"))
+        event = TelemetryEventDTO(
+            event_type="loop.failure",
+            tick=1,
+            payload=_failure_payload(1, error="overflow"),
+            metadata=TelemetryMetadata(),
+        )
+        pub.emit_event(event)
         _sleep_brief()
     finally:
         pub.stop_worker(wait=True)

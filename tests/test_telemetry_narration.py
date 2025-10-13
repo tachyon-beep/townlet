@@ -6,6 +6,7 @@ from townlet.config import (
     RelationshipNarrationConfig,
     load_config,
 )
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.narration import NarrationRateLimiter
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.world.grid import WorldState
@@ -74,9 +75,10 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
         "queue_length": 2,
         "intensity": 1.5,
     }
-    publisher.emit_event(
-        "loop.tick",
-        {
+    telemetry_event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=0,
+        payload={
             "tick": 0,
             "world": world,
             "rewards": {},
@@ -90,15 +92,18 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    publisher.emit_event(telemetry_event)
     narrations = publisher.latest_narrations()
     assert len(narrations) == 1
     assert narrations[0]["category"] == "queue_conflict"
 
     # Within cooldown window, narration should be suppressed.
-    publisher.emit_event(
-        "loop.tick",
-        {
+    telemetry_event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=2,
+        payload={
             "tick": 2,
             "world": world,
             "rewards": {},
@@ -112,15 +117,18 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    publisher.emit_event(telemetry_event)
     assert publisher.latest_narrations() == []
 
     # Priority reason bypasses cooldown.
     priority_event = dict(event)
     priority_event["reason"] = "ghost_step"
-    publisher.emit_event(
-        "loop.tick",
-        {
+    telemetry_event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=3,
+        payload={
             "tick": 3,
             "world": world,
             "rewards": {},
@@ -134,7 +142,9 @@ def test_telemetry_publisher_emits_queue_conflict_narration(tmp_path: Path) -> N
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    publisher.emit_event(telemetry_event)
     narrations = publisher.latest_narrations()
     assert len(narrations) == 1
     assert narrations[0]["data"]["reason"] == "ghost_step"

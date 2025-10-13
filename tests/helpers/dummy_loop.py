@@ -12,14 +12,14 @@ from townlet.core.sim_loop import (
     TelemetryComponents,
     WorldComponents,
 )
-from townlet.snapshots.state import SnapshotState
-from townlet.telemetry.publisher import TelemetryPublisher
-from townlet.testing import DummyTelemetrySink
-from townlet.world.dto.observation import (
+from townlet.dto.observations import (
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+from townlet.snapshots.state import SnapshotState
+from townlet.telemetry.publisher import TelemetryPublisher
+from townlet.testing import DummyTelemetrySink
 from townlet.world.runtime import RuntimeStepResult
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from townlet.dto.telemetry import TelemetryEventDTO
 from townlet.ports.telemetry import TelemetrySink
 from townlet.telemetry.publisher import TelemetryPublisher
 
@@ -28,8 +29,13 @@ class StdoutTelemetryAdapter(TelemetrySink):
             self._publisher.close()
         self._started = False
 
-    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
-        self._publisher.event_dispatcher.emit_event(name, payload)
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Forward typed event to the publisher's internal event dispatcher.
+
+        Args:
+            event: TelemetryEventDTO containing event_type, tick, and payload.
+        """
+        self._publisher.event_dispatcher.emit_event(event.event_type, event.payload)
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         metrics = self._publisher._latest_health_status  # type: ignore[attr-defined]

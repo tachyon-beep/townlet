@@ -7,6 +7,7 @@ from rich.console import Console
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.dashboard import (
     AgentCardState,
@@ -50,11 +51,12 @@ def _make_loop() -> SimulationLoop:
         needs={"hunger": 0.4, "hygiene": 0.8, "energy": 0.9},
         wallet=1.0,
     )
-    world.assign_jobs_to_agents()  
+    world.assign_jobs_to_agents()
     world.update_relationship("alice", "bob", trust=0.3, familiarity=0.2)
-    loop.telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=world.tick,
+        payload={
             "tick": world.tick,
             "world": world,
             "rewards": {},
@@ -68,7 +70,9 @@ def _make_loop() -> SimulationLoop:
             "possessed_agents": [],
             "social_events": [],
         },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
     _ = world.apply_console([])
     return loop
 

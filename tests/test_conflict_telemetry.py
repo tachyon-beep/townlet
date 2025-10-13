@@ -3,6 +3,7 @@ from pathlib import Path
 from tests.helpers.telemetry import build_global_context
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 
 
@@ -50,9 +51,10 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
             "reason": "ghost_step",
         }
     )
-    loop.telemetry.emit_event(
-        "loop.tick",
-        {
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=world.tick,
+        payload={
             "tick": world.tick,
             "world": world,
             "rewards": {},
@@ -84,7 +86,9 @@ def test_conflict_snapshot_reports_rivalry_counts() -> None:
                 queue_affinity_metrics=world.context.export_queue_affinity_metrics(),
             ),
         },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
 
     conflict_snapshot = loop.telemetry.latest_conflict_snapshot()
     assert conflict_snapshot["queues"]["cooldown_events"] >= 0
@@ -158,9 +162,10 @@ def test_conflict_export_import_preserves_history() -> None:
                 "reason": "ghost_step",
             }
         )
-        loop.telemetry.emit_event(
-            "loop.tick",
-            {
+        event = TelemetryEventDTO(
+            event_type="loop.tick",
+            tick=world.tick,
+            payload={
                 "tick": world.tick,
                 "world": world,
                 "rewards": {},
@@ -169,26 +174,28 @@ def test_conflict_export_import_preserves_history() -> None:
                 "kpi_history": False,
                 "reward_breakdown": {},
                 "stability_inputs": {},
-            "perturbations": {},
-            "policy_identity": {},
-            "possessed_agents": [],
-            "social_events": [],
-            "global_context": build_global_context(
-                queue_metrics=world.context.export_queue_metrics(),
-                queues=world.context.export_queue_state(),
-                relationship_snapshot={
-                    "alice": {"bob": {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.5 + 0.2 * tick}},
-                    "bob": {"alice": {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.5 + 0.2 * tick}},
-                },
-                relationship_metrics={
-                    "total": 2,
-                    "owners": {"alice": 1, "bob": 1},
-                    "reasons": {"ghost_step": tick + 1},
-                    "history": [],
-                },
-            ),
-        },
-    )
+                "perturbations": {},
+                "policy_identity": {},
+                "possessed_agents": [],
+                "social_events": [],
+                "global_context": build_global_context(
+                    queue_metrics=world.context.export_queue_metrics(),
+                    queues=world.context.export_queue_state(),
+                    relationship_snapshot={
+                        "alice": {"bob": {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.5 + 0.2 * tick}},
+                        "bob": {"alice": {"trust": 0.0, "familiarity": 0.0, "rivalry": 0.5 + 0.2 * tick}},
+                    },
+                    relationship_metrics={
+                        "total": 2,
+                        "owners": {"alice": 1, "bob": 1},
+                        "reasons": {"ghost_step": tick + 1},
+                        "history": [],
+                    },
+                ),
+            },
+            metadata=TelemetryMetadata(),
+        )
+        loop.telemetry.emit_event(event)
     exported = loop.telemetry.export_state()
     from townlet.telemetry.publisher import TelemetryPublisher
 

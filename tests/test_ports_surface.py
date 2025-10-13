@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from townlet.dto.observations import GlobalObservationDTO, ObservationEnvelope
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.testing import DummyPolicyBackend, DummyTelemetrySink, DummyWorldRuntime
-from townlet.world.dto.observation import GlobalObservationDTO, ObservationEnvelope
 
 
 def _build_envelope(tick: int = 1) -> ObservationEnvelope:
@@ -58,7 +59,13 @@ def test_dummy_telemetry_sink_surface() -> None:
     assert isinstance(telemetry, DummyTelemetrySink)
 
     telemetry.start()
-    telemetry.emit_event("dummy.event", {"value": 1})
+    event = TelemetryEventDTO(
+        event_type="dummy.event",
+        tick=0,
+        payload={"value": 1},
+        metadata=TelemetryMetadata(),
+    )
+    telemetry.emit_event(event)
     telemetry.emit_metric("dummy.metric", 1.0, foo="bar")
     status = telemetry.transport_status()
     assert isinstance(status, dict)

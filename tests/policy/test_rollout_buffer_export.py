@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 
-from townlet.policy.rollout import RolloutBuffer
-from townlet.policy.trajectory_service import TrajectoryService
-from townlet.world.dto.observation import (
+from townlet.dto.observations import (
     DTO_SCHEMA_VERSION,
     AgentObservationDTO,
     GlobalObservationDTO,
     ObservationEnvelope,
 )
+from townlet.policy.rollout import RolloutBuffer
+from townlet.policy.trajectory_service import TrajectoryService
 
 
 def test_rollout_buffer_emits_dto_export(tmp_path) -> None:

@@ -12,6 +12,7 @@ from townlet.console.command import (
     ConsoleCommandError,
     ConsoleCommandResult,
 )
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.ports.telemetry import TelemetrySink
 from townlet.ports.world import WorldRuntime
 from townlet.snapshots.state import SnapshotState
@@ -137,7 +138,13 @@ class ConsoleRouter:
             "command": command_payload,
             "result": result.to_dict(),
         }
-        self._telemetry.emit_event("console.result", event_payload)
+        event = TelemetryEventDTO(
+            event_type="console.result",
+            tick=result.tick or 0,
+            payload=event_payload,
+            metadata=TelemetryMetadata(),
+        )
+        self._telemetry.emit_event(event)
 
     def _coerce_envelope(self, payload: object) -> ConsoleCommandEnvelope:
         if isinstance(payload, ConsoleCommandEnvelope):

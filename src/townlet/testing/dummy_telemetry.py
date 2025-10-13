@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from townlet.dto.telemetry import TelemetryEventDTO
+
 
 class DummyTelemetrySink:
     """In-memory telemetry sink useful for tests and dummies."""
@@ -26,9 +28,13 @@ class DummyTelemetrySink:
     def stop(self) -> None:
         self.stopped = True
 
-    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
-        event_payload = dict(payload) if isinstance(payload, Mapping) else {}
-        self.events.append((name, event_payload))
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Accept a typed telemetry event and store it for inspection.
+
+        Args:
+            event: TelemetryEventDTO containing event_type, tick, and payload.
+        """
+        self.events.append((event.event_type, dict(event.payload)))
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         self.metrics.append((name, float(value), dict(tags)))

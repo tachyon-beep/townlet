@@ -26,7 +26,7 @@ from townlet.world.grid import WorldState
 from .dto_view import DTOWorldView
 
 if TYPE_CHECKING:  # pragma: no cover
-    from townlet.world.dto.observation import ObservationEnvelope
+    from townlet.dto.observations import ObservationEnvelope
 
 # NOTE: Training orchestrator is imported lazily by TrainingHarness to avoid
 # importing Torch-dependent modules during test collection in non-ML envs.

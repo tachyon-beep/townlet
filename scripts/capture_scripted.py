@@ -11,10 +11,10 @@ import numpy as np
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.observations import AgentObservationDTO
 from townlet.policy.replay import frames_to_replay_sample
 from townlet.policy.scripted import ScriptedPolicyAdapter, get_scripted_policy
 from townlet.policy.scenario_utils import seed_default_agents
-from townlet.world.dto.observation import AgentObservationDTO
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

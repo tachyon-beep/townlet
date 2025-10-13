@@ -14,6 +14,7 @@ from townlet.agents.models import Personality, personality_from_profile
 from townlet.config import SimulationConfig
 from townlet.core.interfaces import TelemetrySinkProtocol
 from townlet.core.utils import is_stub_telemetry
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots.migrations import (
@@ -543,7 +544,13 @@ def apply_snapshot_to_telemetry(
     if isinstance(stability_metrics, Mapping):
         emit = getattr(telemetry, "emit_event", None)
         if callable(emit):
-            emit("stability.metrics", dict(stability_metrics))
+            event = TelemetryEventDTO(
+                event_type="stability.metrics",
+                tick=snapshot.tick,
+                payload=dict(stability_metrics),
+                metadata=TelemetryMetadata(),
+            )
+            emit(event)
     if snapshot.identity and hasattr(telemetry, "update_policy_identity"):
         telemetry.update_policy_identity(snapshot.identity)
     migrations_applied = (
@@ -558,7 +565,13 @@ def apply_snapshot_to_telemetry(
         if applied_list:
             emit = getattr(telemetry, "emit_event", None)
             if callable(emit):
-                emit("telemetry.snapshot.migrations", {"applied": applied_list})
+                event = TelemetryEventDTO(
+                    event_type="telemetry.snapshot.migrations",
+                    tick=snapshot.tick,
+                    payload={"applied": applied_list},
+                    metadata=TelemetryMetadata(),
+                )
+                emit(event)
 
 
 class SnapshotManager:

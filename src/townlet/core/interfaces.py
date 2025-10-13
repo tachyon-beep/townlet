@@ -12,7 +12,8 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
 
 if TYPE_CHECKING:  # pragma: no cover
-    from townlet.world.dto.observation import ObservationEnvelope
+    from townlet.dto.observations import ObservationEnvelope
+    from townlet.dto.telemetry import TelemetryEventDTO
     from townlet.world.grid import WorldState
 
 ObservationBatch: TypeAlias = Mapping[str, object]
@@ -111,8 +112,8 @@ class TelemetrySinkProtocol(Protocol):
     ) -> Mapping[str, object] | None: ...
     def register_event_subscriber(self, subscriber: Callable[[list[dict[str, object]]], None]) -> None: ...
 
-    def emit_event(self, name: str, payload: Mapping[str, object] | None = None) -> None:
-        """Dispatch a telemetry event payload."""
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Dispatch a typed telemetry event."""
 
     def latest_queue_metrics(self) -> Mapping[str, int] | None:
         """Return the most recent queue metrics payload."""

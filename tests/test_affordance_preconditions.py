@@ -7,6 +7,7 @@ import pytest
 from townlet.config import load_config
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 from townlet.world.preconditions import (
     PreconditionSyntaxError,
@@ -82,9 +83,10 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
 
     failures = [event for event in events if event.get("event") == "affordance_precondition_fail"]
 
-    loop.telemetry.emit_event(
-        "loop.tick",
-        {
+    event_dto = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=world.tick,
+        payload={
             "tick": world.tick,
             "world": world,
             "rewards": {},
@@ -104,7 +106,9 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
             },
             "precondition_failures": failures,
         },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event_dto)
     failures = loop.telemetry.latest_precondition_failures()
     assert len(failures) >= 1
     assert all(entry["agent_id"] == "alice" for entry in failures)

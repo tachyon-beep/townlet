@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
+from townlet.dto.observations import ObservationEnvelope
 from townlet.scheduler.perturbations import PerturbationScheduler
-from townlet.world.dto.observation import ObservationEnvelope
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig

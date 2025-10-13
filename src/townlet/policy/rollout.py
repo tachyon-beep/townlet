@@ -16,7 +16,7 @@ from townlet.policy.replay_buffer import (
     InMemoryReplayDataset,
     InMemoryReplayDatasetConfig,
 )
-from townlet.world.dto.observation import DTO_SCHEMA_VERSION
+from townlet.dto.observations import DTO_SCHEMA_VERSION
 
 
 @dataclass

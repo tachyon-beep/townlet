@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover - fallback shim
 
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.utils import policy_provider_name, telemetry_provider_name
-from townlet.world.dto.observation import ObservationEnvelope
+from townlet.dto.observations import ObservationEnvelope
 from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.telemetry import (
     AgentSummary,

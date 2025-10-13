@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
 from townlet.core.utils import is_stub_policy, is_stub_telemetry
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.snapshots import SnapshotManager
 from townlet.stability.promotion import PromotionManager
 
@@ -382,7 +383,14 @@ def create_console_router(
         base["promotion_state"] = promotion.snapshot()
         emit = getattr(publisher, "emit_event", None)
         if callable(emit):
-            emit("stability.metrics", base)
+            tick = getattr(world, "tick", 0) if world is not None else 0
+            event = TelemetryEventDTO(
+                event_type="stability.metrics",
+                tick=tick,
+                payload=base,
+                metadata=TelemetryMetadata(),
+            )
+            emit(event)
 
     def _apply_release_metadata(metadata: object) -> None:
         if policy is None and config is None:

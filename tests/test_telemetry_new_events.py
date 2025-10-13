@@ -4,6 +4,7 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 
 
@@ -47,7 +48,13 @@ def emit_loop_tick(
         "global_context": global_context,
     }
     payload.update(overrides)
-    telemetry.emit_event("loop.tick", payload)
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=tick,
+        payload=payload,
+        metadata=TelemetryMetadata(),
+    )
+    telemetry.emit_event(event)
 
 
 def test_shower_events_in_telemetry() -> None:

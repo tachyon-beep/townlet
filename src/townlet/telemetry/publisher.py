@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
+from townlet.dto.telemetry import TelemetryEventDTO
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.telemetry.aggregation import (
@@ -1891,10 +1892,17 @@ class TelemetryPublisher(_TelemetrySinkBase):
 
         return self._event_dispatcher
 
-    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
-        """Forward an event through the internal dispatcher."""
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Forward a typed event through the internal dispatcher.
 
-        self._event_dispatcher.emit_event(name, payload)
+        Args:
+            event: TelemetryEventDTO containing event_type, tick, payload, and metadata.
+
+        Note:
+            The internal _event_dispatcher still uses name/payload for backwards
+            compatibility with existing subscribers. The DTO is unpacked here.
+        """
+        self._event_dispatcher.emit_event(event.event_type, event.payload)
 
     def _handle_event(self, name: str, payload: Mapping[str, Any]) -> None:
         """Internal subscriber that bridges events back into publisher behaviour."""
