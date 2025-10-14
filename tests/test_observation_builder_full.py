@@ -6,7 +6,7 @@ import numpy as np
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.world.grid import AgentSnapshot
 
 
@@ -39,16 +39,16 @@ def make_full_world() -> SimulationLoop:
 
 def test_full_observation_map_and_features() -> None:
     loop = make_full_world()
-    builder: ObservationBuilder = loop.observations
+    service = WorldObservationService(config=loop.config)
     world = loop.world
-    observations = builder.build_batch(world, terminated={})
+    observations = service.build_batch(world, terminated={})
 
     obs = observations["alice"]
     map_tensor = obs["map"]
     features = obs["features"]
     metadata = obs["metadata"]
 
-    window = builder.hybrid_cfg.local_window
+    window = service.hybrid_cfg.local_window
     assert map_tensor.shape == (6, window, window)
     assert metadata["map_shape"] == (6, window, window)
     assert metadata["variant"] == "full"

@@ -5,9 +5,9 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections.abc import Iterable, Mapping
-from typing import Any, cast
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 

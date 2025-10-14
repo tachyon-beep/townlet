@@ -4,7 +4,34 @@ import time
 from pathlib import Path
 
 from townlet.config import load_config
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.publisher import TelemetryPublisher
+
+
+def _failure_payload(tick: int, error: str = "simulated") -> dict[str, object]:
+    return {
+        "tick": tick,
+        "status": "error",
+        "error": error,
+        "duration_ms": 0.0,
+        "snapshot_path": None,
+        "transport": {
+            "provider": "port",
+            "queue_length": 0,
+            "dropped_messages": 0,
+            "last_flush_duration_ms": None,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "auth_enabled": False,
+            "worker": {"alive": True, "error": None, "restart_count": 0},
+        },
+        "global_context": {},
+        "summary": {
+            "duration_ms": 0.0,
+            "queue_length": 0,
+            "dropped_messages": 0,
+        },
+    }
 
 
 def _sleep_brief() -> None:
@@ -18,7 +45,13 @@ def test_worker_flush_counters_increment() -> None:
     try:
         # Trigger a few small payloads via loop failure events
         for i in range(3):
-            pub.record_loop_failure({"tick": i + 1, "error": "simulated"})
+            event = TelemetryEventDTO(
+                event_type="loop.failure",
+                tick=i + 1,
+                payload=_failure_payload(i + 1),
+                metadata=TelemetryMetadata(),
+            )
+            pub.emit_event(event)
         _sleep_brief()
     finally:
         pub.stop_worker(wait=True)
@@ -36,10 +69,15 @@ def test_backpressure_drop_increments_dropped_messages() -> None:
     config.telemetry.transport.buffer.max_buffer_bytes = 8
     pub = TelemetryPublisher(config)
     try:
-        pub.record_loop_failure({"tick": 1, "error": "overflow"})
+        event = TelemetryEventDTO(
+            event_type="loop.failure",
+            tick=1,
+            payload=_failure_payload(1, error="overflow"),
+            metadata=TelemetryMetadata(),
+        )
+        pub.emit_event(event)
         _sleep_brief()
     finally:
         pub.stop_worker(wait=True)
     status = pub.latest_transport_status()
     assert status.get("dropped_messages", 0) >= 1
-

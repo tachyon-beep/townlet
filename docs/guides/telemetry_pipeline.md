@@ -18,7 +18,7 @@ Example excerpt:
 ```yaml
 telemetry:
   transport:
-    type: stdout   # stdout | file | tcp | websocket (stub) | prometheus (textfile)
+    type: stdout   # stdout | file | tcp | http | websocket (stub) | prometheus (textfile)
     file_path: logs/telemetry.jsonl  # for file transport
     endpoint: localhost:9090         # for tcp transport
     enable_tls: true                 # tcp only
@@ -28,10 +28,11 @@ telemetry:
       max_batch_size: 32
       max_buffer_bytes: 256000
       flush_interval_ticks: 1
-  worker:
-    backpressure: drop_oldest  # drop_oldest | block | fan_out
-    block_timeout_seconds: 0.5
-    restart_limit: 3
+    worker:
+      backpressure: drop_oldest  # drop_oldest | block | fan_out
+      block_timeout_seconds: 0.5
+      restart_limit: 3
+  # Example: to POST events to an external collector, set type=http and provide endpoint=http(s) URL.
   transforms:
     pipeline:
       - snapshot_normalizer
@@ -42,8 +43,9 @@ telemetry:
 
 ## Protocol Surface (common read‑only accessors)
 
-- `publish_tick(...)` – main emission entrypoint.
-- `drain_console_buffer()` / `record_console_results(results)` – console ingress/egress.
+- `emit_event("loop.tick", payload)` – main emission entrypoint (tick lifecycle).
+- `emit_event("loop.health", payload)` / `emit_event("loop.failure", payload)` – health & failure reporting. Payloads include structured `transport`, DTO `global_context`, and a `summary` block that replaces the legacy `telemetry_*` scalars.
+- `emit_event("console.result", payload)` – console ingress/egress (results include metadata + payload).
 - Read‑only getters used by dashboards and scripts:
   - state snapshots (`latest_*`): economy, utilities, relationships, employment, conflicts, social events, narrations, policy snapshot/identity, affordances, reward breakdown, stability, health.
   - transport: `latest_transport_status()` (queue length, dropped, flushms, peaks, restarts, failures, totals, flags).
@@ -62,6 +64,8 @@ Worker/population metrics are exposed via `latest_transport_status()`:
 - `worker_restart_count`, `worker_alive`, `worker_error`
 
 Loop health logs include these counters per tick (`tick_health ...`).
+
+`latest_health_status()` now mirrors the structured event: consumers should read transport metrics from `payload["transport"]` and queue/perturbation/employment summaries from `payload["summary"]`. When ingesting historical logs that still expose `telemetry_queue` or related aliases, normalise them into the `summary` block before forwarding to dashboards.
 
 ## Benchmarking
 

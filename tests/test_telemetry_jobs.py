@@ -32,7 +32,8 @@ def test_telemetry_captures_job_snapshot() -> None:
     first_agent = next(iter(snapshot.values()))
     assert "job_id" in first_agent
     assert "on_shift" in first_agent
-    assert "wages_earned" in first_agent
+    assert "inventory" in first_agent
+    assert "wages_earned" in first_agent["inventory"]
 
 
 def test_stability_monitor_lateness_alert() -> None:

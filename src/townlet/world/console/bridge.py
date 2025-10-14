@@ -57,12 +57,14 @@ class ConsoleBridge:
     def handlers(self) -> Mapping[str, ConsoleHandlerEntry]:
         return self._handlers
 
-    def record_result(self, result: ConsoleCommandResult) -> None:
-        if result.cmd_id:
-            self._cmd_history[result.cmd_id] = result.clone()
+    def record_result(self, result: ConsoleCommandResult) -> ConsoleCommandResult:
+        stored = result.clone()
+        if stored.cmd_id:
+            self._cmd_history[stored.cmd_id] = stored.clone()
             while len(self._cmd_history) > self._history_limit:
                 self._cmd_history.popitem(last=False)
-        self._result_buffer.append(result)
+        self._result_buffer.append(stored)
+        return stored
 
     def consume_results(self) -> list[ConsoleCommandResult]:
         results = list(self._result_buffer)
@@ -77,7 +79,8 @@ class ConsoleBridge:
         clone.tick = self._world.tick
         return clone
 
-    def apply(self, operations: Iterable[Any]) -> None:
+    def apply(self, operations: Iterable[Any]) -> list[ConsoleCommandResult]:
+        produced: list[ConsoleCommandResult] = []
         for operation in operations:
             try:
                 envelope = ConsoleCommandEnvelope.from_payload(operation)
@@ -99,7 +102,8 @@ class ConsoleBridge:
                     tick=self._world.tick,
                 )
                 logger.warning("Rejected console command: %s", exc)
-                self.record_result(result)
+                stored = self.record_result(result)
+                produced.append(stored.clone())
                 continue
             except Exception:  # pragma: no cover - defensive guard
                 logger.exception("Failed to normalise console command payload: %r", operation)
@@ -113,7 +117,8 @@ class ConsoleBridge:
                     f"Unknown console command '{envelope.name}'",
                     tick=self._world.tick,
                 )
-                self.record_result(result)
+                stored = self.record_result(result)
+                produced.append(stored.clone())
                 continue
 
             if entry.mode == "admin" and envelope.mode != "admin":
@@ -123,7 +128,8 @@ class ConsoleBridge:
                     "Command requires admin mode",
                     tick=self._world.tick,
                 )
-                self.record_result(result)
+                stored = self.record_result(result)
+                produced.append(stored.clone())
                 continue
 
             if entry.require_cmd_id and not envelope.cmd_id:
@@ -133,13 +139,15 @@ class ConsoleBridge:
                     "Command requires cmd_id for idempotency",
                     tick=self._world.tick,
                 )
-                self.record_result(result)
+                stored = self.record_result(result)
+                produced.append(stored.clone())
                 continue
 
             if envelope.cmd_id:
                 cached = self.cached_result(envelope.cmd_id)
                 if cached is not None:
-                    self.record_result(cached)
+                    stored = self.record_result(cached)
+                    produced.append(stored.clone())
                     continue
 
             try:
@@ -164,4 +172,6 @@ class ConsoleBridge:
 
             if result.tick is None:
                 result.tick = self._world.tick
-            self.record_result(result)
+            stored = self.record_result(result)
+            produced.append(stored.clone())
+        return produced

@@ -6,26 +6,22 @@ import logging
 import time
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    Protocol,
-    TypedDict,
-)
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, cast
 
+from townlet.config import SimulationConfig
 from townlet.world.agents.interfaces import (
     AgentRegistryProtocol,
     RelationshipServiceProtocol,
 )
 from townlet.world.preconditions import evaluate_preconditions
 from townlet.world.queue import QueueManager
+from townlet.world.systems import queues as queue_system
 
 logger = logging.getLogger("townlet.world.grid")
 
 
 if TYPE_CHECKING:  # pragma: no cover - type hint guard
-    from townlet.world.grid import AgentSnapshot
+    from townlet.world.agents.snapshot import AgentSnapshot
 
 
 @dataclass(slots=True)
@@ -38,16 +34,19 @@ class AffordanceEnvironment:
     objects: MutableMapping[str, Any]
     affordances: MutableMapping[str, Any]
     running_affordances: MutableMapping[str, Any]
-    active_reservations: MutableMapping[str, str]
+    active_reservations: MutableMapping[str, str | None]
     emit_event: Callable[[str, dict[str, object]], None]
     sync_reservation: Callable[[str], None]
     apply_affordance_effects: Callable[[str, dict[str, float]], None]
-    dispatch_hooks: Callable[[str, Iterable[str]], bool]
+    dispatch_hooks: DispatchHookCallable
     record_queue_conflict: Callable[..., None]
     apply_need_decay: Callable[[], None]
     build_precondition_context: Callable[..., dict[str, Any]]
     snapshot_precondition_context: Callable[[Mapping[str, Any]], dict[str, Any]]
     tick_supplier: Callable[[], int]
+    store_stock: MutableMapping[str, dict[str, int]]
+    recent_meal_participants: MutableMapping[str, dict[str, Any]]
+    config: SimulationConfig
     world_ref: Any | None = None
 
 
@@ -84,14 +83,32 @@ class HookPayload(TypedDict, total=False):
     tick: int
     agent_id: str
     object_id: str
-    affordance_id: str
+    affordance_id: str | None
     environment: AffordanceEnvironment
     world: Any
     spec: Any
     effects: dict[str, float]
-    reason: str
-    condition: str
+    reason: str | None
+    condition: str | None
     context: dict[str, object]
+    cancel: bool
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    """Best-effort conversion of ``value`` to ``int``."""
+
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
 
 
 def snapshot_running_affordance(
@@ -120,7 +137,7 @@ def build_hook_payload(
     tick: int,
     agent_id: str,
     object_id: str,
-    affordance_id: str,
+    affordance_id: str | None,
     environment: AffordanceEnvironment,
     spec: Any,
     extra: Mapping[str, object] | None = None,
@@ -140,8 +157,28 @@ def build_hook_payload(
     if environment.world_ref is not None:
         payload["world"] = environment.world_ref
     if extra:
-        payload.update(extra)
+        _apply_hook_extra(payload, extra)
     return payload
+
+
+def _apply_hook_extra(payload: HookPayload, extra: Mapping[str, object]) -> None:
+    """Merge validated hook extras into the payload."""
+
+    for key, value in extra.items():
+        if key == "effects" and isinstance(value, Mapping):
+            payload["effects"] = {
+                str(effect): float(amount) for effect, amount in value.items()
+            }
+        elif key == "context" and isinstance(value, Mapping):
+            payload["context"] = {str(k): v for k, v in value.items()}
+        elif key == "reason":
+            payload["reason"] = None if value is None else str(value)
+        elif key == "condition":
+            payload["condition"] = None if value is None else str(value)
+        elif key == "cancel":
+            payload["cancel"] = bool(value)
+        else:
+            logger.debug("Ignoring unsupported hook extra key '%s'", key)
 
 
 @dataclass(slots=True)
@@ -181,10 +218,14 @@ def apply_affordance_outcome(
     if outcome.metadata:
         history_entry["metadata"] = dict(outcome.metadata)
 
-    outcome_log = snapshot.inventory.setdefault("_affordance_outcomes", [])
+    inventory = cast("MutableMapping[str, object]", snapshot.inventory)
+    history = inventory.get("_affordance_outcomes")
+    if isinstance(history, list):
+        outcome_log = cast("list[dict[str, object]]", history)
+    else:
+        outcome_log = []
+        inventory["_affordance_outcomes"] = outcome_log
     outcome_log.append(history_entry)
-    if len(outcome_log) > 10:
-        del outcome_log[0]
     if len(outcome_log) > 10:
         del outcome_log[0]
 
@@ -236,7 +277,7 @@ class DefaultAffordanceRuntime:
 
     @property
     def running_affordances(self) -> MutableMapping[str, Any]:
-        return self._ctx.running_affordances
+        return self._ctx.environment.running_affordances
 
     @property
     def instrumentation_level(self) -> str:
@@ -403,6 +444,7 @@ class DefaultAffordanceRuntime:
         metadata: dict[str, object] = {}
         running = self.running_affordances.pop(object_id, None)
         affordance_id = requested_affordance_id
+        waiting_before_release: list[str] = queue_manager.queue_snapshot(object_id)
         if running is not None:
             affordance_id = running.affordance_id
             if success:
@@ -430,8 +472,22 @@ class DefaultAffordanceRuntime:
                 obj = ctx.objects.get(object_id)
                 if obj is not None:
                     obj.occupied_by = None
-        queue_manager.release(object_id, agent_id, tick, success=success)
-        ctx.sync_reservation(object_id)
+        if success:
+            queue_system.handle_handover(
+                manager=queue_manager,
+                object_id=object_id,
+                departing_agent=agent_id,
+                tick=tick,
+                waiting=waiting_before_release,
+                preferred_agent=None,
+                record_queue_conflict=ctx.record_queue_conflict,
+                queue_conflicts=getattr(ctx, "queue_conflicts", None),
+                sync_reservation=ctx.sync_reservation,
+                intensity=0.5,
+            )
+        else:
+            queue_manager.release(object_id, agent_id, tick, success=success)
+            ctx.sync_reservation(object_id)
         if not success:
             if reason:
                 metadata["reason"] = reason
@@ -506,130 +562,7 @@ class DefaultAffordanceRuntime:
         return best_id
 
     def resolve(self, *, tick: int) -> None:
-        ctx = self._ctx
-        queue_manager = ctx.queue_manager
-        objects = ctx.objects
-        active_reservations = ctx.active_reservations
-        record_queue_conflict = ctx.record_queue_conflict
-        debug_enabled = self._instrumentation_enabled()
-        entry_running = 0
-        entry_queued = 0
-        if debug_enabled:
-            entry_running = len(self.running_affordances)
-            entry_queued = sum(
-                len(queue_manager.queue_snapshot(object_id))
-                for object_id in objects.keys()
-            )
-            logger.debug(
-                "world.resolve_affordances.start tick=%s running=%s queued_agents=%s",
-                tick,
-                entry_running,
-                entry_queued,
-            )
-        start_time = time.perf_counter()
-        queue_manager.on_tick(tick)
-        for object_id, occupant in list(active_reservations.items()):
-            queue = queue_manager.queue_snapshot(object_id)
-            if not queue:
-                continue
-            if queue_manager.record_blocked_attempt(object_id):
-                waiting = queue_manager.queue_snapshot(object_id)
-                rival = waiting[0] if waiting else None
-                queue_manager.release(object_id, occupant, tick, success=False)
-                queue_manager.requeue_to_tail(object_id, occupant, tick)
-                if rival is not None:
-                    record_queue_conflict(
-                        object_id=object_id,
-                        actor=occupant,
-                        rival=rival,
-                        reason="ghost_step",
-                        queue_length=len(waiting),
-                        intensity=None,
-                    )
-                self.running_affordances.pop(object_id, None)
-                ctx.sync_reservation(object_id)
-
-        for object_id, running in list(self.running_affordances.items()):
-            running.duration_remaining -= 1
-            if running.duration_remaining <= 0:
-                ctx.apply_affordance_effects(running.agent_id, running.effects)
-                self.running_affordances.pop(object_id, None)
-                waiting = queue_manager.queue_snapshot(object_id)
-                spec = ctx.affordances.get(running.affordance_id)
-                hook_names = tuple(spec.hooks.get("after", ())) if spec else ()
-                if debug_enabled:
-                    hook_start = time.perf_counter()
-                ctx.dispatch_hooks(
-                    "after",
-                    hook_names,
-                    agent_id=running.agent_id,
-                    object_id=object_id,
-                    spec=spec,
-                    extra={"effects": dict(running.effects)},
-                )
-                if debug_enabled:
-                    hook_duration_ms = (time.perf_counter() - hook_start) * 1000.0
-                    logger.debug(
-                        (
-                            "world.resolve_affordances.hook tick=%s stage=%s "
-                            "object=%s agent=%s duration_ms=%.2f hooks=%s"
-                        ),
-                        tick,
-                        "after",
-                        object_id,
-                        running.agent_id,
-                        hook_duration_ms,
-                        len(hook_names),
-                    )
-                preferred = self._select_handover_candidate(
-                    ctx.relationships,
-                    running.agent_id,
-                    waiting,
-                )
-                if preferred is not None:
-                    queue_manager.promote_agent(object_id, preferred)
-                queue_manager.release(object_id, running.agent_id, tick, success=True)
-                ctx.sync_reservation(object_id)
-                if waiting:
-                    next_agent = preferred if preferred is not None else waiting[0]
-                    record_queue_conflict(
-                        object_id=object_id,
-                        actor=running.agent_id,
-                        rival=next_agent,
-                        reason="handover",
-                        queue_length=len(waiting),
-                        intensity=0.5,
-                    )
-                ctx.emit_event(
-                    "affordance_finish",
-                    {
-                        "agent_id": running.agent_id,
-                        "object_id": object_id,
-                        "affordance_id": running.affordance_id,
-                    },
-                )
-
-        if debug_enabled:
-            duration_ms = (time.perf_counter() - start_time) * 1000.0
-            running_count = len(self.running_affordances)
-            queued_agents = sum(
-                len(queue_manager.queue_snapshot(object_id))
-                for object_id in objects.keys()
-            )
-            logger.debug(
-                (
-                    "world.resolve_affordances.end tick=%s duration_ms=%.2f "
-                    "running=%s queued_agents=%s running_delta=%s queued_delta=%s"
-                ),
-                tick,
-                duration_ms,
-                running_count,
-                queued_agents,
-                running_count - entry_running,
-                queued_agents - entry_queued,
-            )
-
-        ctx.apply_need_decay()
+        advance_running_affordances(self, tick=tick)
 
     def _instrumentation_enabled(self) -> bool:
         return self._instrumentation_level == "timings" or logger.isEnabledFor(logging.DEBUG)
@@ -656,7 +589,9 @@ class DefaultAffordanceRuntime:
                 "agent_id": running.agent_id,
                 "affordance_id": running.affordance_id,
                 "duration_remaining": int(running.duration_remaining),
-                "effects": {key: float(value) for key, value in running.effects.items()},
+                "effects": {
+                    key: float(value) for key, value in running.effects.items()
+                },
             }
         return state
 
@@ -670,7 +605,7 @@ class DefaultAffordanceRuntime:
             affordance_id = str(entry.get("affordance_id", ""))
             if not agent_id or not affordance_id:
                 continue
-            duration = int(entry.get("duration_remaining", 0))
+            duration = _coerce_int(entry.get("duration_remaining"), 0)
             effects_payload = entry.get("effects", {})
             if isinstance(effects_payload, Mapping):
                 effects = {str(k): float(v) for k, v in effects_payload.items()}
@@ -686,6 +621,124 @@ class DefaultAffordanceRuntime:
             obj = objects.get(object_id)
             if obj is not None:
                 obj.occupied_by = agent_id
-            # Ensure queue manager active reservation aligns with imported state.
             if queue_manager.active_agent(object_id) != agent_id and agent_id:
                 ctx.active_reservations[object_id] = agent_id
+
+
+
+def advance_running_affordances(runtime: DefaultAffordanceRuntime, *, tick: int) -> None:
+    ctx = runtime._ctx
+    queue_manager = ctx.queue_manager
+    objects = ctx.objects
+    record_queue_conflict = ctx.record_queue_conflict
+    debug_enabled = runtime._instrumentation_enabled()
+    entry_running = 0
+    entry_queued = 0
+    if debug_enabled:
+        entry_running = len(runtime.running_affordances)
+        entry_queued = sum(
+            len(queue_manager.queue_snapshot(object_id))
+            for object_id in objects.keys()
+        )
+        logger.debug(
+            "world.resolve_affordances.start tick=%s running=%s queued_agents=%s",
+            tick,
+            entry_running,
+            entry_queued,
+        )
+    start_time = time.perf_counter()
+    for object_id, running in list(runtime.running_affordances.items()):
+        running.duration_remaining -= 1
+        if running.duration_remaining > 0:
+            continue
+        ctx.apply_affordance_effects(running.agent_id, running.effects)
+        runtime.running_affordances.pop(object_id, None)
+        waiting = queue_manager.queue_snapshot(object_id)
+        spec = ctx.affordances.get(running.affordance_id)
+        hook_names = tuple(spec.hooks.get("after", ())) if spec else ()
+        if debug_enabled:
+            hook_start = time.perf_counter()
+        ctx.dispatch_hooks(
+            "after",
+            hook_names,
+            agent_id=running.agent_id,
+            object_id=object_id,
+            spec=spec,
+            extra={"effects": dict(running.effects)},
+        )
+        if debug_enabled:
+            hook_duration_ms = (time.perf_counter() - hook_start) * 1000.0
+            logger.debug(
+                (
+                    "world.resolve_affordances.hook tick=%s stage=%s "
+                    "object=%s agent=%s duration_ms=%.2f hooks=%s"
+                ),
+                tick,
+                "after",
+                object_id,
+                running.agent_id,
+                hook_duration_ms,
+                len(hook_names),
+            )
+        preferred = runtime._select_handover_candidate(
+            ctx.relationships,
+            running.agent_id,
+            waiting,
+        )
+        queue_system.handle_handover(
+            manager=queue_manager,
+            object_id=object_id,
+            departing_agent=running.agent_id,
+            tick=tick,
+            waiting=waiting,
+            preferred_agent=preferred,
+            record_queue_conflict=record_queue_conflict,
+            queue_conflicts=getattr(ctx, "queue_conflicts", None),
+            sync_reservation=ctx.sync_reservation,
+            intensity=0.5,
+        )
+        ctx.emit_event(
+            "affordance_finish",
+            {
+                "agent_id": running.agent_id,
+                "object_id": object_id,
+                "affordance_id": running.affordance_id,
+            },
+        )
+
+    if debug_enabled:
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        running_count = len(runtime.running_affordances)
+        queued_agents = sum(
+            len(queue_manager.queue_snapshot(object_id))
+            for object_id in objects.keys()
+        )
+        logger.debug(
+            (
+                "world.resolve_affordances.end tick=%s duration_ms=%.2f "
+                "running=%s queued_agents=%s running_delta=%s queued_delta=%s"
+            ),
+            tick,
+            duration_ms,
+            running_count,
+            queued_agents,
+            running_count - entry_running,
+            queued_agents - entry_queued,
+        )
+
+    ctx.apply_need_decay()
+class DispatchHookCallable(Protocol):
+    """Callable signature used to run affordance hooks."""
+
+    def __call__(
+        self,
+        stage: Literal["before", "after", "fail"],
+        hook_names: Iterable[str],
+        *,
+        agent_id: str,
+        object_id: str,
+        spec: Any,
+        extra: Mapping[str, Any] | None = None,
+        debug_enabled: bool = False,
+    ) -> bool:
+        ...

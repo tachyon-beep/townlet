@@ -79,13 +79,23 @@ class PerturbationService:
             )
 
     def active_price_spikes(self) -> dict[str, dict[str, object]]:
-        return self.economy_service.active_price_spikes()
+        spikes = self.economy_service.active_price_spikes()
+        if not isinstance(spikes, MutableMapping):
+            return {}
+        snapshot: dict[str, dict[str, object]] = {}
+        for key, value in spikes.items():
+            if isinstance(value, MutableMapping):
+                snapshot[str(key)] = dict(value)
+        return snapshot
 
     def utility_snapshot(self) -> dict[str, bool]:
-        return self.economy_service.utility_snapshot()
+        utilities = self.economy_service.utility_snapshot()
+        if not isinstance(utilities, MutableMapping):
+            return {}
+        return {str(name): bool(state) for name, state in utilities.items()}
 
     def utility_online(self, utility: str) -> bool:
-        return self.economy_service.utility_online(utility)
+        return bool(self.economy_service.utility_online(utility))
 
 
 __all__ = ["PerturbationService"]

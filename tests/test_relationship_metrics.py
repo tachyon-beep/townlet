@@ -257,12 +257,12 @@ def test_absence_triggers_took_my_shift_relationships() -> None:
         wallet=5.0,
         job_id=job_id,
     )
-    ctx_alice = world._get_employment_context("alice")
-    ctx_bob = world._get_employment_context("bob")
+    ctx_alice = world.employment_service.get_context("alice")
+    ctx_bob = world.employment_service.get_context("bob")
     ctx_bob["state"] = "on_time"
     world.agents["bob"].on_shift = True
 
-    world._employment_apply_state_effects(
+    world.employment_service.apply_state_effects(
         snapshot=world.agents["alice"],
         ctx=ctx_alice,
         state="absent",
@@ -299,12 +299,12 @@ def test_late_help_creates_positive_relationship() -> None:
         wallet=5.0,
         job_id=job_id,
     )
-    ctx_alice = world._get_employment_context("alice")
-    ctx_bob = world._get_employment_context("bob")
+    ctx_alice = world.employment_service.get_context("alice")
+    ctx_bob = world.employment_service.get_context("bob")
     ctx_bob["state"] = "on_time"
     world.agents["bob"].on_shift = True
 
-    world._employment_apply_state_effects(
+    world.employment_service.apply_state_effects(
         snapshot=world.agents["alice"],
         ctx=ctx_alice,
         state="late",

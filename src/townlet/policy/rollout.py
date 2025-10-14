@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -15,25 +16,29 @@ from townlet.policy.replay_buffer import (
     InMemoryReplayDataset,
     InMemoryReplayDatasetConfig,
 )
+from townlet.dto.observations import DTO_SCHEMA_VERSION
 
 
 @dataclass
 class AgentRollout:
     agent_id: str
-    frames: list[dict[str, object]] = field(default_factory=list)
+    frames: list[dict[str, Any]] = field(default_factory=list)
 
-    def append(self, frame: dict[str, object]) -> None:
+    def append(self, frame: dict[str, Any]) -> None:
         self.frames.append(frame)
 
     def to_replay_sample(self) -> ReplaySample:
         return frames_to_replay_sample(self.frames)
+
+    def to_dto_artifact(self) -> dict[str, Any]:
+        return build_dto_rollout_artifact(self.agent_id, self.frames)
 
 
 class RolloutBuffer:
     """Collects trajectory frames and exposes helpers to save or replay them."""
 
     def __init__(self) -> None:
-        self._frames: list[dict[str, object]] = []
+        self._frames: list[dict[str, Any]] = []
         self._tick_count = 0
         self._queue_conflict_count = 0
         self._queue_conflict_intensity = 0.0
@@ -44,35 +49,33 @@ class RolloutBuffer:
         self._chat_failure_count = 0
         self._chat_quality_sum = 0.0
 
-    def record_events(self, events: Iterable[dict[str, object]]) -> None:
+    def record_events(self, events: Iterable[Mapping[str, Any]]) -> None:
         for event in events:
-            if event.get("event") == "queue_conflict":
+            event_name = event.get("event")
+            if event_name == "queue_conflict":
                 self._queue_conflict_count += 1
                 intensity = event.get("intensity")
-                try:
+                if isinstance(intensity, (int, float)):
                     self._queue_conflict_intensity += float(intensity)
-                except (TypeError, ValueError):
-                    continue
-            elif event.get("event") == "queue_interaction":
+            elif event_name == "queue_interaction":
                 continue
-            elif event.get("event") == "shared_meal":
+            elif event_name == "shared_meal":
                 self._shared_meal_count += 1
-            elif event.get("event") == "employment_helped_when_late":
+            elif event_name == "employment_helped_when_late":
                 self._late_help_count += 1
-            elif event.get("event") == "employment_took_my_shift":
+            elif event_name == "employment_took_my_shift":
                 self._shift_takeover_count += 1
-            elif event.get("event") == "chat_success":
+            elif event_name == "chat_success":
                 self._chat_success_count += 1
-                try:
-                    self._chat_quality_sum += float(event.get("quality", 0.0))
-                except (TypeError, ValueError):
-                    pass
-            elif event.get("event") == "chat_failure":
+                quality = event.get("quality", 0.0)
+                if isinstance(quality, (int, float)):
+                    self._chat_quality_sum += float(quality)
+            elif event_name == "chat_failure":
                 self._chat_failure_count += 1
 
-    def extend(self, frames: Iterable[dict[str, object]]) -> None:
+    def extend(self, frames: Iterable[Mapping[str, Any]]) -> None:
         for frame in frames:
-            self._frames.append(frame)
+            self._frames.append(dict(frame))
 
     def __len__(self) -> int:
         return len(self._frames)
@@ -119,8 +122,11 @@ class RolloutBuffer:
             meta["metrics"] = sample_metrics
             metrics_map[sample_path.name] = sample_metrics
             meta_path.write_text(json.dumps(meta, indent=2))
+            dto_path = output_dir / f"{stem}_dto.json"
+            dto_payload = rollout.to_dto_artifact()
+            dto_path.write_text(json.dumps(dto_payload, indent=2))
             manifest_entries.append(
-                {"sample": sample_path.name, "meta": meta_path.name}
+                {"sample": sample_path.name, "meta": meta_path.name, "dto": dto_path.name}
             )
 
         manifest_path = output_dir / f"{prefix}_manifest.json"
@@ -184,8 +190,6 @@ class RolloutBuffer:
         counts: dict[str, int] = {}
         for metrics in metrics_sources:
             for key, value in metrics.items():
-                if not isinstance(value, (int, float)):
-                    continue
                 totals[key] = totals.get(key, 0.0) + float(value)
                 counts[key] = counts.get(key, 0) + 1
 
@@ -204,3 +208,63 @@ class RolloutBuffer:
             else:
                 aggregate[key] = total / occurrences
         return aggregate
+
+
+def build_dto_rollout_artifact(agent_id: str, frames: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Normalise rollout frames into a DTO-native export payload."""
+
+    if not frames:
+        raise ValueError("frames cannot be empty when building DTO rollout export")
+
+    resolved_agent_id = str(agent_id) if agent_id else None
+    ticks: list[int] = []
+    normalised_frames: list[dict[str, Any]] = []
+    for frame in frames:
+        frame_agent = str(frame.get("agent_id", resolved_agent_id or "unknown"))
+        if resolved_agent_id is None:
+            resolved_agent_id = frame_agent
+        elif frame_agent != resolved_agent_id:
+            raise ValueError(
+                f"mixed agent identifiers in rollout frames ({resolved_agent_id} vs {frame_agent})"
+            )
+        tick_value = frame.get("tick", 0)
+        try:
+            ticks.append(int(tick_value))
+        except (TypeError, ValueError):
+            ticks.append(0)
+        normalised_frames.append(_normalise_frame(frame))
+
+    if resolved_agent_id is None:
+        resolved_agent_id = "unknown"
+
+    return {
+        "schema_version": DTO_SCHEMA_VERSION,
+        "agent_id": resolved_agent_id,
+        "frame_count": len(normalised_frames),
+        "tick_first": min(ticks),
+        "tick_last": max(ticks),
+        "frames": normalised_frames,
+    }
+
+
+def _normalise_frame(frame: Mapping[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in frame.items():
+        payload[str(key)] = _to_builtin(value)
+    return payload
+
+
+def _to_builtin(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): _to_builtin(v) for k, v in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_to_builtin(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    return value

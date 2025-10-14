@@ -1,15 +1,41 @@
-"""Monitors KPIs and promotion guardrails."""
+"""Monitors KPIs and promotion guardrails - coordinator pattern.
+
+DESIGN#3.1: Analyzer Extraction (WP5 Phase 3.1)
+
+StabilityMonitor acts as a lightweight coordinator that delegates to
+5 specialized analyzers:
+- FairnessAnalyzer: Queue conflict detection
+- RivalryTracker: High-intensity rivalry spikes
+- RewardVarianceAnalyzer: Reward variance tracking
+- OptionThrashDetector: Option switching monitoring
+- StarvationDetector: Sustained hunger tracking
+
+The monitor handles:
+- Analyzer instantiation and configuration
+- Delegation of track() to analyzers
+- Aggregation of metrics and alerts
+- Promotion window logic
+- Legacy alert detection (embedding, affordance, lateness, employment)
+- State export/import coordination
+"""
 
 from __future__ import annotations
 
-from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from townlet.config import SimulationConfig
+from townlet.stability.analyzers import (
+    FairnessAnalyzer,
+    OptionThrashDetector,
+    RewardVarianceAnalyzer,
+    RivalryTracker,
+    StarvationDetector,
+)
+from townlet.utils.coerce import coerce_float, coerce_int
 
 
 class StabilityMonitor:
-    """Tracks rolling metrics and canaries."""
+    """Coordinates stability analyzers and tracks promotion guardrails."""
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
@@ -20,11 +46,31 @@ class StabilityMonitor:
         self.fail_threshold = config.stability.affordance_fail_threshold
         self.lateness_threshold = config.stability.lateness_threshold
         self._employment_enabled = config.employment.enforce_job_loop
-        self._fairness_alert_limit = 5
 
-        self._starvation_cfg = config.stability.starvation
-        self._reward_cfg = config.stability.reward_variance
-        self._option_cfg = config.stability.option_thrash
+        # Instantiate analyzers
+        self._fairness = FairnessAnalyzer(alert_limit=5)
+        self._rivalry = RivalryTracker(
+            alert_limit=5,
+            intensity_threshold=config.conflict.rivalry.avoid_threshold,
+        )
+        self._starvation = StarvationDetector(
+            hunger_threshold=config.stability.starvation.hunger_threshold,
+            min_duration_ticks=config.stability.starvation.min_duration_ticks,
+            window_ticks=config.stability.starvation.window_ticks,
+            max_incidents=config.stability.starvation.max_incidents,
+        )
+        self._reward_variance = RewardVarianceAnalyzer(
+            window_ticks=config.stability.reward_variance.window_ticks,
+            max_variance=config.stability.reward_variance.max_variance,
+            min_samples=config.stability.reward_variance.min_samples,
+        )
+        self._option_thrash = OptionThrashDetector(
+            window_ticks=config.stability.option_thrash.window_ticks,
+            max_thrash_rate=config.stability.option_thrash.max_switch_rate,
+            min_samples=config.stability.option_thrash.min_samples,
+        )
+
+        # Promotion window state
         self._promotion_cfg = config.stability.promotion
         self._promotion_allowed_alerts = set(self._promotion_cfg.allowed_alerts)
         self._promotion_window_ticks = self._promotion_cfg.window_ticks
@@ -35,56 +81,11 @@ class StabilityMonitor:
         self._promotion_last_result: str | None = None
         self._promotion_last_evaluated_tick: int | None = None
 
-        self._starvation_streaks: dict[str, int] = {}
-        self._starvation_active: set[str] = set()
-        self._starvation_incidents: deque[tuple[int, str]] = deque()
-
-        self._reward_samples: deque[tuple[int, float]] = deque()
-        self._option_samples: deque[tuple[int, float]] = deque()
-
         self._latest_metrics: dict[str, object] = {
             "alerts": [],
             "thresholds": self._threshold_snapshot(),
             "promotion": self._promotion_snapshot(),
         }
-
-    def _promotion_snapshot(self) -> dict[str, object]:
-        window_end = self._promotion_window_start + self._promotion_window_ticks
-        return {
-            "window_start": self._promotion_window_start,
-            "window_end": window_end,
-            "window_ticks": self._promotion_window_ticks,
-            "pass_streak": self._promotion_pass_streak,
-            "required_passes": self._promotion_cfg.required_passes,
-            "candidate_ready": self._promotion_candidate_ready,
-            "last_result": self._promotion_last_result,
-            "last_evaluated_tick": self._promotion_last_evaluated_tick,
-        }
-
-    def _finalise_promotion_window(self, window_end: int) -> None:
-        passed = not self._promotion_window_failed
-        if passed:
-            self._promotion_pass_streak += 1
-            self._promotion_last_result = "pass"
-        else:
-            self._promotion_pass_streak = 0
-            self._promotion_last_result = "fail"
-        self._promotion_candidate_ready = (
-            self._promotion_pass_streak >= self._promotion_cfg.required_passes
-        )
-        self._promotion_last_evaluated_tick = max(window_end - 1, 0)
-        self._promotion_window_start = window_end
-        self._promotion_window_failed = False
-
-    def _update_promotion_window(self, tick: int, alerts: Iterable[str]) -> None:
-        window_end = self._promotion_window_start + self._promotion_window_ticks
-        while tick >= window_end:
-            self._finalise_promotion_window(window_end)
-            window_end = self._promotion_window_start + self._promotion_window_ticks
-        disallowed = [a for a in alerts if a not in self._promotion_allowed_alerts]
-        if disallowed:
-            self._promotion_window_failed = True
-
 
     def track(
         self,
@@ -101,36 +102,94 @@ class StabilityMonitor:
         option_switch_counts: dict[str, int] | None = None,
         rivalry_events: Iterable[dict[str, object]] | None = None,
     ) -> None:
+        """Track metrics and check alert thresholds.
+
+        Delegates to 5 specialized analyzers and aggregates alerts:
+        1. FairnessAnalyzer - queue conflict deltas
+        2. RivalryTracker - high-intensity rivalry spikes
+        3. StarvationDetector - sustained hunger incidents
+        4. OptionThrashDetector - option switching rate
+        5. RewardVarianceAnalyzer - reward distribution variance
+
+        Also handles legacy alerts: embedding reuse, affordance failures,
+        lateness spikes, employment queue overflow.
+
+        Args:
+            tick: Current simulation tick
+            rewards: Per-agent rewards
+            terminated: Per-agent termination flags
+            queue_metrics: Queue conflict metrics (cumulative counters)
+            embedding_metrics: Embedding reuse metrics
+            job_snapshot: Employment snapshot for lateness
+            events: Affordance events (for failure counting)
+            employment_metrics: Employment exit queue metrics
+            hunger_levels: Per-agent hunger levels (0.0 = starving)
+            option_switch_counts: Per-agent option switch counts
+            rivalry_events: Rivalry event list with intensity
+        """
         previous_queue_metrics = self.last_queue_metrics or {}
         self.last_queue_metrics = queue_metrics
         self.last_embedding_metrics = embedding_metrics
         alerts: list[str] = []
 
-        fairness_delta = {
-            "cooldown_events": 0,
-            "ghost_step_events": 0,
-            "rotation_events": 0,
-        }
-        if queue_metrics:
-            for key in fairness_delta:
-                new_value = int(queue_metrics.get(key, 0))
-                old_value = int(previous_queue_metrics.get(key, 0))
-                fairness_delta[key] = max(0, new_value - old_value)
-            if (
-                fairness_delta["ghost_step_events"] >= self._fairness_alert_limit
-                or fairness_delta["rotation_events"] >= self._fairness_alert_limit
-            ):
-                alerts.append("queue_fairness_pressure")
+        # Delegate to FairnessAnalyzer
+        fairness_metrics = self._fairness.analyze(
+            tick=tick, queue_metrics=queue_metrics
+        )
+        fairness_alert = self._fairness.check_alert()
+        if fairness_alert:
+            alerts.append(fairness_alert)
+        fairness_delta = fairness_metrics.get("queue_deltas", {})
 
+        # Delegate to RivalryTracker
+        rivalry_metrics = self._rivalry.analyze(
+            tick=tick, rivalry_events=rivalry_events
+        )
+        rivalry_alert = self._rivalry.check_alert()
+        if rivalry_alert:
+            alerts.append(rivalry_alert)
+        rivalry_events_list = rivalry_metrics.get("rivalry_events", [])
+
+        # Delegate to StarvationDetector
+        starvation_metrics = self._starvation.analyze(
+            tick=tick, hunger_levels=hunger_levels, terminated=terminated
+        )
+        starvation_alert = self._starvation.check_alert()
+        if starvation_alert:
+            alerts.append(starvation_alert)
+        starvation_incidents = starvation_metrics.get("starvation_incidents", 0)
+
+        # Delegate to OptionThrashDetector
+        option_metrics = self._option_thrash.analyze(
+            tick=tick, option_switch_counts=option_switch_counts
+        )
+        option_alert = self._option_thrash.check_alert()
+        if option_alert:
+            alerts.append(option_alert)
+        option_rate = option_metrics.get("option_thrash_mean")
+        option_samples = option_metrics.get("option_samples", 0)
+
+        # Delegate to RewardVarianceAnalyzer
+        reward_metrics = self._reward_variance.analyze(tick=tick, rewards=rewards)
+        reward_alert = self._reward_variance.check_alert()
+        if reward_alert:
+            alerts.append(reward_alert)
+        reward_variance = reward_metrics.get("reward_variance")
+        reward_mean = reward_metrics.get("reward_mean")
+        reward_samples = reward_metrics.get("reward_samples", 0)
+
+        # Legacy alert: embedding reuse warning
         if embedding_metrics and embedding_metrics.get("reuse_warning"):
             alerts.append("embedding_reuse_warning")
 
+        # Legacy alert: affordance failures
         fail_count = 0
         if events is not None:
             fail_count = sum(1 for e in events if e.get("event") == "affordance_fail")
         if self.fail_threshold >= 0 and fail_count > self.fail_threshold:
             alerts.append("affordance_failures_exceeded")
 
+        # Legacy alert: lateness spike
         if job_snapshot is not None and self.lateness_threshold >= 0:
             lateness_total = 0
             for agent_info in job_snapshot.values():
@@ -138,75 +197,34 @@ class StabilityMonitor:
                     late_value = agent_info.get("late_ticks_today", 0)
                 else:
                     late_value = agent_info.get("lateness_counter", 0)
-                lateness_total += int(late_value)
+                lateness_total += coerce_int(late_value)
             if lateness_total > self.lateness_threshold:
                 alerts.append("lateness_spike")
 
+        # Legacy alert: employment exit queue
         if employment_metrics is not None:
-            pending = int(employment_metrics.get("pending_count", 0))
-            limit = int(employment_metrics.get("queue_limit", 0))
+            pending = coerce_int(employment_metrics.get("pending_count"))
+            limit = coerce_int(employment_metrics.get("queue_limit"))
             if limit and pending > limit:
                 alerts.append("employment_exit_queue_overflow")
             elif pending and not alerts:
                 alerts.append("employment_exit_backlog")
 
-        starvation_incidents = self._update_starvation_state(
-            tick=tick,
-            hunger_levels=hunger_levels,
-            terminated=terminated,
-        )
-        if (
-            starvation_incidents > self._starvation_cfg.max_incidents
-            and self._starvation_cfg.max_incidents >= 0
-        ):
-            alerts.append("starvation_spike")
-
-        option_rate = self._update_option_samples(
-            tick=tick,
-            option_switch_counts=option_switch_counts,
-            active_agent_count=len(hunger_levels or {}),
-        )
-
-        rivalry_events_list = list(rivalry_events or [])
-        high_intensity = [
-            event
-            for event in rivalry_events_list
-            if float(event.get("intensity", 0.0))
-            >= self.config.conflict.rivalry.avoid_threshold
-        ]
-        if len(high_intensity) >= self._fairness_alert_limit:
-            alerts.append("rivalry_spike")
-        if (
-            option_rate is not None
-            and option_rate > self._option_cfg.max_switch_rate
-            and len(self._option_samples) >= self._option_cfg.min_samples
-        ):
-            alerts.append("option_thrash_detected")
-
-        reward_variance, reward_mean, reward_sample_count = self._update_reward_samples(
-            tick=tick,
-            rewards=rewards,
-        )
-        if (
-            reward_variance is not None
-            and reward_variance > self._reward_cfg.max_variance
-            and len(self._reward_samples) >= self._reward_cfg.min_samples
-        ):
-            alerts.append("reward_variance_spike")
-
+        # Update promotion window
         self._update_promotion_window(tick, alerts)
 
+        # Store aggregated results
         self.latest_alerts = alerts
         self.latest_alert = alerts[0] if alerts else None
 
         self._latest_metrics = {
             "starvation_incidents": starvation_incidents,
-            "starvation_window_ticks": self._starvation_cfg.window_ticks,
+            "starvation_window_ticks": self.config.stability.starvation.window_ticks,
             "option_switch_rate": option_rate,
-            "option_samples": len(self._option_samples),
+            "option_samples": option_samples,
             "reward_variance": reward_variance,
             "reward_mean": reward_mean,
-            "reward_samples": reward_sample_count,
+            "reward_samples": reward_samples,
             "queue_totals": dict(queue_metrics or {}),
             "queue_deltas": fairness_delta,
             "rivalry_events": rivalry_events_list,
@@ -216,17 +234,17 @@ class StabilityMonitor:
         }
 
     def latest_metrics(self) -> dict[str, object]:
+        """Return copy of latest metrics dict."""
         return dict(self._latest_metrics)
 
     def export_state(self) -> dict[str, object]:
+        """Export coordinator and analyzer state for snapshots."""
         return {
-            "starvation_streaks": dict(self._starvation_streaks),
-            "starvation_active": list(self._starvation_active),
-            "starvation_incidents": [
-                list(entry) for entry in self._starvation_incidents
-            ],
-            "reward_samples": [list(entry) for entry in self._reward_samples],
-            "option_samples": [list(entry) for entry in self._option_samples],
+            "starvation": self._starvation.export_state(),
+            "reward_variance": self._reward_variance.export_state(),
+            "option_thrash": self._option_thrash.export_state(),
+            "fairness": self._fairness.export_state(),
+            "rivalry": self._rivalry.export_state(),
             "latest_metrics": dict(self._latest_metrics),
             "promotion": {
                 "window_start": self._promotion_window_start,
@@ -238,57 +256,49 @@ class StabilityMonitor:
             },
         }
 
-    def import_state(self, payload: dict[str, object]) -> None:
-        streaks = payload.get("starvation_streaks", {})
-        if isinstance(streaks, dict):
-            self._starvation_streaks = {
-                str(agent): int(value) for agent, value in streaks.items()
-            }
-        else:
-            self._starvation_streaks = {}
+    def import_state(self, payload: Mapping[str, object]) -> None:
+        """Import coordinator and analyzer state from snapshots."""
+        # Import analyzer states
+        starvation_state = payload.get("starvation")
+        if isinstance(starvation_state, dict):
+            self._starvation.import_state(starvation_state)
 
-        active = payload.get("starvation_active", [])
-        if isinstance(active, list):
-            self._starvation_active = {str(agent) for agent in active}
-        else:
-            self._starvation_active = set()
+        reward_state = payload.get("reward_variance")
+        if isinstance(reward_state, dict):
+            self._reward_variance.import_state(reward_state)
 
-        incidents = payload.get("starvation_incidents", [])
-        self._starvation_incidents = deque()
-        if isinstance(incidents, list):
-            for entry in incidents:
-                if isinstance(entry, (list, tuple)) and len(entry) == 2:
-                    tick, agent = entry
-                    self._starvation_incidents.append((int(tick), str(agent)))
+        option_state = payload.get("option_thrash")
+        if isinstance(option_state, dict):
+            self._option_thrash.import_state(option_state)
 
-        reward_samples = payload.get("reward_samples", [])
-        self._reward_samples = deque()
-        if isinstance(reward_samples, list):
-            for entry in reward_samples:
-                if isinstance(entry, (list, tuple)) and len(entry) == 2:
-                    tick, value = entry
-                    self._reward_samples.append((int(tick), float(value)))
+        fairness_state = payload.get("fairness")
+        if isinstance(fairness_state, dict):
+            self._fairness.import_state(fairness_state)
 
-        option_samples = payload.get("option_samples", [])
-        self._option_samples = deque()
-        if isinstance(option_samples, list):
-            for entry in option_samples:
-                if isinstance(entry, (list, tuple)) and len(entry) == 2:
-                    tick, value = entry
-                    self._option_samples.append((int(tick), float(value)))
+        rivalry_state = payload.get("rivalry")
+        if isinstance(rivalry_state, dict):
+            self._rivalry.import_state(rivalry_state)
+
+        # Import promotion state
         promotion = payload.get("promotion", {})
         if isinstance(promotion, dict):
-            self._promotion_window_start = int(promotion.get("window_start", 0))
+            self._promotion_window_start = coerce_int(
+                promotion.get("window_start"), default=0
+            )
             self._promotion_window_failed = bool(promotion.get("window_failed", False))
-            self._promotion_pass_streak = int(promotion.get("pass_streak", 0))
-            self._promotion_candidate_ready = bool(promotion.get("candidate_ready", False))
+            self._promotion_pass_streak = coerce_int(
+                promotion.get("pass_streak"), default=0
+            )
+            self._promotion_candidate_ready = bool(
+                promotion.get("candidate_ready", False)
+            )
             last_result = promotion.get("last_result")
             self._promotion_last_result = (
                 str(last_result) if last_result is not None else None
             )
             last_tick = promotion.get("last_evaluated_tick")
             self._promotion_last_evaluated_tick = (
-                int(last_tick) if last_tick is not None else None
+                coerce_int(last_tick) if last_tick is not None else None
             )
         else:
             self._promotion_window_start = 0
@@ -298,26 +308,33 @@ class StabilityMonitor:
             self._promotion_last_result = None
             self._promotion_last_evaluated_tick = None
 
+        # Import latest metrics
         metrics = payload.get("latest_metrics", {})
         self._latest_metrics = dict(metrics) if isinstance(metrics, dict) else {}
         if "thresholds" not in self._latest_metrics:
             self._latest_metrics["thresholds"] = self._threshold_snapshot()
         self._latest_metrics["promotion"] = self._promotion_snapshot()
-        self.latest_alerts = list(self._latest_metrics.get("alerts", []))
+        alerts_obj = self._latest_metrics.get("alerts", [])
+        self.latest_alerts = (
+            list(alerts_obj) if isinstance(alerts_obj, Iterable) else []
+        )
         self.latest_alert = self.latest_alerts[0] if self.latest_alerts else None
 
     def reset_state(self) -> None:
-        self._starvation_streaks.clear()
-        self._starvation_active.clear()
-        self._starvation_incidents.clear()
-        self._reward_samples.clear()
-        self._option_samples.clear()
+        """Reset all analyzer and coordinator state."""
+        self._starvation.reset()
+        self._reward_variance.reset()
+        self._option_thrash.reset()
+        self._fairness.reset()
+        self._rivalry.reset()
+
         self._promotion_window_start = 0
         self._promotion_window_failed = False
         self._promotion_pass_streak = 0
         self._promotion_candidate_ready = False
         self._promotion_last_result = None
         self._promotion_last_evaluated_tick = None
+
         self._latest_metrics = {
             "alerts": [],
             "thresholds": self._threshold_snapshot(),
@@ -326,95 +343,52 @@ class StabilityMonitor:
         self.latest_alert = None
         self.latest_alerts = []
 
-    def _update_starvation_state(
-        self,
-        *,
-        tick: int,
-        hunger_levels: dict[str, float] | None,
-        terminated: dict[str, bool],
-    ) -> int:
-        cutoff = tick - self._starvation_cfg.window_ticks
-        while self._starvation_incidents and self._starvation_incidents[0][0] <= cutoff:
-            self._starvation_incidents.popleft()
-
-        if hunger_levels is None:
-            return len(self._starvation_incidents)
-
-        for agent_id, hunger in hunger_levels.items():
-            if hunger <= self._starvation_cfg.hunger_threshold:
-                streak = self._starvation_streaks.get(agent_id, 0) + 1
-                self._starvation_streaks[agent_id] = streak
-                if (
-                    streak >= self._starvation_cfg.min_duration_ticks
-                    and agent_id not in self._starvation_active
-                ):
-                    self._starvation_incidents.append((tick, agent_id))
-                    self._starvation_active.add(agent_id)
-            else:
-                self._starvation_streaks.pop(agent_id, None)
-                self._starvation_active.discard(agent_id)
-
-        for agent_id, was_terminated in terminated.items():
-            if was_terminated:
-                self._starvation_streaks.pop(agent_id, None)
-                self._starvation_active.discard(agent_id)
-
-        return len(self._starvation_incidents)
-
-    def _update_reward_samples(
-        self,
-        *,
-        tick: int,
-        rewards: dict[str, float],
-    ) -> tuple[float | None, float | None, int]:
-        cutoff = tick - self._reward_cfg.window_ticks
-        while self._reward_samples and self._reward_samples[0][0] <= cutoff:
-            self._reward_samples.popleft()
-
-        for value in rewards.values():
-            self._reward_samples.append((tick, float(value)))
-
-        if not self._reward_samples:
-            return None, None, 0
-
-        values = [sample[1] for sample in self._reward_samples]
-        sample_count = len(values)
-        if sample_count == 0:
-            return None, None, 0
-        mean = sum(values) / sample_count
-        variance = sum((value - mean) ** 2 for value in values) / sample_count
-        return variance, mean, sample_count
+    def _promotion_snapshot(self) -> dict[str, object]:
+        """Return promotion window state snapshot."""
+        window_end = self._promotion_window_start + self._promotion_window_ticks
+        return {
+            "window_start": self._promotion_window_start,
+            "window_end": window_end,
+            "window_ticks": self._promotion_window_ticks,
+            "pass_streak": self._promotion_pass_streak,
+            "required_passes": self._promotion_cfg.required_passes,
+            "candidate_ready": self._promotion_candidate_ready,
+            "last_result": self._promotion_last_result,
+            "last_evaluated_tick": self._promotion_last_evaluated_tick,
+        }
 
     def _threshold_snapshot(self) -> dict[str, object]:
+        """Return threshold configuration snapshot."""
         return {
             "affordance_fail_threshold": self.fail_threshold,
             "lateness_threshold": self.lateness_threshold,
-            "starvation": self._starvation_cfg.model_dump(),
-            "reward_variance": self._reward_cfg.model_dump(),
-            "option_thrash": self._option_cfg.model_dump(),
+            "starvation": self.config.stability.starvation.model_dump(),
+            "reward_variance": self.config.stability.reward_variance.model_dump(),
+            "option_thrash": self.config.stability.option_thrash.model_dump(),
         }
 
-    def _update_option_samples(
-        self,
-        *,
-        tick: int,
-        option_switch_counts: dict[str, int] | None,
-        active_agent_count: int,
-    ) -> float | None:
-        cutoff = tick - self._option_cfg.window_ticks
-        while self._option_samples and self._option_samples[0][0] <= cutoff:
-            self._option_samples.popleft()
+    def _finalise_promotion_window(self, window_end: int) -> None:
+        """Finalize completed promotion window and advance to next."""
+        passed = not self._promotion_window_failed
+        if passed:
+            self._promotion_pass_streak += 1
+            self._promotion_last_result = "pass"
+        else:
+            self._promotion_pass_streak = 0
+            self._promotion_last_result = "fail"
+        self._promotion_candidate_ready = (
+            self._promotion_pass_streak >= self._promotion_cfg.required_passes
+        )
+        self._promotion_last_evaluated_tick = max(window_end - 1, 0)
+        self._promotion_window_start = window_end
+        self._promotion_window_failed = False
 
-        if option_switch_counts is not None:
-            total_switches = float(sum(option_switch_counts.values()))
-            agents_considered = active_agent_count or len(option_switch_counts)
-            if agents_considered <= 0:
-                agents_considered = 1
-            rate = total_switches / float(agents_considered)
-            self._option_samples.append((tick, rate))
-
-        if not self._option_samples:
-            return None
-
-        rates = [sample[1] for sample in self._option_samples]
-        return sum(rates) / len(rates)
+    def _update_promotion_window(self, tick: int, alerts: Iterable[str]) -> None:
+        """Update promotion window state based on current tick and alerts."""
+        window_end = self._promotion_window_start + self._promotion_window_ticks
+        while tick >= window_end:
+            self._finalise_promotion_window(window_end)
+            window_end = self._promotion_window_start + self._promotion_window_ticks
+        disallowed = [a for a in alerts if a not in self._promotion_allowed_alerts]
+        if disallowed:
+            self._promotion_window_failed = True

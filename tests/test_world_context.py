@@ -26,6 +26,7 @@ def test_world_context_mirrors_world_state(simulation_loop: SimulationLoop) -> N
 
     assert isinstance(context, WorldContext)
     assert simulation_loop.world_context is context
+    assert context.observation_service is not None
 
     # mutate state and ensure context sees the changes
     world.register_object(object_id="fridge_1", object_type="fridge", position=(0, 0))
@@ -42,8 +43,9 @@ def test_world_context_mirrors_world_state(simulation_loop: SimulationLoop) -> N
 
     adapter = simulation_loop.world_adapter
     assert adapter.queue_manager is world.queue_manager
+    snapshot = adapter.objects_snapshot()
     with pytest.raises(TypeError):
-        adapter.objects["new_object"] = object()  # type: ignore[index]
+        snapshot["new_object"] = {}  # type: ignore[index]
 
 
 def test_world_context_event_and_console_bridge(simulation_loop: SimulationLoop) -> None:
@@ -76,3 +78,161 @@ def test_world_context_nightly_reset_proxy(
 
     assert captured == [123]
     assert result == ["ok"]
+
+
+
+
+def test_world_context_reset_deterministic(simulation_loop: SimulationLoop) -> None:
+    world = simulation_loop.world
+    context = world.context
+
+    # Produce an event and mutate tick to ensure reset clears state
+    context.emit_event("reset.test", {"value": 1})
+    world.tick = 42
+
+    context.reset(seed=123)
+    first_random = world.rng.random()
+
+    # Events drained and tick reset
+    assert world.tick == 0
+    assert world.drain_events() == []
+
+    context.reset(seed=123)
+    second_random = world.rng.random()
+
+    assert first_random == second_random
+    assert world.tick == 0
+
+
+def test_world_context_tick_executes_actions(simulation_loop: SimulationLoop) -> None:
+    loop = simulation_loop
+    world = loop.world
+    context = world.context
+
+    world.lifecycle_service.spawn_agent(
+        "alice",
+        (0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+        wallet=0.0,
+        home_position=(0, 0),
+    )
+
+    context.apply_actions({"alice": {"kind": "move", "position": (1, 1)}})
+
+    result = context.tick(
+        tick=1,
+        console_operations=[],
+        prepared_actions={},
+        lifecycle=loop.lifecycle,
+        perturbations=loop.perturbations,
+        ticks_per_day=loop._ticks_per_day,
+    )
+
+    assert world.agents["alice"].position == (1, 1)
+    assert result.actions["alice"]["kind"] == "move"
+    assert isinstance(result.console_results, list)
+
+
+def test_world_context_apply_actions_validation(simulation_loop: SimulationLoop) -> None:
+    loop = simulation_loop
+    world = loop.world
+    context = world.context
+
+    world.lifecycle_service.spawn_agent(
+        "alice",
+        (0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+        wallet=0.0,
+        home_position=(0, 0),
+    )
+
+    context.apply_actions({"alice": {"kind": "move", "position": (1, 1)}})
+    context.apply_actions({"alice": None})
+
+    result = context.tick(
+        tick=1,
+        console_operations=[],
+        prepared_actions={},
+        lifecycle=loop.lifecycle,
+        perturbations=loop.perturbations,
+        ticks_per_day=loop._ticks_per_day,
+    )
+
+    assert "alice" not in result.actions  # None cleared the pending action
+
+    with pytest.raises(TypeError):
+        context.apply_actions({"alice": 42})
+
+
+def test_world_context_tick_merges_pending_and_prepared(simulation_loop: SimulationLoop) -> None:
+    loop = simulation_loop
+    world = loop.world
+    context = world.context
+
+    world.lifecycle_service.spawn_agent(
+        "alice",
+        (0, 0),
+        needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
+        wallet=0.0,
+        home_position=(0, 0),
+    )
+
+    context.apply_actions({"alice": {"kind": "move", "position": (1, 1)}})
+    prepared = {"alice": {"kind": "move", "position": (2, 2)}}
+
+    result = context.tick(
+        tick=1,
+        console_operations=[],
+        prepared_actions=prepared,
+        lifecycle=loop.lifecycle,
+        perturbations=loop.perturbations,
+        ticks_per_day=loop._ticks_per_day,
+    )
+
+    assert world.agents["alice"].position == (2, 2)
+    assert result.actions["alice"]["position"] == (2, 2)
+    assert context._pending_actions == {}
+    episode_span = max(1, int(loop._ticks_per_day))
+    assert world.agents["alice"].episode_tick == 1 % episode_span
+
+
+def test_world_context_tick_triggers_nightly_reset(
+    simulation_loop: SimulationLoop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    loop = simulation_loop
+    world = loop.world
+    context = world.context
+    captured: list[int] = []
+
+    def fake_apply(self, tick: int) -> list[str]:
+        captured.append(tick)
+        return ["ok"]
+
+    monkeypatch.setattr(type(context.nightly_reset_service), "apply", fake_apply, raising=False)
+
+    result = context.tick(
+        tick=loop._ticks_per_day or 1,
+        console_operations=[],
+        prepared_actions={},
+        lifecycle=loop.lifecycle,
+        perturbations=loop.perturbations,
+        ticks_per_day=loop._ticks_per_day,
+    )
+
+    assert isinstance(result.termination_reasons, dict)
+    expected_tick = loop._ticks_per_day or 1
+    assert captured == [expected_tick]
+
+
+def test_world_context_observe_uses_configured_service(simulation_loop: SimulationLoop) -> None:
+    context = simulation_loop.world.context
+    context.state.lifecycle_service.spawn_agent(
+        "sample_agent",
+        (0, 0),
+        needs={"hunger": 0.5, "energy": 0.5},
+        wallet=5.0,
+        home_position=(0, 0),
+    )
+    envelope = context.observe()
+    assert envelope.tick == context.state.tick
+    assert envelope.agents

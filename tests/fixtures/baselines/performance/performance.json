@@ -1,0 +1,23 @@
+{
+  "benchmark_metadata": {
+    "timestamp": "2025-10-14",
+    "config": "configs/examples/poc_hybrid.yaml",
+    "ticks": 100,
+    "purpose": "WP5 Phase 0.1 baseline capture for RNG migration regression detection"
+  },
+  "tick_performance": {
+    "average_tick_seconds": 0.001059,
+    "average_tick_ms": 1.059,
+    "throughput_ticks_per_second": 944.29
+  },
+  "observations": [
+    "Telemetry buffer exceeded 256000 bytes during 100-tick run",
+    "Thread cleanup warning at shutdown (telemetry worker thread)",
+    "Console auth disabled warnings present",
+    "Multiple telemetry global_context snapshot fallbacks occurred"
+  ],
+  "regression_thresholds": {
+    "max_acceptable_tick_ms": 1.5,
+    "description": "Tick performance must not exceed 1.5ms average (41% regression tolerance)"
+  }
+}

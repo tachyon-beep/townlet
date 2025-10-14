@@ -1,0 +1,76 @@
+{
+  "metrics": {
+    "starvation_incidents": 0,
+    "starvation_window_ticks": 1000,
+    "option_switch_rate": 0.0,
+    "option_samples": 3,
+    "reward_variance": null,
+    "reward_mean": null,
+    "reward_samples": 0,
+    "queue_totals": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "queue_deltas": {
+      "cooldown_events": 0,
+      "ghost_step_events": 0,
+      "rotation_events": 0
+    },
+    "rivalry_events": [],
+    "alerts": [],
+    "thresholds": {
+      "affordance_fail_threshold": 5,
+      "lateness_threshold": 3,
+      "starvation": {
+        "window_ticks": 1000,
+        "max_incidents": 0,
+        "hunger_threshold": 0.05,
+        "min_duration_ticks": 30
+      },
+      "reward_variance": {
+        "window_ticks": 1000,
+        "max_variance": 0.25,
+        "min_samples": 20
+      },
+      "option_thrash": {
+        "window_ticks": 600,
+        "max_switch_rate": 0.25,
+        "min_samples": 10
+      }
+    },
+    "promotion": {
+      "window_start": 0,
+      "window_end": 1000,
+      "window_ticks": 1000,
+      "pass_streak": 0,
+      "required_passes": 2,
+      "candidate_ready": false,
+      "last_result": null,
+      "last_evaluated_tick": null
+    },
+    "promotion_state": {
+      "state": "monitoring",
+      "pass_streak": 0,
+      "required_passes": 2,
+      "candidate_ready": false,
+      "candidate_ready_tick": null,
+      "last_result": null,
+      "last_evaluated_tick": null,
+      "current_release": {
+        "config_id": "v1.3.0"
+      },
+      "initial_release": {
+        "config_id": "v1.3.0"
+      },
+      "candidate": null,
+      "history": []
+    }
+  },
+  "alerts": [],
+  "inputs": {
+    "hunger_levels": {},
+    "option_switch_counts": {},
+    "reward_samples": {}
+  }
+}

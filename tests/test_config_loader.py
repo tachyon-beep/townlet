@@ -419,7 +419,7 @@ def test_telemetry_tcp_transport_requires_endpoint(tmp_path: Path) -> None:
 def test_telemetry_schema_transform_config(tmp_path: Path) -> None:
     source = Path("configs/examples/poc_hybrid.yaml")
     config_data = yaml.safe_load(source.read_text())
-    schema_path = str((Path("tests/data/telemetry_schema/snapshot_minimal.schema.json").resolve()))
+    schema_path = str(Path("tests/data/telemetry_schema/snapshot_minimal.schema.json").resolve())
     config_data.setdefault("telemetry", {})
     config_data["telemetry"]["transforms"] = {
         "pipeline": [

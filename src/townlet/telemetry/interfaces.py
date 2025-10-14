@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias, runtime_checkable
 
-from townlet.core.interfaces import ObservationBatch, RewardMapping
+from townlet.core.interfaces import RewardMapping
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.console.command import ConsoleCommandResult
@@ -50,7 +50,6 @@ class TelemetryAggregationProtocol(Protocol):
         *,
         tick: int,
         world: WorldState,
-        observations: ObservationBatch,
         rewards: RewardMapping,
         events: Iterable[Mapping[str, object]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,

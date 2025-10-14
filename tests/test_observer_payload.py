@@ -32,10 +32,10 @@ def test_observer_payload_contains_job_and_economy() -> None:
     job_snapshot = publisher.latest_job_snapshot()
     economy_snapshot = publisher.latest_economy_snapshot()
     assert "alice" in job_snapshot
-    assert "wages_earned" in job_snapshot["alice"]
+    assert "wages_earned" in job_snapshot["alice"]["inventory"]
     assert economy_snapshot
-    first_obj = next(iter(economy_snapshot.values()))
-    assert "stock" in first_obj
+    assert "settings" in economy_snapshot
+    assert "utility_snapshot" in economy_snapshot
 
 
 def test_planning_payload_consistency() -> None:
@@ -49,11 +49,12 @@ def test_planning_payload_consistency() -> None:
     for agent_info in job_snapshot.values():
         assert isinstance(agent_info.get("wallet"), float)
         assert isinstance(agent_info.get("lateness_counter"), int)
+        inventory = agent_info.get("inventory", {})
+        assert isinstance(inventory.get("wages_earned"), (float, int))
 
-    for obj_info in economy_snapshot.values():
-        assert isinstance(obj_info.get("type"), str)
-        for value in obj_info.get("stock", {}).values():
-            assert isinstance(value, int)
+    utility_snapshot = economy_snapshot.get("utility_snapshot", {})
+    for status in utility_snapshot.values():
+        assert isinstance(status, bool)
 
 
 def test_personality_snapshot_respects_flag() -> None:

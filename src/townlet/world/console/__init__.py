@@ -1,7 +1,7 @@
 """Console-facing world utilities (placeholder package).
 
-This module currently re-exports the legacy console bridge implementation.
-Future phases of WP-C will migrate concrete implementations into this package.
+This package re-exports the event-driven console bridge until the dedicated
+orchestration surface is finalised by WP1. No legacy queue shims remain.
 """
 
 from __future__ import annotations

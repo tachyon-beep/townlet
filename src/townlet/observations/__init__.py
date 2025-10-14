@@ -1,7 +1,8 @@
-"""Observation builders and utilities."""
+"""Observation encoding (legacy module - functionality moved to world.observations)."""
 
 from __future__ import annotations
 
-from .builder import ObservationBuilder
+# ObservationBuilder has been retired and replaced with encoder functions
+# in townlet.world.observations.encoders
 
-__all__ = ["ObservationBuilder"]
+__all__: list[str] = []

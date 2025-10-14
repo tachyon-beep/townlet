@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 from townlet.config import (
     ArrangedMeetEventConfig,
@@ -29,7 +30,7 @@ class ScheduledPerturbation:
     kind: PerturbationKind
     started_at: int
     ends_at: int
-    payload: dict[str, object] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
     targets: list[str] = field(default_factory=list)
 
 
@@ -152,7 +153,7 @@ class PerturbationScheduler:
         starts_in: int = 0,
         duration: int | None = None,
         targets: list[str] | None = None,
-        payload_overrides: dict[str, object] | None = None,
+        payload_overrides: dict[str, Any] | None = None,
     ) -> ScheduledPerturbation:
         spec = self.spec_for(spec_name)
         if spec is None:
@@ -190,19 +191,20 @@ class PerturbationScheduler:
                     },
                 )
                 return True
-        event = self._active.pop(event_id, None)
-        if event is None:
+        active_event = self._active.get(event_id)
+        if active_event is None:
             return False
+        del self._active[event_id]
         world._emit_event(
             "perturbation_cancelled",
             {
-                "event_id": event.event_id,
-                "spec": event.spec_name,
-                "kind": event.kind.value,
+                "event_id": active_event.event_id,
+                "spec": active_event.spec_name,
+                "kind": active_event.kind.value,
                 "pending": False,
             },
         )
-        self._on_event_concluded(world, event)
+        self._on_event_concluded(world, active_event)
         return True
 
     def _activate(self, world: WorldState, event: ScheduledPerturbation) -> None:
@@ -345,7 +347,7 @@ class PerturbationScheduler:
         *,
         duration_override: int | None = None,
         targets_override: list[str] | None = None,
-        payload_override: dict[str, object] | None = None,
+        payload_override: dict[str, Any] | None = None,
     ) -> ScheduledPerturbation | None:
         duration_range = spec.duration
         if duration_override is not None:
@@ -355,12 +357,15 @@ class PerturbationScheduler:
             if duration_range.max > duration_range.min:
                 length = self._random.randint(duration_range.min, duration_range.max)
         ends_at = current_tick + max(length, 0)
-        payload: dict[str, object] = dict(payload_override or {})
+        payload: dict[str, Any] = dict(payload_override or {})
         targets: list[str] = list(targets_override or [])
 
         if isinstance(spec, PriceSpikeEventConfig):
             if "magnitude" in payload:
-                magnitude = float(payload["magnitude"])
+                magnitude_value = payload["magnitude"]
+                if not isinstance(magnitude_value, (int, float)):
+                    raise TypeError("magnitude payload must be numeric")
+                magnitude = float(magnitude_value)
             else:
                 magnitude = spec.magnitude.min
                 if spec.magnitude.max > spec.magnitude.min:
@@ -410,7 +415,7 @@ class PerturbationScheduler:
     # Queue management
     # ------------------------------------------------------------------
     def enqueue(
-        self, events: Iterable[ScheduledPerturbation | Mapping[str, object]]
+        self, events: Iterable[ScheduledPerturbation | Mapping[str, Any]]
     ) -> None:
         for event in events:
             if isinstance(event, ScheduledPerturbation):
@@ -430,7 +435,7 @@ class PerturbationScheduler:
     # ------------------------------------------------------------------
     # State persistence helpers
     # ------------------------------------------------------------------
-    def export_state(self) -> dict[str, object]:
+    def export_state(self) -> dict[str, Any]:
         return {
             "pending": [self._serialize_event(event) for event in self._pending],
             "active": {
@@ -444,7 +449,7 @@ class PerturbationScheduler:
             "rng_state": encode_rng_state(self._random.getstate()),
         }
 
-    def import_state(self, payload: dict[str, object]) -> None:
+    def import_state(self, payload: Mapping[str, Any]) -> None:
         self._pending = [
             self._coerce_event(entry)
             for entry in payload.get("pending", [])
@@ -509,17 +514,17 @@ class PerturbationScheduler:
     def spec_for(self, name: str) -> PerturbationEventConfig | None:
         return self.specs.get(name)
 
-    def rng_state(self) -> tuple:
+    def rng_state(self) -> tuple[object, ...]:
         return self._random.getstate()
 
-    def set_rng_state(self, state: tuple) -> None:
+    def set_rng_state(self, state: tuple[object, ...]) -> None:
         self._random.setstate(state)
 
     @property
     def rng(self) -> random.Random:
         return self._random
 
-    def _coerce_event(self, data: Mapping[str, object]) -> ScheduledPerturbation:
+    def _coerce_event(self, data: Mapping[str, Any]) -> ScheduledPerturbation:
         spec_name = str(
             data.get("spec_name")
             or data.get("event")
@@ -555,7 +560,7 @@ class PerturbationScheduler:
         )
 
     @staticmethod
-    def _serialize_event(event: ScheduledPerturbation) -> dict[str, object]:
+    def _serialize_event(event: ScheduledPerturbation) -> dict[str, Any]:
         return {
             "event_id": event.event_id,
             "spec_name": event.spec_name,
@@ -566,10 +571,10 @@ class PerturbationScheduler:
             "targets": list(event.targets),
         }
 
-    def serialize_event(self, event: ScheduledPerturbation) -> dict[str, object]:
+    def serialize_event(self, event: ScheduledPerturbation) -> dict[str, Any]:
         return self._serialize_event(event)
 
-    def latest_state(self) -> dict[str, object]:
+    def latest_state(self) -> dict[str, Any]:
         return {
             "active": {
                 event_id: self._serialize_event(event)

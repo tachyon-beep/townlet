@@ -11,16 +11,18 @@ from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
+from townlet.dto.telemetry import TelemetryEventDTO
 from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.telemetry.aggregation import (
     StreamPayloadBuilder,
     TelemetryAggregator,
 )
+from townlet.telemetry.event_dispatcher import TelemetryEventDispatcher
 from townlet.telemetry.events import (
     RELATIONSHIP_FRIENDSHIP_EVENT,
     RELATIONSHIP_RIVALRY_EVENT,
@@ -32,13 +34,11 @@ from townlet.telemetry.transform import (
     RedactFieldsTransform,
     SchemaValidationTransform,
     SnapshotEventNormalizer,
-    TelemetryTransformPipeline,
     TransformPipelineConfig,
     compile_json_schema,
     copy_relationship_snapshot,
     normalize_perturbations_payload,
 )
-from townlet.config.loader import TelemetryTransformEntry
 from townlet.telemetry.transport import (
     TelemetryTransportError,
     TransportBuffer,
@@ -50,11 +50,18 @@ from townlet.world.core.runtime_adapter import ensure_world_adapter
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.config.telemetry import TelemetryTransformEntry
     from townlet.world.grid import WorldState
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
+if TYPE_CHECKING:
+    _TelemetrySinkBase = TelemetrySinkProtocol
+else:  # pragma: no cover - runtime base is object to avoid circular imports
+    _TelemetrySinkBase = object
 
-class TelemetryPublisher:
+
+class TelemetryPublisher(_TelemetrySinkBase):
     """Publish telemetry snapshots, manage console ingress, and track health."""
 
     def __init__(self, config: SimulationConfig) -> None:
@@ -63,10 +70,13 @@ class TelemetryPublisher:
         self.schema_version = "0.9.7"
         self._relationship_narration_cfg = self.config.telemetry.relationship_narration
         self._personality_narration_cfg = self.config.telemetry.personality_narration
-        self._console_buffer: list[object] = []
+        self._latest_console_events: deque[object] = deque(maxlen=50)
         self._latest_queue_metrics: dict[str, int] | None = None
         self._latest_embedding_metrics: dict[str, float] | None = None
         self._latest_events: list[dict[str, object]] = []
+        self._latest_policy_metadata_event: dict[str, object] | None = None
+        self._latest_policy_anneal_event: dict[str, object] | None = None
+        self._latest_policy_metadata_snapshot: dict[str, object] | None = None
         self._event_subscribers: list[Callable[[list[dict[str, object]]], None]] = []
         self._latest_employment_metrics: dict[str, object] = {}
         self._latest_conflict_snapshot: dict[str, object] = {
@@ -114,7 +124,8 @@ class TelemetryPublisher:
         self._rivalry_event_history: list[dict[str, object]] = []
         self._latest_possessed_agents: list[str] = []
         self._latest_precondition_failures: list[dict[str, object]] = []
-        self._console_results_batch: list[dict[str, Any]] = []
+        self._latest_console_results: list[dict[str, Any]] = []
+        self._last_console_results_tick: int | None = None
         self._console_results_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._console_audit_path = Path("logs/console/commands.jsonl")
         self._latest_health_status: dict[str, object] = {}
@@ -131,6 +142,10 @@ class TelemetryPublisher:
         self._pending_manual_narrations: list[dict[str, object]] = []
         self._manual_narration_lock = threading.Lock()
         self._runtime_variant: str | None = None
+        self._latest_observation_envelope: dict[str, Any] | None = None
+        self._event_dispatcher = TelemetryEventDispatcher()
+        self._event_dispatcher.register_subscriber(self._handle_event)
+        self._global_context_warning_fields: set[str] = set()
         transport_cfg = self.config.telemetry.transport
         self._transport_config = transport_cfg
         self._transport_retry = transport_cfg.retry
@@ -170,7 +185,7 @@ class TelemetryPublisher:
                 "telemetry_transport_plaintext host=%s message='TLS disabled; plaintext transport is intended for localhost dev only.'",
                 endpoint,
             )
-        self._transport_client = self._build_transport_client()
+        self._transport_client: Any = self._build_transport_client()
         poll_interval = float(getattr(transport_cfg, "worker_poll_seconds", 0.5))
         # Expose the flush poll interval for tests/diagnostics (legacy compatibility)
         self._flush_poll_interval = poll_interval
@@ -182,7 +197,10 @@ class TelemetryPublisher:
             reset_callable=self._reset_transport_client,
             poll_interval_seconds=poll_interval,
             flush_interval_ticks=int(transport_cfg.buffer.flush_interval_ticks),
-            backpressure_strategy=str(getattr(worker_cfg, "backpressure", "drop_oldest")),
+            backpressure_strategy=cast(
+                Literal["drop_oldest", "block", "fan_out"],
+                str(getattr(worker_cfg, "backpressure", "drop_oldest")),
+            ),
             block_timeout_seconds=float(getattr(worker_cfg, "block_timeout_seconds", 0.5)),
             restart_limit=int(getattr(worker_cfg, "restart_limit", 3)),
         )
@@ -193,11 +211,15 @@ class TelemetryPublisher:
         )
         self._aggregator = TelemetryAggregator(
             self._payload_builder,
-            console_sink=self._store_console_results,
+            console_sink=cast(Callable[[Iterable[object]], None], self._store_console_results),
             failure_sink=self._store_loop_failure,
         )
+        from townlet.telemetry.interfaces import TelemetryTransformProtocol
+
         configured_transforms = self._build_transforms_from_config()
-        self._transform_config = TransformPipelineConfig(transforms=tuple(configured_transforms))
+        self._transform_config = TransformPipelineConfig(
+            transforms=cast(tuple[TelemetryTransformProtocol, ...], tuple(configured_transforms))
+        )
         self._transform_pipeline = self._transform_config.build_pipeline()
         self._worker_manager.start()
 
@@ -234,8 +256,10 @@ class TelemetryPublisher:
             )
         return tuple(transforms)
 
-    def _load_builtin_schemas(self) -> dict[str, object]:
-        schema_map: dict[str, object] = {}
+    def _load_builtin_schemas(self) -> dict[str, Any]:
+        from townlet.telemetry.transform.transforms import CompiledSchema
+
+        schema_map: dict[str, CompiledSchema] = {}
         try:
             package = importlib.resources.files("townlet.telemetry.schemas")
         except (AttributeError, ModuleNotFoundError):  # pragma: no cover - best effort fallback
@@ -287,7 +311,7 @@ class TelemetryPublisher:
             if default_required is not None:
                 if not isinstance(default_required, Iterable) or isinstance(default_required, (str, bytes)):
                     raise TypeError("telemetry.transforms.ensure_fields.default_required_fields must be a sequence")
-                default_required_set = {str(field) for field in default_required}
+                default_required_set: Iterable[str] = {str(field) for field in default_required}
             else:
                 default_required_set = ("tick",)
             return EnsureFieldsTransform(
@@ -299,7 +323,9 @@ class TelemetryPublisher:
             schema_option = options.get("schemas")
             if not isinstance(schema_option, Mapping) or not schema_option:
                 raise ValueError("telemetry.transforms.schema_validator requires a 'schemas' mapping")
-            compiled: dict[str, object] = {}
+            from townlet.telemetry.transform.transforms import CompiledSchema as CS
+
+            compiled: dict[str, CS] = {}
             for kind, schema_path in schema_option.items():
                 path = Path(str(schema_path)).expanduser()
                 if not path.is_absolute():
@@ -316,45 +342,10 @@ class TelemetryPublisher:
 
         raise ValueError(f"Unsupported telemetry transform id '{transform_id}'")
 
-    def queue_console_command(self, command: object) -> None:
-        """Authorise and enqueue an incoming console command payload."""
-        try:
-            sanitized, _principal = self._console_auth.authorise(command)
-        except ConsoleAuthenticationError as exc:
-            identity = exc.identity
-            envelope = ConsoleCommandEnvelope(
-                name=identity.get("name") or "unknown",
-                args=[],
-                kwargs={},
-                cmd_id=identity.get("cmd_id"),
-                issuer=identity.get("issuer"),
-            )
-            result = ConsoleCommandResult.from_error(
-                envelope,
-                code="unauthorized",
-                message=exc.message,
-                details={"reason": "auth_failed"},
-            )
-            self.record_console_results([result])
-            logger.warning(
-                "Rejected console command due to authentication failure: name=%s issuer=%s",
-                identity.get("name"),
-                identity.get("issuer"),
-            )
-            return
-        except TypeError as exc:
-            logger.warning("Rejected malformed console command: %s", exc)
-            return
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Unexpected error while authenticating console command")
-            return
-
-        self._console_buffer.append(sanitized)
-
     def drain_console_buffer(self) -> Iterable[object]:
-        """Return queued console commands and clear the buffer."""
-        drained = list(self._console_buffer)
-        self._console_buffer.clear()
+        """Return cached console events and clear for snapshot operations."""
+        drained = list(self._latest_console_events)
+        self._latest_console_events.clear()
         return drained
 
     def export_state(self) -> dict[str, object]:
@@ -368,8 +359,8 @@ class TelemetryPublisher:
             "economy_settings": dict(self._latest_economy_settings),
             "price_spikes": {
                 event_id: {
-                    "magnitude": float(data.get("magnitude", 0.0)),
-                    "targets": list(data.get("targets", ())),
+                    "magnitude": float(magnitude) if isinstance(magnitude := data.get("magnitude", 0.0), (int, float, str)) else 0.0,
+                    "targets": list(targets) if isinstance(targets := data.get("targets", ()), Iterable) else [],
                 }
                 for event_id, data in self._latest_price_spikes.items()
             },
@@ -415,8 +406,12 @@ class TelemetryPublisher:
             state["health"] = dict(self._latest_health_status)
         state["queue_history"] = list(self._queue_fairness_history)
         state["rivalry_events"] = list(self._rivalry_event_history)
-        state["console_results"] = list(self._console_results_batch)
+        state["console_results"] = list(self._latest_console_results)
         state["possessed_agents"] = list(self._latest_possessed_agents)
+        if self._latest_policy_metadata_event is not None:
+            state["policy_metadata_event"] = copy.deepcopy(self._latest_policy_metadata_event)
+        if self._latest_policy_anneal_event is not None:
+            state["policy_anneal_event"] = copy.deepcopy(self._latest_policy_anneal_event)
         if self._latest_precondition_failures:
             state["precondition_failures"] = [
                 dict(entry) for entry in self._latest_precondition_failures
@@ -426,21 +421,19 @@ class TelemetryPublisher:
             state["promotion_state"] = promotion_state
         return state
 
-    def import_state(self, payload: dict[str, object]) -> None:
-        self._latest_queue_metrics = payload.get("queue_metrics") or None
-        if self._latest_queue_metrics is not None:
-            self._latest_queue_metrics = dict(self._latest_queue_metrics)
+    def import_state(self, payload: Mapping[str, object]) -> None:
+        queue_metrics_raw = payload.get("queue_metrics")
+        self._latest_queue_metrics = dict(queue_metrics_raw) if isinstance(queue_metrics_raw, Mapping) else None
 
-        self._latest_embedding_metrics = payload.get("embedding_metrics") or None
-        if self._latest_embedding_metrics is not None:
-            self._latest_embedding_metrics = dict(self._latest_embedding_metrics)
+        embedding_metrics_raw = payload.get("embedding_metrics")
+        self._latest_embedding_metrics = dict(embedding_metrics_raw) if isinstance(embedding_metrics_raw, Mapping) else None
 
         conflict_snapshot = payload.get("conflict_snapshot") or {}
-        self._latest_conflict_snapshot = dict(conflict_snapshot)
+        self._latest_conflict_snapshot = dict(conflict_snapshot) if isinstance(conflict_snapshot, Mapping) else {}
 
         relationship_metrics = payload.get("relationship_metrics")
         self._latest_relationship_metrics = (
-            dict(relationship_metrics) if relationship_metrics else None
+            dict(relationship_metrics) if isinstance(relationship_metrics, Mapping) else None
         )
         summary_payload = payload.get("relationship_summary") or {}
         if isinstance(summary_payload, Mapping):
@@ -448,12 +441,14 @@ class TelemetryPublisher:
         social_events_payload = payload.get("social_events") or []
         if isinstance(social_events_payload, list):
             self._social_event_history = deque(
-                [dict(entry) for entry in social_events_payload],
+                [dict(entry) if isinstance(entry, Mapping) else {} for entry in social_events_payload],
                 maxlen=self._social_event_history.maxlen,
             )
 
-        self._latest_job_snapshot = dict(payload.get("job_snapshot", {}))
-        self._latest_economy_snapshot = dict(payload.get("economy_snapshot", {}))
+        job_snapshot_raw = payload.get("job_snapshot", {})
+        self._latest_job_snapshot = dict(job_snapshot_raw) if isinstance(job_snapshot_raw, Mapping) else {}
+        economy_snapshot_raw = payload.get("economy_snapshot", {})
+        self._latest_economy_snapshot = dict(economy_snapshot_raw) if isinstance(economy_snapshot_raw, Mapping) else {}
         economy_settings = payload.get("economy_settings", {})
         if isinstance(economy_settings, Mapping):
             self._latest_economy_settings = {
@@ -488,8 +483,10 @@ class TelemetryPublisher:
             }
         else:
             self._latest_utilities = {"power": True, "water": True}
-        self._latest_employment_metrics = dict(payload.get("employment_metrics", {}))
-        self._latest_events = list(payload.get("events", []))
+        employment_metrics_raw = payload.get("employment_metrics", {})
+        self._latest_employment_metrics = dict(employment_metrics_raw) if isinstance(employment_metrics_raw, Mapping) else {}
+        events_raw = payload.get("events", [])
+        self._latest_events = list(events_raw) if isinstance(events_raw, Iterable) else []
         runtime_payload = payload.get("affordance_runtime") or {}
         if isinstance(runtime_payload, Mapping):
             running_section = runtime_payload.get("running") or {}
@@ -662,16 +659,37 @@ class TelemetryPublisher:
 
         console_payload = payload.get("console_results")
         if isinstance(console_payload, list):
-            self._console_results_batch = [
+            latest = [
                 dict(entry) for entry in console_payload if isinstance(entry, Mapping)
             ]
+            self._latest_console_results = latest
+            for entry in latest:
+                self._console_results_history.append(dict(entry))
+            if latest:
+                try:
+                    self._last_console_results_tick = int(latest[-1].get("tick", 0))
+                except (TypeError, ValueError):
+                    self._last_console_results_tick = None
+            else:
+                self._last_console_results_tick = None
         else:
-            self._console_results_batch = []
+            self._latest_console_results = []
+            self._last_console_results_tick = None
         possessed_payload = payload.get("possessed_agents")
         if isinstance(possessed_payload, list):
             self._latest_possessed_agents = [str(agent) for agent in possessed_payload]
         else:
             self._latest_possessed_agents = []
+        metadata_event_payload = payload.get("policy_metadata_event")
+        if isinstance(metadata_event_payload, Mapping):
+            self._latest_policy_metadata_event = copy.deepcopy(dict(metadata_event_payload))
+        else:
+            self._latest_policy_metadata_event = None
+        anneal_event_payload = payload.get("policy_anneal_event")
+        if isinstance(anneal_event_payload, Mapping):
+            self._latest_policy_anneal_event = copy.deepcopy(dict(anneal_event_payload))
+        else:
+            self._latest_policy_anneal_event = None
         failures_payload = payload.get("precondition_failures")
         if isinstance(failures_payload, list):
             self._latest_precondition_failures = [
@@ -687,24 +705,36 @@ class TelemetryPublisher:
 
         self._payload_builder.reset()
 
-    def export_console_buffer(self) -> list[object]:
-        return list(self._console_buffer)
-
     def import_console_buffer(self, buffer: Iterable[object]) -> None:
-        self._console_buffer = list(buffer)
+        """Restore console events from snapshot."""
+        self._latest_console_events.clear()
+        for item in buffer:
+            self._latest_console_events.append(item)
 
-    def record_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
+    def _ingest_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
         """Persist console results for audit logs and downstream subscribers."""
+
         self._aggregator.record_console_results(results)
 
     def _store_console_results(self, results: Iterable[ConsoleCommandResult]) -> None:
-        batch: list[dict[str, Any]] = []
         for result in results:
             payload = result.to_dict()
-            batch.append(payload)
+            tick = payload.get("tick")
+            if tick is None:
+                payload = dict(payload)
+                tick = self.current_tick()
+                payload["tick"] = tick
+            try:
+                tick_int = int(tick)
+            except (TypeError, ValueError):
+                tick_int = self.current_tick()
+                payload["tick"] = tick_int
+            if self._last_console_results_tick != tick_int:
+                self._latest_console_results = []
+                self._last_console_results_tick = tick_int
+            self._latest_console_results.append(payload)
             self._console_results_history.append(payload)
             self._append_console_audit(payload)
-        self._console_results_batch = batch if batch else []
 
     def set_runtime_variant(self, variant: str | None) -> None:
         """Record which runtime variant produced the latest telemetry."""
@@ -712,12 +742,12 @@ class TelemetryPublisher:
         self._runtime_variant = variant
 
     def latest_console_results(self) -> list[dict[str, Any]]:
-        return list(self._console_results_batch)
+        return list(self._latest_console_results)
 
     def console_history(self) -> list[dict[str, Any]]:
         return list(self._console_results_history)
 
-    def record_possessed_agents(self, agents: Iterable[str]) -> None:
+    def _ingest_possessed_agents(self, agents: Iterable[str]) -> None:
         self._latest_possessed_agents = sorted({str(agent) for agent in agents})
 
     def latest_possessed_agents(self) -> list[str]:
@@ -731,8 +761,13 @@ class TelemetryPublisher:
 
         return dict(self._transport_status)
 
+    def transport_status(self) -> Mapping[str, object]:
+        """TelemetrySink compatibility helper returning the latest transport snapshot."""
 
-    def record_loop_failure(self, payload: Mapping[str, object]) -> None:
+        return dict(self._transport_status)
+
+
+    def _ingest_loop_failure(self, payload: Mapping[str, object]) -> None:
         """Persist loop failure telemetry and append a failure event."""
 
         failure_events = list(self._aggregator.record_loop_failure(payload))
@@ -743,6 +778,27 @@ class TelemetryPublisher:
     def _store_loop_failure(self, payload: Mapping[str, object]) -> None:
         failure_data = dict(payload)
         failure_data.setdefault("status", "error")
+        summary_payload_raw = failure_data.get("summary")
+        if isinstance(summary_payload_raw, Mapping):
+            summary_payload = dict(summary_payload_raw)
+        else:
+            summary_payload = {}
+        transport_payload = failure_data.get("transport")
+        if isinstance(transport_payload, Mapping):
+            summary_payload.setdefault(
+                "queue_length",
+                transport_payload.get("queue_length"),
+            )
+            summary_payload.setdefault(
+                "dropped_messages",
+                transport_payload.get("dropped_messages"),
+            )
+        duration = failure_data.get("duration_ms")
+        if duration is not None:
+            summary_payload.setdefault("duration_ms", duration)
+        failure_data["summary"] = summary_payload
+        queue_length = summary_payload.get("queue_length")
+        dropped_messages = summary_payload.get("dropped_messages")
         self._latest_health_status = failure_data
         event = {
             "kind": "loop_failure",
@@ -753,20 +809,112 @@ class TelemetryPublisher:
         if len(self._latest_events) > 128:
             self._latest_events = self._latest_events[-128:]
         logger.error(
-            "simulation_loop_failure tick=%s error=%s",
+            "simulation_loop_failure tick=%s error=%s queue=%s dropped=%s snapshot=%s",
             failure_data.get("tick"),
             failure_data.get("error"),
+            queue_length,
+            dropped_messages,
+            failure_data.get("snapshot_path"),
         )
 
-    def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
+    def _ingest_health_metrics(self, metrics: Mapping[str, object]) -> None:
         """Update health telemetry derived from the simulation loop."""
-        self._latest_health_status = dict(metrics)
+
+        payload = dict(metrics)
+        transport_payload = payload.get("transport")
+        if isinstance(transport_payload, Mapping):
+            worker_payload = transport_payload.get("worker")
+            worker_alive = False
+            worker_error = None
+            worker_restart_count = 0
+            if isinstance(worker_payload, Mapping):
+                worker_alive = bool(worker_payload.get("alive", False))
+                worker_error = worker_payload.get("error")
+                try:
+                    worker_restart_count = int(worker_payload.get("restart_count", 0) or 0)
+                except (TypeError, ValueError):
+                    worker_restart_count = 0
+            payload["transport"] = {
+                "provider": transport_payload.get("provider"),
+                "queue_length": int(transport_payload.get("queue_length", 0) or 0),
+                "dropped_messages": int(transport_payload.get("dropped_messages", 0) or 0),
+                "last_flush_duration_ms": transport_payload.get("last_flush_duration_ms"),
+                "payloads_flushed_total": int(transport_payload.get("payloads_flushed_total", 0) or 0),
+                "bytes_flushed_total": int(transport_payload.get("bytes_flushed_total", 0) or 0),
+                "auth_enabled": bool(transport_payload.get("auth_enabled", False)),
+                "worker": {
+                    "alive": worker_alive,
+                    "error": worker_error,
+                    "restart_count": worker_restart_count,
+                },
+            }
+        context_payload = payload.get("global_context")
+        if isinstance(context_payload, Mapping):
+            payload["global_context"] = copy.deepcopy(dict(context_payload))
+        summary_payload = payload.get("summary")
+        if isinstance(summary_payload, Mapping):
+            payload["summary"] = dict(summary_payload)
+        else:
+            summary: dict[str, object] = {}
+            transport_snapshot = payload.get("transport")
+            if isinstance(transport_snapshot, Mapping):
+                summary["queue_length"] = transport_snapshot.get("queue_length", 0)
+                summary["dropped_messages"] = transport_snapshot.get("dropped_messages", 0)
+                summary["last_flush_duration_ms"] = transport_snapshot.get("last_flush_duration_ms")
+                summary["payloads_flushed_total"] = transport_snapshot.get("payloads_flushed_total", 0)
+                summary["bytes_flushed_total"] = transport_snapshot.get("bytes_flushed_total", 0)
+                summary["auth_enabled"] = transport_snapshot.get("auth_enabled", False)
+                worker_payload = transport_snapshot.get("worker")
+                if isinstance(worker_payload, Mapping):
+                    summary["worker_alive"] = worker_payload.get("alive")
+                    summary["worker_error"] = worker_payload.get("error")
+                    summary["worker_restart_count"] = worker_payload.get("restart_count", 0)
+            context_payload = payload.get("global_context")
+            if isinstance(context_payload, Mapping):
+                perturbations_payload = context_payload.get("perturbations")
+                if isinstance(perturbations_payload, Mapping):
+                    pending_section = perturbations_payload.get("pending")
+                    active_section = perturbations_payload.get("active")
+
+                    def _count_entries(value: object) -> int:
+                        if value is None:
+                            return 0
+                        if isinstance(value, Mapping):
+                            return len(value)
+                        if isinstance(value, (list, tuple, set)):
+                            return len(value)
+                        if isinstance(value, (int, float)):
+                            return int(value)
+                        if isinstance(value, str):
+                            try:
+                                return int(value)
+                            except ValueError:
+                                return 0
+                        return 0
+
+                    summary["perturbations_pending"] = _count_entries(pending_section)
+                    summary["perturbations_active"] = _count_entries(active_section)
+                employment_payload = context_payload.get("employment_snapshot")
+                if isinstance(employment_payload, Mapping):
+                    pending_count = employment_payload.get("pending_count")
+                    if isinstance(pending_count, (int, float)):
+                        summary["employment_exit_queue"] = int(pending_count)
+                    else:
+                        pending_section = employment_payload.get("pending")
+                        if isinstance(pending_section, (list, tuple, set)):
+                            summary["employment_exit_queue"] = len(pending_section)
+            duration_value = payload.get("duration_ms")
+            if duration_value is not None:
+                summary["duration_ms"] = duration_value
+            if summary:
+                payload["summary"] = summary
+        self._latest_health_status = payload
 
     def latest_health_status(self) -> dict[str, object]:
         """Return the most recently recorded health payload."""
         return dict(self._latest_health_status)
 
-    def _build_transport_client(self):
+    def _build_transport_client(self) -> Any:
         cfg = self._transport_config
         try:
             client = create_transport(
@@ -823,19 +971,66 @@ class TelemetryPublisher:
         except Exception:  # pragma: no cover - shutdown cleanup
             logger.debug("Closing telemetry transport failed", exc_info=True)
 
+    def _warn_missing_global_field(self, field: str) -> None:
+        """Log a one-time warning when DTO global context omits required data."""
+
+        if field in self._global_context_warning_fields:
+            return
+        self._global_context_warning_fields.add(field)
+        logger.warning(
+            "Telemetry global_context missing '%s'; falling back to adapter snapshot",
+            field,
+        )
+
     def _capture_affordance_runtime(
         self,
         *,
-        world: WorldState | WorldRuntimeAdapterProtocol,
+        world: WorldState | WorldRuntimeAdapterProtocol | None,
         events: Iterable[Mapping[str, object]] | None,
         tick: int,
+        global_payload: Mapping[str, Any] | None = None,
     ) -> None:
-        adapter = ensure_world_adapter(world)
-        runtime_snapshot = adapter.running_affordances_snapshot()
-        running_payload = {
-            str(object_id): asdict(state)
-            for object_id, state in runtime_snapshot.items()
-        }
+        running_payload: dict[str, dict[str, object]] = {}
+        active_reservations: dict[str, object] = {}
+
+        if isinstance(global_payload, Mapping):
+            runtime_section = global_payload.get("running_affordances")
+            if isinstance(runtime_section, Mapping) and runtime_section:
+                for object_id, entry in runtime_section.items():
+                    if isinstance(entry, Mapping):
+                        running_payload[str(object_id)] = {
+                            str(key): value for key, value in entry.items()
+                        }
+                    else:
+                        try:
+                            running_payload[str(object_id)] = asdict(entry)
+                        except Exception:  # pragma: no cover - defensive
+                            running_payload[str(object_id)] = {"raw": entry}
+            queues_section = global_payload.get("queues")
+            if isinstance(queues_section, Mapping):
+                reservations_payload = queues_section.get("active_reservations")
+                if isinstance(reservations_payload, Mapping):
+                    active_reservations = {
+                        str(agent): dict(value)
+                        for agent, value in reservations_payload.items()
+                        if isinstance(value, Mapping)
+                    }
+
+        adapter = ensure_world_adapter(world) if world is not None else None
+        if not running_payload and adapter is not None:
+            self._warn_missing_global_field("running_affordances")
+            from dataclasses import is_dataclass
+
+            runtime_snapshot = adapter.running_affordances_snapshot()
+            running_payload = {
+                str(object_id): asdict(state) if is_dataclass(state) and not isinstance(state, type) else {}
+                for object_id, state in runtime_snapshot.items()
+            }
+        if not active_reservations and adapter is not None:
+            try:
+                active_reservations = dict(adapter.active_reservations)
+            except Exception:  # pragma: no cover - defensive
+                active_reservations = {}
         event_counts = {
             "start": 0,
             "finish": 0,
@@ -843,31 +1038,29 @@ class TelemetryPublisher:
             "precondition_fail": 0,
         }
         for event in events or ():
-            if not isinstance(event, Mapping):
-                continue
-            name = str(event.get("event", ""))
-            if name == "affordance_start":
-                event_counts["start"] += 1
-            elif name == "affordance_finish":
-                event_counts["finish"] += 1
-            elif name == "affordance_fail":
-                event_counts["fail"] += 1
-            elif name == "affordance_precondition_fail":
-                event_counts["precondition_fail"] += 1
+            if isinstance(event, Mapping):
+                name = str(event.get("event", ""))
+                if name == "affordance_start":
+                    event_counts["start"] += 1
+                elif name == "affordance_finish":
+                    event_counts["finish"] += 1
+                elif name == "affordance_fail":
+                    event_counts["fail"] += 1
+                elif name == "affordance_precondition_fail":
+                    event_counts["precondition_fail"] += 1
         self._latest_affordance_runtime = {
             "tick": int(tick),
             "running": running_payload,
             "running_count": len(running_payload),
-            "active_reservations": dict(adapter.active_reservations),
+            "active_reservations": active_reservations,
             "event_counts": event_counts,
         }
 
-    def publish_tick(
+    def _ingest_loop_tick(
         self,
         *,
         tick: int,
-        world: WorldState,
-        observations: dict[str, object],
+        world: WorldState | WorldRuntimeAdapterProtocol | None = None,
         rewards: dict[str, float],
         events: Iterable[dict[str, object]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
@@ -876,26 +1069,64 @@ class TelemetryPublisher:
         stability_inputs: Mapping[str, object] | None = None,
         perturbations: Mapping[str, object] | None = None,
         policy_identity: Mapping[str, object] | None = None,
+        policy_metadata: Mapping[str, object] | None = None,
         possessed_agents: Iterable[str] | None = None,
         social_events: Iterable[dict[str, object]] | None = None,
         runtime_variant: str | None = None,
+        observations_dto: Mapping[str, object] | None = None,
+        **extra: Any,
     ) -> None:
-        # Observations and rewards are consumed for downstream side effects.
-        _ = observations, rewards
+        # Rewards are consumed for downstream side effects.
+        _ = rewards
+        _ = extra
         tick = int(tick)
         if runtime_variant is not None:
             self._runtime_variant = runtime_variant
         self._current_tick = tick
-        adapter = ensure_world_adapter(world)
-        raw_world = getattr(adapter, "_world", world)
+        if world is None and not isinstance(extra.get("global_context"), Mapping):
+            raise ValueError("loop.tick ingestion requires a world snapshot or global_context payload")
+        if policy_metadata is not None:
+            self._latest_policy_metadata_snapshot = copy.deepcopy(dict(policy_metadata))
+        else:
+            self._latest_policy_metadata_snapshot = None
+        if observations_dto is not None:
+            self._latest_observation_envelope = copy.deepcopy(dict(observations_dto))
+        else:
+            self._latest_observation_envelope = None
+        global_payload_raw = extra.get("global_context")
+        global_payload = (
+            copy.deepcopy(dict(global_payload_raw))
+            if isinstance(global_payload_raw, Mapping)
+            else {}
+        )
+        adapter: WorldRuntimeAdapterProtocol | None = None
+        raw_world = None
+        if world is not None:
+            adapter = ensure_world_adapter(world)
+            raw_world = getattr(adapter, "_world", world)
         self._narration_limiter.begin_tick(tick)
         manual_narrations = self._consume_manual_narrations()
         self._latest_narrations = manual_narrations
         previous_queue_metrics = dict(self._latest_queue_metrics or {})
-        try:
-            queue_metrics = adapter.queue_manager.metrics()
-        except Exception:  # pragma: no cover - defensive guard for stubs
-            logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+        queue_metrics: dict[str, int] | None = None
+        queue_metrics_payload = global_payload.get("queue_metrics")
+        if isinstance(queue_metrics_payload, Mapping):
+            queue_metrics = {
+                str(key): int(value)
+                for key, value in queue_metrics_payload.items()
+            }
+        if queue_metrics is None and adapter is not None:
+            try:
+                queue_metrics = {
+                    str(key): int(value)
+                    for key, value in adapter.queue_manager.metrics().items()
+                }
+                self._warn_missing_global_field("queue_metrics")
+            except Exception:  # pragma: no cover - defensive guard for stubs
+                logger.debug("Telemetry queue metrics unavailable; defaulting to zeros", exc_info=True)
+                queue_metrics = None
+        if queue_metrics is None:
+            self._warn_missing_global_field("queue_metrics")
             queue_metrics = {
                 "cooldown_events": 0,
                 "ghost_step_events": 0,
@@ -919,7 +1150,25 @@ class TelemetryPublisher:
                 - int(previous_queue_metrics.get("rotation_events", 0)),
             ),
         }
-        rivalry_snapshot = dict(adapter.rivalry_snapshot())
+        rivalry_snapshot = {}
+        rivalry_snapshot_payload = global_payload.get("relationship_snapshot")
+        if isinstance(rivalry_snapshot_payload, Mapping):
+            rivalry_snapshot = {
+                str(agent): {
+                    str(other_agent): dict(metrics)
+                    for other_agent, metrics in compatibility.items()
+                    if isinstance(metrics, Mapping)
+                }
+                for agent, compatibility in rivalry_snapshot_payload.items()
+            }
+        elif adapter is not None:
+            try:
+                rivalry_snapshot = cast(dict[str, dict[str, dict[str, float]]], dict(adapter.rivalry_snapshot()))
+                self._warn_missing_global_field("relationship_snapshot")
+            except Exception:  # pragma: no cover - defensive guard for stubs
+                logger.debug("Telemetry rivalry snapshot unavailable", exc_info=True)
+        else:
+            self._warn_missing_global_field("relationship_snapshot")
         self._queue_fairness_history.append(
             {
                 "tick": int(tick),
@@ -930,20 +1179,26 @@ class TelemetryPublisher:
         if len(self._queue_fairness_history) > 120:
             self._queue_fairness_history.pop(0)
 
-        new_events = adapter.consume_rivalry_events()
-        for event in new_events:
+        rivalry_history_payload = global_payload.get("rivalry_events", [])
+        if not isinstance(rivalry_history_payload, list):
+            logger.warning("rivalry_events_payload_invalid", extra={"type": type(rivalry_history_payload).__name__})
+            rivalry_history_payload = []
+
+        normalised_events: list[dict[str, object]] = []
+        for event in rivalry_history_payload:
             if not isinstance(event, Mapping):
+                logger.debug("rivalry_event_invalid", extra={"event": event})
                 continue
-            payload = {
-                "tick": int(event.get("tick", tick)),
-                "agent_a": str(event.get("agent_a", "")),
-                "agent_b": str(event.get("agent_b", "")),
-                "intensity": float(event.get("intensity", 0.0)),
-                "reason": str(event.get("reason", "unknown")),
-            }
-            self._rivalry_event_history.append(payload)
-        if len(self._rivalry_event_history) > 120:
-            self._rivalry_event_history = self._rivalry_event_history[-120:]
+            normalised_events.append(
+                {
+                    "tick": int(event.get("tick", tick)),
+                    "agent_a": str(event.get("agent_a", "")),
+                    "agent_b": str(event.get("agent_b", "")),
+                    "intensity": float(event.get("intensity", 0.0)),
+                    "reason": str(event.get("reason", "unknown")),
+                }
+            )
+        self._rivalry_event_history = normalised_events[-120:]
 
         self._latest_conflict_snapshot = {
             "queues": dict(queue_metrics),
@@ -951,14 +1206,35 @@ class TelemetryPublisher:
             "rivalry": rivalry_snapshot,
             "rivalry_events": list(self._rivalry_event_history[-20:]),
         }
-        metrics_snapshot = adapter.relationship_metrics_snapshot()
-        if metrics_snapshot:
-            self._latest_relationship_metrics = dict(metrics_snapshot)
+        metrics_snapshot = global_payload.get("relationship_metrics")
+        if isinstance(metrics_snapshot, Mapping) and metrics_snapshot:
+            self._latest_relationship_metrics = {
+                str(key): value for key, value in metrics_snapshot.items()
+            }
+        elif adapter is not None:
+            snapshot_metrics = adapter.relationship_metrics_snapshot()
+            if snapshot_metrics:
+                self._warn_missing_global_field("relationship_metrics")
+                self._latest_relationship_metrics = dict(snapshot_metrics)
+            else:
+                logger.debug(
+                    "Telemetry relationship metrics unavailable; retaining previous snapshot",
+                )
         else:
-            logger.debug(
-                "Telemetry relationship metrics unavailable; retaining previous snapshot",
-            )
-        relationship_snapshot = self._capture_relationship_snapshot(adapter)
+            self._warn_missing_global_field("relationship_metrics")
+        relationship_snapshot_payload = global_payload.get("relationship_snapshot")
+        if isinstance(relationship_snapshot_payload, Mapping) and relationship_snapshot_payload:
+            relationship_snapshot = {
+                str(agent): {
+                    str(other_agent): dict(metrics)
+                    for other_agent, metrics in entries.items()
+                    if isinstance(metrics, Mapping)
+                }
+                for agent, entries in relationship_snapshot_payload.items()
+            }
+        else:
+            self._warn_missing_global_field("relationship_snapshot")
+            relationship_snapshot = self._capture_relationship_snapshot(adapter) if adapter is not None else {}
         self._latest_relationship_updates = self._compute_relationship_updates(
             self._previous_relationship_snapshot,
             relationship_snapshot,
@@ -968,23 +1244,27 @@ class TelemetryPublisher:
             relationship_snapshot
         )
         self._latest_relationship_overlay = self._build_relationship_overlay()
-        self._latest_relationship_summary = self._build_relationship_summary(
-            relationship_snapshot, adapter
-        )
+        if adapter is not None:
+            self._latest_relationship_summary = self._build_relationship_summary(
+                relationship_snapshot, adapter
+            )
+        else:
+            self._latest_relationship_summary = {}
         try:
-            raw_embedding_metrics = adapter.embedding_allocator.metrics()
+            raw_embedding_metrics = (
+                adapter.embedding_allocator.metrics() if adapter is not None else {}
+            )
         except Exception:  # pragma: no cover - defensive guard for stub adapters
             logger.debug(
                 "Telemetry embedding metrics unavailable; defaulting to empty metrics",
                 exc_info=True,
             )
             raw_embedding_metrics = {}
-        processed_embedding_metrics: dict[str, object] = {}
+        processed_embedding_metrics: dict[str, float] = {}
         for key, value in raw_embedding_metrics.items():
             if isinstance(value, (int, float)):
                 processed_embedding_metrics[str(key)] = float(value)
-            else:
-                processed_embedding_metrics[str(key)] = value
+            # Non-numeric values are silently skipped
         self._latest_embedding_metrics = processed_embedding_metrics
         if events is not None:
             self._latest_events = list(events)
@@ -1003,13 +1283,14 @@ class TelemetryPublisher:
         except Exception:  # pragma: no cover - defensive
             personality_enabled = False
         if personality_enabled or self.config.personality_profiles_enabled():
-            self._latest_personality_snapshot = self._build_personality_snapshot(adapter)
+            self._latest_personality_snapshot = self._build_personality_snapshot(adapter) if adapter is not None else {}
         else:
             self._latest_personality_snapshot = {}
         self._capture_affordance_runtime(
             world=world,
             events=self._latest_events,
             tick=tick,
+            global_payload=global_payload,
         )
         self._latest_precondition_failures = [
             dict(event)
@@ -1034,54 +1315,114 @@ class TelemetryPublisher:
         else:
             self._latest_policy_snapshot = {}
         if possessed_agents is not None:
-            self.record_possessed_agents(possessed_agents)
-        self._latest_job_snapshot = {
-            agent_id: {
-                "job_id": snapshot.job_id,
-                "on_shift": snapshot.on_shift,
-                "wallet": snapshot.wallet,
-                "lateness_counter": snapshot.lateness_counter,
-                "wages_earned": snapshot.inventory.get("wages_earned", 0),
-                "meals_cooked": snapshot.inventory.get("meals_cooked", 0),
-                "meals_consumed": snapshot.inventory.get("meals_consumed", 0),
-                "basket_cost": snapshot.inventory.get("basket_cost", 0.0),
-                "shift_state": snapshot.shift_state,
-                "attendance_ratio": snapshot.attendance_ratio,
-                "late_ticks_today": snapshot.late_ticks_today,
-                "absent_shifts_7d": snapshot.absent_shifts_7d,
-                "wages_withheld": snapshot.wages_withheld,
-                "exit_pending": snapshot.exit_pending,
-                "needs": {
-                    str(need): float(value)
-                    for need, value in snapshot.needs.items()
-                },
+            self._ingest_possessed_agents(possessed_agents)
+        job_snapshot_payload = global_payload.get("job_snapshot")
+        if isinstance(job_snapshot_payload, Mapping) and job_snapshot_payload:
+            self._latest_job_snapshot = {
+                str(agent_id): dict(snapshot)
+                for agent_id, snapshot in job_snapshot_payload.items()
+                if isinstance(snapshot, Mapping)
             }
-            for agent_id, snapshot in adapter.agent_snapshots_view().items()
-        }
-        self._latest_economy_snapshot = {
-            object_id: {
-                "type": obj.object_type,
-                "stock": dict(obj.stock),
+        elif adapter is not None:
+            self._warn_missing_global_field("job_snapshot")
+            latest: dict[str, dict[str, object]] = {}
+            for agent_id, snapshot in adapter.agent_snapshots_view().items():
+                inventory = snapshot.inventory
+                job_payload: dict[str, object] = {
+                    "job_id": snapshot.job_id,
+                    "on_shift": snapshot.on_shift,
+                    "wallet": snapshot.wallet,
+                    "lateness_counter": snapshot.lateness_counter,
+                    "wages_earned": inventory.get("wages_earned", 0),
+                    "meals_cooked": inventory.get("meals_cooked", 0),
+                    "meals_consumed": inventory.get("meals_consumed", 0),
+                    "basket_cost": adapter.basket_cost(agent_id),
+                    "shift_state": snapshot.shift_state,
+                    "attendance_ratio": snapshot.attendance_ratio,
+                    "late_ticks_today": snapshot.late_ticks_today,
+                    "absent_shifts_7d": snapshot.absent_shifts_7d,
+                    "wages_withheld": snapshot.wages_withheld,
+                    "exit_pending": snapshot.exit_pending,
+                    "needs": {
+                        str(need): float(value)
+                        for need, value in snapshot.needs.items()
+                    },
+                }
+                latest[agent_id] = job_payload
+            self._latest_job_snapshot = cast(dict[str, object], latest)
+        else:
+            self._warn_missing_global_field("job_snapshot")
+
+        economy_snapshot_payload = global_payload.get("economy_snapshot")
+        if isinstance(economy_snapshot_payload, Mapping) and economy_snapshot_payload:
+            self._latest_economy_snapshot = {
+                str(object_id): dict(entry)
+                for object_id, entry in economy_snapshot_payload.items()
+                if isinstance(entry, Mapping)
             }
-            for object_id, obj in raw_world.objects.items()
-        }
-        if hasattr(raw_world, "economy_settings"):
+        elif raw_world is not None and hasattr(raw_world, "objects"):
+            self._warn_missing_global_field("economy_snapshot")
+            self._latest_economy_snapshot = {
+                object_id: {
+                    "type": obj.object_type,
+                    "stock": dict(obj.stock),
+                }
+                for object_id, obj in raw_world.objects.items()
+            }
+        else:
+            self._warn_missing_global_field("economy_snapshot")
+        economy_settings_payload = global_payload.get("economy_settings")
+        if isinstance(economy_settings_payload, Mapping):
+            self._latest_economy_settings = {
+                str(key): float(value)
+                for key, value in economy_settings_payload.items()
+            }
+        elif raw_world is not None and hasattr(raw_world, "economy_settings"):
+            self._warn_missing_global_field("economy_settings")
             self._latest_economy_settings = raw_world.economy_settings()
         else:
+            self._warn_missing_global_field("economy_settings")
             self._latest_economy_settings = {
                 str(key): float(value) for key, value in self.config.economy.items()
             }
-        if hasattr(raw_world, "active_price_spikes"):
+
+        price_spikes_payload = global_payload.get("price_spikes")
+        if isinstance(price_spikes_payload, Mapping):
+            self._latest_price_spikes = {
+                str(event_id): dict(data)
+                for event_id, data in price_spikes_payload.items()
+                if isinstance(data, Mapping)
+            }
+        elif raw_world is not None and hasattr(raw_world, "active_price_spikes"):
+            self._warn_missing_global_field("price_spikes")
             self._latest_price_spikes = raw_world.active_price_spikes()
         else:
+            self._warn_missing_global_field("price_spikes")
             self._latest_price_spikes = {}
-        if hasattr(raw_world, "utility_snapshot"):
+
+        utilities_payload = global_payload.get("utilities")
+        if isinstance(utilities_payload, Mapping):
+            self._latest_utilities = {
+                str(key): bool(value)
+                for key, value in utilities_payload.items()
+            }
+        elif raw_world is not None and hasattr(raw_world, "utility_snapshot"):
+            self._warn_missing_global_field("utilities")
             self._latest_utilities = raw_world.utility_snapshot()
         else:
+            self._warn_missing_global_field("utilities")
             self._latest_utilities = {"power": True, "water": True}
-        if hasattr(raw_world, "employment_queue_snapshot"):
-            self._latest_employment_metrics = raw_world.employment_queue_snapshot()
+
+        employment_metrics_payload = global_payload.get("employment_snapshot")
+        if isinstance(employment_metrics_payload, Mapping):
+            self._latest_employment_metrics = {
+                str(key): value for key, value in employment_metrics_payload.items()
+            }
+        elif raw_world is not None and hasattr(raw_world, "employment_queue_snapshot"):
+            self._warn_missing_global_field("employment_snapshot")
+            self._latest_employment_metrics = raw_world.employment_queue_snapshot() or {}
         else:
+            self._warn_missing_global_field("employment_snapshot")
             self._latest_employment_metrics = {}
         if reward_breakdown is not None:
             self._latest_reward_breakdown = {
@@ -1095,7 +1436,7 @@ class TelemetryPublisher:
             self._latest_affordance_manifest = dict(manifest_meta)
         else:
             self._latest_affordance_manifest = {}
-        if kpi_history:
+        if kpi_history and adapter is not None:
             self._update_kpi_history(adapter)
             self._kpi_history.setdefault("queue_rotation_events", []).append(
                 fairness_delta["rotation_events"]
@@ -1105,14 +1446,15 @@ class TelemetryPublisher:
             )
 
         if stability_inputs is not None:
+            hunger_raw = stability_inputs.get("hunger_levels", {}) or {}
+            option_switch_raw = stability_inputs.get("option_switch_counts", {}) or {}
+            reward_samples_raw = stability_inputs.get("reward_samples") or {}
             self._latest_stability_inputs = {
-                "hunger_levels": dict(stability_inputs.get("hunger_levels", {}) or {}),
-                "option_switch_counts": dict(
-                    stability_inputs.get("option_switch_counts", {}) or {}
-                ),
+                "hunger_levels": dict(hunger_raw) if isinstance(hunger_raw, Mapping) else {},
+                "option_switch_counts": dict(option_switch_raw) if isinstance(option_switch_raw, Mapping) else {},
                 "reward_samples": {
-                    agent: float(value)
-                    for agent, value in ((stability_inputs.get("reward_samples") or {}).items())
+                    agent: float(value) if isinstance(value, (int, float)) else 0.0
+                    for agent, value in (reward_samples_raw.items() if isinstance(reward_samples_raw, Mapping) else [])
                 },
             }
 
@@ -1135,8 +1477,7 @@ class TelemetryPublisher:
         aggregated_events = list(
             self._aggregator.collect_tick(
                 tick=tick,
-                world=world,
-                observations=observations,
+                world=None,
                 rewards=rewards,
                 events=self._latest_events,
                 policy_snapshot=self._latest_policy_snapshot,
@@ -1148,26 +1489,18 @@ class TelemetryPublisher:
                 possessed_agents=possessed_agents or (),
                 social_events=self._latest_events,
                 runtime_variant=self._runtime_variant,
-                queue_metrics=self._latest_queue_metrics or {},
                 embedding_metrics=self._latest_embedding_metrics or {},
-                employment_metrics=self._latest_employment_metrics or {},
                 conflict_snapshot=self.latest_conflict_snapshot(),
-                relationship_metrics=self._latest_relationship_metrics or {},
-                relationship_snapshot=self._latest_relationship_snapshot,
                 relationship_updates=self._latest_relationship_updates,
                 relationship_overlay=self._latest_relationship_overlay,
                 narrations=self._latest_narrations,
-                job_snapshot=self._latest_job_snapshot,
-                economy_snapshot=self._latest_economy_snapshot,
-                economy_settings=self._latest_economy_settings,
-                price_spikes=self._latest_price_spikes,
-                utilities=self._latest_utilities,
                 affordance_manifest=self._latest_affordance_manifest,
                 stability_metrics=latest_stability_metrics,
                 stability_alerts=latest_stability_alerts,
                 promotion=latest_promotion_state,
                 anneal_status=latest_anneal_status,
                 kpi_history_payload=latest_kpi_history,
+                global_context=global_payload,
             )
         )
         transformed_events = self._transform_pipeline.process(aggregated_events)
@@ -1192,18 +1525,23 @@ class TelemetryPublisher:
 
     def latest_affordance_runtime(self) -> dict[str, object]:
         runtime = self._latest_affordance_runtime
-        running_section = runtime.get("running") or {}
-        event_counts = dict(runtime.get("event_counts", {}))
+        running_section_raw = runtime.get("running") or {}
+        running_section = running_section_raw if isinstance(running_section_raw, Mapping) else {}
+        event_counts_raw = runtime.get("event_counts", {})
+        event_counts = dict(event_counts_raw) if isinstance(event_counts_raw, Mapping) else {}
         for key in ("start", "finish", "fail", "precondition_fail"):
             event_counts.setdefault(key, 0)
+        tick_raw = runtime.get("tick", 0)
+        running_count_raw = runtime.get("running_count", 0)
+        active_reservations_raw = runtime.get("active_reservations", {})
         return {
-            "tick": int(runtime.get("tick", 0)),
-            "running_count": int(runtime.get("running_count", 0)),
+            "tick": int(tick_raw) if isinstance(tick_raw, (int, float, str)) else 0,
+            "running_count": int(running_count_raw) if isinstance(running_count_raw, (int, float, str)) else 0,
             "running": {
-                str(object_id): dict(entry)
+                str(object_id): dict(entry) if isinstance(entry, Mapping) else {}
                 for object_id, entry in running_section.items()
             },
-            "active_reservations": dict(runtime.get("active_reservations", {})),
+            "active_reservations": dict(active_reservations_raw) if isinstance(active_reservations_raw, Mapping) else {},
             "event_counts": event_counts,
         }
 
@@ -1285,7 +1623,7 @@ class TelemetryPublisher:
             }
         return result
 
-    def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
+    def _ingest_stability_metrics(self, metrics: Mapping[str, object]) -> None:
         self._latest_stability_metrics = dict(metrics)
 
     def latest_stability_metrics(self) -> dict[str, object]:
@@ -1316,15 +1654,20 @@ class TelemetryPublisher:
         return []
 
     def latest_perturbations(self) -> dict[str, object]:
+        active_raw = self._latest_perturbations.get("active", {})
+        pending_raw = self._latest_perturbations.get("pending", [])
+        cooldowns_raw = self._latest_perturbations.get("cooldowns", {})
+        cooldowns_spec_raw = cooldowns_raw.get("spec", {}) if isinstance(cooldowns_raw, Mapping) else {}
+        cooldowns_agents_raw = cooldowns_raw.get("agents", {}) if isinstance(cooldowns_raw, Mapping) else {}
         return {
             "active": {
-                event_id: dict(data)
-                for event_id, data in self._latest_perturbations.get("active", {}).items()
+                event_id: dict(data) if isinstance(data, Mapping) else {}
+                for event_id, data in (active_raw.items() if isinstance(active_raw, Mapping) else [])
             },
-            "pending": [dict(entry) for entry in self._latest_perturbations.get("pending", [])],
+            "pending": [dict(entry) if isinstance(entry, Mapping) else {} for entry in (pending_raw if isinstance(pending_raw, Iterable) else [])],
             "cooldowns": {
-                "spec": dict(self._latest_perturbations.get("cooldowns", {}).get("spec", {})),
-                "agents": dict(self._latest_perturbations.get("cooldowns", {}).get("agents", {})),
+                "spec": dict(cooldowns_spec_raw) if isinstance(cooldowns_spec_raw, Mapping) else {},
+                "agents": dict(cooldowns_agents_raw) if isinstance(cooldowns_agents_raw, Mapping) else {},
             },
         }
 
@@ -1345,11 +1688,82 @@ class TelemetryPublisher:
             return None
         return dict(self._latest_policy_identity)
 
-    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
+    def latest_policy_metadata_snapshot(self) -> dict[str, object] | None:
+        if self._latest_policy_metadata_snapshot is None:
+            return None
+        return copy.deepcopy(self._latest_policy_metadata_snapshot)
+
+    def latest_observation_envelope(self) -> dict[str, object] | None:
+        if self._latest_observation_envelope is None:
+            return None
+        return copy.deepcopy(self._latest_observation_envelope)
+
+    def _ingest_policy_metadata(self, payload: Mapping[str, Any]) -> None:
+        metadata_payload = payload.get("metadata")
+        if not isinstance(metadata_payload, Mapping):
+            self._latest_policy_metadata_event = None
+            return
+        metadata_copy = copy.deepcopy(dict(metadata_payload))
+        option_counts = metadata_copy.get("option_switch_counts")
+        if isinstance(option_counts, Mapping):
+            metadata_copy["option_switch_counts"] = {
+                str(agent): int(count)
+                for agent, count in sorted(option_counts.items())
+            }
+        possessed_payload = metadata_copy.get("possessed_agents")
+        if isinstance(possessed_payload, Iterable) and not isinstance(
+            possessed_payload, (str, bytes)
+        ):
+            agents = sorted({str(agent) for agent in possessed_payload})
+            metadata_copy["possessed_agents"] = agents
+        event_payload: dict[str, object] = {
+            "tick": int(payload.get("tick", -1)),
+            "provider": str(payload.get("provider", "")),
+            "metadata": metadata_copy,
+        }
+        self._latest_policy_metadata_event = copy.deepcopy(event_payload)
+        identity_payload = metadata_copy.get("identity")
+        if isinstance(identity_payload, Mapping):
+            self.update_policy_identity(identity_payload)
+
+    def latest_policy_metadata(self) -> dict[str, object] | None:
+        if self._latest_policy_metadata_event is None:
+            return None
+        return copy.deepcopy(self._latest_policy_metadata_event)
+
+    def _ingest_policy_anneal(self, payload: Mapping[str, Any]) -> None:
+        event_payload: dict[str, object] = {
+            "tick": int(payload.get("tick", -1)),
+            "provider": str(payload.get("provider", "")),
+        }
+        if "ratio" in payload:
+            ratio_value = payload.get("ratio")
+            if isinstance(ratio_value, (int, float)):
+                event_payload["ratio"] = float(ratio_value)
+            elif ratio_value is None:
+                event_payload["ratio"] = None
+        context_payload = payload.get("context")
+        if isinstance(context_payload, Mapping):
+            event_payload["context"] = copy.deepcopy(dict(context_payload))
+        else:
+            event_payload["context"] = {}
+        self._latest_policy_anneal_event = copy.deepcopy(event_payload)
+
+    def latest_policy_anneal(self) -> dict[str, object] | None:
+        if self._latest_policy_anneal_event is None:
+            return None
+        return copy.deepcopy(self._latest_policy_anneal_event)
+
+    def _ingest_snapshot_migrations(self, applied: Iterable[str]) -> None:
         self._latest_snapshot_migrations = [str(item) for item in applied]
 
     def latest_snapshot_migrations(self) -> list[str]:
         return list(self._latest_snapshot_migrations)
+
+    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
+        """Public hook for console commands to persist migration history."""
+
+        self._ingest_snapshot_migrations(applied)
 
     def latest_policy_snapshot(self) -> dict[str, dict[str, object]]:
         return {agent: dict(data) for agent, data in self._latest_policy_snapshot.items()}
@@ -1375,7 +1789,7 @@ class TelemetryPublisher:
     def latest_relationship_updates(self) -> list[dict[str, object]]:
         return [dict(update) for update in self._latest_relationship_updates]
 
-    def update_relationship_metrics(self, payload: dict[str, object]) -> None:
+    def update_relationship_metrics(self, payload: Mapping[str, object]) -> None:
         """Allow external callers to seed the latest relationship metrics."""
         self._latest_relationship_metrics = dict(payload)
 
@@ -1483,8 +1897,8 @@ class TelemetryPublisher:
     def latest_price_spikes(self) -> dict[str, dict[str, object]]:
         return {
             event_id: {
-                "magnitude": float(data.get("magnitude", 0.0)),
-                "targets": list(data.get("targets", [])),
+                "magnitude": float(magnitude) if isinstance(magnitude := data.get("magnitude", 0.0), (int, float, str)) else 0.0,
+                "targets": list(targets) if isinstance(targets := data.get("targets", []), Iterable) else [],
             }
             for event_id, data in self._latest_price_spikes.items()
         }
@@ -1497,6 +1911,108 @@ class TelemetryPublisher:
 
     def schema(self) -> str:
         return self.schema_version
+
+    @property
+    def event_dispatcher(self) -> TelemetryEventDispatcher:
+        """Expose the event dispatcher used for streaming telemetry."""
+
+        return self._event_dispatcher
+
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Forward a typed event through the internal dispatcher.
+
+        Args:
+            event: TelemetryEventDTO containing event_type, tick, payload, and metadata.
+
+        Note:
+            The internal _event_dispatcher still uses name/payload for backwards
+            compatibility with existing subscribers. The DTO is unpacked here.
+        """
+        self._event_dispatcher.emit_event(event.event_type, event.payload)
+
+    def _handle_event(self, name: str, payload: Mapping[str, Any]) -> None:
+        """Internal subscriber that bridges events back into publisher behaviour."""
+
+        if name == "loop.tick":
+            self._ingest_loop_tick(**payload)
+            return
+        if name == "loop.health":
+            self._ingest_health_metrics(payload)
+            return
+        if name == "loop.failure":
+            self._ingest_loop_failure(payload)
+            return
+        if name == "policy.metadata":
+            self._ingest_policy_metadata(payload)
+            return
+        if name == "policy.possession":
+            agents = payload.get("agents", payload.get("possessed_agents", ()))
+            if isinstance(agents, Iterable):
+                self._ingest_possessed_agents(agents)
+            return
+        if name == "policy.anneal.update":
+            self._ingest_policy_anneal(payload)
+            return
+        if name == "console.result":
+            result_payload = dict(payload)
+            raw_result = result_payload.get("result")
+            console_payload: dict[str, Any]
+            status_source = result_payload
+            if isinstance(raw_result, Mapping) and (
+                "status" in raw_result or "name" in raw_result or "cmd_id" in raw_result
+            ):
+                console_payload = dict(raw_result)
+                status_source = console_payload
+            else:
+                console_payload = dict(result_payload)
+
+            name_value = status_source.get("name")
+            if not isinstance(name_value, str):
+                name_value = ""
+            status_value = status_source.get("status")
+            if not isinstance(status_value, str):
+                status_value = "ok"
+            result_payload_inner: Mapping[str, Any] | None
+            if status_source is console_payload:
+                result_payload_inner = console_payload.get("result")
+            else:
+                result_payload_inner = raw_result if isinstance(raw_result, Mapping) else None
+            result_value = dict(result_payload_inner) if result_payload_inner is not None else None
+            error_payload_inner: Mapping[str, Any] | None
+            if status_source is console_payload:
+                error_payload_inner = console_payload.get("error")
+            else:
+                error_payload_inner = result_payload.get("error") if isinstance(result_payload.get("error"), Mapping) else None
+            error_value = dict(error_payload_inner) if error_payload_inner is not None else None
+            console_result = ConsoleCommandResult(
+                name=name_value,
+                status=status_value,
+                result=result_value,
+                error=error_value,
+                cmd_id=cast(str | None, status_source.get("cmd_id", result_payload.get("cmd_id"))),
+                issuer=cast(str | None, status_source.get("issuer", result_payload.get("issuer"))),
+                tick=cast(int | None, status_source.get("tick", result_payload.get("tick"))),
+                latency_ms=cast(int | None, status_source.get("latency_ms", result_payload.get("latency_ms"))),
+            )
+            self._ingest_console_results([console_result])
+            self._latest_events.append({"type": "console.result", "payload": result_payload})
+            if len(self._latest_events) > 128:
+                self._latest_events = self._latest_events[-128:]
+            # Also cache for snapshot/restore compatibility
+            self._latest_console_events.append(result_payload)
+            return
+        if name == "stability.metrics":
+            self._ingest_stability_metrics(payload)
+            return
+        if name == "telemetry.snapshot.migrations":
+            applied = payload.get("applied")
+            if isinstance(applied, Iterable):
+                self._ingest_snapshot_migrations(applied)
+            return
+        # Default: append to event cache for observers.
+        self._latest_events.append({"type": name, "payload": dict(payload)})
+        if len(self._latest_events) > 128:
+            self._latest_events = self._latest_events[-128:]
 
     def _capture_relationship_snapshot(
         self,
@@ -1746,7 +2262,8 @@ class TelemetryPublisher:
                     extroversion = 0.0
                 if extroversion < chat_threshold:
                     continue
-                quality = float(event.get("quality", 0.0) or 0.0)
+                quality_raw = event.get("quality", 0.0) or 0.0
+                quality = float(quality_raw) if isinstance(quality_raw, (int, float, str)) else 0.0
                 if quality < quality_threshold:
                     continue
                 message = (
@@ -1875,8 +2392,10 @@ class TelemetryPublisher:
             if not owner or not other:
                 continue
             status = str(update.get("status", ""))
-            trust = float(update.get("trust", 0.0) or 0.0)
-            familiarity = float(update.get("familiarity", 0.0) or 0.0)
+            trust_raw = update.get("trust", 0.0) or 0.0
+            trust = float(trust_raw) if isinstance(trust_raw, (int, float, str)) else 0.0
+            familiarity_raw = update.get("familiarity", 0.0) or 0.0
+            familiarity = float(familiarity_raw) if isinstance(familiarity_raw, (int, float, str)) else 0.0
             delta = update.get("delta")
             delta_trust = float(delta.get("trust", 0.0)) if isinstance(delta, Mapping) else 0.0
             delta_fam = float(delta.get("familiarity", 0.0)) if isinstance(delta, Mapping) else 0.0
@@ -1914,8 +2433,7 @@ class TelemetryPublisher:
 
     def _emit_relationship_rivalry_narrations(self, tick: int) -> None:
         summary = self._latest_relationship_summary
-        if not isinstance(summary, Mapping):
-            return
+        # summary is always a dict[str, object], no need for isinstance check
         avoid_threshold = float(self._relationship_narration_cfg.rivalry_avoid_threshold)
         escalation_threshold = float(
             self._relationship_narration_cfg.rivalry_escalation_threshold
@@ -2024,8 +2542,10 @@ class TelemetryPublisher:
             return
         object_id = str(event.get("object_id", "")) or "queue"
         reason = str(event.get("reason", "unknown"))
-        intensity = float(event.get("intensity", 0.0) or 0.0)
-        queue_length = int(event.get("queue_length", 0))
+        intensity_raw = event.get("intensity", 0.0) or 0.0
+        intensity = float(intensity_raw) if isinstance(intensity_raw, (int, float, str)) else 0.0
+        queue_length_raw = event.get("queue_length", 0)
+        queue_length = int(queue_length_raw) if isinstance(queue_length_raw, (int, float, str)) else 0
         priority = reason == "ghost_step"
         dedupe_key = ":".join(
             [
@@ -2153,16 +2673,15 @@ class TelemetryPublisher:
         world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> None:
         adapter = ensure_world_adapter(world)
-        queue_sum = float(
-            self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0)
-        )
+        queues_raw = self._latest_conflict_snapshot.get("queues", {})
+        intensity_sum_raw = queues_raw.get("intensity_sum", 0.0) if isinstance(queues_raw, Mapping) else 0.0
+        queue_sum = float(intensity_sum_raw) if isinstance(intensity_sum_raw, (int, float, str)) else 0.0
         lateness_avg = 0.0
         agents = list(adapter.agent_snapshots_view().values())
         if agents:
             lateness_avg = sum(agent.lateness_counter for agent in agents) / len(agents)
-        social_metric = float(
-            (self._latest_relationship_metrics or {}).get("late_help_events", 0.0)
-        )
+        social_metric_raw = (self._latest_relationship_metrics or {}).get("late_help_events", 0.0)
+        social_metric = float(social_metric_raw) if isinstance(social_metric_raw, (int, float, str)) else 0.0
 
         def _push(name: str, value: float) -> None:
             history = self._kpi_history.setdefault(name, [])

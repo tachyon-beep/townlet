@@ -19,12 +19,11 @@ def _provider_lookup(loop: object, key: str, fallback_attr: str) -> str:
     if isinstance(info, dict):
         return str(info.get(key, "unknown") or "unknown")
     if info is not None:
-        try:
-            value = info.get(key, "unknown")  # type: ignore[attr-defined]
+        getter = getattr(info, "get", None)
+        if callable(getter):
+            value = getter(key, "unknown")
             if value:
                 return str(value)
-        except AttributeError:
-            pass
     attr_value = getattr(loop, fallback_attr, None)
     if attr_value:
         return str(attr_value)
@@ -40,8 +39,14 @@ def telemetry_provider_name(loop: _ProviderCarrier) -> str:
 
 
 def is_stub_policy(policy: PolicyBackendProtocol, provider: str | None = None) -> bool:
+    # Check if policy is directly a stub
     if isinstance(policy, StubPolicyBackend):
         return True
+    # Check if policy is an adapter wrapping a stub backend
+    backend = getattr(policy, "_backend", None)
+    if backend is not None and isinstance(backend, StubPolicyBackend):
+        return True
+    # Check if provider name indicates stub
     if provider is None:
         return False
     return provider == "stub"

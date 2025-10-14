@@ -8,15 +8,22 @@ subsystems consume (policy, telemetry, rewards, etc.).
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
+from townlet.dto.observations import ObservationEnvelope
 from townlet.scheduler.perturbations import PerturbationScheduler
 
 if TYPE_CHECKING:  # pragma: no cover
+    from townlet.config import SimulationConfig
+    from townlet.core.interfaces import TelemetrySinkProtocol
+    from townlet.dto.world import SimulationSnapshot
     from townlet.lifecycle.manager import LifecycleManager
+    from townlet.stability.monitor import StabilityMonitor
+    from townlet.stability.promotion import PromotionManager
     from townlet.world.grid import WorldState
     from townlet.world.observations.interfaces import WorldRuntimeAdapterProtocol
 
@@ -62,9 +69,8 @@ class WorldRuntime:
         self._lifecycle = lifecycle
         self._perturbations = perturbations
         self._ticks_per_day = max(0, int(ticks_per_day))
-        self._queued_console: list[ConsoleCommandEnvelope] = []
-        self._pending_actions: dict[str, object] = {}
         self._world_adapter: WorldRuntimeAdapterProtocol | None = None
+        self._pending_actions: dict[str, object] = {}
 
     @property
     def world(self) -> WorldState:
@@ -84,31 +90,72 @@ class WorldRuntime:
     def world_adapter(self) -> WorldRuntimeAdapterProtocol | None:
         return self._world_adapter
 
-    def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
-        """Buffer console operations for the next tick.
+    def agents(self) -> Iterable[str]:
+        """Return known agent identifiers."""
 
-        The buffered operations are drained the next time :meth:`tick` executes.
-        Callers typically pass in commands drained from the telemetry layer.
-        """
+        state_agents = getattr(self._world, "agents", None)
+        if isinstance(state_agents, Mapping):
+            return state_agents.keys()
+        if isinstance(state_agents, Iterable):  # pragma: no cover - legacy fallback
+            return state_agents
+        context = getattr(self._world, "context", None)
+        if context is not None:
+            agents_view = getattr(context.state, "agents", {})
+            if isinstance(agents_view, Mapping):
+                return agents_view.keys()
+        return ()
 
-        self._queued_console.extend(list(operations))
+    def observe(self, agent_ids: Iterable[str] | None = None) -> ObservationEnvelope:
+        """Produce a DTO observation envelope for the requested agents."""
+
+        context = getattr(self._world, "context", None)
+        if context is None or not hasattr(context, "observe"):
+            raise RuntimeError("World context does not support DTO observations")
+        envelope = context.observe(agent_ids=agent_ids)
+        if not isinstance(envelope, ObservationEnvelope):
+            raise TypeError("World context returned non-DTO observation envelope")
+        return envelope
 
     def apply_actions(self, actions: ActionMapping) -> None:
-        """Stage policy actions for the next tick.
+        """Stage policy actions for the next tick."""
 
-        Actions staged here are consumed unless :meth:`tick` is provided with a
-        dedicated ``policy_actions`` mapping or an ``action_provider`` callable.
-        """
-
+        context = getattr(self._world, "context", None)
+        if context is not None:
+            apply_actions = getattr(context, "apply_actions", None)
+            if callable(apply_actions):
+                apply_actions(actions)
+                return
         self._pending_actions = dict(actions)
 
-    def snapshot(self) -> dict[str, object]:  # pragma: no cover - thin pass-through
+    def snapshot(
+        self,
+        *,
+        config: SimulationConfig | None = None,
+        telemetry: TelemetrySinkProtocol | None = None,
+        stability: StabilityMonitor | None = None,
+        promotion: PromotionManager | None = None,
+        rng_streams: Mapping[str, random.Random] | None = None,
+        identity: Mapping[str, object] | None = None,
+    ) -> SimulationSnapshot:  # pragma: no cover - thin pass-through
         """Expose the underlying world snapshot for diagnostics/tests."""
 
-        snapshot_getter = getattr(self._world, "snapshot", None)
-        if callable(snapshot_getter):
-            return snapshot_getter()
-        raise AttributeError("WorldState does not expose a snapshot() method")
+        target_config = config or getattr(self._world, "config", None)
+        if target_config is None:
+            raise RuntimeError("World runtime requires configuration for snapshot export")
+
+        from townlet.snapshots import snapshot_from_world
+
+        return snapshot_from_world(
+            target_config,
+            self._world,
+            lifecycle=self._lifecycle,
+            telemetry=telemetry,
+            perturbations=self._perturbations,
+            stability=stability,
+            promotion=promotion,
+            rng_streams=rng_streams,
+            identity=identity,
+        )
 
     def tick(
         self,
@@ -136,12 +183,7 @@ class WorldRuntime:
         lifecycle = self._lifecycle
         perturbations = self._perturbations
 
-        queued_ops = (
-            list(console_operations)
-            if console_operations is not None
-            else list(self._queued_console)
-        )
-        self._queued_console.clear()
+        queued_ops = list(console_operations or ())
 
         prepared_actions: MutableMapping[str, object]
         if policy_actions is not None:
@@ -149,26 +191,42 @@ class WorldRuntime:
         elif action_provider is not None:
             prepared_actions = dict(action_provider(world, tick))
         else:
-            prepared_actions = dict(self._pending_actions)
-        self._pending_actions.clear()
+            prepared_actions = {}
 
-        world.tick = tick
-        lifecycle.process_respawns(world, tick=tick)
-        world.apply_console(queued_ops)
-        console_results = list(world.consume_console_results())
-        perturbations.tick(world, current_tick=tick)
-        world.apply_actions(prepared_actions)
-        world.resolve_affordances(current_tick=tick)
-        if self._ticks_per_day and tick % self._ticks_per_day == 0:
-            world.apply_nightly_reset()
-        terminated = dict(lifecycle.evaluate(world, tick=tick))
-        termination_reasons = dict(lifecycle.termination_reasons())
-        events = list(world.drain_events())
+        context = getattr(world, "context", None)
+        if context is None:
+            if not prepared_actions:
+                prepared_actions = dict(self._pending_actions)
+            self._pending_actions.clear()
 
-        return RuntimeStepResult(
-            console_results=console_results,
-            events=events,
-            actions=dict(prepared_actions),
-            terminated=terminated,
-            termination_reasons=termination_reasons,
+            world.tick = tick
+            lifecycle.process_respawns(world, tick=tick)
+            console_results = list(world.apply_console(queued_ops))
+            perturbations.tick(world, current_tick=tick)
+            world.apply_actions(prepared_actions)
+            world.resolve_affordances(current_tick=tick)
+            if self._ticks_per_day and tick % self._ticks_per_day == 0:
+                world.apply_nightly_reset()
+            terminated = dict(lifecycle.evaluate(world, tick=tick))
+            termination_reasons = dict(lifecycle.termination_reasons())
+            events = list(world.drain_events())
+
+            return RuntimeStepResult(
+                console_results=console_results,
+                events=events,
+                actions=dict(prepared_actions),
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+            )
+
+        result = context.tick(
+            tick=tick,
+            console_operations=queued_ops,
+            prepared_actions=prepared_actions,
+            lifecycle=lifecycle,
+            perturbations=perturbations,
+            ticks_per_day=self._ticks_per_day,
         )
+        if isinstance(result, RuntimeStepResult):
+            return result
+        return RuntimeStepResult(**result)

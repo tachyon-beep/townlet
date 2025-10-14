@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from townlet.policy.behavior import AgentIntent, BehaviorController
+from townlet.policy.dto_view import DTOWorldView
 from townlet.world.grid import WorldState
 
 
@@ -115,10 +116,15 @@ class BehaviorBridge:
         agent_id: str,
         tick: int,
         guardrail_fn: Callable[[WorldState, str, AgentIntent], AgentIntent],
+        *,
+        dto_world: DTOWorldView,
     ) -> tuple[AgentIntent, bool]:
         """Determine an agent intent and enforce option commit guardrails."""
 
-        scripted = self.behavior.decide(world, agent_id)
+        if dto_world is None:  # pragma: no cover - defensive guard
+            raise ValueError("BehaviorBridge.decide_agent requires a DTO world view")
+
+        scripted = self.behavior.decide(world, agent_id, dto_world=dto_world)
         blended = self._select_intent_with_blend(world, agent_id, scripted)
         guarded = guardrail_fn(world, agent_id, blended)
         intent, enforced = self._enforce_option_commit(agent_id, tick, guarded)
@@ -152,6 +158,21 @@ class BehaviorBridge:
         snapshot = dict(self._option_switch_counts)
         self._option_switch_counts.clear()
         return snapshot
+
+    def snapshot(self) -> dict[str, object]:
+        """Return a diagnostic snapshot of anneal and commit state."""
+
+        commit_state = {
+            str(agent_id): int(until)
+            for agent_id, until in self._option_commit_until.items()
+        }
+        return {
+            "anneal_ratio": self.current_anneal_ratio(),
+            "blend_enabled": self._anneal_blend_enabled,
+            "option_commit_ticks": int(self.option_commit_ticks),
+            "possessed_agents": self.possessed_agents(),
+            "commit_state": commit_state,
+        }
 
     def mark_termination(self, agent_id: str) -> None:
         """Reset commit/option tracking for ``agent_id`` after termination."""

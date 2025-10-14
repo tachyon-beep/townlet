@@ -46,7 +46,7 @@ class SocialSnippetConfig(BaseModel):
 
 
 class ObservationsConfig(BaseModel):
-    """Bundle observation variants consumed by ObservationBuilder."""
+    """Bundle observation variants consumed by WorldObservationService."""
 
     hybrid: HybridObservationConfig = Field(
         default_factory=lambda: HybridObservationConfig(

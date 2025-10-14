@@ -81,6 +81,9 @@ def test_affordance_runtime_context_delegates_environment() -> None:
         build_precondition_context=lambda **_: {},
         snapshot_precondition_context=lambda _: {},
         tick_supplier=lambda: 42,
+        store_stock={},
+        recent_meal_participants={},
+        config=config,
         world_ref="sentinel",
     )
     context = AffordanceRuntimeContext(environment=environment)

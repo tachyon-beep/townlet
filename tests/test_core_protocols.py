@@ -11,25 +11,22 @@ from townlet.console.command import ConsoleCommandEnvelope, ConsoleCommandResult
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
 )
 from townlet.policy.runner import PolicyRuntime
+from townlet.ports.world import WorldRuntime as WorldRuntimePort
 from townlet.telemetry.publisher import TelemetryPublisher
-from townlet.world.runtime import WorldRuntime
+from townlet.world.runtime import WorldRuntime as ConcreteWorldRuntime
 
 
 class _StubWorld:
     def __init__(self) -> None:
         self.tick = 0
         self.console_calls: list[Iterable[ConsoleCommandEnvelope]] = []
-        self._console_results: list[ConsoleCommandResult] = []
         self._events: list[dict[str, object]] = []
 
-    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
+    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> list[ConsoleCommandResult]:
         self.console_calls.append(list(operations))
-
-    def consume_console_results(self) -> list[ConsoleCommandResult]:
-        return list(self._console_results)
+        return []
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
         _ = actions
@@ -68,13 +65,13 @@ def sample_config() -> Any:
 
 
 def test_world_runtime_satisfies_protocol() -> None:
-    runtime = WorldRuntime(
+    runtime = ConcreteWorldRuntime(
         world=_StubWorld(),
         lifecycle=_StubLifecycle(),
         perturbations=_StubPerturbations(),
         ticks_per_day=1,
     )
-    assert isinstance(runtime, WorldRuntimeProtocol)
+    assert isinstance(runtime, WorldRuntimePort)
 
 
 def test_policy_runtime_satisfies_protocol(sample_config: Any) -> None:

@@ -11,6 +11,12 @@ from townlet.world.agents.registry import AgentRegistry
 from townlet.world.queue import QueueManager
 
 
+@dataclass(frozen=True, slots=True)
+class PriceSpikeEvent:
+    magnitude: float
+    targets: tuple[str, ...]
+
+
 @dataclass(slots=True)
 class EconomyService:
     """Manage economy values, price spikes, and utility outages."""
@@ -24,10 +30,11 @@ class EconomyService:
     tick_supplier: Callable[[], int]
 
     _economy_baseline: dict[str, float] = field(init=False)
-    _price_spike_events: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
+    _price_spike_events: dict[str, PriceSpikeEvent] = field(init=False, default_factory=dict)
     _utility_status: dict[str, bool] = field(init=False)
     _utility_events: dict[str, set[str]] = field(init=False)
     _object_utility_baselines: dict[str, dict[str, float]] = field(init=False, default_factory=dict)
+    _agent_basket_costs: dict[str, float] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         self._economy_baseline = {
@@ -48,9 +55,11 @@ class EconomyService:
             + self.config.economy.get("cook_hygiene_cost", 0.0)
             + self.config.economy.get("ingredients_cost", 0.0)
         )
+        basket_costs: dict[str, float] = {}
         for snapshot in self.agents.values():
-            snapshot.inventory["basket_cost"] = basket_cost
+            basket_costs[str(snapshot.agent_id)] = float(basket_cost)
         self.restock_economy()
+        self._agent_basket_costs = basket_costs
 
     def restock_economy(self) -> None:
         restock_amount = int(self.config.economy.get("stove_stock_replenish", 0))
@@ -98,13 +107,13 @@ class EconomyService:
         magnitude: float,
         targets: Iterable[str] | None = None,
     ) -> None:
-        resolved = tuple(self._resolve_price_targets(targets))
+        resolved = self._resolve_price_targets(targets)
         if not resolved:
             return
-        self._price_spike_events[event_id] = {
-            "magnitude": max(float(magnitude), 0.0),
-            "targets": resolved,
-        }
+        self._price_spike_events[event_id] = PriceSpikeEvent(
+            magnitude=max(float(magnitude), 0.0),
+            targets=resolved,
+        )
         self._recompute_price_spikes()
 
     def clear_price_spike(self, event_id: str) -> None:
@@ -113,10 +122,10 @@ class EconomyService:
         self._price_spike_events.pop(event_id, None)
         self._recompute_price_spikes()
 
-    def _resolve_price_targets(self, targets: Iterable[str] | None) -> list[str]:
+    def _resolve_price_targets(self, targets: Iterable[str] | None) -> tuple[str, ...]:
         resolved: list[str] = []
         if not targets:
-            return list(self._economy_baseline.keys())
+            return tuple(self._economy_baseline.keys())
         groups = {
             "global": list(self.config.economy.keys()),
             "market": [
@@ -135,14 +144,14 @@ class EconomyService:
                 continue
             if key in self.config.economy and key not in resolved:
                 resolved.append(key)
-        return resolved
+        return tuple(resolved)
 
     def _recompute_price_spikes(self) -> None:
         for key, value in self._economy_baseline.items():
             self.config.economy[key] = value
         for event in self._price_spike_events.values():
-            magnitude = max(event.get("magnitude", 1.0), 0.0)
-            for key in event.get("targets", ()):  # type: ignore[arg-type]
+            magnitude = max(event.magnitude, 0.0)
+            for key in event.targets:
                 if key in self.config.economy:
                     self.config.economy[key] = self.config.economy[key] * magnitude
         self.update_basket_metrics()
@@ -200,19 +209,25 @@ class EconomyService:
         return {str(key): float(value) for key, value in self.config.economy.items()}
 
     def active_price_spikes(self) -> dict[str, dict[str, object]]:
-        snapshot: dict[str, dict[str, object]] = {}
-        for event_id, info in self._price_spike_events.items():
-            snapshot[event_id] = {
-                "magnitude": float(info.get("magnitude", 0.0)),
-                "targets": [str(target) for target in info.get("targets", ())],
+        return {
+            event_id: {
+                "magnitude": float(event.magnitude),
+                "targets": [str(target) for target in event.targets],
             }
-        return snapshot
+            for event_id, event in self._price_spike_events.items()
+        }
 
     def utility_snapshot(self) -> dict[str, bool]:
         return {str(key): bool(value) for key, value in self._utility_status.items()}
 
     def utility_online(self, utility: str) -> bool:
         return self._utility_status.get(utility.lower(), True)
+
+    def basket_cost_for_agent(self, agent_id: str) -> float:
+        return float(self._agent_basket_costs.get(str(agent_id), 0.0))
+
+    def basket_cost_snapshot(self) -> dict[str, float]:
+        return {str(agent_id): float(cost) for agent_id, cost in self._agent_basket_costs.items()}
 
 
 __all__ = ["EconomyService"]

@@ -1,0 +1,62 @@
+# WP1 Pre-Compact Brief — 2025-10-11
+
+## Current Focus
+- WP1 remediation continues; world factory and adapter operate solely on `WorldContext`, with adapter coverage added in `tests/adapters/test_default_world_adapter.py` to lock in `reset`/`tick`/`observe` semantics.
+- T4.4b completed: the loop emits a DTO-first `global_context`, publisher/aggregator/CLI/observer consumers rely on dispatcher DTO data, and documentation now references the DTO flow. Regression bundle (`pytest tests/telemetry/test_aggregation.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py -q`) is recorded.
+- Console ownership sits with the orchestration layer: the world factory attaches the console service via `WorldState.attach_console_service`, `WorldComponents` exposes it to the loop, and `TelemetryPublisher` consumes dispatcher events for console results (tests cover router/CLI/dashboard pathways).
+- `tests/core/test_sim_loop_modular_smoke.py` continues to verify DTO envelopes plus console telemetry on default providers; broader UI/CLI tests still exercise the legacy pathway until the DTO migration lands.
+
+## Strategic Guidance
+The broader intent is to finish the port-first composition root so the simulation loop, factories, and telemetry stack behave as a thin orchestration shell. Every remaining task should move us toward deterministic, DTO-native ports: no legacy `WorldState` reach-ins, deterministic RNG management owned by the context, and console/telemetry flows expressed purely as events. Keep the end goal in mind—when WP1 closes, downstream packages must be able to plug into world/policy/telemetry ports without encountering legacy shims or hidden state.
+
+## Outstanding Work
+- Coordinate with WP3 Stage 6 to run the remaining close-out tasks (`ruff`,
+  `mypy`, documentation refresh, release notes) now that the full `pytest` suite
+  is green.
+- After WP3 signs off Stage 6, finish Step 8: telemetry documentation refresh,
+  dispatcher-based policy identity events, final regression sweep, and release
+  notes.
+
+## WorldContext Summary
+- Modular tick orchestration, observation envelopes, and snapshot exports now live entirely inside `WorldContext`. Tests (`tests/test_world_context.py`, `tests/world/test_world_context_parity.py`) verify action staging, nightly reset cadence, and per-agent `episode_tick` updates.
+- Documentation refreshed (`WC_A_tick_flow.md`, `WC_E_observation_mapping.md`); remaining loop references to `WorldState` are read-only metrics collection (`hunger_levels`, etc.).
+
+## Dependences / Notes
+- Context wiring currently depends on the factory ensuring `observation_service` is configured; adapter.observe now proxies DTO envelopes directly from the context and adapter tests guard the behaviour.
+- Telemetry/policy DTO work (WP3) remains active—keep schema alignment in mind while removing residual legacy helpers, especially around RNG determinism and policy snapshot events.
+- Factory/port registries are restored between tests to keep the built-in telemetry `stub`
+  provider pointing at `StubTelemetrySink`; `tests/test_telemetry_stub_compat.py` guards stub/stdout
+  parity for console snapshots and snapshot exports.
+
+## Helpful Paths
+- Factory tests: `tests/factories/test_world_factory.py`
+- World context tests: `tests/test_world_context.py`, `tests/world/test_world_context_observe.py`
+- Simulation loop parity: `tests/core/test_sim_loop_dto_parity.py`
+- Modular smoke: `tests/core/test_sim_loop_modular_smoke.py`
+
+Use this as reorientation after compaction.
+
+## Telemetry Health Inventory Update (2025-10-11 23:45, refreshed)
+- Health and failure payloads emit the structured schema: top-level `duration_ms`, nested `transport`
+  (queue/backlog/workers), and embedded DTO `global_context` snapshots with a derived `summary` block.
+  The legacy alias fields have been removed; dashboards/CLI read from the structured payload and the
+  dispatcher converts any archived alias payloads on ingest.
+- Metrics derive exclusively from `_build_transport_status` and DTO exports, removing the legacy
+  `self.world.employment.exit_queue_length()` call. Scheduler counts serve only as defensive fallback
+  when context data is missing.
+- Telemetry publisher caches deep copies of the structured payload (`latest_health_status` exposes
+  transport/global context), dispatcher queue history prefers the embedded context, and UI/CLI helpers
+  pull queue/perturbation metrics from the structured fields.
+- Regression bundle (`pytest tests/test_sim_loop_health.py tests/telemetry/test_event_dispatcher.py tests/test_telemetry_surface_guard.py tests/test_console_commands.py tests/test_conflict_telemetry.py tests/test_observer_ui_dashboard.py tests/test_telemetry_watch.py -q`) stays green across the structured schema.
+
+### Stage 6 Progress Snapshot (2025-10-12)
+- Targeted mypy backlog burning down: critical modules now clean
+  (`world/dto/factory.py`, `policy/dto_view.py`, `world/spatial.py`,
+  `world/agents/relationships_service.py`, `world/core/runtime_adapter.py`,
+  `world/queue/manager.py`). Remaining mypy noise is confined to legacy
+  employment/economy/affordance modules and UI dashboards.
+- DTO/telemetry refactor validated: `ObservationEnvelope` construction,
+  DTO world view, queue/relationship snapshots, and runtime adapter
+  typing are all enforced by mypy.
+- Strategy: continue sweeping the high-impact modules (employment,
+  affordance runtime, economy services) before the Stage 6 full run.

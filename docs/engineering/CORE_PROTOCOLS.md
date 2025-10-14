@@ -1,14 +1,25 @@
 # Core Simulation Interfaces
 
-The target architecture calls for the simulation loop to depend on behaviour contracts rather than concrete implementations. The following protocols live in `src/townlet/core/interfaces.py` and are exported via `townlet.core`:
+Townlet’s composition root depends on behaviour contracts instead of concrete classes.
+The canonical protocol definitions live in `src/townlet/core/interfaces.py`, while the
+world-runtime boundary is exported directly from `src/townlet/ports/world.py`. Import
+paths to use:
 
-- `WorldRuntimeProtocol`: advancing tick state, queueing console input, and exposing per-tick artefacts.
-- `PolicyBackendProtocol`: scripted/learned policy bridge offering `decide`, `post_step`, and policy metadata accessors.
-- `TelemetrySinkProtocol`: tick publication, console ingestion, health reporting, and snapshot import/export hooks.
+- `townlet.ports.world.WorldRuntime` (structural protocol, runtime-checkable)
+- `townlet.core.PolicyBackendProtocol`
+- `townlet.core.TelemetrySinkProtocol`
 
-Existing implementations (`WorldRuntime`, `PolicyRuntime`, `TelemetryPublisher`) conform to these protocols; `tests/test_core_protocols.py` guards that contract. Provider registries exposed via `townlet.core.resolve_*` now return protocol instances while allowing additional implementations to register themselves. New factories and adapters should type against the protocols, importing them from `townlet.core` rather than the concrete modules. This keeps downstream code aligned with the target architecture outlined in `docs/architecture_review/townlet-target-architecture.md`.
+Existing implementations (`WorldRuntime` facade, `PolicyRuntime`, `TelemetryPublisher`)
+conform to these contracts; `tests/test_core_protocols.py` and
+`tests/test_ports_surface.py` guard the surface. Provider registries exposed via
+`townlet.core.resolve_*` now return port instances while allowing additional
+implementations to register themselves. New factories and adapters should type against
+these interfaces, importing them from the paths above, to stay aligned with the
+target architecture in `docs/architecture_review/townlet-target-architecture.md`.
 
-Configuration files can select providers via the `runtime` block on `SimulationConfig`, with optional keyword arguments forwarded to the registered factory. When the block is omitted, defaults (`world: default`, `policy: scripted`, `telemetry: stdout`) are applied automatically.
+Configuration files select providers via the `runtime` block on `SimulationConfig`, with
+optional keyword arguments forwarded to the registered factory. When the block is
+omitted, defaults (`world: default`, `policy: scripted`, `telemetry: stdout`) apply.
 
 Built-in fallback providers (`policy.stub`, `policy.pytorch`, `telemetry.stub`, `telemetry.http`) automatically degrade to stub implementations when optional dependencies such as PyTorch or `httpx` are absent. The stubs log structured warnings so operators know that reduced capability is active.
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from townlet.world.employment import EmploymentEngine
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import (
     EmploymentCoordinator,
-    EmploymentEngine,
     create_employment_coordinator,
 )
 from townlet.world.relationships import (

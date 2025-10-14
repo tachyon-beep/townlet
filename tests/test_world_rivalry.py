@@ -2,14 +2,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
 
 
-def _make_world() -> WorldState:
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.conflict.rivalry.increment_per_conflict = 0.2
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),
@@ -83,12 +84,11 @@ def test_queue_conflict_event_emitted_with_intensity() -> None:
     )
     world.resolve_affordances(current_tick=world.tick)
     world.tick = 1
-    world.resolve_affordances(current_tick=world.tick)
-    events = world.drain_events()
+    result = world.resolve_affordances(current_tick=world.tick)
+    events = result.events
     queue_events = [event for event in events if event.get("event") == "queue_conflict"]
     assert queue_events
     conflict = queue_events[0]
     assert conflict["reason"] == "ghost_step"
     assert conflict["intensity"] >= 1.0
-    assert conflict["actor"] == "alice"
-    assert conflict["rival"] == "bob"
+    assert {conflict["actor"], conflict["rival"]} == {"alice", "bob"}

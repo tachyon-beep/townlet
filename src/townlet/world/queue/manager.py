@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from townlet.config import QueueFairnessConfig, SimulationConfig
@@ -182,8 +183,14 @@ class QueueManager:
         if isinstance(queues_payload, dict):
             for object_id, entries in queues_payload.items():
                 object_entries: list[QueueEntry] = []
-                for entry in entries or []:
-                    agent_id = str(entry.get("agent_id"))
+                entries_list = entries if isinstance(entries, list) else []
+                for entry in entries_list:
+                    if not isinstance(entry, Mapping):
+                        continue
+                    agent_raw = entry.get("agent_id")
+                    if agent_raw is None:
+                        continue
+                    agent_id = str(agent_raw)
                     joined_tick = int(entry.get("joined_tick", 0))
                     object_entries.append(
                         QueueEntry(agent_id=agent_id, joined_tick=joined_tick)
@@ -193,11 +200,14 @@ class QueueManager:
 
         cooldown_payload = payload.get("cooldowns", [])
         self._cooldowns = {}
-        for entry in cooldown_payload or []:
-            object_id = str(entry.get("object_id"))
-            agent_id = str(entry.get("agent_id"))
-            expiry = int(entry.get("expiry", 0))
-            self._cooldowns[(object_id, agent_id)] = expiry
+        if isinstance(cooldown_payload, list):
+            for entry in cooldown_payload:
+                if not isinstance(entry, Mapping):
+                    continue
+                object_id = str(entry.get("object_id"))
+                agent_id = str(entry.get("agent_id"))
+                expiry = int(entry.get("expiry", 0))
+                self._cooldowns[(object_id, agent_id)] = expiry
 
         stall_payload = payload.get("stall_counts", {})
         if isinstance(stall_payload, dict):

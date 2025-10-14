@@ -2,13 +2,40 @@ from __future__ import annotations
 
 import logging
 import time
+import types
 from collections.abc import Mapping
 from pathlib import Path
-import types
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.telemetry.publisher import TelemetryPublisher
+
+
+def _failure_payload(tick: int, error: str = "boom") -> dict[str, object]:
+    return {
+        "tick": tick,
+        "status": "error",
+        "error": error,
+        "duration_ms": 0.0,
+        "snapshot_path": None,
+        "transport": {
+            "provider": "port",
+            "queue_length": 0,
+            "dropped_messages": 0,
+            "last_flush_duration_ms": None,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "auth_enabled": False,
+            "worker": {"alive": True, "error": None, "restart_count": 0},
+        },
+        "global_context": {},
+        "summary": {
+            "duration_ms": 0.0,
+            "queue_length": 0,
+            "dropped_messages": 0,
+        },
+    }
 
 
 def _ensure_agents(loop: SimulationLoop) -> None:
@@ -97,11 +124,12 @@ def test_health_metrics_include_worker_status(tmp_path: Path) -> None:
         _ensure_agents(loop)
         loop.step()
         metrics = loop.telemetry.latest_health_status()
-
-        assert metrics["telemetry_worker_alive"] is True
-        assert metrics["telemetry_worker_error"] is None
-        assert metrics["telemetry_worker_restart_count"] == 0
-        assert metrics["telemetry_console_auth_enabled"] is False
+        summary = metrics.get("summary")
+        assert isinstance(summary, dict)
+        assert summary["worker_alive"] is True
+        assert summary["worker_error"] is None
+        assert summary["worker_restart_count"] == 0
+        assert summary["auth_enabled"] is False
     finally:
         loop.close()
 
@@ -118,7 +146,9 @@ def test_health_metrics_reflect_auth_enabled(tmp_path: Path) -> None:
         _ensure_agents(loop)
         loop.step()
         metrics = loop.telemetry.latest_health_status()
-        assert metrics["telemetry_console_auth_enabled"] is True
+        summary = metrics.get("summary")
+        assert isinstance(summary, dict)
+        assert summary["auth_enabled"] is True
     finally:
         loop.close()
 
@@ -134,7 +164,13 @@ def test_record_loop_failure_emits_pipeline_events(monkeypatch) -> None:
 
     monkeypatch.setattr(publisher, "_enqueue_stream_payload", capture)
     try:
-        publisher.record_loop_failure({"tick": 7, "error": "boom"})
+        event = TelemetryEventDTO(
+            event_type="loop.failure",
+            tick=7,
+            payload=_failure_payload(7),
+            metadata=TelemetryMetadata(),
+        )
+        publisher.emit_event(event)
         assert emitted, "loop failure did not emit telemetry payload"
         payload, tick = emitted[0]
         assert tick == 7

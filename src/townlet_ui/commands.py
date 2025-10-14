@@ -14,7 +14,7 @@ from townlet.console.handlers import ConsoleCommand
 logger = logging.getLogger(__name__)
 
 
-class CommandQueueFull(RuntimeError):
+class CommandQueueFullError(RuntimeError):
     """Raised when the executor queue exceeds the configured pending limit."""
 
     def __init__(self, pending: int, max_pending: int) -> None:  # pragma: no cover - trivial
@@ -69,7 +69,7 @@ class ConsoleCommandExecutor:
         except queue.Full as exc:
             pending = self.pending_count()
             max_pending = self._max_pending or pending
-            raise CommandQueueFull(pending, max_pending) from exc
+            raise CommandQueueFullError(pending, max_pending) from exc
 
     def submit_payload(
         self, payload: Mapping[str, Any], *, enqueue: bool = True

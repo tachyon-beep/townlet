@@ -10,7 +10,7 @@ import pytest
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.policy.models import torch_available
 from townlet.policy.replay import (
     ReplayDataset,
@@ -205,8 +205,8 @@ def _make_sample(
         wallet=3.0,
     )
     world.register_rivalry_conflict("alice", "bob")
-    builder = ObservationBuilder(config)
-    obs = builder.build_batch(world, terminated={})["alice"]
+    service = WorldObservationService(config=config)
+    obs = service.build_batch(world, terminated={})["alice"]
     timesteps = 2
     map_seq = np.stack([obs["map"], obs["map"]], axis=0)
     feature_seq = np.stack([obs["features"], obs["features"]], axis=0)
@@ -265,8 +265,8 @@ def _make_social_sample() -> ReplaySample:
     )
     world.record_chat_success("alice", "bob", quality=0.8)
 
-    builder = ObservationBuilder(config)
-    observation = builder.build_batch(world, terminated={"alice": False, "bob": False})[
+    service = WorldObservationService(config=config)
+    observation = service.build_batch(world, terminated={"alice": False, "bob": False})[
         "alice"
     ]
     map_seq = np.stack([observation["map"], observation["map"]], axis=0)

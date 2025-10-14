@@ -289,4 +289,114 @@ class WorldContext:
 
 ---
 
-**Proceed to implement Work Package 2 now.**
+## COMPLETION SIGN-OFF
+
+**Status**: ✅ COMPLETE
+**Completion Date**: 2025-10-13 (WP3.2 WS2)
+**Verified By**: Claude Code (autonomous agent)
+
+### Sanity Checks — Final Status
+
+* ✅ Simulation loop depends **only** on `WorldRuntime`.
+* ✅ `WorldContext` is the registered default world in the factory.
+* ✅ No imports from telemetry/policy inside `townlet/world/*`.
+* ✅ `pytest -q` passes; determinism tests pass with fixed seed.
+* ✅ `ruff` and `mypy` clean for new/changed files.
+* ✅ `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` (with ASCII module map) matches the implemented package.
+
+### Deliverables — Verification
+
+1. ✅ **New Package Layout** — Hierarchical modular structure implemented
+   - `townlet/world/` with organized subdirectories
+   - `core/` — WorldContext and runtime adapter
+   - `systems/` — Per-tick domain systems (affordances, economy, employment, perturbations, queues, relationships)
+   - `observations/` — Modular encoder architecture (map, features, social)
+   - `affordances/` — Hot-reloadable YAML-based action system
+   - `agents/` — Lifecycle management and state tracking
+   - `console/`, `economy/`, `perturbations/`, `queue/`, `hooks/` — Cohesive subsystems
+   - Console/UI code properly separated from world domain logic
+
+2. ✅ **Façade (`WorldContext`) implementing `WorldRuntime`**
+   - `WorldRuntime` façade in `world/runtime.py` (stateful orchestration)
+   - `WorldContext` in `world/core/context.py` (system aggregation)
+   - Implements all `WorldRuntime` protocol methods
+   - Uses structural typing (no explicit inheritance required)
+   - Internals not imported by simulation loop
+
+3. ✅ **Domain Separation** — Clean responsibility boundaries
+   - `grid.py` — WorldState containers
+   - `spatial.py` — Grid utilities and neighbourhood lookups
+   - `agents/registry.py` — Agent lifecycle (no telemetry/policy dependencies)
+   - `actions.py` — Action validation
+   - `observations/` — Observation encoders (no side effects)
+   - `systems/` — Per-tick systems with `SystemProtocol`
+   - `events.py` — Domain event dispatcher (synchronous)
+   - `rng.py` — Three independent deterministic RNG streams
+   - No circular imports
+
+4. ✅ **Decouple from Non-Domain Concerns**
+   - No direct imports of telemetry, CLI, HTTP, or ML internals
+   - World emits domain events only
+   - Console integration via `console/bridge.py` adapter
+
+5. ✅ **Adapter Integration**
+   - `WorldContext` registered as default in world factory
+   - Factory returns `WorldRuntime` protocol instances
+   - Configs and tests migrated to use factory paths
+
+6. ✅ **Tests** — Comprehensive coverage
+   - **Unit tests**: Spatial, agents, actions, observations, systems, RNG
+   - **Integration tests**:
+     - Observation builder tests (full/hybrid/compact variants)
+     - System integration tests
+     - Affordance runtime tests
+     - Deterministic RNG tests (same seed → same outcomes)
+   - **Smoke tests**: WP1 loop tests pass with `WorldContext`
+   - All tests passing
+
+7. ✅ **Docs** — Complete architecture documentation
+   - ADR-002 updated with:
+     - Tick Pipeline Specification (9-stage deterministic sequence)
+     - Actual Package Layout (hierarchical structure with rationale)
+     - Implementation Status section
+   - Architecture diagram created (`docs/architecture_review/diagrams/world_architecture.md`)
+   - ASCII module map showing relationships
+   - Determinism & RNG seeding policy documented
+
+8. ✅ **Quality Gates**
+   - `ruff` and `mypy` clean
+   - Functions small and single-purpose
+   - Docstrings on public classes/functions
+   - No import cycles
+
+### Implementation Notes
+
+- **Hierarchical organization**: Package evolved beyond flat structure as subsystems grew
+- **Modular observations**: Full `observations/` package with composable encoders (map, features, social)
+- **Extended systems**: Added affordances, perturbations, queues beyond original spec
+- **Hot-reloadable affordances**: YAML-based configuration in `configs/affordances/core.yaml`
+- **WorldRuntime façade**: Separate from WorldContext for cleaner orchestration/context separation
+- **DTO migration**: Observation DTOs created in `world/dto/`, later migrated to `townlet/dto/`
+
+All deviations from original specification documented in ADR-002 with detailed rationale demonstrating architectural improvements.
+
+### Key Architectural Improvements
+
+1. **Façade Pattern** — WorldRuntime provides simplified interface hiding internal complexity
+2. **System Aggregation** — WorldContext coordinates domain systems with clear responsibilities
+3. **Modular Observations** — Independently testable, composable encoders
+4. **DTO Boundaries** — Type-safe observation exchange (extended by WP3)
+5. **Event-Driven Design** — Domain events enable future features without modifying world internals
+6. **Deterministic Tick Pipeline** — 9-stage sequence with three independent RNG streams
+
+### Related Documents
+
+- `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` — Architectural decision with implementation status
+- `docs/architecture_review/diagrams/world_architecture.md` — Visual architecture representation
+- `docs/architecture_review/ADR/ADR-001 - Port and Factory Registry.md` — Port protocols that world implements
+- `docs/architecture_review/WP_TASKINGS/WP1.md` — Port/factory foundation
+- `docs/architecture_review/WP_TASKINGS/WP3.md` — DTO boundaries extending world observations
+
+---
+
+**Work Package 2 implementation complete and verified.**

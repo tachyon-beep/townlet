@@ -11,6 +11,7 @@ import numpy as np
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.observations import AgentObservationDTO
 from townlet.policy.replay import frames_to_replay_sample
 from townlet.policy.scripted import ScriptedPolicyAdapter, get_scripted_policy
 from townlet.policy.scenario_utils import seed_default_agents
@@ -38,28 +39,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _build_frame(
     adapter: ScriptedPolicyAdapter,
-    agent_id: str,
-    observation: dict[str, np.ndarray],
+    agent: AgentObservationDTO,
     reward: float,
     terminated: bool,
     trajectory_id: str,
 ) -> dict[str, object]:
-    observation_meta = dict(observation.get("metadata", {}) or {})
+    observation_meta = dict(agent.metadata or {})
     frame_meta: dict[str, object] = {
         **observation_meta,
-        "agent_id": agent_id,
+        "agent_id": agent.agent_id,
         "trajectory_id": trajectory_id,
     }
-    map_shape = tuple(observation.get("map", np.zeros(0)).shape)
+    map_tensor = np.asarray(agent.map or np.zeros(0), dtype=np.float32)
+    features_tensor = np.asarray(agent.features or np.zeros(0), dtype=np.float32)
+    map_shape = tuple(map_tensor.shape)
     frame_meta["map_shape"] = list(frame_meta.get("map_shape", map_shape))
     map_channels = frame_meta.get("map_channels", [])
     if isinstance(map_channels, tuple):
         frame_meta["map_channels"] = list(map_channels)
 
-    action = adapter.last_actions.get(agent_id, {"kind": "wait"})
+    action = adapter.last_actions.get(agent.agent_id, {"kind": "wait"})
     return {
-        "map": observation["map"],
-        "features": observation["features"],
+        "map": map_tensor,
+        "features": features_tensor,
         "action_id": None,
         "action": action,
         "log_prob": 0.0,
@@ -89,14 +91,15 @@ def main(argv: list[str] | None = None) -> None:
 
     for _ in range(max(0, args.ticks)):
         artifacts = loop.step()
-        for agent_id, observation in artifacts.observations.items():
+        envelope = artifacts.envelope
+        for agent in envelope.agents:
+            agent_id = agent.agent_id
             reward = float(artifacts.rewards.get(agent_id, 0.0))
             terminated = bool(adapter.last_terminated.get(agent_id, False))
             trajectory_id = f"{trajectory_prefix}_{agent_id}"
             frame = _build_frame(
                 adapter,
-                agent_id,
-                observation,
+                agent,
                 reward,
                 terminated,
                 trajectory_id,

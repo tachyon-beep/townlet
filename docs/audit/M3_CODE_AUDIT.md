@@ -11,7 +11,7 @@ _None (addressed via Phase 2/3 work)._
 - Added read-only `WorldState` accessors (`active_reservations_view`, `agent_snapshots_view`, `objects_by_position_view`) with coverage in `tests/test_world_state_accessors.py` to support the observation boundary cleanup.
 
 ### 2. Observation Boundary Hardening (completed)
-- `WorldState` now exposes read-only views consumed by `townlet.world.observation`, observation builder, and reward engine tests.
+- `WorldState` now exposes read-only views consumed by `townlet.world.observations` helpers, observation builder, and reward engine tests.
 - Tests updated to use queue manager/state refresh helpers instead of poking private attributes, and the engineering doc records the accessor contract.
 
 ### 3. Public Employment Test Hooks (1–2 days)
