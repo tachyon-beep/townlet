@@ -32,8 +32,8 @@ class TelemetryAggregator:
         self,
         *,
         tick: int,
-        world,
-        rewards,
+        world: Any,
+        rewards: Any,
         events: Iterable[Mapping[str, Any]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, Any]] | None = None,
         kpi_history: bool = False,
@@ -60,23 +60,23 @@ class TelemetryAggregator:
                 employment_metrics=extra.get("employment_metrics"),
                 conflict_snapshot=extra.get("conflict_snapshot", {}),
                 relationship_metrics=extra.get("relationship_metrics"),
-                relationship_snapshot=extra.get("relationship_snapshot"),
+                relationship_snapshot=extra.get("relationship_snapshot", {}),
                 relationship_updates=extra.get("relationship_updates", ()),
                 relationship_overlay=extra.get("relationship_overlay", {}),
                 events=events or (),
                 narrations=extra.get("narrations", ()),
-                job_snapshot=extra.get("job_snapshot"),
-                economy_snapshot=extra.get("economy_snapshot"),
-                economy_settings=extra.get("economy_settings"),
-                price_spikes=extra.get("price_spikes"),
-                utilities=extra.get("utilities"),
+                job_snapshot=extra.get("job_snapshot", {}),
+                economy_snapshot=extra.get("economy_snapshot", {}),
+                economy_settings=extra.get("economy_settings", {}),
+                price_spikes=extra.get("price_spikes", {}),
+                utilities=extra.get("utilities", {}),
                 affordance_manifest=extra.get("affordance_manifest", {}),
                 reward_breakdown=reward_breakdown or {},
-                stability_metrics=extra.get("stability_metrics"),
+                stability_metrics=extra.get("stability_metrics", {}),
                 stability_alerts=stability_alerts,
                 stability_inputs=stability_inputs or {},
                 promotion=extra.get("promotion"),
-                perturbations=perturbations,
+                perturbations=perturbations or {},
                 policy_identity=policy_identity or {},
                 policy_snapshot=policy_snapshot or {},
                 anneal_status=extra.get("anneal_status"),
@@ -101,7 +101,8 @@ class TelemetryAggregator:
         if self._failure_sink is not None:
             self._failure_sink(payload)
         metadata = {"kind": "loop_failure"}
-        tick = int(payload.get("tick", 0))
+        tick_raw = payload.get("tick", 0)
+        tick = int(tick_raw) if isinstance(tick_raw, (int, float, str)) else 0
         from townlet.telemetry.interfaces import TelemetryEvent
 
         yield TelemetryEvent(tick=tick, kind="health", payload=dict(payload), metadata=metadata)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import pickle
 import random
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -483,12 +481,6 @@ class WorldContext:
                 },
             )
         return coerced
-
-
-def _derive_seed_from_state(state: tuple[Any, ...]) -> int:
-    payload = pickle.dumps(state)
-    digest = hashlib.sha256(payload).digest()
-    return int.from_bytes(digest[:8], "big", signed=False)
 
 
 __all__ = ["WorldContext"]

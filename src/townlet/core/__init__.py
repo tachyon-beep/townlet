@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):  # pragma: no cover - lazy import glue
+def __getattr__(name: str) -> object:  # pragma: no cover - lazy import glue
     if name == "SimulationLoop":
         from .sim_loop import SimulationLoop as _SimulationLoop
 

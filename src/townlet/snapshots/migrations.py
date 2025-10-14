@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 

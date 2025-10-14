@@ -89,9 +89,9 @@ class ObservationEnvelope(_FrozenModel):
 
 
 __all__ = [
-    "ObservationEnvelope",
+    "DTO_SCHEMA_VERSION",
     "AgentObservationDTO",
     "GlobalObservationDTO",
+    "ObservationEnvelope",
     "ObservationMetadata",
-    "DTO_SCHEMA_VERSION",
 ]

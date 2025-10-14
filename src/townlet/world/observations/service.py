@@ -247,7 +247,8 @@ class WorldObservationService(ObservationServiceProtocol):
         if slot is None:
             return entry
         payload = dict(entry)
-        metadata = dict(payload.get("metadata", {}))  # type: ignore[arg-type]
+        metadata_raw = payload.get("metadata", {})
+        metadata = dict(metadata_raw) if isinstance(metadata_raw, dict) else {}
         metadata["embedding_slot"] = slot
         payload["metadata"] = metadata
         return payload
@@ -477,7 +478,7 @@ class WorldObservationService(ObservationServiceProtocol):
         map_shape: tuple[int, int, int],
         map_channels: tuple[str, ...] | list[str],
         social_context: dict[str, object] | None = None,
-        local_summary: dict[str, float] | None = None,
+        local_summary: dict[str, float] | dict[str, object] | None = None,
         personality_context: dict[str, object] | None = None,
     ) -> dict[str, object]:
         """Build metadata dictionary."""

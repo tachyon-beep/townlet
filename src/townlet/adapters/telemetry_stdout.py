@@ -38,7 +38,7 @@ class StdoutTelemetryAdapter(TelemetrySink):
         self._publisher.event_dispatcher.emit_event(event.event_type, event.payload)
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
-        metrics = self._publisher._latest_health_status  # type: ignore[attr-defined]
+        metrics = self._publisher._latest_health_status
         metrics[name] = {
             "value": float(value),
             "tags": dict(tags),

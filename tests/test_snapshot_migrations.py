@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from townlet.dto.world import (
 )
 from townlet.snapshots import SnapshotManager
 from townlet.snapshots.migrations import clear_registry, register_migration
+from townlet.utils import encode_rng_state
 
 
 @pytest.fixture(scope="module")
@@ -39,6 +41,7 @@ def _basic_state(config: SimulationConfig) -> SimulationSnapshot:
         queues=QueueSnapshot(),
         employment=EmploymentSnapshot(),
         relationships={},
+        rng_state=encode_rng_state(random.getstate()),
         identity=IdentitySnapshot(config_id=config.config_id),
     )
 

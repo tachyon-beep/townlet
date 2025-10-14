@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from townlet.adapters.world_default import DefaultWorldAdapter
 from townlet.lifecycle.manager import LifecycleManager
@@ -18,7 +18,7 @@ from .registry import register, resolve
 
 
 def create_world(provider: str = "default", **kwargs: Any) -> WorldRuntime:
-    return resolve("world", provider, **kwargs)
+    return cast(WorldRuntime, resolve("world", provider, **kwargs))
 
 
 def _derive_ticks_per_day(config: Any, explicit: int | None) -> int:
@@ -66,7 +66,7 @@ def _build_default_world(
             config,
             attach_console=False,
             **world_options,
-        )  # type: ignore[arg-type]
+        )
     else:
         if config is None:
             config = getattr(target_world, "config", None)
@@ -80,8 +80,8 @@ def _build_default_world(
         target_world.attach_console_service(console_service)
         context = target_world.context
     else:
-        console_service = getattr(context, "console", None)
-        if console_service is None:
+        console_service_raw = getattr(context, "console", None)
+        if console_service_raw is None:
             console_service = build_console_service(target_world)
             target_world.attach_console_service(console_service)
             context = target_world.context

@@ -33,7 +33,7 @@ class BCDatasetConfig:
     manifest: Path
 
 
-class BCTrajectoryDataset(Dataset):  # type: ignore[misc]
+class BCTrajectoryDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Torch dataset flattening replay samples for behaviour cloning."""
 
     def __init__(self, samples: Sequence[ReplaySample]) -> None:
@@ -60,9 +60,9 @@ class BCTrajectoryDataset(Dataset):  # type: ignore[misc]
         self.action_dim = int(np.max(self._actions)) + 1 if self._actions.size else 1
 
     def __len__(self) -> int:
-        return self._actions.shape[0]
+        return int(self._actions.shape[0])
 
-    def __getitem__(self, index: int):  # type: ignore[override]
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         map_tensor = torch.from_numpy(self._maps[index]).float()
         feature_tensor = torch.from_numpy(self._features[index]).float()
         action_tensor = torch.tensor(self._actions[index], dtype=torch.long)

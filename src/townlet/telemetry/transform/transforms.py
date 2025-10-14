@@ -159,8 +159,10 @@ class CompiledSchema:
             value = payload[name]
             if "type" in spec and not self._check_type(value, spec["type"]):
                 errors.append(f"field '{name}' expected type {spec['type']}")
-            if "enum" in spec and value not in spec["enum"]:
-                errors.append(f"field '{name}' not in enum {spec['enum']}")
+            if "enum" in spec:
+                enum_value = spec["enum"]
+                if isinstance(enum_value, Iterable) and value not in enum_value:
+                    errors.append(f"field '{name}' not in enum {enum_value}")
             if "const" in spec and value != spec["const"]:
                 errors.append(f"field '{name}' expected const {spec['const']}")
         return errors
@@ -190,7 +192,10 @@ def compile_json_schema(schema: Mapping[str, object]) -> CompiledSchema:
     schema_type = schema.get("type")
     if schema_type not in ("object", None):
         raise ValueError("SchemaValidationTransform only supports object schemas")
-    required = set(schema.get("required", []))
+    required_raw = schema.get("required", [])
+    if not isinstance(required_raw, Iterable):
+        raise TypeError("schema 'required' must be iterable")
+    required = {str(field) for field in required_raw}
     properties = schema.get("properties", {})
     if not isinstance(properties, Mapping):
         raise TypeError("schema 'properties' must be a mapping")

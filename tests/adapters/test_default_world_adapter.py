@@ -126,11 +126,13 @@ def stub_world_adapter(monkeypatch):
         return SimulationSnapshot(
             config_id="test",
             tick=tick,
+            ticks_per_day=1440,
             agents={},
             objects={},
             queues=QueueSnapshot(),
             employment=EmploymentSnapshot(),
             relationships={},
+            rng_state="{}",  # Minimal valid RNG state
             identity=IdentitySnapshot(config_id="test"),
         )
 

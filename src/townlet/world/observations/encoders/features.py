@@ -53,7 +53,7 @@ def encode_feature_vector(
     landmarks: list[str] | None = None,
     landmark_slices: dict[str, slice] | None = None,
     personality_enabled: bool = False,
-) -> tuple[np.ndarray, dict[str, object], dict[str, object] | None]:
+) -> tuple[np.ndarray, dict[str, float], dict[str, object] | None]:
     """
     Encode a complete feature vector for an agent.
 

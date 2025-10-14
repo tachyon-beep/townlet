@@ -179,8 +179,7 @@ def _resolve_relationships(
 
     entries: list[dict[str, object]] = []
     for other_id, metrics in relationships.items():
-        if not isinstance(metrics, Mapping):
-            continue
+        # metrics is guaranteed to be Mapping due to relationships type
         entries.append(
             {
                 "other_id": str(other_id),

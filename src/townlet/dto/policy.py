@@ -625,9 +625,9 @@ class AnnealSummaryDTO(TrainingResultBase):
 
 
 __all__ = [
-    "TrainingResultBase",
-    "BCTrainingResultDTO",
-    "PPOTrainingResultDTO",
     "AnnealStageResultDTO",
     "AnnealSummaryDTO",
+    "BCTrainingResultDTO",
+    "PPOTrainingResultDTO",
+    "TrainingResultBase",
 ]

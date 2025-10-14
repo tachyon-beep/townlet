@@ -35,4 +35,4 @@ class ConsoleEventDTO(BaseModel):
     error: str | None = None
 
 
-__all__ = ["TelemetryEventDTO", "TelemetryMetadata", "ConsoleEventDTO"]
+__all__ = ["ConsoleEventDTO", "TelemetryEventDTO", "TelemetryMetadata"]

@@ -59,7 +59,7 @@ if torch_available():
 
         def forward(
             self, map_tensor: torch.Tensor, features: torch.Tensor
-        ) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
+        ) -> tuple[torch.Tensor, torch.Tensor]:
             encoded_map = self.map_encoder(map_tensor)
             encoded_features = self.feature_encoder(features)
             hidden = torch.cat([encoded_map, encoded_features], dim=-1)
@@ -70,7 +70,7 @@ if torch_available():
 
 else:
 
-    class ConflictAwarePolicyNetwork:  # type: ignore[too-few-public-methods,misc]
+    class ConflictAwarePolicyNetwork:  # type: ignore[no-redef]
         """Placeholder that raises if PyTorch is unavailable."""
 
         def __init__(self, cfg: ConflictAwarePolicyConfig) -> None:

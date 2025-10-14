@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any, Literal
 
-from townlet.config.loader import TelemetryRetryPolicy
+from townlet.config.telemetry import TelemetryRetryPolicy
 from townlet.telemetry.transport import TransportBuffer
 
 logger = logging.getLogger(__name__)
@@ -184,12 +184,6 @@ class TelemetryWorkerManager:
                 overflow.append(self._buffer.popleft())
                 self._status["queue_length"] = len(self._buffer)
                 self._buffer_not_full.notify_all()
-        else:  # pragma: no cover - defensive
-            dropped = self._buffer.drop_until_within_capacity()
-            if dropped:
-                self._status["dropped_messages"] += dropped
-            self._status["queue_length"] = len(self._buffer)
-            self._buffer_not_full.notify_all()
 
     def _send_in_caller(self, payload: bytes, tick: int) -> None:
         if not self._send_with_retry(payload, tick):

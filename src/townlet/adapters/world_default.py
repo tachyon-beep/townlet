@@ -178,6 +178,13 @@ class DefaultWorldAdapter(WorldRuntime):
             "perturbations": self._perturbations,
         }
 
+    def bind_world(self, world: WorldState) -> None:
+        """Rebind the runtime to a freshly constructed world instance."""
+        # Rebind context to new world state
+        self._context = WorldContext(world)
+        self._world_adapter = ensure_world_adapter(world)
+        self._tick = getattr(world, "tick", 0)
+
     # ------------------------------------------------------------------
     # Transitional helpers
     # ------------------------------------------------------------------

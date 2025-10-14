@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from townlet.core.interfaces import TelemetrySinkProtocol
+from townlet.dto.telemetry import TelemetryEventDTO
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,12 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         self._latest_console_events.clear()
         return drained
 
-    def emit_event(self, name: str, payload: Mapping[str, Any] | None = None) -> None:
-        logger.debug("telemetry_stub_event name=%s payload=%s", name, dict(payload or {}))
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Emit a typed telemetry event (stub implementation)."""
+        logger.debug("telemetry_stub_event type=%s tick=%s", event.event_type, event.tick)
         # Cache console.result events for snapshot restore
-        if name == "console.result" and payload:
-            self._latest_console_events.append(payload)
+        if event.event_type == "console.result":
+            self._latest_console_events.append(event.payload)
 
     def emit_metric(self, name: str, value: float, **tags: Any) -> None:
         logger.debug("telemetry_stub_metric name=%s value=%s tags=%s", name, value, tags)

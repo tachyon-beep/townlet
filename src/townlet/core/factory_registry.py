@@ -63,17 +63,17 @@ def resolve_world(name: str, **kwargs: Any) -> WorldRuntime:
     from townlet.factories.world_factory import create_world as _create_world  # local import to avoid cycles
 
     instance = _create_world(provider=name, **kwargs)
-    return _ensure_protocol(instance, WorldRuntime, name)
+    return _ensure_protocol(instance, WorldRuntime, name)  # type: ignore[type-abstract]
 
 
 def resolve_policy(name: str, **kwargs: Any) -> PolicyBackendProtocol:
     instance = _policy_registry.resolve(name, **kwargs)
-    return _ensure_protocol(instance, PolicyBackendProtocol, name)
+    return _ensure_protocol(instance, PolicyBackendProtocol, name)  # type: ignore[type-abstract]
 
 
 def resolve_telemetry(name: str, **kwargs: Any) -> TelemetrySinkProtocol:
     instance = _telemetry_registry.resolve(name, **kwargs)
-    return _ensure_protocol(instance, TelemetrySinkProtocol, name)
+    return _ensure_protocol(instance, TelemetrySinkProtocol, name)  # type: ignore[type-abstract]
 
 
 # Register built-in providers
@@ -89,7 +89,7 @@ _policy_registry.register("stub", lambda **kwargs: StubPolicyBackend(**kwargs))
 _policy_registry.register("pytorch", lambda **kwargs: _resolve_pytorch_policy(**kwargs))
 _telemetry_registry.register("stdout", lambda **kwargs: TelemetryPublisher(**kwargs))
 _telemetry_registry.register("default", lambda **kwargs: TelemetryPublisher(**kwargs))
-_telemetry_registry.register("stub", lambda **kwargs: StubTelemetrySink(**kwargs))
+_telemetry_registry.register("stub", lambda **kwargs: StubTelemetrySink(**kwargs))  # type: ignore[abstract]
 _telemetry_registry.register("http", lambda **kwargs: _resolve_http_telemetry(**kwargs))
 
 
@@ -103,7 +103,7 @@ def _resolve_pytorch_policy(**kwargs: Any) -> PolicyBackendProtocol:
 def _resolve_http_telemetry(**kwargs: Any) -> TelemetrySinkProtocol:
     if not _httpx_available():
         logger.warning("telemetry_provider_fallback provider=http message='httpx not installed; using stub telemetry.'")
-        return StubTelemetrySink(**kwargs)
+        return StubTelemetrySink(**kwargs)  # type: ignore[abstract]
     return TelemetryPublisher(**kwargs)
 
 

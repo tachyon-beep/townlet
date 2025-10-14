@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):  # pragma: no cover - lazy import glue
+def __getattr__(name: str) -> object:  # pragma: no cover - lazy import glue
     if name == "WorldContext":
         from .context import WorldContext as _WorldContext
 

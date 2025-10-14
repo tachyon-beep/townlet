@@ -149,6 +149,7 @@ def test_snapshot_config_mismatch_raises(tmp_path: Path, sample_config) -> None:
         queues=QueueSnapshot(),
         employment=EmploymentSnapshot(),
         relationships={},
+        rng_state=encode_rng_state(random.getstate()),
         identity=IdentitySnapshot(config_id="other-config"),
     )
     path = manager.save(state)
@@ -180,6 +181,7 @@ def test_snapshot_schema_version_mismatch(tmp_path: Path, sample_config) -> None
         queues=QueueSnapshot(),
         employment=EmploymentSnapshot(),
         relationships={},
+        rng_state=encode_rng_state(random.getstate()),
         identity=IdentitySnapshot(config_id=sample_config.config_id),
     )
     path = manager.save(state)
@@ -216,6 +218,7 @@ def test_snapshot_mismatch_allowed_when_guardrail_disabled(
         queues=QueueSnapshot(),
         employment=EmploymentSnapshot(),
         relationships={},
+        rng_state=encode_rng_state(random.getstate()),
         identity=IdentitySnapshot(config_id="legacy"),
     )
     path = manager.save(state)
@@ -238,6 +241,7 @@ def test_snapshot_schema_downgrade_honours_allow_flag(
         queues=QueueSnapshot(),
         employment=EmploymentSnapshot(),
         relationships={},
+        rng_state=encode_rng_state(random.getstate()),
         identity=IdentitySnapshot(config_id=sample_config.config_id),
     )
     path = manager.save(state)

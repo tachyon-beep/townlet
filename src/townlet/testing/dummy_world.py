@@ -84,10 +84,11 @@ class DummyWorldRuntime:
             )
             for agent in selected
         ]
+        # Use alias "global" for global_context field (ADR-003 DTO pattern)
         return ObservationEnvelope(
             tick=self._tick,
             agents=agents,
-            global_context=GlobalObservationDTO(),
+            **{"global": GlobalObservationDTO()},  # type: ignore[arg-type]
             actions=dict(self._last_actions),
             terminated=dict.fromkeys(selected, False),
             termination_reasons=dict.fromkeys(selected, ""),
@@ -95,6 +96,11 @@ class DummyWorldRuntime:
 
     def apply_actions(self, actions: Mapping[str, Any]) -> None:
         self._last_actions = dict(actions)
+
+    def bind_world(self, world: WorldState) -> None:
+        """Rebind to a new world (no-op for dummy runtime)."""
+        # Dummy runtime doesn't hold world state, so this is a no-op
+        pass
 
     def snapshot(
         self,
@@ -110,10 +116,12 @@ class DummyWorldRuntime:
         return SimulationSnapshot(
             config_id=self.config_id,
             tick=self._tick,
+            ticks_per_day=1440,
             agents={},
             objects={},
             queues=QueueSnapshot(),
             employment=EmploymentSnapshot(),
+            rng_state="{}",  # Minimal valid RNG state
             identity=IdentitySnapshot(config_id=self.config_id),
         )
 

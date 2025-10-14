@@ -11,7 +11,7 @@ from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
@@ -197,7 +197,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
             reset_callable=self._reset_transport_client,
             poll_interval_seconds=poll_interval,
             flush_interval_ticks=int(transport_cfg.buffer.flush_interval_ticks),
-            backpressure_strategy=str(getattr(worker_cfg, "backpressure", "drop_oldest")),
+            backpressure_strategy=cast(
+                Literal["drop_oldest", "block", "fan_out"],
+                str(getattr(worker_cfg, "backpressure", "drop_oldest")),
+            ),
             block_timeout_seconds=float(getattr(worker_cfg, "block_timeout_seconds", 0.5)),
             restart_limit=int(getattr(worker_cfg, "restart_limit", 3)),
         )
@@ -208,11 +211,15 @@ class TelemetryPublisher(_TelemetrySinkBase):
         )
         self._aggregator = TelemetryAggregator(
             self._payload_builder,
-            console_sink=self._store_console_results,
+            console_sink=cast(Callable[[Iterable[object]], None], self._store_console_results),
             failure_sink=self._store_loop_failure,
         )
+        from townlet.telemetry.interfaces import TelemetryTransformProtocol
+
         configured_transforms = self._build_transforms_from_config()
-        self._transform_config = TransformPipelineConfig(transforms=tuple(configured_transforms))
+        self._transform_config = TransformPipelineConfig(
+            transforms=cast(tuple[TelemetryTransformProtocol, ...], tuple(configured_transforms))
+        )
         self._transform_pipeline = self._transform_config.build_pipeline()
         self._worker_manager.start()
 
@@ -249,8 +256,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
             )
         return tuple(transforms)
 
-    def _load_builtin_schemas(self) -> dict[str, object]:
-        schema_map: dict[str, object] = {}
+    def _load_builtin_schemas(self) -> dict[str, Any]:
+        from townlet.telemetry.transform.transforms import CompiledSchema
+
+        schema_map: dict[str, CompiledSchema] = {}
         try:
             package = importlib.resources.files("townlet.telemetry.schemas")
         except (AttributeError, ModuleNotFoundError):  # pragma: no cover - best effort fallback
@@ -302,7 +311,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
             if default_required is not None:
                 if not isinstance(default_required, Iterable) or isinstance(default_required, (str, bytes)):
                     raise TypeError("telemetry.transforms.ensure_fields.default_required_fields must be a sequence")
-                default_required_set = {str(field) for field in default_required}
+                default_required_set: Iterable[str] = {str(field) for field in default_required}
             else:
                 default_required_set = ("tick",)
             return EnsureFieldsTransform(
@@ -314,7 +323,9 @@ class TelemetryPublisher(_TelemetrySinkBase):
             schema_option = options.get("schemas")
             if not isinstance(schema_option, Mapping) or not schema_option:
                 raise ValueError("telemetry.transforms.schema_validator requires a 'schemas' mapping")
-            compiled: dict[str, object] = {}
+            from townlet.telemetry.transform.transforms import CompiledSchema as CS
+
+            compiled: dict[str, CS] = {}
             for kind, schema_path in schema_option.items():
                 path = Path(str(schema_path)).expanduser()
                 if not path.is_absolute():
@@ -348,8 +359,8 @@ class TelemetryPublisher(_TelemetrySinkBase):
             "economy_settings": dict(self._latest_economy_settings),
             "price_spikes": {
                 event_id: {
-                    "magnitude": float(data.get("magnitude", 0.0)),
-                    "targets": list(data.get("targets", ())),
+                    "magnitude": float(magnitude) if isinstance(magnitude := data.get("magnitude", 0.0), (int, float, str)) else 0.0,
+                    "targets": list(targets) if isinstance(targets := data.get("targets", ()), Iterable) else [],
                 }
                 for event_id, data in self._latest_price_spikes.items()
             },
@@ -411,20 +422,18 @@ class TelemetryPublisher(_TelemetrySinkBase):
         return state
 
     def import_state(self, payload: Mapping[str, object]) -> None:
-        self._latest_queue_metrics = payload.get("queue_metrics") or None
-        if self._latest_queue_metrics is not None:
-            self._latest_queue_metrics = dict(self._latest_queue_metrics)
+        queue_metrics_raw = payload.get("queue_metrics")
+        self._latest_queue_metrics = dict(queue_metrics_raw) if isinstance(queue_metrics_raw, Mapping) else None
 
-        self._latest_embedding_metrics = payload.get("embedding_metrics") or None
-        if self._latest_embedding_metrics is not None:
-            self._latest_embedding_metrics = dict(self._latest_embedding_metrics)
+        embedding_metrics_raw = payload.get("embedding_metrics")
+        self._latest_embedding_metrics = dict(embedding_metrics_raw) if isinstance(embedding_metrics_raw, Mapping) else None
 
         conflict_snapshot = payload.get("conflict_snapshot") or {}
-        self._latest_conflict_snapshot = dict(conflict_snapshot)
+        self._latest_conflict_snapshot = dict(conflict_snapshot) if isinstance(conflict_snapshot, Mapping) else {}
 
         relationship_metrics = payload.get("relationship_metrics")
         self._latest_relationship_metrics = (
-            dict(relationship_metrics) if relationship_metrics else None
+            dict(relationship_metrics) if isinstance(relationship_metrics, Mapping) else None
         )
         summary_payload = payload.get("relationship_summary") or {}
         if isinstance(summary_payload, Mapping):
@@ -432,12 +441,14 @@ class TelemetryPublisher(_TelemetrySinkBase):
         social_events_payload = payload.get("social_events") or []
         if isinstance(social_events_payload, list):
             self._social_event_history = deque(
-                [dict(entry) for entry in social_events_payload],
+                [dict(entry) if isinstance(entry, Mapping) else {} for entry in social_events_payload],
                 maxlen=self._social_event_history.maxlen,
             )
 
-        self._latest_job_snapshot = dict(payload.get("job_snapshot", {}))
-        self._latest_economy_snapshot = dict(payload.get("economy_snapshot", {}))
+        job_snapshot_raw = payload.get("job_snapshot", {})
+        self._latest_job_snapshot = dict(job_snapshot_raw) if isinstance(job_snapshot_raw, Mapping) else {}
+        economy_snapshot_raw = payload.get("economy_snapshot", {})
+        self._latest_economy_snapshot = dict(economy_snapshot_raw) if isinstance(economy_snapshot_raw, Mapping) else {}
         economy_settings = payload.get("economy_settings", {})
         if isinstance(economy_settings, Mapping):
             self._latest_economy_settings = {
@@ -472,8 +483,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
             }
         else:
             self._latest_utilities = {"power": True, "water": True}
-        self._latest_employment_metrics = dict(payload.get("employment_metrics", {}))
-        self._latest_events = list(payload.get("events", []))
+        employment_metrics_raw = payload.get("employment_metrics", {})
+        self._latest_employment_metrics = dict(employment_metrics_raw) if isinstance(employment_metrics_raw, Mapping) else {}
+        events_raw = payload.get("events", [])
+        self._latest_events = list(events_raw) if isinstance(events_raw, Iterable) else []
         runtime_payload = payload.get("affordance_runtime") or {}
         if isinstance(runtime_payload, Mapping):
             running_section = runtime_payload.get("running") or {}
@@ -765,8 +778,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
     def _store_loop_failure(self, payload: Mapping[str, object]) -> None:
         failure_data = dict(payload)
         failure_data.setdefault("status", "error")
-        summary_payload = failure_data.get("summary")
-        if not isinstance(summary_payload, Mapping):
+        summary_payload_raw = failure_data.get("summary")
+        if isinstance(summary_payload_raw, Mapping):
+            summary_payload = dict(summary_payload_raw)
+        else:
             summary_payload = {}
         transport_payload = failure_data.get("transport")
         if isinstance(transport_payload, Mapping):
@@ -1004,9 +1019,11 @@ class TelemetryPublisher(_TelemetrySinkBase):
         adapter = ensure_world_adapter(world) if world is not None else None
         if not running_payload and adapter is not None:
             self._warn_missing_global_field("running_affordances")
+            from dataclasses import is_dataclass
+
             runtime_snapshot = adapter.running_affordances_snapshot()
             running_payload = {
-                str(object_id): asdict(state)
+                str(object_id): asdict(state) if is_dataclass(state) and not isinstance(state, type) else {}
                 for object_id, state in runtime_snapshot.items()
             }
         if not active_reservations and adapter is not None:
@@ -1021,17 +1038,16 @@ class TelemetryPublisher(_TelemetrySinkBase):
             "precondition_fail": 0,
         }
         for event in events or ():
-            if not isinstance(event, Mapping):
-                continue
-            name = str(event.get("event", ""))
-            if name == "affordance_start":
-                event_counts["start"] += 1
-            elif name == "affordance_finish":
-                event_counts["finish"] += 1
-            elif name == "affordance_fail":
-                event_counts["fail"] += 1
-            elif name == "affordance_precondition_fail":
-                event_counts["precondition_fail"] += 1
+            if isinstance(event, Mapping):
+                name = str(event.get("event", ""))
+                if name == "affordance_start":
+                    event_counts["start"] += 1
+                elif name == "affordance_finish":
+                    event_counts["finish"] += 1
+                elif name == "affordance_fail":
+                    event_counts["fail"] += 1
+                elif name == "affordance_precondition_fail":
+                    event_counts["precondition_fail"] += 1
         self._latest_affordance_runtime = {
             "tick": int(tick),
             "running": running_payload,
@@ -1147,7 +1163,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
             }
         elif adapter is not None:
             try:
-                rivalry_snapshot = dict(adapter.rivalry_snapshot())
+                rivalry_snapshot = cast(dict[str, dict[str, dict[str, float]]], dict(adapter.rivalry_snapshot()))
                 self._warn_missing_global_field("relationship_snapshot")
             except Exception:  # pragma: no cover - defensive guard for stubs
                 logger.debug("Telemetry rivalry snapshot unavailable", exc_info=True)
@@ -1218,7 +1234,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
             }
         else:
             self._warn_missing_global_field("relationship_snapshot")
-            relationship_snapshot = self._capture_relationship_snapshot(adapter)
+            relationship_snapshot = self._capture_relationship_snapshot(adapter) if adapter is not None else {}
         self._latest_relationship_updates = self._compute_relationship_updates(
             self._previous_relationship_snapshot,
             relationship_snapshot,
@@ -1244,12 +1260,11 @@ class TelemetryPublisher(_TelemetrySinkBase):
                 exc_info=True,
             )
             raw_embedding_metrics = {}
-        processed_embedding_metrics: dict[str, object] = {}
+        processed_embedding_metrics: dict[str, float] = {}
         for key, value in raw_embedding_metrics.items():
             if isinstance(value, (int, float)):
                 processed_embedding_metrics[str(key)] = float(value)
-            else:
-                processed_embedding_metrics[str(key)] = value
+            # Non-numeric values are silently skipped
         self._latest_embedding_metrics = processed_embedding_metrics
         if events is not None:
             self._latest_events = list(events)
@@ -1268,7 +1283,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
         except Exception:  # pragma: no cover - defensive
             personality_enabled = False
         if personality_enabled or self.config.personality_profiles_enabled():
-            self._latest_personality_snapshot = self._build_personality_snapshot(adapter)
+            self._latest_personality_snapshot = self._build_personality_snapshot(adapter) if adapter is not None else {}
         else:
             self._latest_personality_snapshot = {}
         self._capture_affordance_runtime(
@@ -1334,7 +1349,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
                     },
                 }
                 latest[agent_id] = job_payload
-            self._latest_job_snapshot = latest
+            self._latest_job_snapshot = cast(dict[str, object], latest)
         else:
             self._warn_missing_global_field("job_snapshot")
 
@@ -1345,7 +1360,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
                 for object_id, entry in economy_snapshot_payload.items()
                 if isinstance(entry, Mapping)
             }
-        elif raw_world is not None:
+        elif raw_world is not None and hasattr(raw_world, "objects"):
             self._warn_missing_global_field("economy_snapshot")
             self._latest_economy_snapshot = {
                 object_id: {
@@ -1421,7 +1436,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
             self._latest_affordance_manifest = dict(manifest_meta)
         else:
             self._latest_affordance_manifest = {}
-        if kpi_history:
+        if kpi_history and adapter is not None:
             self._update_kpi_history(adapter)
             self._kpi_history.setdefault("queue_rotation_events", []).append(
                 fairness_delta["rotation_events"]
@@ -1431,14 +1446,15 @@ class TelemetryPublisher(_TelemetrySinkBase):
             )
 
         if stability_inputs is not None:
+            hunger_raw = stability_inputs.get("hunger_levels", {}) or {}
+            option_switch_raw = stability_inputs.get("option_switch_counts", {}) or {}
+            reward_samples_raw = stability_inputs.get("reward_samples") or {}
             self._latest_stability_inputs = {
-                "hunger_levels": dict(stability_inputs.get("hunger_levels", {}) or {}),
-                "option_switch_counts": dict(
-                    stability_inputs.get("option_switch_counts", {}) or {}
-                ),
+                "hunger_levels": dict(hunger_raw) if isinstance(hunger_raw, Mapping) else {},
+                "option_switch_counts": dict(option_switch_raw) if isinstance(option_switch_raw, Mapping) else {},
                 "reward_samples": {
-                    agent: float(value)
-                    for agent, value in ((stability_inputs.get("reward_samples") or {}).items())
+                    agent: float(value) if isinstance(value, (int, float)) else 0.0
+                    for agent, value in (reward_samples_raw.items() if isinstance(reward_samples_raw, Mapping) else [])
                 },
             }
 
@@ -1509,18 +1525,23 @@ class TelemetryPublisher(_TelemetrySinkBase):
 
     def latest_affordance_runtime(self) -> dict[str, object]:
         runtime = self._latest_affordance_runtime
-        running_section = runtime.get("running") or {}
-        event_counts = dict(runtime.get("event_counts", {}))
+        running_section_raw = runtime.get("running") or {}
+        running_section = running_section_raw if isinstance(running_section_raw, Mapping) else {}
+        event_counts_raw = runtime.get("event_counts", {})
+        event_counts = dict(event_counts_raw) if isinstance(event_counts_raw, Mapping) else {}
         for key in ("start", "finish", "fail", "precondition_fail"):
             event_counts.setdefault(key, 0)
+        tick_raw = runtime.get("tick", 0)
+        running_count_raw = runtime.get("running_count", 0)
+        active_reservations_raw = runtime.get("active_reservations", {})
         return {
-            "tick": int(runtime.get("tick", 0)),
-            "running_count": int(runtime.get("running_count", 0)),
+            "tick": int(tick_raw) if isinstance(tick_raw, (int, float, str)) else 0,
+            "running_count": int(running_count_raw) if isinstance(running_count_raw, (int, float, str)) else 0,
             "running": {
-                str(object_id): dict(entry)
+                str(object_id): dict(entry) if isinstance(entry, Mapping) else {}
                 for object_id, entry in running_section.items()
             },
-            "active_reservations": dict(runtime.get("active_reservations", {})),
+            "active_reservations": dict(active_reservations_raw) if isinstance(active_reservations_raw, Mapping) else {},
             "event_counts": event_counts,
         }
 
@@ -1633,15 +1654,20 @@ class TelemetryPublisher(_TelemetrySinkBase):
         return []
 
     def latest_perturbations(self) -> dict[str, object]:
+        active_raw = self._latest_perturbations.get("active", {})
+        pending_raw = self._latest_perturbations.get("pending", [])
+        cooldowns_raw = self._latest_perturbations.get("cooldowns", {})
+        cooldowns_spec_raw = cooldowns_raw.get("spec", {}) if isinstance(cooldowns_raw, Mapping) else {}
+        cooldowns_agents_raw = cooldowns_raw.get("agents", {}) if isinstance(cooldowns_raw, Mapping) else {}
         return {
             "active": {
-                event_id: dict(data)
-                for event_id, data in self._latest_perturbations.get("active", {}).items()
+                event_id: dict(data) if isinstance(data, Mapping) else {}
+                for event_id, data in (active_raw.items() if isinstance(active_raw, Mapping) else [])
             },
-            "pending": [dict(entry) for entry in self._latest_perturbations.get("pending", [])],
+            "pending": [dict(entry) if isinstance(entry, Mapping) else {} for entry in (pending_raw if isinstance(pending_raw, Iterable) else [])],
             "cooldowns": {
-                "spec": dict(self._latest_perturbations.get("cooldowns", {}).get("spec", {})),
-                "agents": dict(self._latest_perturbations.get("cooldowns", {}).get("agents", {})),
+                "spec": dict(cooldowns_spec_raw) if isinstance(cooldowns_spec_raw, Mapping) else {},
+                "agents": dict(cooldowns_agents_raw) if isinstance(cooldowns_agents_raw, Mapping) else {},
             },
         }
 
@@ -1763,7 +1789,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
     def latest_relationship_updates(self) -> list[dict[str, object]]:
         return [dict(update) for update in self._latest_relationship_updates]
 
-    def update_relationship_metrics(self, payload: dict[str, object]) -> None:
+    def update_relationship_metrics(self, payload: Mapping[str, object]) -> None:
         """Allow external callers to seed the latest relationship metrics."""
         self._latest_relationship_metrics = dict(payload)
 
@@ -1871,8 +1897,8 @@ class TelemetryPublisher(_TelemetrySinkBase):
     def latest_price_spikes(self) -> dict[str, dict[str, object]]:
         return {
             event_id: {
-                "magnitude": float(data.get("magnitude", 0.0)),
-                "targets": list(data.get("targets", [])),
+                "magnitude": float(magnitude) if isinstance(magnitude := data.get("magnitude", 0.0), (int, float, str)) else 0.0,
+                "targets": list(targets) if isinstance(targets := data.get("targets", []), Iterable) else [],
             }
             for event_id, data in self._latest_price_spikes.items()
         }
@@ -1958,17 +1984,16 @@ class TelemetryPublisher(_TelemetrySinkBase):
             else:
                 error_payload_inner = result_payload.get("error") if isinstance(result_payload.get("error"), Mapping) else None
             error_value = dict(error_payload_inner) if error_payload_inner is not None else None
-            result_kwargs = {
-                "name": name_value,
-                "status": status_value,
-                "result": result_value,
-                "error": error_value,
-                "cmd_id": status_source.get("cmd_id", result_payload.get("cmd_id")),
-                "issuer": status_source.get("issuer", result_payload.get("issuer")),
-                "tick": status_source.get("tick", result_payload.get("tick")),
-                "latency_ms": status_source.get("latency_ms", result_payload.get("latency_ms")),
-            }
-            console_result = ConsoleCommandResult(**result_kwargs)
+            console_result = ConsoleCommandResult(
+                name=name_value,
+                status=status_value,
+                result=result_value,
+                error=error_value,
+                cmd_id=cast(str | None, status_source.get("cmd_id", result_payload.get("cmd_id"))),
+                issuer=cast(str | None, status_source.get("issuer", result_payload.get("issuer"))),
+                tick=cast(int | None, status_source.get("tick", result_payload.get("tick"))),
+                latency_ms=cast(int | None, status_source.get("latency_ms", result_payload.get("latency_ms"))),
+            )
             self._ingest_console_results([console_result])
             self._latest_events.append({"type": "console.result", "payload": result_payload})
             if len(self._latest_events) > 128:
@@ -2237,7 +2262,8 @@ class TelemetryPublisher(_TelemetrySinkBase):
                     extroversion = 0.0
                 if extroversion < chat_threshold:
                     continue
-                quality = float(event.get("quality", 0.0) or 0.0)
+                quality_raw = event.get("quality", 0.0) or 0.0
+                quality = float(quality_raw) if isinstance(quality_raw, (int, float, str)) else 0.0
                 if quality < quality_threshold:
                     continue
                 message = (
@@ -2366,8 +2392,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
             if not owner or not other:
                 continue
             status = str(update.get("status", ""))
-            trust = float(update.get("trust", 0.0) or 0.0)
-            familiarity = float(update.get("familiarity", 0.0) or 0.0)
+            trust_raw = update.get("trust", 0.0) or 0.0
+            trust = float(trust_raw) if isinstance(trust_raw, (int, float, str)) else 0.0
+            familiarity_raw = update.get("familiarity", 0.0) or 0.0
+            familiarity = float(familiarity_raw) if isinstance(familiarity_raw, (int, float, str)) else 0.0
             delta = update.get("delta")
             delta_trust = float(delta.get("trust", 0.0)) if isinstance(delta, Mapping) else 0.0
             delta_fam = float(delta.get("familiarity", 0.0)) if isinstance(delta, Mapping) else 0.0
@@ -2405,8 +2433,7 @@ class TelemetryPublisher(_TelemetrySinkBase):
 
     def _emit_relationship_rivalry_narrations(self, tick: int) -> None:
         summary = self._latest_relationship_summary
-        if not isinstance(summary, Mapping):
-            return
+        # summary is always a dict[str, object], no need for isinstance check
         avoid_threshold = float(self._relationship_narration_cfg.rivalry_avoid_threshold)
         escalation_threshold = float(
             self._relationship_narration_cfg.rivalry_escalation_threshold
@@ -2515,8 +2542,10 @@ class TelemetryPublisher(_TelemetrySinkBase):
             return
         object_id = str(event.get("object_id", "")) or "queue"
         reason = str(event.get("reason", "unknown"))
-        intensity = float(event.get("intensity", 0.0) or 0.0)
-        queue_length = int(event.get("queue_length", 0))
+        intensity_raw = event.get("intensity", 0.0) or 0.0
+        intensity = float(intensity_raw) if isinstance(intensity_raw, (int, float, str)) else 0.0
+        queue_length_raw = event.get("queue_length", 0)
+        queue_length = int(queue_length_raw) if isinstance(queue_length_raw, (int, float, str)) else 0
         priority = reason == "ghost_step"
         dedupe_key = ":".join(
             [
@@ -2644,16 +2673,15 @@ class TelemetryPublisher(_TelemetrySinkBase):
         world: WorldState | WorldRuntimeAdapterProtocol,
     ) -> None:
         adapter = ensure_world_adapter(world)
-        queue_sum = float(
-            self._latest_conflict_snapshot.get("queues", {}).get("intensity_sum", 0.0)
-        )
+        queues_raw = self._latest_conflict_snapshot.get("queues", {})
+        intensity_sum_raw = queues_raw.get("intensity_sum", 0.0) if isinstance(queues_raw, Mapping) else 0.0
+        queue_sum = float(intensity_sum_raw) if isinstance(intensity_sum_raw, (int, float, str)) else 0.0
         lateness_avg = 0.0
         agents = list(adapter.agent_snapshots_view().values())
         if agents:
             lateness_avg = sum(agent.lateness_counter for agent in agents) / len(agents)
-        social_metric = float(
-            (self._latest_relationship_metrics or {}).get("late_help_events", 0.0)
-        )
+        social_metric_raw = (self._latest_relationship_metrics or {}).get("late_help_events", 0.0)
+        social_metric = float(social_metric_raw) if isinstance(social_metric_raw, (int, float, str)) else 0.0
 
         def _push(name: str, value: float) -> None:
             history = self._kpi_history.setdefault(name, [])

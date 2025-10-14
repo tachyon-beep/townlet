@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from townlet.adapters.telemetry_stdout import StdoutTelemetryAdapter
 from townlet.core import factory_registry as core_registry
@@ -13,7 +13,7 @@ from townlet.testing import DummyTelemetrySink
 from .registry import register, resolve
 
 
-def create_telemetry(provider: str = "stdout", **kwargs: Any):
+def create_telemetry(provider: str = "stdout", **kwargs: Any) -> object:
     return resolve("telemetry", provider, **kwargs)
 
 
@@ -24,7 +24,7 @@ def _build_stdout_telemetry(*, publisher: TelemetryPublisher) -> StdoutTelemetry
 
 @register("telemetry", "stub")
 def _build_stub_telemetry(**kwargs: Any) -> StubTelemetrySink:
-    return StubTelemetrySink(**kwargs)
+    return StubTelemetrySink(**kwargs)  # type: ignore[abstract]
 
 
 @register("telemetry", "http")
@@ -34,7 +34,7 @@ def _build_http_telemetry(
     **kwargs: Any,
 ) -> StdoutTelemetryAdapter | StubTelemetrySink:
     if not core_registry._httpx_available():
-        return StubTelemetrySink(**kwargs)
+        return StubTelemetrySink(**kwargs)  # type: ignore[abstract]
     return StdoutTelemetryAdapter(publisher)
 
 

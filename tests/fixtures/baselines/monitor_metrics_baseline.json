@@ -1,0 +1,2402 @@
+[
+  {
+    "tick": 0,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 1,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 1,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 2,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 2,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 3,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 3,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 4,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 4,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 5,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 5,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 6,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 6,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 7,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 7,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 8,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 8,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 9,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 9,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 10,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 10,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 11,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 11,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 12,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 12,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 13,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 13,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 14,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 14,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 15,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 15,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 16,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 16,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 17,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 17,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 18,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 18,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 19,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 19,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 20,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 20,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 21,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 21,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 22,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 22,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 23,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 23,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 24,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 24,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 25,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 25,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 26,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 26,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 27,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 27,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 28,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 28,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 29,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 29,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 30,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 30,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 31,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 31,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 32,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 32,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 33,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 33,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 34,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 34,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 35,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 35,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 36,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 36,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 37,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 37,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 38,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 38,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 39,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 39,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 40,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 40,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 41,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 41,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 42,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 42,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 43,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 43,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 44,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 44,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 45,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 45,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 46,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 46,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 47,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 47,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 48,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 48,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 49,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 49,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 50,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 50,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 51,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 51,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 52,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 52,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 53,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 53,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 54,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 54,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 55,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 55,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 56,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 56,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 57,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 57,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 58,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 58,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 59,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 59,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 60,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 60,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 61,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 61,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 62,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 62,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 63,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 63,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 64,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 64,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 65,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 65,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 66,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 66,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 67,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 67,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 68,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 68,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 69,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 69,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 70,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 70,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 71,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 71,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 72,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 72,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 73,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 73,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 74,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 74,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 75,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 75,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 76,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 76,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 77,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 77,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 78,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 78,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 79,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 79,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 80,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 80,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 81,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 81,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 82,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 82,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 83,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 83,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 84,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 84,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 85,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 85,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 86,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 86,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 87,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 87,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 88,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 88,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 89,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 89,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 90,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 90,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 91,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 91,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 92,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 92,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 93,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 93,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 94,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 94,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 95,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 95,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 96,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 96,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 97,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 97,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 98,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 98,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 99,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  },
+  {
+    "tick": 99,
+    "metrics": {
+      "starvation_incidents": 0,
+      "starvation_window_ticks": 1000,
+      "option_switch_rate": 0.0,
+      "option_samples": 100,
+      "reward_variance": null,
+      "reward_mean": null,
+      "reward_samples": 0,
+      "queue_totals": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "queue_deltas": {
+        "cooldown_events": 0,
+        "ghost_step_events": 0,
+        "rotation_events": 0
+      },
+      "alerts": []
+    },
+    "alert": null
+  }
+]
