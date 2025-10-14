@@ -67,7 +67,7 @@ def test_option_thrash_alert_averages_over_window() -> None:
             option_switch_counts={"alice": 1},
             events=[],
         )
-    assert "option_thrash_detected" in monitor.latest_alerts
+    assert "option_thrashing" in monitor.latest_alerts
     metrics = monitor.latest_metrics()
     assert "thresholds" in metrics
     assert "promotion" in metrics

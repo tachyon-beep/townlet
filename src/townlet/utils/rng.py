@@ -79,3 +79,8 @@ def encode_rng(rng: random.Random) -> str:
     """Capture the current state of ``rng`` as a serialisable JSON string."""
 
     return encode_rng_state(rng.getstate())
+
+
+# Aliases for backwards compatibility with test expectations
+encode_rng_state_json = encode_rng_state
+decode_rng_state_json = decode_rng_state

@@ -292,6 +292,11 @@ class SimulationSnapshot(BaseModel):
         for stream_name, payload in v.items():
             if not isinstance(payload, str):
                 raise ValueError(f"RNG stream '{stream_name}' must be JSON string")
+
+            # Skip validation for special metadata keys
+            if stream_name == "context_seed":
+                continue
+
             try:
                 # Validate it's parseable JSON
                 json.loads(payload)

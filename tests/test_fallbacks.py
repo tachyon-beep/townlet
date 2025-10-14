@@ -6,17 +6,12 @@ from typing import Any
 import pytest
 
 from townlet.config import RuntimeProviderConfig, RuntimeProviders, load_config
-from townlet.core import (
-    SimulationLoop,
-    is_stub_policy,
-    is_stub_telemetry,
-    policy_provider_name,
-    telemetry_provider_name,
-)
+from townlet.core import SimulationLoop
 from townlet.core import factory_registry as registry
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 from townlet.factories import policy_factory
-from townlet.policy.fallback import StubPolicyBackend
-from townlet.telemetry.fallback import StubTelemetrySink
+from townlet.policy.fallback import StubPolicyBackend, is_stub_policy
+from townlet.telemetry.fallback import StubTelemetrySink, is_stub_telemetry
 
 
 @pytest.fixture(scope="module")

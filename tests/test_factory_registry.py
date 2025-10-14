@@ -18,18 +18,15 @@ from townlet.core import (
     telemetry_registry,
 )
 from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
-from townlet.core.utils import (
-    is_stub_policy,
-    is_stub_telemetry,
-    policy_provider_name,
-    telemetry_provider_name,
-)
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
 from townlet.factories import registry as port_registry_module
 from townlet.factories.registry import available as factory_available
 from townlet.factories.registry import register as factory_register
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.policy import DEFAULT_POLICY_PROVIDER, resolve_policy_backend
+from townlet.policy.fallback import is_stub_policy
 from townlet.ports.world import WorldRuntime
+from townlet.telemetry.fallback import is_stub_telemetry
 from townlet.scheduler.perturbations import PerturbationScheduler
 
 

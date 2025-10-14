@@ -10,12 +10,9 @@ from pathlib import Path
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop, SimulationLoopError
-from townlet.core.utils import (
-    is_stub_policy,
-    is_stub_telemetry,
-    policy_provider_name,
-    telemetry_provider_name,
-)
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
+from townlet.policy.fallback import is_stub_policy
+from townlet.telemetry.fallback import is_stub_telemetry
 
 
 def parse_args() -> argparse.Namespace:

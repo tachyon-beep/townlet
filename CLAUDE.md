@@ -2,6 +2,27 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Pre-Release Software Policy
+
+**CRITICAL**: This is pre-release software under active development. **NO BACKWARDS COMPATIBILITY CODE IS TOLERATED.**
+
+- This project is in pre-1.0 development phase; breaking changes are expected and acceptable
+- When fixing bugs or making improvements, **NEVER** add backwards compatibility code
+- **ALWAYS** fix forward: update data formats, regenerate baselines, migrate schemas
+- If a data format changes (snapshots, configs, DTOs), regenerate the test fixtures — do not support legacy formats
+- Breaking changes are acceptable; maintaining legacy code paths is not
+- Clean, forward-only code is required; compatibility shims are explicitly forbidden
+
+**Examples of what NOT to do:**
+- Adding pickle fallback when migrating to JSON format
+- Supporting both old and new field names in DTOs
+- Maintaining deprecated code paths "for compatibility"
+
+**Examples of correct approach:**
+- Migrate data format, regenerate all test baselines
+- Update all code to use new API, remove old API entirely
+- Change schema, update all instances, regenerate fixtures
+
 ## Quick Reference
 
 ### Development Commands
