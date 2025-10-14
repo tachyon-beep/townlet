@@ -207,9 +207,116 @@ The implementation evolved beyond the original ADR specification in ways that ob
 - ✅ ADR-002 (World Modularisation) documents actual architecture
 - ✅ ADR-003 (DTO Boundary) extends ports with typed DTOs
 
+## Architecture Deep Dive
+
+### Port Protocol vs Concrete Implementation
+
+The port-and-adapter pattern creates three layers:
+
+1. **Port Protocol** (`townlet.ports.world.WorldRuntime`)
+   - Structural protocol defining the contract
+   - Imported by `SimulationLoop` for type checking
+   - Enables dependency inversion
+   - Location: `src/townlet/ports/world.py`
+
+2. **Concrete Implementation** (`townlet.world.runtime.WorldRuntime`)
+   - Stateful façade implementing the port
+   - Buffers console operations and policy actions
+   - Delegates to `WorldContext` for tick execution
+   - Location: `src/townlet/world/runtime.py`
+
+3. **Adapter Layer** (`townlet.adapters.world_default.DefaultWorldAdapter`)
+   - Wraps concrete implementation for registry
+   - Handles provider-specific initialization
+   - Location: `src/townlet/adapters/world_default.py`
+
+**Naming Convention**: The protocol and concrete class share the name "WorldRuntime". This is intentional and leverages structural typing (PEP 544):
+- Different namespaces prevent confusion (`ports.world` vs `world.runtime`)
+- Import paths make the distinction clear
+- Protocol documentation explicitly notes this pattern
+
+### Runtime/Context Architecture
+
+The world implementation uses **delegation** to separate concerns:
+
+```
+SimulationLoop
+    ↓ (uses port)
+WorldRuntime (Façade)
+    ↓ (delegates to)
+WorldContext (Aggregator)
+    ↓ (coordinates)
+Domain Systems (Affordances, Economy, Employment, etc.)
+    ↓ (operate on)
+WorldState (Core State)
+    ↓ (wrapped by)
+WorldRuntimeAdapter (Read-only View)
+    ↓ (used by)
+ObservationService
+```
+
+**WorldRuntime** ([src/townlet/world/runtime.py:51-233](../../../src/townlet/world/runtime.py#L51-L233)):
+- **Purpose**: Public façade implementing port protocol
+- **Responsibilities**:
+  - Buffer policy actions and console operations
+  - Implement port contract methods
+  - Delegate tick execution to WorldContext
+  - Provide legacy fallback for direct WorldState access
+- **Pattern**: Stateful façade with buffering
+
+**WorldContext** ([src/townlet/world/core/context.py:48-495](../../../src/townlet/world/core/context.py#L48-L495)):
+- **Purpose**: Internal aggregator coordinating subsystems
+- **Responsibilities**:
+  - Aggregate 13 domain services (queue, affordance, employment, lifecycle, etc.)
+  - Orchestrate tick pipeline through systems
+  - Build observation envelopes (DTOs)
+  - Export subsystem snapshots for telemetry
+  - Manage RNG streams
+- **Pattern**: Service aggregator with delegation
+
+**Delegation Flow** (WorldRuntime → WorldContext):
+
+```python
+# WorldRuntime.tick() (line 196-232)
+context = getattr(world, "context", None)
+if context is None:
+    # Legacy path: direct WorldState manipulation
+    world.apply_actions(prepared_actions)
+    world.resolve_affordances(current_tick=tick)
+    ...
+else:
+    # Modern path: delegate to WorldContext
+    result = context.tick(
+        tick=tick,
+        console_operations=queued_ops,
+        prepared_actions=prepared_actions,
+        lifecycle=lifecycle,
+        perturbations=perturbations,
+        ticks_per_day=self._ticks_per_day,
+    )
+```
+
+This design provides:
+- **Separation of concerns**: Runtime handles buffering/port contract; Context handles subsystem orchestration
+- **Testability**: Can test Context in isolation or inject mock services
+- **Evolution path**: Legacy WorldState path coexists with modern Context path
+- **Modularity**: Adding new subsystems only requires updating WorldContext
+
+**WorldRuntimeAdapter** ([src/townlet/world/core/runtime_adapter.py:44-216](../../../src/townlet/world/core/runtime_adapter.py#L44-L216)):
+- **Purpose**: Read-only view over WorldState for observations/policy
+- **Responsibilities**:
+  - Provide safe, read-only accessors to world state
+  - Wrap embedding allocator
+  - Convert internal state to public-facing formats
+- **Pattern**: Adapter with read-only enforcement
+- **Usage**: Observation service accesses world via adapter, never directly
+
+For detailed analysis, see: [WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md](../WP_NOTES/WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md)
+
 ## Related Documents
 
 - `docs/architecture_review/WP_TASKINGS/WP1.md` — implementation checklist aligned with this ADR.
 - `docs/architecture_review/ARCHITECTURE_REVIEW_2.md` — architectural context motivating the port boundary.
 - `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` — world package structure and WorldContext implementation.
 - `docs/architecture_review/ADR/ADR-003 - DTO Boundary.md` — typed DTO boundaries extending the port protocols.
+- `docs/architecture_review/WP_NOTES/WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md` — detailed analysis of Runtime/Context architecture.

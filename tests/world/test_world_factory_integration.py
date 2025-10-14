@@ -5,8 +5,8 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.dto.observations import ObservationEnvelope
+from townlet.dto.world import SimulationSnapshot
 from townlet.factories import create_world
-from townlet.snapshots.state import SnapshotState
 
 
 def test_create_world_instantiates_context_from_config() -> None:
@@ -21,7 +21,7 @@ def test_create_world_instantiates_context_from_config() -> None:
     assert list(world_runtime.agents()) == []
     result = world_runtime.tick(tick=1, policy_actions={})
     snapshot = world_runtime.snapshot()
-    assert isinstance(snapshot, SnapshotState)
+    assert isinstance(snapshot, SimulationSnapshot)
     assert snapshot.tick == 1
     assert isinstance(result.console_results, list)
     # Use new component accessor pattern

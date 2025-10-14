@@ -17,9 +17,14 @@ from townlet.config import (
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
 from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.dto.world import (
+    EmploymentSnapshot,
+    IdentitySnapshot,
+    QueueSnapshot,
+    SimulationSnapshot,
+)
 from townlet.snapshots import SnapshotManager
 from townlet.snapshots.migrations import clear_registry, register_migration
-from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import AgentSnapshot
 from townlet_ui.commands import (
     CommandQueueFullError,
@@ -807,7 +812,16 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
     )
     assert validate["valid"] is True
 
-    legacy_state = SnapshotState(config_id="legacy", tick=5)
+    legacy_state = SimulationSnapshot(
+        config_id="legacy",
+        tick=5,
+        agents={},
+        objects={},
+        queues=QueueSnapshot(),
+        employment=EmploymentSnapshot(),
+        relationships={},
+        identity=IdentitySnapshot(config_id="legacy"),
+    )
     legacy_manager = SnapshotManager(tmp_path)
     legacy_path = legacy_manager.save(legacy_state)
 
@@ -820,10 +834,18 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
     )
     assert strict_failure["valid"] is False
 
+    def migrate_legacy(state: dict, cfg) -> dict:
+        migrated = dict(state)
+        migrated["config_id"] = cfg.config_id
+        identity = dict(migrated.get("identity", {}))
+        identity["config_id"] = cfg.config_id
+        migrated["identity"] = identity
+        return migrated
+
     register_migration(
         "legacy",
         config.config_id,
-        lambda state, cfg: replace(state, config_id=cfg.config_id),
+        migrate_legacy,
     )
 
     router_admin = create_console_router(

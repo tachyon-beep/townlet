@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.config import SimulationConfig
-    from townlet.snapshots.state import SnapshotState
 
 MigrationHandler = Callable[
-    ["SnapshotState", "SimulationConfig"], "SnapshotState | None"
+    [dict[str, Any], "SimulationConfig"], dict[str, Any] | None
 ]
 
 
@@ -81,22 +80,23 @@ class SnapshotMigrationRegistry:
     def apply_path(
         self,
         path: list[MigrationEdge],
-        state: SnapshotState,
+        state: dict[str, Any],
         config: SimulationConfig,
-    ) -> tuple[SnapshotState, list[str]]:
+    ) -> tuple[dict[str, Any], list[str]]:
         applied: list[str] = []
-        current = state
+        current = dict(state)
         for edge in path:
             result = edge.handler(current, config)
             if result is None:
                 # handler mutated in-place
                 result = current
+            current_config_id = result.get("config_id", "")
             if (
-                result.config_id == current.config_id
-                and edge.target != result.config_id
+                current_config_id == current.get("config_id", "")
+                and edge.target != current_config_id
             ):
                 raise MigrationExecutionError(
-                    f"Migration {edge.identifier} did not update config_id from {current.config_id}"
+                    f"Migration {edge.identifier} did not update config_id from {current.get('config_id', '')}"
                 )
             current = result
             applied.append(f"{edge.source}->{edge.target}:{edge.identifier}")

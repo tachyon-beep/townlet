@@ -21,21 +21,21 @@ def _make_world(hunger: float = 0.5) -> WorldState:
 
 def test_reward_negative_with_high_deficit() -> None:
     world = _make_world(hunger=0.1)
-    rewards = RewardEngine(world.config).compute(world, terminated={})
-    assert rewards["alice"] < 0.0
+    breakdowns = RewardEngine(world.config).compute(world, terminated={})
+    assert breakdowns["alice"].total < 0.0
 
 
 def test_reward_clipped_by_config() -> None:
     world = _make_world(hunger=0.0)
     engine = RewardEngine(world.config)
-    rewards = engine.compute(world, terminated={})
-    assert rewards["alice"] >= -world.config.rewards.clip.clip_per_tick
+    breakdowns = engine.compute(world, terminated={})
+    assert breakdowns["alice"].total >= -world.config.rewards.clip.clip_per_tick
 
 
 def test_survival_tick_positive_when_balanced() -> None:
     world = _make_world(hunger=0.8)
     engine = RewardEngine(world.config)
-    rewards = engine.compute(world, terminated={})
+    breakdowns = engine.compute(world, terminated={})
     expected = world.config.rewards.survival_tick
     weights = world.config.rewards.needs_weights
     for need, value in world.agents["alice"].needs.items():
@@ -44,7 +44,7 @@ def test_survival_tick_positive_when_balanced() -> None:
         expected -= weight * max(0.0, deficit) ** 2
     clip = world.config.rewards.clip.clip_per_tick
     expected = max(min(expected, clip), -clip)
-    assert rewards["alice"] == pytest.approx(expected)
+    assert breakdowns["alice"].total == pytest.approx(expected)
 
 
 def test_chat_reward_applied_for_successful_conversation() -> None:
@@ -62,7 +62,7 @@ def test_chat_reward_applied_for_successful_conversation() -> None:
 
     engine = RewardEngine(world.config)
     terminated = dict.fromkeys(world.agents, False)
-    rewards = engine.compute(world, terminated)
+    breakdowns = engine.compute(world, terminated)
 
     base = world.config.rewards.survival_tick
     social_cfg = world.config.rewards.social
@@ -71,8 +71,8 @@ def test_chat_reward_applied_for_successful_conversation() -> None:
         + social_cfg.C1_coeff_trust * 0.05
         + social_cfg.C1_coeff_fam * 0.10
     )
-    assert rewards["alice"] == pytest.approx(base + expected_bonus, rel=1e-5)
-    assert rewards["bob"] == pytest.approx(base + expected_bonus, rel=1e-5)
+    assert breakdowns["alice"].total == pytest.approx(base + expected_bonus, rel=1e-5)
+    assert breakdowns["bob"].total == pytest.approx(base + expected_bonus, rel=1e-5)
 
 
 def test_chat_reward_skipped_when_needs_override_triggers() -> None:
@@ -95,10 +95,10 @@ def test_chat_reward_skipped_when_needs_override_triggers() -> None:
 
     engine = RewardEngine(world.config)
     terminated = dict.fromkeys(world.agents, False)
-    rewards = engine.compute(world, terminated)
+    breakdowns = engine.compute(world, terminated)
 
-    assert rewards["bob"] > rewards["alice"]
-    assert rewards["alice"] <= 0.0
+    assert breakdowns["bob"].total > breakdowns["alice"].total
+    assert breakdowns["alice"].total <= 0.0
 
 
 def test_chat_events_ignored_when_social_stage_disabled() -> None:
@@ -118,12 +118,11 @@ def test_chat_events_ignored_when_social_stage_disabled() -> None:
 
     engine = RewardEngine(config)
     terminated = dict.fromkeys(world.agents, False)
-    rewards = engine.compute(world, terminated)
+    breakdowns = engine.compute(world, terminated)
 
     for agent_id in ("alice", "bob"):
-        assert rewards[agent_id] == pytest.approx(config.rewards.survival_tick)
-        breakdown = engine.latest_reward_breakdown()[agent_id]
-        assert breakdown["social"] == pytest.approx(0.0)
+        assert breakdowns[agent_id].total == pytest.approx(config.rewards.survival_tick)
+        assert breakdowns[agent_id].social == pytest.approx(0.0)
 
 
 def test_chat_reward_blocked_within_termination_window() -> None:
@@ -140,19 +139,19 @@ def test_chat_reward_blocked_within_termination_window() -> None:
 
     world.tick = 50
     world.record_chat_success("alice", "bob", quality=1.0)
-    rewards = engine.compute(world, {"alice": True, "bob": False})
-    assert rewards["alice"] <= 0.0
-    assert rewards["bob"] > 0.0
+    breakdowns = engine.compute(world, {"alice": True, "bob": False})
+    assert breakdowns["alice"].total <= 0.0
+    assert breakdowns["bob"].total > 0.0
 
     world.tick = 55
     world.record_chat_success("alice", "bob", quality=1.0)
-    rewards = engine.compute(world, {"alice": False, "bob": False})
-    assert rewards["alice"] <= 0.0  # still within termination window
+    breakdowns = engine.compute(world, {"alice": False, "bob": False})
+    assert breakdowns["alice"].total <= 0.0  # still within termination window
 
     world.tick = 70
     world.record_chat_success("alice", "bob", quality=1.0)
-    rewards = engine.compute(world, {"alice": False, "bob": False})
-    assert rewards["alice"] > 0.0
+    breakdowns = engine.compute(world, {"alice": False, "bob": False})
+    assert breakdowns["alice"].total > 0.0
 
 
 def test_chat_failure_penalty() -> None:
@@ -173,9 +172,9 @@ def test_chat_failure_penalty() -> None:
     world.record_chat_failure("alice", "bob")
 
     engine = RewardEngine(world.config)
-    rewards = engine.compute(world, dict.fromkeys(world.agents, False))
+    breakdowns = engine.compute(world, dict.fromkeys(world.agents, False))
 
-    assert rewards["alice"] < world.config.rewards.survival_tick
+    assert breakdowns["alice"].total < world.config.rewards.survival_tick
 
 
 def test_rivalry_avoidance_reward() -> None:
@@ -197,9 +196,9 @@ def test_rivalry_avoidance_reward() -> None:
     )
 
     engine = RewardEngine(config)
-    rewards = engine.compute(world, dict.fromkeys(world.agents, False))
+    breakdowns = engine.compute(world, dict.fromkeys(world.agents, False))
 
-    assert rewards["alice"] > config.rewards.survival_tick
+    assert breakdowns["alice"].total > config.rewards.survival_tick
 
 
 def test_episode_clip_enforced() -> None:
@@ -210,12 +209,12 @@ def test_episode_clip_enforced() -> None:
     clip_episode = world.config.rewards.clip.clip_per_episode
     rewards = []
     for _ in range(10):
-        rewards.append(engine.compute(world, terminated={})["alice"])
+        rewards.append(engine.compute(world, terminated={})["alice"].total)
     assert sum(rewards) <= clip_episode
     # Reset episode totals on termination
     engine.compute(world, terminated={"alice": True})
     # After reset the agent should accrue rewards again (bounded by tick clip)
-    next_reward = engine.compute(world, terminated={})["alice"]
+    next_reward = engine.compute(world, terminated={})["alice"].total
     assert next_reward >= -world.config.rewards.clip.clip_per_tick
 
 
@@ -254,20 +253,19 @@ def test_wage_and_punctuality_bonus(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     engine = RewardEngine(config)
-    reward = engine.compute(world, terminated={})["alice"]
+    breakdown = engine.compute(world, terminated={})["alice"]
     base = config.rewards.survival_tick  # needs all satisfied so only survival tick
     expected = (
         base
         + context["wages_paid"]
         + (config.rewards.punctuality_bonus * context["punctuality_bonus"])
     )
-    assert reward == pytest.approx(expected)
-    breakdown = engine.latest_reward_breakdown()["alice"]
-    assert breakdown["wage"] == context["wages_paid"]
-    assert breakdown["punctuality"] == pytest.approx(
+    assert breakdown.total == pytest.approx(expected)
+    assert breakdown.wage == context["wages_paid"]
+    assert breakdown.punctuality == pytest.approx(
         config.rewards.punctuality_bonus * context["punctuality_bonus"]
     )
-    assert breakdown["total"] == pytest.approx(reward)
+    assert breakdown.total == pytest.approx(expected)
 
 
 def test_terminal_penalty_applied_for_faint() -> None:
@@ -282,14 +280,13 @@ def test_terminal_penalty_applied_for_faint() -> None:
     engine = RewardEngine(config)
     terminated = {"alice": True}
     reasons = {"alice": "faint"}
-    reward = engine.compute(world, terminated, reasons)["alice"]
+    breakdown = engine.compute(world, terminated, reasons)["alice"]
     raw_expected = config.rewards.survival_tick + config.rewards.faint_penalty
     clip = config.rewards.clip.clip_per_tick
     expected = max(min(raw_expected, clip), -clip)
-    assert reward == pytest.approx(expected)
-    breakdown = engine.latest_reward_breakdown()["alice"]
-    assert breakdown["terminal_penalty"] == pytest.approx(config.rewards.faint_penalty)
-    assert breakdown["clip_adjustment"] == pytest.approx(expected - raw_expected)
+    assert breakdown.total == pytest.approx(expected)
+    assert breakdown.terminal_penalty == pytest.approx(config.rewards.faint_penalty)
+    assert breakdown.clip_adjustment == pytest.approx(expected - raw_expected)
 
 
 
@@ -305,14 +302,13 @@ def test_terminal_penalty_applied_for_eviction() -> None:
     engine = RewardEngine(config)
     terminated = {"alice": True}
     reasons = {"alice": "eviction"}
-    reward = engine.compute(world, terminated, reasons)["alice"]
+    breakdown = engine.compute(world, terminated, reasons)["alice"]
     raw_expected = config.rewards.survival_tick + config.rewards.eviction_penalty
     clip = config.rewards.clip.clip_per_tick
     expected = max(min(raw_expected, clip), -clip)
-    assert reward == pytest.approx(expected)
-    breakdown = engine.latest_reward_breakdown()["alice"]
-    assert breakdown["terminal_penalty"] == pytest.approx(config.rewards.eviction_penalty)
-    assert breakdown["clip_adjustment"] == pytest.approx(expected - raw_expected)
+    assert breakdown.total == pytest.approx(expected)
+    assert breakdown.terminal_penalty == pytest.approx(config.rewards.eviction_penalty)
+    assert breakdown.clip_adjustment == pytest.approx(expected - raw_expected)
 
 
 def test_positive_rewards_blocked_within_death_window() -> None:
@@ -325,16 +321,16 @@ def test_positive_rewards_blocked_within_death_window() -> None:
         wallet=1.0,
     )
     engine = RewardEngine(config)
-    baseline = engine.compute(world, {"alice": False})["alice"]
+    baseline = engine.compute(world, {"alice": False})["alice"].total
     assert baseline > 0
 
     window = int(config.rewards.clip.no_positive_within_death_ticks)
     engine.compute(world, {"alice": True})
     for _offset in range(1, window):
         world.tick += 1
-        reward = engine.compute(world, {"alice": False})["alice"]
+        reward = engine.compute(world, {"alice": False})["alice"].total
         assert reward <= 0.0
 
     world.tick += window + 1
-    reward = engine.compute(world, {"alice": False})["alice"]
+    reward = engine.compute(world, {"alice": False})["alice"].total
     assert reward == pytest.approx(baseline)

@@ -1203,7 +1203,7 @@ def create_console_router(
             "valid": True,
             "config_id": state.config_id,
             "tick": state.tick,
-            "migrations_applied": list(state.migrations.get("applied", [])),
+            "migrations_applied": list(state.migrations.applied),
         }
 
     def snapshot_migrate_handler(command: ConsoleCommand) -> object:
@@ -1228,7 +1228,7 @@ def create_console_router(
                 "message": str(exc),
                 "path": str(path),
             }
-        applied = list(state.migrations.get("applied", []))
+        applied = list(state.migrations.applied)
         publisher.record_snapshot_migrations(applied)
         output_arg = command.kwargs.get("output")
         saved_path: Path | None = None

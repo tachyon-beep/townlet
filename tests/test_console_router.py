@@ -5,6 +5,7 @@ from typing import Any
 
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.dto.telemetry import TelemetryEventDTO
+from townlet.dto.world import SimulationSnapshot, IdentitySnapshot
 from townlet.orchestration import ConsoleRouter
 from townlet.ports.telemetry import TelemetrySink
 from townlet.ports.world import WorldRuntime
@@ -12,7 +13,7 @@ from townlet.ports.world import WorldRuntime
 
 class _StubWorld(WorldRuntime):
     def __init__(self) -> None:
-        self.snapshots: list[dict[str, Any]] = []
+        self.snapshots: list[SimulationSnapshot] = []
 
     def reset(self, seed: int | None = None) -> None:  # pragma: no cover - unused
         _ = seed
@@ -30,10 +31,18 @@ class _StubWorld(WorldRuntime):
     def apply_actions(self, actions: Mapping[str, Any]) -> None:  # pragma: no cover - unused
         _ = actions
 
-    def snapshot(self) -> Mapping[str, Any]:
-        payload = {"tick": len(self.snapshots)}
-        self.snapshots.append(payload)
-        return payload
+    def snapshot(self) -> SimulationSnapshot:
+        snapshot = SimulationSnapshot(
+            config_id="test",
+            tick=len(self.snapshots),
+            agents={},
+            objects={},
+            queues={"active": {}, "queues": {}, "cooldowns": [], "stall_counts": {}},
+            employment={"exit_queue": [], "queue_timestamps": {}, "manual_exits": [], "exits_today": 0},
+            identity=IdentitySnapshot(config_id="test"),
+        )
+        self.snapshots.append(snapshot)
+        return snapshot
 
     def queue_console(self, operations):  # type: ignore[override]
         _ = operations
@@ -71,7 +80,11 @@ def test_console_router_emits_snapshot_event() -> None:
     assert name == "console.result"
     assert payload["result"]["status"] == "ok"
     assert payload["result"]["tick"] == 7
-    assert payload["result"]["result"] == {"tick": 0}
+    # Snapshot is converted to dict via model_dump()
+    result = payload["result"]["result"]
+    assert isinstance(result, dict)
+    assert result["tick"] == 0
+    assert result["config_id"] == "test"
 
 
 def test_console_router_handles_unknown_command() -> None:

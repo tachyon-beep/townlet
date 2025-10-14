@@ -12,7 +12,12 @@ from townlet.dto.observations import (
     GlobalObservationDTO,
     ObservationEnvelope,
 )
-from townlet.snapshots.state import SnapshotState
+from townlet.dto.world import (
+    EmploymentSnapshot,
+    IdentitySnapshot,
+    QueueSnapshot,
+    SimulationSnapshot,
+)
 from townlet.world.runtime import RuntimeStepResult
 
 
@@ -118,7 +123,16 @@ def stub_world_adapter(monkeypatch):
     monkeypatch.setattr("townlet.snapshots.state.ensure_world_adapter", _ensure)
     def _snapshot_from_world(config, world, **kwargs):  # type: ignore[override]
         tick = getattr(world, "tick", 0)
-        return SnapshotState(config_id="test", tick=tick)
+        return SimulationSnapshot(
+            config_id="test",
+            tick=tick,
+            agents={},
+            objects={},
+            queues=QueueSnapshot(),
+            employment=EmploymentSnapshot(),
+            relationships={},
+            identity=IdentitySnapshot(config_id="test"),
+        )
 
     monkeypatch.setattr("townlet.adapters.world_default.snapshot_from_world", _snapshot_from_world)
     return sentinel
@@ -189,12 +203,12 @@ def test_default_world_adapter_snapshot_includes_tick_and_events(
     adapter.tick(tick=3, console_operations=None, action_provider=None, policy_actions=None)
 
     snapshot = adapter.snapshot()
-    assert isinstance(snapshot, SnapshotState)
+    assert isinstance(snapshot, SimulationSnapshot)
     assert snapshot.tick == 3
-    assert snapshot.promotion == {}
+    assert snapshot.promotion.state == "monitoring"
     assert adapter._last_events == []  # type: ignore[attr-defined]
 
     # Subsequent snapshot should not alter cached events
     follow_up = adapter.snapshot()
-    assert isinstance(follow_up, SnapshotState)
+    assert isinstance(follow_up, SimulationSnapshot)
     assert adapter._last_events == []  # type: ignore[attr-defined]

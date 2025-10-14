@@ -16,7 +16,6 @@ from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.dto.world import SimulationSnapshot
 from townlet.ports.telemetry import TelemetrySink
 from townlet.ports.world import WorldRuntime
-from townlet.snapshots.state import SnapshotState
 
 ConsoleHandler = Callable[[ConsoleCommandEnvelope], Any]
 
@@ -183,8 +182,6 @@ class ConsoleRouter:
         # Convert snapshot DTOs to dict for console result serialization
         if isinstance(payload, SimulationSnapshot):
             payload = payload.model_dump()
-        elif isinstance(payload, SnapshotState):
-            payload = payload.as_dict()
         return ConsoleCommandResult.ok(envelope, payload, tick=tick)
 
 

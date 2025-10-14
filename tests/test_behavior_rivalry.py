@@ -93,8 +93,8 @@ def test_scripted_behavior_initiates_chat_when_conditions_met() -> None:
 
     world.record_chat_success("alice", "bob", quality=intent.quality or 1.0)
     engine = RewardEngine(config)
-    rewards = engine.compute(world, dict.fromkeys(world.agents, False))
-    assert rewards["alice"] > config.rewards.survival_tick
+    breakdowns = engine.compute(world, dict.fromkeys(world.agents, False))
+    assert breakdowns["alice"].total > config.rewards.survival_tick
 
 
 def test_scripted_behavior_avoids_chat_when_relationships_disabled() -> None:

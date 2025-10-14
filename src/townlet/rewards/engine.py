@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 
 from townlet.agents.models import PersonalityProfile, PersonalityProfiles
 from townlet.config import SimulationConfig
+from townlet.dto.rewards import RewardBreakdown
 from townlet.world.grid import WorldState
 from townlet.world.observations.context import agent_context as observation_agent_context
 from townlet.utils.coerce import coerce_float
@@ -35,7 +36,7 @@ class RewardEngine:
         world: WorldState,
         terminated: dict[str, bool],
         reasons: Mapping[str, str] | None = None,
-    ) -> dict[str, float]:
+    ) -> dict[str, RewardBreakdown]:
         rewards: dict[str, float] = {}
         clip_cfg = self.config.rewards.clip
         clip_value = clip_cfg.clip_per_tick
@@ -64,7 +65,8 @@ class RewardEngine:
         wage_rate = float(self.config.rewards.wage_rate)
         punctuality_bonus = float(self.config.rewards.punctuality_bonus)
 
-        breakdowns: dict[str, dict[str, float]] = {}
+        breakdowns: dict[str, RewardBreakdown] = {}
+        legacy_breakdowns: dict[str, dict[str, float]] = {}
 
         for agent_id, snapshot in world.agents.items():
             components: dict[str, float] = {}
@@ -136,18 +138,44 @@ class RewardEngine:
                 total = new_total
             self._episode_totals[agent_id] = cumulative
 
-            rewards[agent_id] = total
-            components["clip_adjustment"] = (
-                guard_adjust + tick_clip_adjust + episode_clip_adjust
-            )
+            clip_adjustment = guard_adjust + tick_clip_adjust + episode_clip_adjust
+            components["clip_adjustment"] = clip_adjustment
             components["total"] = total
-            breakdowns[agent_id] = components
 
-        self._latest_breakdown = breakdowns
+            # Construct RewardBreakdown DTO
+            breakdown = RewardBreakdown(
+                agent_id=agent_id,
+                tick=current_tick,
+                total=total,
+                # Aggregates
+                homeostasis=components["survival"] + components["needs_penalty"],
+                work=components["wage"] + components["punctuality"],
+                social=components["social"],
+                shaping=0.0,
+                # Explicit components
+                survival=components["survival"],
+                needs_penalty=components["needs_penalty"],
+                wage=components["wage"],
+                punctuality=components["punctuality"],
+                social_bonus=components["social_bonus"],
+                social_penalty=components["social_penalty"],
+                social_avoidance=components["social_avoidance"],
+                terminal_penalty=components["terminal_penalty"],
+                clip_adjustment=clip_adjustment,
+                # Metadata
+                needs=dict(snapshot.needs),
+                guardrail_active=(guard_adjust != 0.0),
+                clipped=(tick_clip_adjust != 0.0 or episode_clip_adjust != 0.0),
+            )
+
+            breakdowns[agent_id] = breakdown
+            legacy_breakdowns[agent_id] = components
+
+        self._latest_breakdown = legacy_breakdowns
         self._latest_social_events = self._prepare_social_event_log(
             chat_events, avoidance_events
         )
-        return rewards
+        return breakdowns
 
     # ------------------------------------------------------------------
     # Internal helpers

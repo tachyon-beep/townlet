@@ -17,7 +17,12 @@ from townlet.dto.observations import (
     GlobalObservationDTO,
     ObservationEnvelope,
 )
-from townlet.snapshots.state import SnapshotState
+from townlet.dto.world import (
+    EmploymentSnapshot,
+    IdentitySnapshot,
+    QueueSnapshot,
+    SimulationSnapshot,
+)
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.testing import DummyTelemetrySink
 from townlet.world.runtime import RuntimeStepResult
@@ -237,11 +242,30 @@ class _DummyRewardEngine:
         world: _DummyWorldState,
         terminated: Mapping[str, bool],
         termination_reasons: Mapping[str, str],
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:  # Returns dict[str, RewardBreakdown] but use Any to avoid import
         _ = (terminated, termination_reasons)
-        rewards = dict.fromkeys(world.agents, 0.0)
+        # Return RewardBreakdown DTOs (import here to avoid circular dependency)
+        from townlet.dto.rewards import RewardBreakdown
+
+        breakdowns = {}
+        for agent_id in world.agents:
+            breakdowns[agent_id] = RewardBreakdown(
+                agent_id=agent_id,
+                tick=world.tick,
+                total=0.0,
+                homeostasis=0.0,
+                work=0.0,
+                social=0.0,
+                survival=0.0,
+                needs_penalty=0.0,
+                wage=0.0,
+                punctuality=0.0,
+                needs={},
+            )
+
+        # Keep legacy breakdown for compatibility
         self._latest_breakdown = {agent_id: {"base": 0.0} for agent_id in world.agents}
-        return rewards
+        return breakdowns
 
     def latest_reward_breakdown(self) -> Mapping[str, Mapping[str, float]]:
         return copy.deepcopy(self._latest_breakdown)
@@ -422,8 +446,17 @@ class _LoopDummyWorldRuntime:
     def apply_actions(self, actions: Mapping[str, Any]) -> None:  # pragma: no cover - deterministic
         self._last_actions = dict(actions)
 
-    def snapshot(self) -> SnapshotState:
-        return SnapshotState(config_id=self._world.config_id, tick=self._world.tick)
+    def snapshot(self) -> SimulationSnapshot:
+        return SimulationSnapshot(
+            config_id=self._world.config_id,
+            tick=self._world.tick,
+            agents={},
+            objects={},
+            queues=QueueSnapshot(),
+            employment=EmploymentSnapshot(),
+            relationships={},
+            identity=IdentitySnapshot(config_id=self._world.config_id),
+        )
 
     def transport_status(self) -> Mapping[str, Any]:  # pragma: no cover - deterministic
         return {"provider": "dummy", "queue_length": 0, "dropped_messages": 0}

@@ -9,7 +9,6 @@ from .migrations import register_migration
 from .migrations import registry as migration_registry
 from .state import (
     SnapshotManager,
-    SnapshotState,
     apply_snapshot_to_telemetry,
     apply_snapshot_to_world,
     snapshot_from_world,
@@ -18,7 +17,6 @@ from .state import (
 __all__ = [
     "SimulationSnapshot",
     "SnapshotManager",
-    "SnapshotState",
     "apply_snapshot_to_telemetry",
     "apply_snapshot_to_world",
     "clear_migration_registry",

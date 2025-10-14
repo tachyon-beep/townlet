@@ -6,7 +6,6 @@ import json
 import logging
 import random
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -66,212 +65,6 @@ def _parse_version(value: str) -> tuple[int, ...]:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SnapshotState:
-    config_id: str
-    tick: int
-    agents: dict[str, dict[str, Any]] = field(default_factory=dict)
-    objects: dict[str, dict[str, Any]] = field(default_factory=dict)
-    queues: dict[str, Any] = field(default_factory=dict)
-    embeddings: dict[str, Any] = field(default_factory=dict)
-    employment: dict[str, Any] = field(default_factory=dict)
-    lifecycle: dict[str, Any] = field(default_factory=dict)
-    rng_state: str | None = None
-    rng_streams: dict[str, str] = field(default_factory=dict)
-    telemetry: dict[str, Any] = field(default_factory=dict)
-    console_buffer: list[Any] = field(default_factory=list)
-    perturbations: dict[str, Any] = field(default_factory=dict)
-    affordances: dict[str, Any] = field(default_factory=dict)
-    relationships: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
-    relationship_metrics: dict[str, Any] = field(default_factory=dict)
-    stability: dict[str, Any] = field(default_factory=dict)
-    promotion: dict[str, Any] = field(default_factory=dict)
-    identity: dict[str, Any] = field(default_factory=dict)
-    migrations: dict[str, Any] = field(default_factory=lambda: {"applied": [], "required": []})
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "config_id": self.config_id,
-            "tick": self.tick,
-            "agents": {agent_id: dict(payload) for agent_id, payload in self.agents.items()},
-            "objects": {object_id: dict(payload) for object_id, payload in self.objects.items()},
-            "queues": dict(self.queues),
-            "embeddings": dict(self.embeddings),
-            "employment": dict(self.employment),
-            "lifecycle": dict(self.lifecycle),
-            "rng_state": self.rng_state,
-            "rng_streams": dict(self.rng_streams),
-            "telemetry": dict(self.telemetry),
-            "console_buffer": list(self.console_buffer),
-            "perturbations": dict(self.perturbations),
-            "affordances": dict(self.affordances),
-            "relationships": {
-                owner: {other: dict(values) for other, values in edges.items()} for owner, edges in self.relationships.items()
-            },
-            "relationship_metrics": dict(self.relationship_metrics),
-            "stability": dict(self.stability),
-            "promotion": dict(self.promotion),
-            "identity": dict(self.identity),
-            "migrations": dict(self.migrations),
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> SnapshotState:
-        if "config_id" not in payload or "tick" not in payload:
-            raise ValueError("Snapshot payload missing required fields")
-        config_id = str(payload["config_id"])
-        tick_value = payload["tick"]
-        if not isinstance(tick_value, (int, float, str)):
-            raise TypeError("Snapshot tick must be numeric")
-        tick = int(tick_value)
-        agents_obj = payload.get("agents", {})
-        if not isinstance(agents_obj, Mapping):
-            raise ValueError("Snapshot agents field must be a mapping")
-        agents: dict[str, dict[str, Any]] = {str(agent_id): dict(data) for agent_id, data in agents_obj.items()}
-
-        objects_obj = payload.get("objects", {})
-        if not isinstance(objects_obj, Mapping):
-            raise ValueError("Snapshot objects field must be a mapping")
-        objects: dict[str, dict[str, Any]] = {str(object_id): dict(data) for object_id, data in objects_obj.items()}
-
-        queues_payload = payload.get("queues", {})
-        if isinstance(queues_payload, Mapping):
-            queues: dict[str, Any] = dict(queues_payload)
-        else:
-            queues = {}
-
-        embeddings_payload = payload.get("embeddings", {})
-        if isinstance(embeddings_payload, Mapping):
-            embeddings: dict[str, Any] = dict(embeddings_payload)
-        else:
-            embeddings = {}
-
-        employment_payload = payload.get("employment", {})
-        if isinstance(employment_payload, Mapping):
-            employment: dict[str, Any] = dict(employment_payload)
-        else:
-            employment = {}
-
-        lifecycle_payload = payload.get("lifecycle", {})
-        if isinstance(lifecycle_payload, Mapping):
-            lifecycle: dict[str, Any] = dict(lifecycle_payload)
-        else:
-            lifecycle = {}
-
-        rng_state = payload.get("rng_state")
-        rng_state_str: str | None
-        if isinstance(rng_state, str):
-            rng_state_str = rng_state
-        else:
-            rng_state_str = None
-
-        rng_streams_payload = payload.get("rng_streams", {})
-        if isinstance(rng_streams_payload, Mapping):
-            rng_streams: dict[str, str] = {str(name): str(data) for name, data in rng_streams_payload.items() if isinstance(data, str)}
-        else:
-            rng_streams = {}
-        if rng_state_str and "world" not in rng_streams:
-            rng_streams["world"] = rng_state_str
-
-        telemetry_payload = payload.get("telemetry", {})
-        telemetry: dict[str, Any] = dict(telemetry_payload) if isinstance(telemetry_payload, Mapping) else {}
-
-        console_buffer_payload = payload.get("console_buffer", [])
-        if isinstance(console_buffer_payload, list):
-            console_buffer = list(console_buffer_payload)
-        else:
-            console_buffer = []
-
-        perturbations_payload = payload.get("perturbations", {})
-        if isinstance(perturbations_payload, Mapping):
-            perturbations: dict[str, Any] = dict(perturbations_payload)
-        else:
-            perturbations = {}
-
-        if "relationships" not in payload:
-            raise ValueError("Snapshot payload missing relationships field")
-        relationships_obj = payload["relationships"]
-        if not isinstance(relationships_obj, Mapping):
-            raise ValueError("Snapshot relationships field must be a mapping")
-        relationships: dict[str, dict[str, dict[str, float]]] = {}
-        for owner, edges in relationships_obj.items():
-            if not isinstance(edges, Mapping):
-                raise ValueError("Relationship edges must be mappings")
-            owner_id = str(owner)
-            owner_edges: dict[str, dict[str, float]] = {}
-            for other, values in edges.items():
-                if isinstance(values, Mapping):
-                    owner_edges[str(other)] = {
-                        "trust": float(values.get("trust", 0.0)),
-                        "familiarity": float(values.get("familiarity", 0.0)),
-                        "rivalry": float(values.get("rivalry", 0.0)),
-                    }
-                else:
-                    # Backwards-compatibility for legacy scalar snapshots.
-                    scalar = float(values)
-                    owner_edges[str(other)] = {
-                        "trust": scalar,
-                        "familiarity": 0.0,
-                        "rivalry": 0.0,
-                    }
-            relationships[owner_id] = owner_edges
-
-        metrics_payload = payload.get("relationship_metrics", {})
-        if isinstance(metrics_payload, Mapping):
-            relationship_metrics: dict[str, Any] = dict(metrics_payload)
-        elif metrics_payload in (None,):
-            relationship_metrics = {}
-        else:
-            raise ValueError("Snapshot relationship_metrics field must be a mapping if provided")
-        affordances_payload = payload.get("affordances", {})
-        if isinstance(affordances_payload, Mapping):
-            affordances: dict[str, Any] = {
-                str(object_id): dict(data) if isinstance(data, Mapping) else {} for object_id, data in affordances_payload.items()
-            }
-        else:
-            affordances = {}
-        stability_payload = payload.get("stability", {})
-        stability: dict[str, Any] = dict(stability_payload) if isinstance(stability_payload, Mapping) else {}
-
-        promotion_payload = payload.get("promotion", {})
-        promotion: dict[str, Any] = dict(promotion_payload) if isinstance(promotion_payload, Mapping) else {}
-
-        identity_payload = payload.get("identity", {})
-        if isinstance(identity_payload, Mapping):
-            identity: dict[str, Any] = dict(identity_payload)
-        else:
-            identity = {"config_id": config_id}
-
-        migrations_payload = payload.get("migrations", {})
-        if isinstance(migrations_payload, Mapping):
-            migrations: dict[str, Any] = dict(migrations_payload)
-        else:
-            migrations = {"applied": [], "required": []}
-
-        return cls(
-            config_id=config_id,
-            tick=tick,
-            agents=agents,
-            objects=objects,
-            queues=queues,
-            embeddings=embeddings,
-            employment=employment,
-            lifecycle=lifecycle,
-            rng_state=rng_state_str,
-            rng_streams=rng_streams,
-            telemetry=telemetry,
-            console_buffer=console_buffer,
-            perturbations=perturbations,
-            affordances=affordances,
-            relationships=relationships,
-            relationship_metrics=relationship_metrics,
-            stability=stability,
-            promotion=promotion,
-            identity=identity,
-            migrations=migrations,
-        )
-
-
 def snapshot_from_world(
     config: SimulationConfig,
     world: WorldState,
@@ -291,6 +84,11 @@ def snapshot_from_world(
     # Build AgentSummary DTOs
     agents: dict[str, AgentSummary] = {}
     for agent_id, agent_snapshot in adapter.agent_snapshots_view().items():
+        # Filter out internal fields (starting with _) from inventory
+        clean_inventory = {
+            k: int(v) for k, v in agent_snapshot.inventory.items()
+            if not k.startswith('_') and isinstance(v, (int, float))
+        }
         agents[agent_id] = AgentSummary(
             agent_id=agent_id,
             position=agent_snapshot.position,
@@ -302,7 +100,7 @@ def snapshot_from_world(
                 "ambition": float(agent_snapshot.personality.ambition),
             },
             personality_profile=agent_snapshot.personality_profile,
-            inventory=dict(agent_snapshot.inventory),
+            inventory=clean_inventory,
             job_id=agent_snapshot.job_id,
             on_shift=bool(agent_snapshot.on_shift),
             lateness_counter=int(agent_snapshot.lateness_counter),
@@ -788,24 +586,24 @@ class SnapshotManager:
                     required=[f"{state.config_id}->{config.config_id}"],
                 )
                 return state
-            # For actual migration, convert to legacy SnapshotState temporarily
-            # TODO: Update migration system to work with SimulationSnapshot in later phase
-            legacy_state = SnapshotState.from_dict(state_payload)
+            # Apply migrations using dict-based migration system
+            migrated_dict = dict(state_payload)
             try:
-                migration_path = migration_registry.find_path(legacy_state.config_id, config.config_id)
+                migration_path = migration_registry.find_path(state.config_id, config.config_id)
             except MigrationNotFoundError as exc:
-                raise ValueError(f"Snapshot config_id mismatch: expected {config.config_id}, got {legacy_state.config_id}") from exc
+                raise ValueError(f"Snapshot config_id mismatch: expected {config.config_id}, got {state.config_id}") from exc
             try:
-                legacy_state, applied = migration_registry.apply_path(migration_path, legacy_state, config)
+                migrated_dict, applied = migration_registry.apply_path(migration_path, migrated_dict, config)
             except MigrationExecutionError as exc:
                 raise ValueError("Snapshot migration failed") from exc
-            if legacy_state.config_id != config.config_id:
+            final_config_id = migrated_dict.get("config_id", "")
+            if final_config_id != config.config_id:
                 raise ValueError(
                     f"Snapshot migration chain did not reach target config_id {config.config_id} "
-                    f"(ended at {legacy_state.config_id})"
+                    f"(ended at {final_config_id})"
                 )
-            # Convert back to SimulationSnapshot after migration
-            state = SimulationSnapshot.model_validate(legacy_state.as_dict())
+            # Deserialize migrated dict to SimulationSnapshot
+            state = SimulationSnapshot.model_validate(migrated_dict)
             # Update migrations metadata
             applied_list = list(state.migrations.applied)
             applied_list.extend(applied)

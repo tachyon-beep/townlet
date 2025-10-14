@@ -560,13 +560,19 @@ class SimulationLoop:
             lifecycle=self.lifecycle,
         )
         apply_snapshot_to_telemetry(self.telemetry, state)
-        self.perturbations.import_state(state.perturbations)
+        # Convert perturbations DTO to dict for import_state
+        perturbations_dict = state.perturbations.model_dump() if hasattr(state.perturbations, 'model_dump') else state.perturbations
+        self.perturbations.import_state(perturbations_dict)
         if state.stability:
-            self.stability.import_state(state.stability)
+            # Convert stability DTO to dict for import_state
+            stability_dict = state.stability.model_dump() if hasattr(state.stability, 'model_dump') else state.stability
+            self.stability.import_state(stability_dict)
         else:
             self.stability.reset_state()
         if state.promotion:
-            self.promotion.import_state(state.promotion)
+            # Convert promotion DTO to dict for import_state
+            promotion_dict = state.promotion.model_dump() if hasattr(state.promotion, 'model_dump') else state.promotion
+            self.promotion.import_state(promotion_dict)
         else:
             self.promotion.reset()
         stability_metrics = self.stability.latest_metrics()
@@ -692,8 +698,29 @@ class SimulationLoop:
                         metadata=TelemetryMetadata(),
                     )
                     port.emit_event(event)
-            rewards = self.rewards.compute(self.world, terminated, termination_reasons)
-            reward_breakdown = self.rewards.latest_reward_breakdown()
+            reward_dtos = self.rewards.compute(self.world, terminated, termination_reasons)
+            # Extract totals for policy backend (backward compatible)
+            rewards = {agent_id: dto.total for agent_id, dto in reward_dtos.items()}
+            # Serialize only numeric component fields for telemetry (backward compatible)
+            reward_breakdown = {
+                agent_id: {
+                    "total": dto.total,
+                    "homeostasis": dto.homeostasis,
+                    "shaping": dto.shaping,
+                    "work": dto.work,
+                    "social": dto.social,
+                    "survival": dto.survival,
+                    "needs_penalty": dto.needs_penalty,
+                    "wage": dto.wage,
+                    "punctuality": dto.punctuality,
+                    "social_bonus": dto.social_bonus,
+                    "social_penalty": dto.social_penalty,
+                    "social_avoidance": dto.social_avoidance,
+                    "terminal_penalty": dto.terminal_penalty,
+                    "clip_adjustment": dto.clip_adjustment,
+                }
+                for agent_id, dto in reward_dtos.items()
+            }
             if controller is not None:
                 controller.post_step(rewards, terminated)
             else:  # pragma: no cover - defensive

@@ -57,19 +57,25 @@ The simulation follows a **ports-and-adapters pattern** with three main runtime 
 
 These are wired together by `SimulationLoop` (`src/townlet/core/sim_loop.py`), which orchestrates the tick sequence and delegates to factories (`src/townlet/factories/`) that resolve provider names (e.g., `"scripted"`, `"pytorch"`, `"stdout"`) into concrete implementations.
 
-### Architectural Refactoring (In Progress)
+### Architectural Refactoring (Complete ✅)
 
-The codebase is undergoing a major architectural improvement initiative documented in `docs/architecture_review/`. Three work packages (WP1, WP2, WP3) are introducing:
+The codebase has completed a major architectural improvement initiative documented in `docs/architecture_review/`. The completed work packages (WP1-4) introduced:
 
 - **WP1 (Complete)**: Minimal port protocols, registry-backed factories, and adapter pattern to decouple the simulation loop from concrete implementations (see ADR-001)
-- **WP2 (Complete)**: Modular world package with separated concerns (state, actions, observations, systems) behind the `WorldContext` façade (see ADR-002)
-- **WP3 (Stage 6)**: DTO-based boundaries using Pydantic models to replace dict-shaped payloads across telemetry, observations, and policy interfaces
+- **WP2 (Complete)**: Modular world package with separated concerns (state, actions, observations, systems) behind the `WorldRuntime` façade and `WorldContext` aggregator (see ADR-002)
+- **WP3 (Complete)**: DTO-based boundaries using Pydantic v2 models; observations, snapshots, policy, rewards, and telemetry DTOs complete (see ADR-003)
+- **WP4 (Complete)**: Strategy-based training architecture with modular BC/PPO/Anneal strategies and comprehensive policy DTOs (see ADR-004)
+- **WP4.1 (Complete)**: Reward DTO integration and WP1/WP2 documentation reconciliation with comprehensive architecture diagrams
+
+**Overall Progress**: 100% complete ✅ (All work packages delivered: WP1, WP2, WP3, WP3.2, WP4, WP4.1)
 
 **Key architectural documents:**
 - `docs/architecture_review/ARCHITECTURE_REVIEW_2.md` — Master architectural report with refactoring roadmap
 - `docs/architecture_review/ADR/ADR-001 - Port and Factory Registry.md` — Port contract definitions
 - `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` — World package structure
-- `docs/architecture_review/WP_TASKINGS/WP[1-3].md` — Work package specifications
+- `docs/architecture_review/ADR/ADR-003 - DTO Boundary.md` — DTO consolidation strategy and patterns
+- `docs/architecture_review/ADR/ADR-004 - Policy Training Strategies.md` — Training strategy architecture
+- `docs/architecture_review/WP_TASKINGS/` — Work package specifications and compliance assessment
 
 ### Simulation Tick Sequence
 
@@ -90,10 +96,11 @@ Each tick follows this order (see `SimulationLoop.step()` in `src/townlet/core/s
 ### Key Subsystems
 
 **World Model** (`src/townlet/world/`)
+- `runtime.py:WorldRuntime` — Façade implementing port protocol, delegates to WorldContext
+- `core/context.py:WorldContext` — Internal aggregator coordinating 13 services
 - `grid.py:WorldState` — 48×48 tile grid, agents, needs, inventory, economy
-- `affordances.py` — Declarative YAML-based action system (hot-reloadable)
-- `systems/employment.py` — Job assignment, shift windows, punctuality tracking
-- `runtime.py:WorldRuntime` — Facade that sequences world operations each tick
+- `affordances/` — Declarative YAML-based action system (hot-reloadable)
+- `systems/` — Domain systems (employment, economy, affordances, queues, relationships, perturbations)
 
 **Observations** (`src/townlet/observations/`, `src/townlet/world/observations/`)
 - Three variants (switchable via `features.observations`): `full`, `hybrid`, `compact`
@@ -127,6 +134,9 @@ Each tick follows this order (see `SimulationLoop.step()` in `src/townlet/core/s
 - `manager.py:SnapshotManager` — Save/load world + RNG streams + policy hash + config_id
 - Auto-migration support (`config.snapshot.migrations.auto_apply`)
 - Captures three RNG streams: `world`, `events`, `policy`
+- **DTO-based architecture**: Uses `SimulationSnapshot` DTO (Pydantic v2) with 11 nested subsystem DTOs
+- **Dict-based migrations**: Migrations operate on dicts, then final dict is validated into DTO
+- See `docs/architecture_review/ADR/ADR-003 - DTO Boundary.md` for DTO consolidation patterns
 
 **Telemetry** (`src/townlet/telemetry/`)
 - `publisher.py:TelemetryPublisher` — Pub/sub with buffering + backpressure
@@ -197,6 +207,25 @@ Critical design files (read when making architectural changes):
 - On load, `SnapshotManager` checks compatibility and applies migrations if enabled
 - Add migrations in `src/townlet/snapshots/migrations.py`
 
+**Working with DTOs (Pydantic v2):**
+- The codebase uses Pydantic v2 DTOs for typed boundaries (observations, snapshots, policy results)
+- Top-level DTO package: `townlet/dto/` (`observations.py`, `policy.py`, `world.py`)
+- **Serialization**: Use `.model_dump()` (NOT `.dict()` from Pydantic v1)
+- **Deserialization**: Use `.model_validate()` (NOT `.parse_obj()` from Pydantic v1)
+- **Attribute access**: DTOs use attribute access, **never** dictionary access
+  ```python
+  # ✅ CORRECT
+  applied = snapshot.migrations.applied
+  state = snapshot.promotion.state
+
+  # ❌ WRONG
+  applied = snapshot.migrations.get("applied", [])  # AttributeError!
+  state = snapshot["promotion"]["state"]            # TypeError!
+  ```
+- **Nested DTOs**: Complex DTOs (e.g., `SimulationSnapshot`) use nested composition for modular validation
+- **Migration integration**: Migrations operate on dicts, then final dict is validated into DTO
+- See ADR-003 for complete DTO consolidation patterns
+
 **Adding a config field:**
 - Update the Pydantic model in `src/townlet/config/`
 - Regenerate `docs/guides/CONFIG_REFERENCE.md`
@@ -218,9 +247,9 @@ Critical design files (read when making architectural changes):
 - **Reset LSTM state on hard context cuts** — Teleport, possess, death all require `ctx_reset_flag=True`
 - **No positive rewards near death** — Guardrail suppresses rewards within N ticks of termination
 - **Observation variant must be in policy hash** — Otherwise promotion breaks determinism
-- **Afford
-ance hooks must be idempotent** — They may retry on failure or rollback
+- **Affordance hooks must be idempotent** — They may retry on failure or rollback
 - **Console commands need validation** — Use `ConsoleCommandEnvelope.from_payload()` and handle `ConsoleCommandError`
+- **DTOs are not dictionaries** — Use attribute access (`dto.field`) not dict access (`dto["field"]` or `dto.get()`). Pydantic models will raise `AttributeError` or `TypeError` on dict-style access
 
 ## Debugging
 

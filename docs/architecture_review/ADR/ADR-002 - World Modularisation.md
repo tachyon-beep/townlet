@@ -25,7 +25,10 @@ observers such as telemetry, and drives all mutation through a deterministic tic
   ```
   townlet/world/
     __init__.py
-    context.py           # structural WorldRuntime façade
+    runtime.py           # WorldRuntime façade (implements port protocol)
+    core/
+      context.py         # WorldContext aggregator (internal)
+      runtime_adapter.py # Read-only adapter for observations
     state.py             # authoritative world state containers
     actions.py           # action schema, validation, apply pipeline
     observe.py           # read-only observation builders
@@ -39,9 +42,12 @@ observers such as telemetry, and drives all mutation through a deterministic tic
     errors.py            # world-specific exceptions
   ```
 
-- `context.WorldContext` composes these collaborators and provides the methods required by
-  `WorldRuntime` (`reset`, `tick`, `agents`, `observe`, `apply_actions`, `snapshot`). Structural
-  typing is sufficient; subclassing the protocol is optional.
+- `runtime.WorldRuntime` (the concrete implementation) composes these collaborators and provides
+  the methods required by the `WorldRuntime` port protocol (`tick`, `agents`, `observe`,
+  `apply_actions`, `snapshot`). Structural typing is used; subclassing the protocol is optional.
+
+- `core/context.WorldContext` is the internal aggregator that coordinates 13 domain services and
+  orchestrates the tick pipeline. It is used by `WorldRuntime`, not exposed at the port boundary.
 
 - The tick pipeline follows a strict order:
 
@@ -344,7 +350,12 @@ townlet/world/
 
 ### Architecture Diagram
 
-See `docs/architecture_review/diagrams/world_architecture.md` for visual representation.
+See [WP4.1/WORLD_PACKAGE_ARCHITECTURE.md](../WP_NOTES/WP4.1/WORLD_PACKAGE_ARCHITECTURE.md) for comprehensive architectural documentation including:
+- Module relationship diagram
+- Tick pipeline data flow
+- System responsibilities table
+- Module count by subsystem
+- Design patterns used
 
 ## Implementation Notes
 
@@ -425,5 +436,9 @@ All deviations enhance modularity, testability, and maintainability without comp
 
 ## Related Documents
 
-- `docs/architecture_review/WP_TASKINGS/WP1.md`
-- `docs/architecture_review/WP_TASKINGS/WP2.md`
+- `docs/architecture_review/WP_TASKINGS/WP1.md` — WP1 implementation checklist
+- `docs/architecture_review/WP_TASKINGS/WP2.md` — WP2 implementation checklist
+- [ADR-001: Port and Factory Registry](./ADR-001%20-%20Port%20and%20Factory%20Registry.md) — Port protocol pattern
+- [ADR-003: DTO Boundary](./ADR-003%20-%20DTO%20Boundary.md) — DTO enforcement at boundaries
+- [WP4.1/WORLD_PACKAGE_ARCHITECTURE.md](../WP_NOTES/WP4.1/WORLD_PACKAGE_ARCHITECTURE.md) — Detailed architecture documentation
+- [WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md](../WP_NOTES/WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md) — Runtime/Context architecture analysis
