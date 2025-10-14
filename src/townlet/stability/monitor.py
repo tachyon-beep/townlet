@@ -143,7 +143,7 @@ class StabilityMonitor:
 
         # Delegate to RivalryTracker
         rivalry_metrics = self._rivalry.analyze(
-            tick=tick, rivalry_events=rivalry_events
+            tick=tick, rivalry_events=list(rivalry_events) if rivalry_events else None
         )
         rivalry_alert = self._rivalry.check_alert()
         if rivalry_alert:
