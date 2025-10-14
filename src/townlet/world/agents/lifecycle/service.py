@@ -66,7 +66,7 @@ class LifecycleService:
 
         wallet_value = float(wallet) if wallet is not None else 0.0
         resolved_needs = dict(needs or {})
-        profile_name = personality_profile or ""
+        profile_name = personality_profile or "balanced"  # Default to "balanced" (required by DTO validation)
 
         snapshot = AgentSnapshot(
             agent_id=agent_id,

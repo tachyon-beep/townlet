@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, cast
 from townlet.agents.models import Personality, personality_from_profile
 from townlet.config import SimulationConfig
 from townlet.core.interfaces import TelemetrySinkProtocol
-from townlet.core.utils import is_stub_telemetry
 from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.telemetry.fallback import is_stub_telemetry
 from townlet.dto.world import (
     AffordanceSnapshot,
     AgentSummary,

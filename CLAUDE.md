@@ -28,6 +28,7 @@ pytest path/to/test_file.py::test_function_name  # Run a single test
 ```bash
 ruff check src tests           # Lint
 mypy src                       # Type check
+lint-imports                   # Import boundary enforcement (5 contracts)
 scripts/check_docstrings.py src/townlet --min-module 95 --min-callable 40  # Docstring coverage
 ```
 
@@ -194,6 +195,40 @@ Critical design files (read when making architectural changes):
 - Feature flags (`features.*`) guard work-in-progress; no ad-hoc conditionals
 - Modules should be small and cohesive; cross-module interactions via dataclasses/protocols
 - Tag design references in comments: `# DESIGN#4.1` links to spec section
+
+## Import Boundary Enforcement
+
+The codebase enforces architectural boundaries using `import-linter` with 5 contracts:
+
+**Enforced Boundaries**:
+1. **DTO Independence** — DTOs must not import concrete implementations
+2. **Layered Architecture** — Enforces domain → core → ports → dto hierarchy
+3. **World/Policy Separation** — Prevents bidirectional coupling
+4. **Policy/Telemetry Separation** — Prevents direct coupling (indirect paths allowed)
+5. **Config DTO-Only** — Config only imports DTOs and minimal snapshots
+
+**How to Work with Boundaries**:
+- Run `lint-imports` before committing to check for violations
+- CI blocks PRs with new import violations
+- All exceptions are documented in `.importlinter` with architectural rationale
+- See `docs/architecture_review/IMPORT_EXCEPTIONS.md` for exception registry
+- Reference ADR-001 (Ports & Adapters), ADR-002 (World Modularization), ADR-003 (DTO Boundaries)
+
+**Adding New Exceptions**:
+If you need to add a legitimate architectural dependency that violates a contract:
+1. Identify which contract is violated and why the import is necessary
+2. Determine the architectural pattern (factory, composition, orchestration, etc.)
+3. Add the exception to `.importlinter` under the appropriate contract's `ignore_imports`
+4. Add a comment explaining the rationale with ADR reference
+5. Update `docs/architecture_review/IMPORT_EXCEPTIONS.md` with full documentation
+
+**Common Exception Patterns**:
+- **Factory Pattern**: Factories must import what they instantiate (allowed)
+- **Orchestration**: SimulationLoop owns domain objects for coordination (allowed)
+- **Composition**: Parent objects own child components (allowed)
+- **Cross-Cutting**: Snapshots serialize all subsystems (allowed)
+- **Same Layer**: Domain modules can import each other (policy → world allowed)
+- **Indirect Paths**: policy → core → telemetry is acceptable (not direct coupling)
 
 ## Common Patterns
 

@@ -194,3 +194,20 @@ class StubTelemetrySink(TelemetrySinkProtocol):
 
     def close(self) -> None:
         self._latest_console_events.clear()
+
+
+def is_stub_telemetry(telemetry: TelemetrySinkProtocol, provider: str | None = None) -> bool:
+    """Check if a telemetry sink is a stub implementation.
+
+    Args:
+        telemetry: Telemetry sink to check
+        provider: Optional provider name hint
+
+    Returns:
+        True if telemetry is a stub sink
+    """
+    if isinstance(telemetry, StubTelemetrySink):
+        return True
+    if provider is None:
+        return False
+    return provider == "stub"

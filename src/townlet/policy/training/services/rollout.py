@@ -65,7 +65,7 @@ class RolloutCaptureService:
             ValueError: If ticks <= 0 or no agents available.
         """
         from townlet.core.sim_loop import SimulationLoop
-        from townlet.core.utils import is_stub_policy, policy_provider_name
+        from townlet.core.utils import policy_provider_name
         from townlet.policy.rollout import RolloutBuffer
         from townlet.policy.scenario_utils import (
             apply_scenario,
@@ -75,6 +75,8 @@ class RolloutCaptureService:
 
         if ticks <= 0:
             raise ValueError("ticks must be positive to capture a rollout")
+
+        from townlet.policy.fallback import is_stub_policy
 
         # Create simulation loop
         loop = SimulationLoop(self.config)
@@ -108,15 +110,20 @@ class RolloutCaptureService:
         # Run simulation and capture frames
         for _ in range(ticks):
             loop.step()
-            frames = loop.policy.collect_trajectory(clear=True)
-            if frames:
-                buffer.extend(frames)
+            # collect_trajectory is not part of PolicyBackendProtocol
+            collect_method = getattr(loop.policy, "collect_trajectory", None)
+            if callable(collect_method):
+                frames = collect_method(clear=True)
+                if frames:
+                    buffer.extend(frames)
             buffer.record_events(loop.telemetry.latest_events())
 
         # Collect any leftover frames
-        leftover_frames = loop.policy.collect_trajectory(clear=True)
-        if leftover_frames:
-            buffer.extend(leftover_frames)
+        collect_method = getattr(loop.policy, "collect_trajectory", None)
+        if callable(collect_method):
+            leftover_frames = collect_method(clear=True)
+            if leftover_frames:
+                buffer.extend(leftover_frames)
 
         buffer.set_tick_count(ticks)
 

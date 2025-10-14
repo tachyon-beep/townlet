@@ -18,7 +18,7 @@ from types import TracebackType
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
 from townlet.console.command import (
@@ -51,12 +51,14 @@ from townlet.telemetry.fallback import StubTelemetrySink
 from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
 from townlet.utils.coerce import coerce_float, coerce_int
-from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.dto.observations import ObservationEnvelope
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
-from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.grid import WorldState
 from townlet.world.observations.interfaces import ObservationServiceProtocol
+
+if TYPE_CHECKING:
+    from townlet.world.core.context import WorldContext
+    from townlet.world.core.runtime_adapter import WorldRuntimeAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +210,8 @@ class SimulationLoop:
         if name == "world":
             runtime = getattr(self, "runtime", None)
             if isinstance(value, WorldState):
-                super().__setattr__("_world_adapter", WorldRuntimeAdapter(value))
+                from townlet.world.core.runtime_adapter import WorldRuntimeAdapter as _WorldRuntimeAdapter
+                super().__setattr__("_world_adapter", _WorldRuntimeAdapter(value))
                 if isinstance(runtime, WorldRuntime):
                     runtime.bind_world(value)
                     bind_adapter = getattr(runtime, "bind_world_adapter", None)
@@ -249,7 +252,7 @@ class SimulationLoop:
 
         policy_components = self._resolve_policy_components()
         self._policy_port = policy_components.port
-        self.policy: PolicyRuntime = policy_components.decision_backend
+        self.policy: PolicyBackendProtocol = policy_components.decision_backend
         self._policy_controller = policy_components.controller
         self._resolved_providers["policy"] = policy_components.provider
 
@@ -433,7 +436,7 @@ class SimulationLoop:
             **self._telemetry_options,
         )
         return TelemetryComponents(
-            port=telemetry_port,
+            port=cast(TelemetrySink, telemetry_port),
             publisher=publisher,
             provider=self._telemetry_provider,
         )
@@ -462,7 +465,8 @@ class SimulationLoop:
 
         adapter = self._world_adapter
         if adapter is None:
-            adapter = WorldRuntimeAdapter(self.world)
+            from townlet.world.core.runtime_adapter import WorldRuntimeAdapter as _WorldRuntimeAdapter
+            adapter = _WorldRuntimeAdapter(self.world)
             super().__setattr__("_world_adapter", adapter)
         return adapter
 
@@ -561,17 +565,17 @@ class SimulationLoop:
         )
         apply_snapshot_to_telemetry(self.telemetry, state)
         # Convert perturbations DTO to dict for import_state
-        perturbations_dict = state.perturbations.model_dump() if hasattr(state.perturbations, 'model_dump') else state.perturbations
+        perturbations_dict: Mapping[str, Any] = state.perturbations.model_dump() if hasattr(state.perturbations, 'model_dump') else cast(dict[str, Any], state.perturbations)
         self.perturbations.import_state(perturbations_dict)
         if state.stability:
             # Convert stability DTO to dict for import_state
-            stability_dict = state.stability.model_dump() if hasattr(state.stability, 'model_dump') else state.stability
+            stability_dict: Mapping[str, object] = state.stability.model_dump() if hasattr(state.stability, 'model_dump') else cast(dict[str, object], state.stability)
             self.stability.import_state(stability_dict)
         else:
             self.stability.reset_state()
         if state.promotion:
             # Convert promotion DTO to dict for import_state
-            promotion_dict = state.promotion.model_dump() if hasattr(state.promotion, 'model_dump') else state.promotion
+            promotion_dict: Mapping[str, object] = state.promotion.model_dump() if hasattr(state.promotion, 'model_dump') else cast(dict[str, object], state.promotion)
             self.promotion.import_state(promotion_dict)
         else:
             self.promotion.reset()
@@ -793,9 +797,9 @@ class SimulationLoop:
                 terminated=terminated,
                 queue_metrics=queue_metrics,
                 embedding_metrics=embedding_metrics,
-                job_snapshot=job_snapshot,
+                job_snapshot={k: dict(v) for k, v in job_snapshot.items()} if job_snapshot else None,
                 events=events,
-                employment_metrics=employment_metrics,
+                employment_metrics=dict(employment_metrics) if employment_metrics else None,
                 hunger_levels=hunger_levels,
                 option_switch_counts=option_switch_counts,
                 rivalry_events=rivalry_events,
@@ -806,7 +810,9 @@ class SimulationLoop:
             stability_metrics["promotion_state"] = promotion_state
             anneal_context: dict[str, object] = {}
             try:
-                anneal_context = self.policy.anneal_context()
+                anneal_ctx_method = getattr(self.policy, "anneal_context", None)
+                if callable(anneal_ctx_method):
+                    anneal_context = anneal_ctx_method()
             except Exception:  # pragma: no cover - defensive
                 logger.debug("anneal_context_unavailable", exc_info=True)
 
@@ -1391,8 +1397,11 @@ class SimulationLoop:
             "anneal_ratio": anneal_ratio,
         }
         promotion_state = self.promotion.snapshot()
+        anneal_context: dict[str, object] = {}
         try:
-            anneal_context = self.policy.anneal_context()
+            anneal_ctx_method = getattr(self.policy, "anneal_context", None)
+            if callable(anneal_ctx_method):
+                anneal_context = anneal_ctx_method()
         except Exception:  # pragma: no cover - defensive
             anneal_context = {}
 
@@ -1468,17 +1477,22 @@ class SimulationLoop:
             raw_events = []
         clean_events: list[dict[str, object]] = []
         for event in raw_events:
-            if not isinstance(event, Mapping):
-                continue
-            clean_events.append(
-                {
-                    "tick": int(event.get("tick", self.tick)),
-                    "agent_a": str(event.get("agent_a", "")),
-                    "agent_b": str(event.get("agent_b", "")),
-                    "intensity": float(event.get("intensity", 0.0)),
-                    "reason": str(event.get("reason", "")),
-                }
-            )
+            # Type contract guarantees event is Mapping, but runtime safety for dynamic data
+            if isinstance(event, Mapping):
+                tick_val = event.get("tick", self.tick)
+                agent_a_val = event.get("agent_a", "")
+                agent_b_val = event.get("agent_b", "")
+                intensity_val = event.get("intensity", 0.0)
+                reason_val = event.get("reason", "")
+                clean_events.append(
+                    {
+                        "tick": coerce_int(tick_val, default=self.tick),
+                        "agent_a": str(agent_a_val) if agent_a_val is not None else "",
+                        "agent_b": str(agent_b_val) if agent_b_val is not None else "",
+                        "intensity": coerce_float(intensity_val, default=0.0),
+                        "reason": str(reason_val) if reason_val is not None else "",
+                    }
+                )
         if clean_events:
             self._rivalry_history.extend(clean_events)
             if len(self._rivalry_history) > 120:

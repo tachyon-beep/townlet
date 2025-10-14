@@ -32,14 +32,19 @@ class _StubWorld(WorldRuntime):
         _ = actions
 
     def snapshot(self) -> SimulationSnapshot:
+        import json
+        from townlet.dto.world import QueueSnapshot, EmploymentSnapshot
+
         snapshot = SimulationSnapshot(
             config_id="test",
             tick=len(self.snapshots),
             agents={},
             objects={},
-            queues={"active": {}, "queues": {}, "cooldowns": [], "stall_counts": {}},
-            employment={"exit_queue": [], "queue_timestamps": {}, "manual_exits": [], "exits_today": 0},
+            queues=QueueSnapshot(),
+            employment=EmploymentSnapshot(),
+            relationships={},
             identity=IdentitySnapshot(config_id="test"),
+            rng_streams={"world": json.dumps({"state": "stub", "version": 1})},  # Required by validator
         )
         self.snapshots.append(snapshot)
         return snapshot

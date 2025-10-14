@@ -14,8 +14,6 @@ from .interfaces import (
     TelemetrySinkProtocol,
 )
 from .utils import (
-    is_stub_policy,
-    is_stub_telemetry,
     policy_provider_name,
     telemetry_provider_name,
 )
@@ -24,8 +22,6 @@ __all__ = [
     "PolicyBackendProtocol",
     "SimulationLoop",
     "TelemetrySinkProtocol",
-    "is_stub_policy",
-    "is_stub_telemetry",
     "policy_provider_name",
     "policy_registry",
     "resolve_policy",

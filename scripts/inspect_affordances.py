@@ -12,7 +12,7 @@ from typing import Any
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
-from townlet.core.utils import is_stub_telemetry
+from townlet.telemetry.fallback import is_stub_telemetry
 
 
 def parse_args() -> argparse.Namespace:

@@ -447,6 +447,9 @@ class _LoopDummyWorldRuntime:
         self._last_actions = dict(actions)
 
     def snapshot(self) -> SimulationSnapshot:
+        import json
+        # Provide minimal RNG stream to satisfy validator (requires non-empty rng_state or rng_streams)
+        dummy_rng = {"state": "dummy", "version": 1}
         return SimulationSnapshot(
             config_id=self._world.config_id,
             tick=self._world.tick,
@@ -456,6 +459,7 @@ class _LoopDummyWorldRuntime:
             employment=EmploymentSnapshot(),
             relationships={},
             identity=IdentitySnapshot(config_id=self._world.config_id),
+            rng_streams={"world": json.dumps(dummy_rng)},  # Non-empty dict with valid JSON
         )
 
     def transport_status(self) -> Mapping[str, Any]:  # pragma: no cover - deterministic

@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 from townlet.core.interfaces import TelemetrySinkProtocol
 from townlet.core.sim_loop import SimulationLoop
-from townlet.core.utils import is_stub_telemetry
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
+from townlet.telemetry.fallback import is_stub_telemetry
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
 from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.agents.snapshot import AgentSnapshot

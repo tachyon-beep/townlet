@@ -25,8 +25,8 @@ jobs:
           ruff check src tests
           mypy src
 
-      - name: Import linter (config isolation)
-        run: lint-imports --config importlinter.ini
+      - name: Import boundary enforcement
+        run: lint-imports
 
       - name: Docstring coverage
         run: |

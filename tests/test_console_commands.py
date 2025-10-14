@@ -821,6 +821,7 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
         employment=EmploymentSnapshot(),
         relationships={},
         identity=IdentitySnapshot(config_id="legacy"),
+        rng_streams={"world": json.dumps({"state": "legacy", "version": 1})},  # Required by validator
     )
     legacy_manager = SnapshotManager(tmp_path)
     legacy_path = legacy_manager.save(legacy_state)

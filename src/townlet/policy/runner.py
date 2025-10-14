@@ -7,13 +7,14 @@ import logging
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from townlet.config import SimulationConfig
 from townlet.policy.behavior import AgentIntent, BehaviorController, build_behavior
 from townlet.policy.behavior_bridge import BehaviorBridge
+from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.policy.models import (
     ConflictAwarePolicyConfig,
     ConflictAwarePolicyNetwork,
@@ -23,7 +24,7 @@ from townlet.policy.models import (
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.grid import WorldState
 
-from .dto_view import DTOWorldView
+from .dto_view import DTOQueueManagerView, DTORelationshipView, DTOWorldView
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.dto.observations import ObservationEnvelope
@@ -131,6 +132,10 @@ class PolicyRuntime:
     def behavior(self) -> BehaviorController:
         return self._behavior_bridge.behavior
 
+    @behavior.setter
+    def behavior(self, controller: BehaviorController) -> None:
+        self._behavior_bridge.behavior = controller
+
     @property
     def transitions(self) -> dict[str, dict[str, object]]:
         """Expose the per-agent transition buffer maintained by the trajectory service."""
@@ -147,11 +152,6 @@ class PolicyRuntime:
         """Return anneal and option commit context for diagnostics."""
 
         return self._behavior_bridge.snapshot()
-
-
-    @behavior.setter
-    def behavior(self, controller: BehaviorController) -> None:
-        self._behavior_bridge.behavior = controller
 
     @property
     def _option_commit_until(self) -> dict[str, int]:
@@ -261,7 +261,8 @@ class PolicyRuntime:
             self._behavior_bridge.update_transition_entry(
                 agent_id, tick, entry, commit_enforced
             )
-            self._trajectory_service.record_action(agent_id, action_payload, action_id)
+            # action_payload is dict[str, object | None] from actions dict, coerce for TrajectoryService
+            self._trajectory_service.record_action(agent_id, cast(dict[str, Any], action_payload), action_id)
         return actions
 
     def _apply_relationship_guardrails(
@@ -314,14 +315,15 @@ class PolicyRuntime:
                 return AgentIntent(kind="wait", blocked=True)
         if intent.kind in {"request", "start"} and intent.object_id:
             guard = getattr(self.behavior, "_rivals_in_queue", None)
-            queue_view = None
-            relationship_view = None
+            queue_view: DTOQueueManagerView
+            relationship_view: DTORelationshipView
             if dto_world is not None:
                 queue_view = dto_world.queue_manager
-                relationship_view = dto_world
+                relationship_view = dto_world._relationships
             else:
-                queue_view = world.queue_manager
-                relationship_view = world
+                # Fallback: wrap WorldState components in DTO views
+                queue_view = DTOQueueManagerView(queues={}, fallback=world.queue_manager)
+                relationship_view = DTORelationshipView(snapshot={}, metrics={}, fallback=world)
             if callable(guard) and guard(
                 world,
                 agent_id,
@@ -513,13 +515,17 @@ class PolicyRuntime:
                         "probability": float(round(float(probabilities[idx]), 6)),
                     }
                 )
-            selected_idx = frame.get("action_id")
+            selected_idx_raw = frame.get("action_id")
+            selected_idx = coerce_int(selected_idx_raw, default=0)
             selected_label = action_lookup.get(selected_idx, str(selected_idx))
+            tick_val = frame.get("tick", self._tick)
+            log_prob_val = frame.get("log_prob", 0.0)
+            value_pred_val = frame.get("value_pred", 0.0)
             snapshot[agent_id] = {
-                "tick": int(frame.get("tick", self._tick)),
+                "tick": coerce_int(tick_val, default=self._tick),
                 "selected_action": selected_label,
-                "log_prob": float(round(float(frame.get("log_prob", 0.0)), 6)),
-                "value_pred": float(round(float(frame.get("value_pred", 0.0)), 6)),
+                "log_prob": float(round(coerce_float(log_prob_val, default=0.0), 6)),
+                "value_pred": float(round(coerce_float(value_pred_val, default=0.0), 6)),
                 "top_actions": top_actions,
             }
         self._latest_policy_snapshot = snapshot
@@ -637,5 +643,5 @@ class TrainingHarness:
 
         self._impl = PolicyTrainingOrchestrator(config=config)
 
-    def __getattr__(self, name: str):  # pragma: no cover - simple delegation
+    def __getattr__(self, name: str) -> Any:  # pragma: no cover - simple delegation
         return getattr(self._impl, name)

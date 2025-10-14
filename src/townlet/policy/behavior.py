@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from types import SimpleNamespace
+from typing import Any, Protocol, cast, runtime_checkable
 
 from townlet.agents.models import PersonalityProfiles
 from townlet.config import SimulationConfig
-from townlet.policy.dto_view import DTOWorldView
+from townlet.policy.dto_view import (
+    DTOQueueManagerView,
+    DTORelationshipView,
+    DTOWorldView,
+)
 from townlet.world.grid import WorldState
 
 
@@ -157,7 +162,7 @@ class ScriptedBehavior(BehaviorController):
     def _cleanup_pending(
         self,
         agent_id: str,
-        queue_view: object,
+        queue_view: DTOQueueManagerView,
         running_affordances: Mapping[str, Any],
     ) -> None:
         state = self.pending.get(agent_id)
@@ -176,7 +181,7 @@ class ScriptedBehavior(BehaviorController):
         self,
         world: WorldState,
         agent_id: str,
-        snapshot: object,
+        snapshot: SimpleNamespace,
         *,
         current_tick: int,
     ) -> AgentIntent | None:
@@ -204,10 +209,10 @@ class ScriptedBehavior(BehaviorController):
         self,
         world: WorldState,
         agent_id: str,
-        snapshot: object,
+        snapshot: SimpleNamespace,
         *,
-        queue_view: object,
-        relationship_view: object,
+        queue_view: DTOQueueManagerView,
+        relationship_view: DTORelationshipView,
         dto_world: DTOWorldView | None,
     ) -> AgentIntent | None:
         hunger = snapshot.needs.get("hunger", 1.0)
@@ -270,9 +275,9 @@ class ScriptedBehavior(BehaviorController):
         self,
         world: WorldState,
         agent_id: str,
-        snapshot: object,
+        snapshot: SimpleNamespace,
         *,
-        relationship_view: object,
+        relationship_view: DTORelationshipView,
         dto_world: DTOWorldView | None,
         current_tick: int,
     ) -> AgentIntent | None:
@@ -356,9 +361,9 @@ class ScriptedBehavior(BehaviorController):
         self,
         world: WorldState,
         agent_id: str,
-        snapshot: object,
+        snapshot: SimpleNamespace,
         *,
-        relationship_view: object,
+        relationship_view: DTORelationshipView,
         dto_world: DTOWorldView | None,
     ) -> AgentIntent | None:
         position = getattr(snapshot, "position", None)
@@ -380,7 +385,12 @@ class ScriptedBehavior(BehaviorController):
         if not rivals_present:
             return None
 
-        grid_size = getattr(self.config.world, "grid_size", (48, 48))
+        # Config has extra="allow" for unknown fields like "world"
+        world_config = getattr(self.config, "world", None)
+        if world_config is not None and isinstance(world_config, Mapping):
+            grid_size = world_config.get("grid_size", (48, 48))
+        else:
+            grid_size = (48, 48)
         width, height = int(grid_size[0]), int(grid_size[1])
         occupied_positions = {
             getattr(agent, "position", None)
@@ -402,8 +412,8 @@ class ScriptedBehavior(BehaviorController):
         agent_id: str,
         object_id: str,
         *,
-        queue_view: object,
-        relationship_view: object,
+        queue_view: DTOQueueManagerView,
+        relationship_view: DTORelationshipView,
         dto_world: DTOWorldView | None = None,
     ) -> bool:
         active = queue_view.active_agent(object_id)
@@ -438,8 +448,8 @@ class ScriptedBehavior(BehaviorController):
         world: WorldState,
         agent_id: str,
         *,
-        queue_view: object,
-        relationship_view: object,
+        queue_view: DTOQueueManagerView,
+        relationship_view: DTORelationshipView,
         dto_world: DTOWorldView | None,
     ) -> AgentIntent | None:
         fridge_id = self._find_object_of_type(world, "fridge")
@@ -493,7 +503,7 @@ class ScriptedBehavior(BehaviorController):
                 return object_id
         return None
 
-    def _behavior_bias(self, snapshot: object, key: str, default: float = 1.0) -> float:
+    def _behavior_bias(self, snapshot: SimpleNamespace, key: str, default: float = 1.0) -> float:
         if not self._personality_bias_enabled:
             return default
         profile_name = getattr(snapshot, "personality_profile", None)
@@ -512,7 +522,7 @@ class ScriptedBehavior(BehaviorController):
             return default
         return max(0.1, min(5.0, numeric))
 
-    def _need_multiplier(self, snapshot: object, need: str) -> float:
+    def _need_multiplier(self, snapshot: SimpleNamespace, need: str) -> float:
         if not self._need_scaling_enabled:
             return 1.0
         profile_name = getattr(snapshot, "personality_profile", None)
@@ -531,7 +541,7 @@ class ScriptedBehavior(BehaviorController):
             return 1.0
         return max(0.1, min(5.0, multiplier))
 
-    def _need_threshold(self, snapshot: object, need: str, base: float) -> float:
+    def _need_threshold(self, snapshot: SimpleNamespace, need: str, base: float) -> float:
         multiplier = self._need_multiplier(snapshot, need)
         threshold = base * multiplier
         return max(0.0, min(1.0, threshold))
@@ -543,9 +553,10 @@ class ScriptedBehavior(BehaviorController):
         other_id: str,
         *,
         dto_world: DTOWorldView | None = None,
-        relationship_view: object | None = None,
+        relationship_view: DTORelationshipView | None = None,
     ) -> bool:
         snapshot = self._agent_snapshot(world, agent_id, dto_world)
+        view: DTORelationshipView | DTOWorldView | WorldState
         view = relationship_view if relationship_view is not None else (
             dto_world if dto_world is not None else world
         )
@@ -577,10 +588,11 @@ class ScriptedBehavior(BehaviorController):
         self,
         world: WorldState,
         dto_world: DTOWorldView | None,
-    ) -> object:
+    ) -> DTOQueueManagerView:
         if dto_world is not None:
             return dto_world.queue_manager
-        return world.queue_manager
+        # Fallback: WorldState.queue_manager is QueueManager, wrap it
+        return DTOQueueManagerView(queues={}, fallback=world.queue_manager)
 
     def _running_affordances(
         self,
@@ -602,8 +614,11 @@ class ScriptedBehavior(BehaviorController):
         self,
         world: WorldState,
         dto_world: DTOWorldView | None,
-    ) -> object:
-        return dto_world if dto_world is not None else world
+    ) -> DTORelationshipView:
+        if dto_world is not None:
+            return dto_world._relationships
+        # Fallback: wrap WorldState with DTORelationshipView
+        return DTORelationshipView(snapshot={}, metrics={}, fallback=world)
 
     def _current_tick(
         self,
@@ -619,7 +634,7 @@ class ScriptedBehavior(BehaviorController):
         world: WorldState,
         agent_id: str,
         dto_world: DTOWorldView | None,
-    ) -> object | None:
+    ) -> SimpleNamespace | None:
         if dto_world is not None:
             snapshot = dto_world.agent_snapshot(agent_id)
             if snapshot is not None:
@@ -629,14 +644,18 @@ class ScriptedBehavior(BehaviorController):
             return None
         getter = getattr(agents, "get", None)
         if callable(getter):
-            return getter(agent_id)
+            result = getter(agent_id)
+            # WorldState.agents returns AgentSnapshot dataclass, convert to SimpleNamespace
+            if result is not None and hasattr(result, "__dict__"):
+                return SimpleNamespace(**result.__dict__)
+            return cast(SimpleNamespace, result)
         return None
 
     def _iter_agent_snapshots(
         self,
         world: WorldState,
         dto_world: DTOWorldView | None,
-    ) -> Iterable[tuple[str, object]]:
+    ) -> Iterable[tuple[str, SimpleNamespace]]:
         if dto_world is not None:
             yield from dto_world.iter_agent_snapshots()
             return
@@ -645,7 +664,12 @@ class ScriptedBehavior(BehaviorController):
             return
         items = getattr(agents, "items", None)
         if callable(items):
-            yield from items()
+            for agent_id, snapshot in items():
+                # WorldState.agents returns AgentSnapshot dataclass, convert to SimpleNamespace
+                if snapshot is not None and hasattr(snapshot, "__dict__"):
+                    yield str(agent_id), SimpleNamespace(**snapshot.__dict__)
+                else:
+                    yield str(agent_id), cast(SimpleNamespace, snapshot)
 
 
 def build_behavior(config: SimulationConfig) -> BehaviorController:

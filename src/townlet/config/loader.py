@@ -441,7 +441,7 @@ class SimulationConfig(BaseModel):
         handlers = dict(self.snapshot.migrations.handlers)
         if not handlers:
             return
-        from townlet.snapshots import register_migration
+        from townlet.snapshots.migrations import register_migration
 
         for legacy_config, handler_path in handlers.items():
             module_name, separator, attribute = handler_path.partition(":")

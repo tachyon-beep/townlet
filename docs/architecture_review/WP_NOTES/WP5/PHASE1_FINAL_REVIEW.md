@@ -16,7 +16,7 @@ Phase 1 (Snapshot System Hardening) is **100% complete** and **ready for product
 |-----------|--------|---------|
 | **Tests** | ✅ PASS | 17/17 tests passing (100%) |
 | **Type Safety** | ✅ PASS | 0 mypy strict errors |
-| **Code Quality** | ⚠️ MINOR | 2 cosmetic ruff warnings (__all__ sorting with comments) |
+| **Code Quality** | ⚠️ MINOR | 2 cosmetic ruff warnings (**all** sorting with comments) |
 | **Documentation** | ✅ PASS | 3 comprehensive completion reports |
 | **Security** | ✅ PASS | Pickle vulnerability eliminated, 0 Bandit issues |
 | **Coverage** | ✅ PASS | 94% for DTOs, 76% for RNG utils |
@@ -30,6 +30,7 @@ Phase 1 (Snapshot System Hardening) is **100% complete** and **ready for product
 ### Phase 1.1: RNG Migration ✅
 
 **Files Changed**:
+
 - [src/townlet/utils/rng.py](src/townlet/utils/rng.py) - Replaced pickle with JSON encoding (37 lines)
 - [src/townlet/world/rng.py](src/townlet/world/rng.py:6) - Removed unused pickle import
 - [src/townlet/world/grid.py](src/townlet/world/grid.py:9) - Removed unused pickle import
@@ -46,11 +47,13 @@ Phase 1 (Snapshot System Hardening) is **100% complete** and **ready for product
 ### Phase 1.2: Snapshot Format Consolidation ✅
 
 **Files Changed**:
+
 - [src/townlet/dto/world.py](src/townlet/dto/world.py:23-303) - Added strict Pydantic validation (140 lines)
 - [tests/test_snapshot_manager.py](tests/test_snapshot_manager.py) - Updated 4 tests to include RNG state
 - [tests/test_snapshot_migrations.py](tests/test_snapshot_migrations.py) - Updated helper function
 
 **Validators Added**:
+
 - `config_id`: Non-empty after stripping
 - `agents`: Agent IDs match dictionary keys
 - `position`: Valid 2-tuple with non-negative coords
@@ -67,6 +70,7 @@ Phase 1 (Snapshot System Hardening) is **100% complete** and **ready for product
 ### Phase 1.3: Type Checking Enforcement ✅
 
 **Files Changed**:
+
 - [src/townlet/utils/rng.py](src/townlet/utils/rng.py:34-38) - Added isinstance() type narrowing
 
 **Type Errors Fixed**: 1 (incompatible type in float() conversion)
@@ -127,6 +131,7 @@ RUF022 `__all__` is not sorted (2 occurrences)
 **Result**: ⚠️ **2 cosmetic warnings** (not blocking)
 
 **Explanation**: Ruff wants `__all__` lists sorted, but ours have semantic grouping with comments:
+
 ```python
 __all__ = [
     # Observations
@@ -169,11 +174,13 @@ Alphabetical sorting would destroy the semantic grouping. This is **acceptable**
 ### Vulnerabilities Eliminated ✅
 
 **Before Phase 1**:
+
 - ❌ **Pickle deserialization vulnerability** (OWASP A08:2021)
   - Risk: Arbitrary code execution via malicious snapshot files
   - Severity: HIGH
 
 **After Phase 1**:
+
 - ✅ **JSON-only serialization** (no code execution risk)
 - ✅ **Pydantic validation** (strict type checking)
 - ✅ **Mypy strict mode** (compile-time type safety)
@@ -211,6 +218,7 @@ Code scanned:
 ### Validation Overhead
 
 Pydantic validation adds minimal overhead:
+
 - Snapshot creation: ~0.1ms (negligible)
 - Snapshot loading: ~0.2ms (negligible)
 - Total: <1% overhead
@@ -224,19 +232,22 @@ Pydantic validation adds minimal overhead:
 ### 1. Old Snapshots Won't Load ⚠️
 
 **Impact**: Snapshots created before Phase 1.1 will fail to load with:
-```
+
+```markdown
 ValueError: Invalid JSON in RNG state payload
 ```
 
 **Mitigation**: This is acceptable per fail-forward philosophy (pre-1.0).
 
 **Action Required**: Users should:
+
 - Generate fresh snapshots after pulling Phase 1 changes
 - Or: Use migration system to convert (future work)
 
 ### 2. Stricter Validation
 
 **Impact**: Invalid snapshots that previously saved will now be rejected:
+
 - Negative tick numbers
 - Out-of-range need values
 - Missing RNG streams
@@ -306,9 +317,11 @@ All three phase completion reports are comprehensive and well-structured:
 ## Issues Identified
 
 ### Critical Issues
+
 **None** ✅
 
 ### Major Issues
+
 **None** ✅
 
 ### Minor Issues
@@ -383,6 +396,7 @@ Phase 1 is **complete, tested, and ready for production use**. All deliverables 
 ### Minor Issues Are Acceptable
 
 The 2 remaining ruff warnings are:
+
 - ❌ **Not blocking** (cosmetic only)
 - ❌ **Not affecting functionality**
 - ✅ **Acceptable for production**

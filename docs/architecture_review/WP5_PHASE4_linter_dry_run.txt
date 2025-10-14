@@ -1,0 +1,556 @@
+[1m=============[0m
+[1mImport Linter[0m
+[1m=============[0m
+[22m[0m
+[1m---------[0m
+[1mContracts[0m
+[1m---------[0m
+[22m[0m
+[1mAnalyzed 214 files, 650 dependencies.[0m
+[1m-------------------------------------[0m
+[22m[0m
+[22mDTOs must not import concrete packages [0m[32m[22mKEPT[0m[33m[22m[0m[22m[0m
+[22mLayered architecture (dto → ports → core → adapters → domain) [0m[31m[22mBROKEN[0m[33m[22m[0m[22m[0m
+[22mWorld must not import policy [0m[31m[22mBROKEN[0m[33m[22m[0m[22m[0m
+[22mPolicy must not import telemetry [0m[31m[22mBROKEN[0m[33m[22m[0m[22m[0m
+[22mConfig must only import DTO and typing [0m[31m[22mBROKEN[0m[33m[22m[0m[22m[0m
+[22mPort protocols must not import adapters [0m[31m[22mBROKEN[0m[33m[22m[0m[22m[0m
+[22mSnapshots must not import implementations (only DTOs) [0m[31m[22mBROKEN[0m[33m[22m[0m[22m[0m
+[22m[0m
+[22mContracts: 1 kept, 6 broken.[0m
+[22m[0m
+[22m[0m
+[31m[1m----------------[0m
+[31m[1mBroken contracts[0m
+[31m[1m----------------[0m
+[22m[0m
+[31m[1mLayered architecture (dto → ports → core → adapters → domain)[0m
+[31m[1m-------------------------------------------------------------[0m
+[22m[0m
+[22mtownlet.policy is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m- townlet.policy.behavior -> townlet.world.grid (l.17)[0m
+[22m[0m
+[31m[22m- townlet.policy.scenario_utils -> townlet.world.grid (l.18)[0m
+[22m[0m
+[31m[22m- townlet.policy.runner -> townlet.world.grid (l.25)[0m
+[22m[0m
+[31m[22m- townlet.policy.scenario_utils -> townlet.world.agents.snapshot (l.12)[0m
+[22m[0m
+[31m[22m- townlet.policy.behavior_bridge -> townlet.world.grid (l.11)[0m
+[22m[0m
+[31m[22m- townlet.policy.scripted -> townlet.world.grid (l.9)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.lifecycle is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.lifecycle.manager -> townlet.config (l.9)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.core is not allowed to import townlet.ports:[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.ports.policy (l.37)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.ports.world (l.40)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.orchestration (l.36)[0m
+[31m[22m  townlet.orchestration -> townlet.orchestration.console (l.3)[0m
+[31m[22m  townlet.orchestration.console -> townlet.ports.telemetry (l.17)[0m
+[31m[22m                                   & townlet.ports.world (l.18)[0m
+[22m[0m
+[31m[22m- townlet.core.factory_registry -> townlet.ports.world (l.11)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.ports.telemetry (l.38)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.factories (l.34)[0m
+[31m[22m  townlet.factories -> townlet.factories.policy_factory (l.3)[0m
+[31m[22m  townlet.factories.policy_factory -> townlet.ports.policy (l.9)[0m
+[22m[0m
+[31m[22m- townlet.core.factory_registry -> townlet.factories.world_factory (l.63)[0m
+[31m[22m  townlet.factories.world_factory -> townlet.ports.world (l.10)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.lifecycle is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m- townlet.lifecycle.manager -> townlet.world.grid (l.10)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.telemetry is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m- townlet.telemetry.publisher -> townlet.world.grid (l.55)[0m
+[22m[0m
+[31m[22m- townlet.telemetry.publisher -> townlet.world.core.runtime_adapter (l.48)[0m
+[22m[0m
+[31m[22m- townlet.telemetry.interfaces -> townlet.world.grid (l.19)[0m
+[22m[0m
+[31m[22m- townlet.telemetry.publisher -> townlet.world.observations.interfaces (l.56)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.telemetry is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.telemetry.narration (l.7)[0m
+[31m[22m  & townlet.telemetry.publisher -> townlet.config (l.17)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.snapshots is not allowed to import townlet.lifecycle:[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.lifecycle.manager (l.32)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.ports is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.ports.world -> townlet.dto.world (l.21)[0m
+[22m[0m
+[31m[22m- townlet.ports.world -> townlet.dto.observations (l.16)[0m
+[22m[0m
+[31m[22m- townlet.ports.telemetry -> townlet.dto.telemetry (l.24)[0m
+[22m[0m
+[31m[22m- townlet.ports.policy -> townlet.dto.observations (l.17)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.policy is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.policy.runner -> townlet.dto.observations (l.30)[0m
+[22m[0m
+[31m[22m- townlet.policy.rollout -> townlet.dto.observations (l.19)[0m
+[22m[0m
+[31m[22m- townlet.policy.dto_view -> townlet.dto.observations (l.11)[0m
+[22m[0m
+[31m[22m- townlet.policy.training.orchestrator -> townlet.dto.policy (l.18)[0m
+[22m[0m
+[31m[22m- townlet.policy.training.strategies.ppo -> townlet.dto.policy (l.23, l.810)[0m
+[22m[0m
+[31m[22m- townlet.policy.training.strategies.bc -> townlet.dto.policy (l.16, l.47)[0m
+[22m[0m
+[31m[22m- townlet.policy.training.strategies.anneal -> townlet.dto.policy (l.20, l.67, l.204, l.245)[0m
+[22m[0m
+[31m[22m- townlet.policy.fallback -> townlet.dto.observations (l.12)[0m
+[22m[0m
+[31m[22m- townlet.policy.scripted -> townlet.dto.observations (l.8)[0m
+[22m[0m
+[31m[22m- townlet.policy.training.strategies.base -> townlet.dto.policy (l.15)[0m
+[22m[0m
+[31m[22m- townlet.policy.trajectory_service -> townlet.dto.observations (l.9)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.snapshots is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.dto.telemetry (l.16)[0m
+[22m[0m
+[31m[22m- townlet.snapshots -> townlet.dto.world (l.5)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.dto.world (l.17)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.observations is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.observations.embedding -> townlet.config (l.7)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.snapshots is not allowed to import townlet.core:[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.core.interfaces (l.14)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.core.utils (l.15)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.snapshots (l.146)[0m
+[22m[0m
+[31m[22m- townlet.world.affordances.core (l.11)[0m
+[31m[22m  & townlet.world.agents.employment (l.9)[0m
+[31m[22m  & townlet.world.agents.relationships_service (l.13)[0m
+[31m[22m  & townlet.world.core.runtime_adapter (l.15)[0m
+[31m[22m  & townlet.world.economy.service (l.9)[0m
+[31m[22m  & townlet.world.employment (l.10)[0m
+[31m[22m  & townlet.world.employment_runtime (l.9)[0m
+[31m[22m  & townlet.world.employment_service (l.9)[0m
+[31m[22m  & townlet.world.grid (l.18)[0m
+[31m[22m  & townlet.world.observations.service (l.10)[0m
+[31m[22m  & townlet.world.queue.manager (l.9)[0m
+[31m[22m  & townlet.world.runtime (l.21)[0m
+[31m[22m  & townlet.world.state (l.16)[0m
+[31m[22m  & townlet.world.systems.employment -> townlet.config (l.9)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.policy is not allowed to import townlet.stability:[0m
+[22m[0m
+[31m[22m- townlet.policy.training.services.promotion -> townlet.stability.promotion (l.13, l.44)[0m
+[22m[0m
+[31m[22m- townlet.policy.training_orchestrator -> townlet.stability.promotion (l.36)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.policy is not allowed to import townlet.core:[0m
+[22m[0m
+[31m[22m- townlet.policy.training.services.rollout -> townlet.core.utils (l.68)[0m
+[22m[0m
+[31m[22m- townlet.policy.fallback -> townlet.core.interfaces (l.9)[0m
+[22m[0m
+[31m[22m- townlet.policy.training_orchestrator -> townlet.core.sim_loop (l.160)[0m
+[22m[0m
+[31m[22m- townlet.policy.api -> townlet.core.factory_registry (l.8)[0m
+[22m[0m
+[31m[22m- townlet.policy.scenario_utils -> townlet.core.sim_loop (l.9)[0m
+[22m[0m
+[31m[22m- townlet.policy.training.services.rollout -> townlet.core.sim_loop (l.67)[0m
+[22m[0m
+[31m[22m- townlet.policy.api -> townlet.core.interfaces (l.9)[0m
+[22m[0m
+[31m[22m- townlet.policy.training_orchestrator -> townlet.core.utils (l.16)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.world.dto.observation -> townlet.dto.observations (l.21)[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.dto.observations (l.17)[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.dto.world (l.23)[0m
+[22m[0m
+[31m[22m- townlet.world.core.context -> townlet.dto.observations (l.12)[0m
+[22m[0m
+[31m[22m- townlet.world.dto -> townlet.dto.observations (l.5)[0m
+[22m[0m
+[31m[22m- townlet.world.dto.factory -> townlet.dto.observations (l.13)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.stability:[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.stability.monitor (l.25)[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.stability.promotion (l.26)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.rewards is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.rewards.engine -> townlet.config (l.9)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.rewards is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m- townlet.rewards.engine -> townlet.world.observations.context (l.12)[0m
+[22m[0m
+[31m[22m- townlet.rewards.engine -> townlet.world.grid (l.11)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.benchmark is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.benchmark.utils -> townlet.config (l.11)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.snapshots is not allowed to import townlet.stability:[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.stability.promotion (l.47)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.stability.monitor (l.46)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.snapshots is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.world.core.runtime_adapter (l.41)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.world.grid (l.42)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.world.rng (l.43)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.scheduler.perturbations (l.33)[0m
+[31m[22m  townlet.scheduler.perturbations -> townlet.world.grid (l.21)[0m
+[22m[0m
+[31m[22m- townlet.snapshots.state -> townlet.world.agents.snapshot (l.40)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.benchmark is not allowed to import townlet.core:[0m
+[22m[0m
+[31m[22m- townlet.benchmark.utils -> townlet.core.sim_loop (l.12)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.lifecycle:[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.lifecycle.manager (l.24)[0m
+[22m[0m
+[31m[22m- townlet.world.core.context -> townlet.lifecycle.manager (l.26)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.telemetry is not allowed to import townlet.core:[0m
+[22m[0m
+[31m[22m- townlet.telemetry.publisher -> townlet.core.interfaces (l.53)[0m
+[22m[0m
+[31m[22m- townlet.telemetry.interfaces -> townlet.core.interfaces (l.15)[0m
+[22m[0m
+[31m[22m- townlet.telemetry.fallback -> townlet.core.interfaces (l.10)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.observations:[0m
+[22m[0m
+[31m[22m- townlet.world.grid -> townlet.observations.embedding (l.28)[0m
+[22m[0m
+[31m[22m- townlet.world.core.runtime_adapter -> townlet.observations.embedding (l.16)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.telemetry is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.telemetry.publisher -> townlet.dto.telemetry (l.18)[0m
+[22m[0m
+[31m[22m- townlet.telemetry.fallback -> townlet.dto.telemetry (l.11)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.telemetry:[0m
+[22m[0m
+[31m[22m- townlet.world.agents.relationships_service -> townlet.telemetry.relationship_metrics (l.14)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.stability is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.stability.monitor (l.26)[0m
+[31m[22m  & townlet.stability.promotion -> townlet.config (l.10)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.policy is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m- townlet.policy.behavior (l.11)[0m
+[31m[22m  & townlet.policy.runner (l.14)[0m
+[31m[22m  & townlet.policy.training.contexts (l.15)[0m
+[31m[22m  & townlet.policy.training.orchestrator (l.17)[0m
+[31m[22m  & townlet.policy.training.services (l.21)[0m
+[31m[22m  & townlet.policy.training.services.promotion (l.12)[0m
+[31m[22m  & townlet.policy.training.services.replay (l.15)[0m
+[31m[22m  & townlet.policy.training.services.rollout (l.14)[0m
+[31m[22m  & townlet.policy.training.strategies.ppo (l.78)[0m
+[31m[22m  & townlet.policy.training_orchestrator -> townlet.config (l.15)[0m
+[31m[22m  townlet.config -> townlet.config.loader (l.21)[0m
+[31m[22m  townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.core is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.dto.telemetry (l.33)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.orchestration (l.36)[0m
+[31m[22m  townlet.orchestration -> townlet.orchestration.console (l.3)[0m
+[31m[22m  townlet.orchestration.console -> townlet.dto.telemetry (l.15)[0m
+[31m[22m                                   & townlet.dto.world (l.16)[0m
+[22m[0m
+[31m[22m- townlet.core.interfaces -> townlet.dto.telemetry (l.16)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.dto.observations (l.54)[0m
+[22m[0m
+[31m[22m- townlet.core.interfaces -> townlet.dto.observations (l.15)[0m
+[22m[0m
+[31m[22m- townlet.core.factory_registry -> townlet.factories.world_factory (l.63)[0m
+[31m[22m  townlet.factories.world_factory -> townlet.adapters.world_default (l.8)[0m
+[31m[22m  townlet.adapters.world_default -> townlet.dto.observations (l.8)[0m
+[31m[22m                                    & townlet.dto.world (l.9)[0m
+[22m[0m
+[31m[22m- townlet.core.sim_loop -> townlet.factories (l.34)[0m
+[31m[22m  townlet.factories -> townlet.factories.policy_factory (l.3)[0m
+[31m[22m  townlet.factories.policy_factory -> townlet.adapters.policy_scripted (l.7)[0m
+[31m[22m  townlet.adapters.policy_scripted -> townlet.dto.observations (l.12)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.rewards is not allowed to import townlet.dto:[0m
+[22m[0m
+[31m[22m- townlet.rewards.engine -> townlet.dto.rewards (l.10)[0m
+[22m[0m
+[22m[0m
+[22mtownlet.world is not allowed to import townlet.core:[0m
+[22m[0m
+[31m[22m- townlet.world.runtime -> townlet.core.interfaces (l.22)[0m
+[22m[0m
+[22m[0m
+[31m[1mWorld must not import policy[0m
+[31m[1m----------------------------[0m
+[22m[0m
+[31m[1mtownlet.world is not allowed to import townlet.policy:[0m
+[22m[0m
+[31m[22m-   townlet.world.runtime -> townlet.snapshots (l.146)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.core.utils (l.15)[0m
+[22m    [0m[31m[22mtownlet.core.utils -> townlet.policy.fallback (l.8)[0m
+[22m[0m
+[22m[0m
+[31m[1mPolicy must not import telemetry[0m
+[31m[1m--------------------------------[0m
+[22m[0m
+[31m[1mtownlet.policy is not allowed to import townlet.telemetry:[0m
+[22m[0m
+[31m[22m-   townlet.policy.api -> townlet.core.factory_registry (l.8)[0m
+[22m    [0m[31m[22mtownlet.core.factory_registry -> townlet.telemetry.fallback (l.83)[0m
+[22m[0m
+[31m[22m-   townlet.policy.behavior_bridge -> townlet.world.grid (l.11)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.world.agents.relationships_service (l.47)[0m
+[22m    [0m[31m[22mtownlet.world.agents.relationships_service -> townlet.telemetry.relationship_metrics (l.14)[0m
+[22m[0m
+[31m[22m-   townlet.policy.scenario_utils -> townlet.core.sim_loop (l.9)[0m
+[22m    [0m[31m[22mtownlet.core.sim_loop -> townlet.telemetry.publisher (l.51)[0m
+[22m[0m
+[31m[22m-   townlet.policy.training.services.rollout -> townlet.core.sim_loop (l.67)[0m
+[22m    [0m[31m[22mtownlet.core.sim_loop -> townlet.telemetry.fallback (l.50)[0m
+[22m[0m
+[31m[22m-   townlet.policy.training.services.rollout -> townlet.core.utils (l.68)[0m
+[22m    [0m[31m[22mtownlet.core.utils -> townlet.telemetry.fallback (l.9)[0m
+[22m[0m
+[31m[22m-   townlet.policy.training_orchestrator -> townlet.core.sim_loop (l.160)[0m
+[22m    [0m[31m[22mtownlet.core.sim_loop -> townlet.factories (l.34)[0m
+[22m    [0m[31m[22mtownlet.factories -> townlet.factories.telemetry_factory (l.5)[0m
+[22m    [0m[31m[22mtownlet.factories.telemetry_factory -> townlet.telemetry.fallback (l.9)[0m
+[22m[0m
+[22m[0m
+[31m[1mConfig must only import DTO and typing[0m
+[31m[1m--------------------------------------[0m
+[22m[0m
+[31m[1mtownlet.config is not allowed to import townlet.observations:[0m
+[22m[0m
+[31m[22m-   townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.world.core.runtime_adapter (l.41)[0m
+[22m    [0m[31m[22mtownlet.world.core.runtime_adapter -> townlet.observations.embedding (l.16)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.config is not allowed to import townlet.policy:[0m
+[22m[0m
+[31m[22m-   townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.core.utils (l.15)[0m
+[22m    [0m[31m[22mtownlet.core.utils -> townlet.policy.fallback (l.8)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.config is not allowed to import townlet.telemetry:[0m
+[22m[0m
+[31m[22m-   townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.core.utils (l.15)[0m
+[22m    [0m[31m[22mtownlet.core.utils -> townlet.telemetry.fallback (l.9)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.config is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m-   townlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.world.rng (l.43)[0m
+[22m[0m
+[22m[0m
+[31m[1mPort protocols must not import adapters[0m
+[31m[1m---------------------------------------[0m
+[22m[0m
+[31m[1mtownlet.ports is not allowed to import townlet.lifecycle:[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.core.interfaces (l.20)[0m
+[22m    [0m[31m[22mtownlet.core.interfaces -> townlet.world.grid (l.17)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.config (l.18)[0m
+[22m    [0m[31m[22mtownlet.config -> townlet.config.loader (l.21)[0m
+[22m    [0m[31m[22mtownlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.lifecycle.manager (l.32)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.grid (l.22)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.world.core.context (l.53)[0m
+[22m    [0m[31m[22mtownlet.world.core.context -> townlet.lifecycle.manager (l.26)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.runtime (l.23)[0m
+[22m    [0m[31m[22mtownlet.world.runtime -> townlet.lifecycle.manager (l.24)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.ports is not allowed to import townlet.policy:[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.runtime (l.23)[0m
+[22m    [0m[31m[22mtownlet.world.runtime -> townlet.snapshots (l.146)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.core.utils (l.15)[0m
+[22m    [0m[31m[22mtownlet.core.utils -> townlet.policy.fallback (l.8)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.ports is not allowed to import townlet.snapshots:[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.grid (l.22)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.config (l.18)[0m
+[22m    [0m[31m[22mtownlet.config -> townlet.config.loader (l.21)[0m
+[22m    [0m[31m[22mtownlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.runtime (l.23)[0m
+[22m    [0m[31m[22mtownlet.world.runtime -> townlet.snapshots (l.146)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.ports is not allowed to import townlet.stability:[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.core.interfaces (l.20)[0m
+[22m    [0m[31m[22mtownlet.core.interfaces -> townlet.world.grid (l.17)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.config (l.18)[0m
+[22m    [0m[31m[22mtownlet.config -> townlet.config.loader (l.21)[0m
+[22m    [0m[31m[22mtownlet.config.loader -> townlet.snapshots (l.444)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.stability.monitor (l.46)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.grid (l.22)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.world.core.context (l.53)[0m
+[22m    [0m[31m[22mtownlet.world.core.context -> townlet.world.runtime (l.41, l.293)[0m
+[22m    [0m[31m[22mtownlet.world.runtime -> townlet.stability.promotion (l.26)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.runtime (l.23)[0m
+[22m    [0m[31m[22mtownlet.world.runtime -> townlet.stability.monitor (l.25)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.ports is not allowed to import townlet.telemetry:[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.grid (l.22)[0m
+[22m    [0m[31m[22mtownlet.world.grid -> townlet.world.agents.relationships_service (l.47)[0m
+[22m    [0m[31m[22mtownlet.world.agents.relationships_service -> townlet.telemetry.relationship_metrics (l.14)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.runtime (l.23)[0m
+[22m    [0m[31m[22mtownlet.world.runtime -> townlet.snapshots (l.146)[0m
+[22m    [0m[31m[22mtownlet.snapshots -> townlet.snapshots.state (l.10)[0m
+[22m    [0m[31m[22mtownlet.snapshots.state -> townlet.core.utils (l.15)[0m
+[22m    [0m[31m[22mtownlet.core.utils -> townlet.telemetry.fallback (l.9)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.ports is not allowed to import townlet.world:[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.core.interfaces (l.20)[0m
+[22m    [0m[31m[22mtownlet.core.interfaces -> townlet.world.grid (l.17)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.grid (l.22)[0m
+[22m[0m
+[31m[22m-   townlet.ports.world -> townlet.world.runtime (l.23)[0m
+[22m[0m
+[22m[0m
+[31m[1mSnapshots must not import implementations (only DTOs)[0m
+[31m[1m-----------------------------------------------------[0m
+[22m[0m
+[31m[1mtownlet.snapshots is not allowed to import townlet.world.grid:[0m
+[22m[0m
+[31m[22m-   townlet.snapshots.state -> townlet.core.interfaces (l.14)[0m
+[22m    [0m[31m[22mtownlet.core.interfaces -> townlet.world.grid (l.17)[0m
+[22m[0m
+[31m[22m-   townlet.snapshots.state -> townlet.lifecycle.manager (l.32)[0m
+[22m    [0m[31m[22mtownlet.lifecycle.manager -> townlet.world.grid (l.10)[0m
+[22m[0m
+[31m[22m-   townlet.snapshots.state -> townlet.scheduler.perturbations (l.33)[0m
+[22m    [0m[31m[22mtownlet.scheduler.perturbations -> townlet.world.grid (l.21)[0m
+[22m[0m
+[31m[22m-   townlet.snapshots.state -> townlet.world.core.runtime_adapter (l.41)[0m
+[22m    [0m[31m[22mtownlet.world.core.runtime_adapter -> townlet.world.grid (l.19, l.199)[0m
+[22m[0m
+[31m[22m-   townlet.snapshots.state -> townlet.world.grid (l.42)[0m
+[22m[0m
+[22m[0m
+[31m[1mtownlet.snapshots is not allowed to import townlet.world.runtime:[0m
+[22m[0m
+[31m[22m-   townlet.snapshots.state -> townlet.world.core.runtime_adapter (l.41)[0m
+[22m    [0m[31m[22mtownlet.world.core.runtime_adapter -> townlet.world.core.context (l.18, l.201)[0m
+[22m    [0m[31m[22mtownlet.world.core.context -> townlet.world.runtime (l.41, l.293)[0m
+[22m[0m
+[22m[0m
