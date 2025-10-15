@@ -43,14 +43,14 @@ class ConsoleService:
     # ------------------------------------------------------------------
     # Command execution / result management
     # ------------------------------------------------------------------
-    def apply(self, operations: Iterable[Any]) -> None:
-        self._bridge.apply(operations)
+    def apply(self, operations: Iterable[Any]) -> list[ConsoleCommandResult]:
+        return self._bridge.apply(operations)
 
     def consume_results(self) -> list[ConsoleCommandResult]:
         return self._bridge.consume_results()
 
-    def record_result(self, result: ConsoleCommandResult) -> None:
-        self._bridge.record_result(result)
+    def record_result(self, result: ConsoleCommandResult) -> ConsoleCommandResult:
+        return self._bridge.record_result(result)
 
     def cached_result(self, cmd_id: str) -> ConsoleCommandResult | None:
         return self._bridge.cached_result(cmd_id)

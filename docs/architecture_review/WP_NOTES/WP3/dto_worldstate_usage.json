@@ -1,0 +1,196 @@
+{
+  "affordance_runtime": [
+    {
+      "line": null,
+      "module": "townlet.policy.behavior",
+      "object": "ScriptedBehavior"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "apply_snapshot_to_world"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "snapshot_from_world"
+    }
+  ],
+  "agents": [
+    {
+      "line": null,
+      "module": "townlet.policy.behavior",
+      "object": "ScriptedBehavior"
+    },
+    {
+      "line": null,
+      "module": "townlet.policy.runner",
+      "object": "PolicyRuntime"
+    },
+    {
+      "line": null,
+      "module": "townlet.policy.training_orchestrator",
+      "object": "PolicyTrainingOrchestrator"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "LifecycleManager"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "PerturbationScheduler"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "PolicyRuntime"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "RewardEngine"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "SimulationLoop"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "WorldRuntimeAdapter"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "apply_snapshot_to_world"
+    }
+  ],
+  "employment": [
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "LifecycleManager"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "SimulationLoop"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "TelemetryPublisher"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "WorldRuntimeAdapter"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "apply_snapshot_to_world"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "snapshot_from_world"
+    }
+  ],
+  "objects": [
+    {
+      "line": null,
+      "module": "townlet.policy.behavior",
+      "object": "ScriptedBehavior"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "ObservationBuilder"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "TelemetryPublisher"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "WorldRuntimeAdapter"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "apply_snapshot_to_world"
+    }
+  ],
+  "queue_manager": [
+    {
+      "line": null,
+      "module": "townlet.policy.behavior",
+      "object": "ScriptedBehavior"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "ObservationBuilder"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "SimulationLoop"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "WorldRuntimeAdapter"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "apply_snapshot_to_world"
+    }
+  ],
+  "relationships": [
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "WorldRuntimeAdapter"
+    }
+  ],
+  "tick": [
+    {
+      "line": null,
+      "module": "townlet.policy.behavior",
+      "object": "ScriptedBehavior"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "LegacyWorldRuntime"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "ObservationBuilder"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "WorldRuntimeAdapter"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "apply_snapshot_to_world"
+    },
+    {
+      "line": null,
+      "module": "townlet.core.sim_loop",
+      "object": "snapshot_from_world"
+    }
+  ]
+}

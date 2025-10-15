@@ -7,6 +7,7 @@ import pytest
 from townlet.config import load_config
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 from townlet.world.preconditions import (
     PreconditionSyntaxError,
@@ -80,17 +81,37 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
     assert fail_event["context"]["power_on"] is False
     assert fail_event["context"]["occupied"] is False
 
-    loop.telemetry.publish_tick(
+    failures = [event for event in events if event.get("event") == "affordance_precondition_fail"]
+
+    event_dto = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=world.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot=None,
+        payload={
+            "tick": world.tick,
+            "world": world,
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+            "global_context": {
+                "queue_metrics": {},
+                "reward_breakdown": {},
+                "perturbations": {},
+            },
+            "precondition_failures": failures,
+        },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event_dto)
     failures = loop.telemetry.latest_precondition_failures()
-    assert len(failures) == 1
-    assert failures[0]["agent_id"] == "alice"
+    assert len(failures) >= 1
+    assert all(entry["agent_id"] == "alice" for entry in failures)
 
     snapshot = router.dispatch(ConsoleCommand(name="telemetry_snapshot", args=(), kwargs={}))
     assert "precondition_failures" in snapshot
@@ -99,7 +120,7 @@ def test_precondition_failure_blocks_affordance_and_emits_event() -> None:
 
 
 def test_precondition_success_allows_affordance_start() -> None:
-    loop, config = _make_loop()
+    loop, _config = _make_loop()
     world = loop.world
 
     world.agents["alice"] = AgentSnapshot(

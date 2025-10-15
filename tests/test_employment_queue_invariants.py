@@ -4,6 +4,7 @@ from pathlib import Path
 
 from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 
 
@@ -41,21 +42,26 @@ def test_employment_queue_snapshot_tracks_pending_agent() -> None:
     assert snapshot["pending"] == ["alice"]
     assert snapshot["pending_count"] == 1
 
-    loop.telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=world.drain_events(),
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown=None,
-        stability_inputs=None,
-        perturbations=None,
-        policy_identity=None,
-        possessed_agents=None,
-        social_events=None,
+        payload={
+            "tick": loop.tick,
+            "world": world,
+            "rewards": {},
+            "events": world.drain_events(),
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
     metrics = loop.telemetry.latest_employment_metrics()
     assert metrics["pending"] == ["alice"]
     assert metrics["pending_count"] == 1
@@ -71,21 +77,26 @@ def test_employment_defer_exit_clears_queue_and_emits_event() -> None:
     assert world.employment_defer_exit("alice") is True
 
     events = world.drain_events()
-    loop.telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown=None,
-        stability_inputs=None,
-        perturbations=None,
-        policy_identity=None,
-        possessed_agents=None,
-        social_events=None,
+        payload={
+            "tick": loop.tick,
+            "world": world,
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
 
     metrics = loop.telemetry.latest_employment_metrics()
     assert metrics["pending_count"] == 0

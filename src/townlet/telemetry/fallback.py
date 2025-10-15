@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from townlet.core.interfaces import TelemetrySinkProtocol
+from townlet.dto.telemetry import TelemetryEventDTO
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +16,10 @@ logger = logging.getLogger(__name__)
 class StubTelemetrySink(TelemetrySinkProtocol):
     """No-op telemetry implementation that logs missing capability."""
 
-    def __init__(self, config: Any | None = None) -> None:
+    def __init__(self, config: Any | None = None, publisher: Any | None = None) -> None:
         self.config = config
-        self._console_buffer: list[object] = []
+        self.publisher = publisher
+        self._latest_console_events: deque[Mapping[str, object]] = deque(maxlen=50)
         logger.warning("telemetry_stub_active provider=stub message='Telemetry transport disabled; install extras or configure stdout.'")
 
     # ---------------------------
@@ -32,54 +35,20 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         _ = identity
 
     def drain_console_buffer(self) -> Iterable[object]:
-        drained = list(self._console_buffer)
-        self._console_buffer.clear()
+        # Drain console events cached from dispatcher emissions
+        drained = list(self._latest_console_events)
+        self._latest_console_events.clear()
         return drained
 
-    def export_console_buffer(self) -> list[object]:
-        return list(self._console_buffer)
+    def emit_event(self, event: TelemetryEventDTO) -> None:
+        """Emit a typed telemetry event (stub implementation)."""
+        logger.debug("telemetry_stub_event type=%s tick=%s", event.event_type, event.tick)
+        # Cache console.result events for snapshot restore
+        if event.event_type == "console.result":
+            self._latest_console_events.append(event.payload)
 
-    def queue_console_command(self, command: object) -> None:
-        # Accept commands for parity; no auth in stub.
-        self._console_buffer.append(command)
-
-    def record_console_results(self, results: Iterable[Mapping[str, object]]) -> None:
-        _ = list(results)
-
-    def publish_tick(
-        self,
-        *,
-        tick: int,
-        world: Any,
-        observations: Mapping[str, object],
-        rewards: Mapping[str, float],
-        events: Iterable[Mapping[str, object]] | None = None,
-        policy_snapshot: Mapping[str, Mapping[str, object]] | None = None,
-        kpi_history: bool = False,
-        reward_breakdown: Mapping[str, Mapping[str, float]] | None = None,
-        stability_inputs: Mapping[str, object] | None = None,
-        perturbations: Mapping[str, object] | None = None,
-        policy_identity: Mapping[str, object] | None = None,
-        possessed_agents: Iterable[str] | None = None,
-        social_events: Iterable[Mapping[str, object]] | None = None,
-        runtime_variant: str | None = None,
-    ) -> None:
-        _ = (
-            tick,
-            world,
-            observations,
-            rewards,
-            events,
-            policy_snapshot,
-            kpi_history,
-            reward_breakdown,
-            stability_inputs,
-            perturbations,
-            policy_identity,
-            possessed_agents,
-            social_events,
-            runtime_variant,
-        )
+    def emit_metric(self, name: str, value: float, **tags: Any) -> None:
+        logger.debug("telemetry_stub_metric name=%s value=%s tags=%s", name, value, tags)
 
     def latest_queue_metrics(self) -> Mapping[str, int] | None:
         return {}
@@ -164,32 +133,26 @@ class StubTelemetrySink(TelemetrySinkProtocol):
     def latest_personality_snapshot(self) -> Mapping[str, object]:
         return {}
 
-    def record_stability_metrics(self, metrics: Mapping[str, object]) -> None:
-        _ = metrics
-
     def latest_transport_status(self) -> Mapping[str, object]:
+        return {"provider": "stub", "status": "inactive"}
+
+    def transport_status(self) -> Mapping[str, object]:
         return {"provider": "stub", "status": "inactive"}
 
     def latest_health_status(self) -> Mapping[str, object]:
         return {}
 
-    def record_health_metrics(self, metrics: Mapping[str, object]) -> None:
-        _ = metrics
-
-    def record_loop_failure(self, payload: Mapping[str, object]) -> None:
-        logger.error("telemetry_stub_loop_failure payload=%s", dict(payload))
-
     def import_state(self, payload: Mapping[str, object]) -> None:
         _ = payload
 
     def import_console_buffer(self, payload: Iterable[object]) -> None:
-        self._console_buffer.extend(payload)
+        # Import from snapshot - convert to event format if needed
+        for item in payload:
+            if isinstance(item, Mapping):
+                self._latest_console_events.append(item)
 
     def update_relationship_metrics(self, metrics: Mapping[str, object]) -> None:
         _ = metrics
-
-    def record_snapshot_migrations(self, applied: Iterable[str]) -> None:
-        _ = list(applied)
 
     def latest_stability_alerts(self) -> Iterable[str]:
         return []
@@ -198,7 +161,7 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         return {}
 
     def latest_console_results(self) -> Iterable[Mapping[str, object]]:
-        return []
+        return list(self._latest_console_events)
 
     def console_history(self) -> Iterable[Mapping[str, object]]:
         return []
@@ -230,4 +193,21 @@ class StubTelemetrySink(TelemetrySinkProtocol):
         _ = subscriber
 
     def close(self) -> None:
-        self._console_buffer.clear()
+        self._latest_console_events.clear()
+
+
+def is_stub_telemetry(telemetry: TelemetrySinkProtocol, provider: str | None = None) -> bool:
+    """Check if a telemetry sink is a stub implementation.
+
+    Args:
+        telemetry: Telemetry sink to check
+        provider: Optional provider name hint
+
+    Returns:
+        True if telemetry is a stub sink
+    """
+    if isinstance(telemetry, StubTelemetrySink):
+        return True
+    if provider is None:
+        return False
+    return provider == "stub"

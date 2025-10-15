@@ -165,23 +165,23 @@ class RelationshipService:
     def decay(self) -> None:
         if self._rivalry_ledgers:
             emptied: list[str] = []
-            for agent_id, ledger in self._rivalry_ledgers.items():
-                ledger.decay(ticks=1)
-                if not ledger.snapshot():
+            for agent_id, rivalry_ledger in self._rivalry_ledgers.items():
+                rivalry_ledger.decay(ticks=1)
+                if not rivalry_ledger.snapshot():
                     emptied.append(agent_id)
             for agent_id in emptied:
                 self._rivalry_ledgers.pop(agent_id, None)
         if self._relationship_ledgers:
             emptied = []
             current_tick = self._tick_supplier()
-            for agent_id, ledger in self._relationship_ledgers.items():
-                ledger.decay()
+            for agent_id, relationship_ledger in self._relationship_ledgers.items():
+                relationship_ledger.decay()
                 self._restore_pinned_ties(
                     owner_id=agent_id,
-                    ledger=ledger,
+                    ledger=relationship_ledger,
                     current_tick=current_tick,
                 )
-                if not ledger.snapshot():
+                if not relationship_ledger.snapshot():
                     emptied.append(agent_id)
             for agent_id in emptied:
                 self._relationship_ledgers.pop(agent_id, None)
@@ -194,11 +194,11 @@ class RelationshipService:
         """Drop references to ``agent_id`` from relationship and rivalry ledgers."""
 
         self._relationship_ledgers.pop(agent_id, None)
-        for ledger in self._relationship_ledgers.values():
-            ledger.remove_tie(agent_id, reason="removed")
+        for relationship_ledger in self._relationship_ledgers.values():
+            relationship_ledger.remove_tie(agent_id, reason="removed")
         self._rivalry_ledgers.pop(agent_id, None)
-        for ledger in self._rivalry_ledgers.values():
-            ledger.remove(agent_id, reason="removed")
+        for rivalry_ledger in self._rivalry_ledgers.values():
+            rivalry_ledger.remove(agent_id, reason="removed")
 
     # ------------------------------------------------------------------
     # Snapshot import/export
@@ -213,7 +213,11 @@ class RelationshipService:
                 owner_id=owner_id,
                 params=self._relationship_parameters(),
             )
-            ledger.inject(dict(edges))
+            normalized = {
+                str(other): {str(metric): float(value) for metric, value in metrics.items()}
+                for other, metrics in edges.items()
+            }
+            ledger.inject(normalized)
             ledger.set_eviction_hook(owner_id=owner_id, hook=self._record_relationship_eviction)
             self._relationship_ledgers[owner_id] = ledger
 
@@ -224,7 +228,8 @@ class RelationshipService:
                 max_samples=8,
             )
             return
-        self._relationship_churn.ingest_payload(dict(payload))
+        normalized = {str(owner): value for owner, value in payload.items()}
+        self._relationship_churn.ingest_payload(normalized)
 
     # ------------------------------------------------------------------
     # Internal helpers

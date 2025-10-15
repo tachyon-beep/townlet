@@ -31,15 +31,17 @@ def test_adapter_reflects_world_state(simulation_loop: SimulationLoop) -> None:
     )
 
     assert "alice" in adapter.agent_snapshots_view()
-    assert adapter.objects["stove_1"].object_type == "stove"
+    objects_snapshot = adapter.objects_snapshot()
+    assert objects_snapshot["stove_1"]["object_type"] == "stove"
     assert adapter.queue_manager is world.queue_manager
 
 
 def test_adapter_prevents_mutation(simulation_loop: SimulationLoop) -> None:
     adapter = simulation_loop.world_adapter
 
+    snapshot = adapter.objects_snapshot()
     with pytest.raises(TypeError):
-        adapter.objects["new"] = object()  # type: ignore[index]
+        snapshot["new"] = {}  # type: ignore[index]
 
 
 def test_adapter_consumes_ctx_reset_requests(simulation_loop: SimulationLoop) -> None:

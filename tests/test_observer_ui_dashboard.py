@@ -7,6 +7,7 @@ from rich.console import Console
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet_ui.dashboard import (
     PaletteState,
     _build_map_panel,
@@ -144,11 +145,12 @@ def test_build_map_panel_produces_table() -> None:
         policy=loop.policy,
         config=loop.config,
     )
+    artifacts = None
     for _ in range(2):
-        loop.step()
+        artifacts = loop.step()
+    assert artifacts is not None
     snapshot = TelemetryClient().from_console(router)
-    obs_batch = loop.observations.build_batch(loop.world, terminated={})
-    panel = _build_map_panel(snapshot, obs_batch, focus_agent=None)
+    panel = _build_map_panel(snapshot, artifacts.envelope, focus_agent=None)
     assert panel is not None
     assert "Local Map" in (panel.title or "")
 
@@ -183,23 +185,28 @@ def test_narration_panel_shows_styled_categories() -> None:
         wallet=1.0,
     )
 
-    telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
+        payload={
+            "tick": loop.tick,
+            "world": world,
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
-    world.apply_console([])
-    world.consume_console_results()
+    _ = world.apply_console([])
 
     events: list[dict[str, object]] = []
 
@@ -220,20 +227,26 @@ def test_narration_panel_shows_styled_categories() -> None:
     world.resolve_affordances(world.tick)
     events.extend(world.drain_events())
 
-    telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=loop.tick + 1,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
+        payload={
+            "tick": loop.tick + 1,
+            "world": world,
+            "rewards": {},
+            "events": events,
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
     snapshot = TelemetryClient().from_console(router)
     assert snapshot.narrations, "Expected narrations to be populated"
@@ -288,29 +301,34 @@ def test_social_panel_renders_with_summary_and_events() -> None:
     world.update_relationship("alice", "bob", trust=0.6, familiarity=0.4)
     world.update_relationship("bob", "alice", trust=0.45, familiarity=0.3, rivalry=0.05)
 
-    telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-        social_events=[
-            {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
-            {
-                "type": "rivalry_avoidance",
-                "agent": "bob",
-                "object": "stove_1",
-                "reason": "queue_rival",
-            },
-        ],
+        payload={
+            "tick": loop.tick,
+            "world": world,
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [
+                {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
+                {
+                    "type": "rivalry_avoidance",
+                    "agent": "bob",
+                    "object": "stove_1",
+                    "reason": "queue_rival",
+                },
+            ],
+        },
+        metadata=TelemetryMetadata(),
     )
+    telemetry.emit_event(event)
 
     snapshot = TelemetryClient().from_console(router)
     panels = list(

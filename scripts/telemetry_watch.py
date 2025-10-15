@@ -307,8 +307,6 @@ def _parse_health_line(line: str) -> dict[str, float]:
     missing = required - record.keys()
     if missing:
         raise ValueError(f"health log missing fields: {sorted(missing)}")
-    record["telemetry_queue"] = record.get("queue", 0.0)
-    record["telemetry_dropped"] = record.get("dropped", 0.0)
     return record
 
 

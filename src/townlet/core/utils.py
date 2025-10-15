@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
-from townlet.policy.fallback import StubPolicyBackend
-from townlet.telemetry.fallback import StubTelemetrySink
-
 
 class _ProviderCarrier(Protocol):
     @property
@@ -19,12 +15,11 @@ def _provider_lookup(loop: object, key: str, fallback_attr: str) -> str:
     if isinstance(info, dict):
         return str(info.get(key, "unknown") or "unknown")
     if info is not None:
-        try:
-            value = info.get(key, "unknown")  # type: ignore[attr-defined]
+        getter = getattr(info, "get", None)
+        if callable(getter):
+            value = getter(key, "unknown")
             if value:
                 return str(value)
-        except AttributeError:
-            pass
     attr_value = getattr(loop, fallback_attr, None)
     if attr_value:
         return str(attr_value)
@@ -37,19 +32,3 @@ def policy_provider_name(loop: _ProviderCarrier) -> str:
 
 def telemetry_provider_name(loop: _ProviderCarrier) -> str:
     return _provider_lookup(loop, "telemetry", "_telemetry_provider")
-
-
-def is_stub_policy(policy: PolicyBackendProtocol, provider: str | None = None) -> bool:
-    if isinstance(policy, StubPolicyBackend):
-        return True
-    if provider is None:
-        return False
-    return provider == "stub"
-
-
-def is_stub_telemetry(telemetry: TelemetrySinkProtocol, provider: str | None = None) -> bool:
-    if isinstance(telemetry, StubTelemetrySink):
-        return True
-    if provider is None:
-        return False
-    return provider == "stub"

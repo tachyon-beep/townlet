@@ -39,6 +39,24 @@ def test_spawn_agent_emits_event_and_allocates(world: WorldState) -> None:
     assert any(event.get("event") == "agent_spawned" for event in events)
 
 
+def test_spawn_assigns_jobs_round_robin(world: WorldState) -> None:
+    world.drain_events()
+    job_ids = list(world.config.jobs.keys())
+    assert job_ids
+
+    first = _spawn(world, "alice", (0, 0))
+    second = _spawn(world, "bob", (1, 0))
+
+    assert first.job_id == job_ids[0]
+    if len(job_ids) > 1:
+        assert second.job_id == job_ids[1]
+    else:
+        assert second.job_id == job_ids[0]
+
+    assert first.inventory.get("wages_earned", 0) == 0
+    assert second.inventory.get("wages_earned", 0) == 0
+
+
 def test_teleport_agent_updates_position(world: WorldState) -> None:
     _spawn(world, "alice", (0, 0))
     world.drain_events()

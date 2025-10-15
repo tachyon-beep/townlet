@@ -12,19 +12,37 @@ The simulation loop currently instantiates concrete classes from `townlet.world`
 
 Implement the following shape, mirroring the WP1 requirements:
 
-1. **Minimal ports only.** Create `townlet/ports/` and define the exact protocols below. They represent the sole surface the loop sees.
+1. **Minimal ports only.** Create `townlet/ports/` and define the exact protocols below. They represent the sole surface the loop sees. World is exported via `townlet.ports.world.WorldRuntime` (runtime-checkable protocol); policy and telemetry remain under `townlet.core`.
 
    ```python
    # townlet/ports/world.py
    from typing import Protocol, Iterable, Mapping, Any
 
+   from collections.abc import Iterable, Mapping, Callable
+   from typing import Protocol, Any
+
    class WorldRuntime(Protocol):
-       def reset(self, seed: int | None = None) -> None: ...
-       def tick(self) -> None: ...
-       def agents(self) -> Iterable[str]: ...
-       def observe(self, agent_ids: Iterable[str] | None = None) -> Mapping[str, Any]: ...
+       def bind_world(self, world: WorldState) -> None: ...
+       def queue_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None: ...
        def apply_actions(self, actions: Mapping[str, Any]) -> None: ...
-       def snapshot(self) -> Mapping[str, Any]: ...
+       def tick(
+           self,
+           *,
+           tick: int,
+           console_operations: Iterable[ConsoleCommandEnvelope] | None = None,
+           action_provider: Callable[[WorldState, int], Mapping[str, Any]] | None = None,
+           policy_actions: Mapping[str, Any] | None = None,
+       ) -> RuntimeStepResult: ...
+       def snapshot(
+           self,
+           *,
+           config: Any | None = None,
+           telemetry: TelemetrySinkProtocol | None = None,
+           stability: Any | None = None,
+           promotion: Any | None = None,
+           rng_streams: Mapping[str, Any] | None = None,
+           identity: Mapping[str, Any] | None = None,
+       ) -> SnapshotState: ...
    ```
 
    ```python
@@ -50,7 +68,7 @@ Implement the following shape, mirroring the WP1 requirements:
 
    *No console buffering, training hooks, transport specifics, or loop instrumentation methods belong on these ports.*
 
-2. **World owns the tick.** `world.tick()` takes no tick argument; the loop reads the current tick from `world.snapshot()`. Maintain `world.apply_actions()` between `observe` and `tick` so policy decisions remain stateless.
+2. **World owns the tick.** `WorldRuntime.tick` accepts the loop tick and optional console/actions inputs. `ConsoleRouter` stages commands via `queue_console`; the loop forwards policy actions via `apply_actions` before invoking `tick`. DTO-only follow-up work (WP3) will replace the `WorldState` callback with prebuilt DTO action batches.
 
 3. **Telemetry lifecycle is explicit.** The loop calls `telemetry.start()` before the first tick and `telemetry.stop()` during shutdown. Every other telemetry concern (console output, batching, back-pressure) lives in adapters.
 
@@ -70,7 +88,7 @@ Implement the following shape, mirroring the WP1 requirements:
 
    Unknown keys raise `ConfigurationError(f"Unknown {kind} provider: {key}. Known: {sorted(REGISTRY[kind])}")`.
 
-6. **Composition root imports ports only.** Entry points resolve providers via factories:
+6. **Composition root imports ports only.** Entry points resolve providers via factories; the simulation loop emits dispatcher events plus a DTO `global_context` payload. High-level structure:
 
    ```python
    world = create_world(cfg)
@@ -80,12 +98,12 @@ Implement the following shape, mirroring the WP1 requirements:
    telemetry.start()
    agent_ids = list(world.agents())
    policy.on_episode_start(agent_ids)
-   for _ in range(cfg.runtime.max_ticks):
-       observations = world.observe()
-       actions = policy.decide(observations)
+   for tick in range(1, cfg.runtime.max_ticks + 1):
+       envelope = world.observe()
+       actions = policy.decide(envelope)
        world.apply_actions(actions)
-       world.tick()
-       telemetry.emit_event("tick", world.snapshot())
+       result = world.tick(tick=tick)
+       telemetry.emit_event("loop.tick", {"tick": tick, "result": result})
    policy.on_episode_end()
    telemetry.stop()
    ```
@@ -106,8 +124,199 @@ Implement the following shape, mirroring the WP1 requirements:
 - Relocate any extra behaviour (`queue_console`, `flush_transitions`, `active_policy_hash`, etc.) into adapters or specialised backends. Expanding the ports requires a fresh ADR.
 - Keep provider keys stable; document additions in both the ADR and the WP1 tasking file.
 - When removing legacy factories, ensure configs use the new registry-backed paths and update docs alongside the code.
+- As DTO-only telemetry rolls out (WP3 Stage 5/6), keep guard tests (`tests/core/test_no_legacy_observation_usage.py`, `tests/test_telemetry_surface_guard.py`, `tests/test_console_commands.py`, `tests/test_conflict_telemetry.py`, `tests/test_observer_ui_dashboard.py`) green—any reintroduction of legacy observation builders or payloads must be confined to adapters/factories explicitly listed in the whitelist.
+- Health/failure telemetry now exposes a structured payload with `transport`, DTO `global_context`, and a `summary` block replacing prior `telemetry_*` aliases. Adapters that ingest historical payloads must convert aliases into the summary before handing data to dashboards; new integrations should rely on the structured fields exclusively.
+
+## Implementation Status
+
+**Status**: COMPLETE (with architectural improvements)
+**Completion Date**: 2025-10-13 (WP3.2 WS1)
+
+### Delivered Components
+
+- ✅ Port protocols defined in `townlet/ports/` (world, policy, telemetry)
+- ✅ Registry-backed factories in `townlet/factories/`
+- ✅ Adapter implementations in `townlet/adapters/`
+- ✅ Dummy test implementations in `townlet/testing/`
+- ✅ Comprehensive test coverage (14 tests passing):
+  - Port surface tests (3 tests)
+  - Factory registry tests (7 tests)
+  - Dummy loop integration tests (3 tests)
+  - Modular smoke tests (1 test)
+
+### Deviations from Original Specification
+
+The implementation evolved beyond the original ADR specification in ways that objectively improve the architecture:
+
+#### 1. WorldRuntime Implementation
+
+**Planned**: WorldContext façade implementing WorldRuntime protocol
+**Actual**: WorldRuntime concrete class in `world/runtime.py`, separate from WorldContext
+
+**Rationale**:
+- The WorldRuntime façade requires stateful coordination (action staging, buffer management, tick sequencing)
+- A concrete class provides this coordination layer more naturally than a pure context object
+- WorldContext (in `world/core/context.py`) focuses on system aggregation and observation building
+
+**Assessment**: Objectively better — clearer separation of concerns (runtime orchestration vs. context access)
+
+#### 2. Naming Convention
+
+**Planned**: Different names for protocol and implementation
+**Actual**: Same name (WorldRuntime) for both protocol and concrete class
+
+**Rationale**:
+- Structural typing (PEP 544) allows this pattern without confusion
+- Different namespaces provide natural separation (`ports.world` vs. `world.runtime`)
+- The concrete class naturally fulfills the protocol contract
+- Cleaner API - consumers import from logical locations
+
+**Assessment**: Acceptable — no confusion in practice due to namespacing. Enhanced with comprehensive docstring explaining the pattern (see `ports/world.py:27-55`).
+
+#### 3. WorldContext Architecture
+
+**Planned**: Single WorldContext implementing WorldRuntime
+**Actual**: WorldContext in `world/core/context.py`, separate from WorldRuntime façade
+
+**Rationale**:
+- WorldContext aggregates domain systems and provides state access
+- WorldRuntime orchestrates tick sequencing and manages external interactions
+- Clean separation: context = state access, runtime = orchestration
+- WorldContext is used internally by WorldRuntime, not exposed at port boundary
+
+**Assessment**: Objectively better — clearer responsibilities, easier testing, better modularity
+
+#### 4. Obsolete Context Stub Removed
+
+**Planned**: N/A (predates this specification)
+**Actual**: Deleted `townlet/world/context.py` stub containing only NotImplementedError
+
+**Rationale**:
+- Stub was created as placeholder during WP2 planning
+- Full implementation now exists in `world/core/context.py` and `world/runtime.py`
+- Stub served no purpose and caused naming confusion
+
+**Assessment**: Objectively better — eliminates dead code and reduces confusion
+
+### Verification
+
+- ✅ All port/factory tests passing (14/14)
+- ✅ Type checking clean (`mypy src/townlet/ports/`)
+- ✅ No imports of deleted context stub
+- ✅ Documentation updated with implementation patterns
+- ✅ ADR-002 (World Modularisation) documents actual architecture
+- ✅ ADR-003 (DTO Boundary) extends ports with typed DTOs
+
+## Architecture Deep Dive
+
+### Port Protocol vs Concrete Implementation
+
+The port-and-adapter pattern creates three layers:
+
+1. **Port Protocol** (`townlet.ports.world.WorldRuntime`)
+   - Structural protocol defining the contract
+   - Imported by `SimulationLoop` for type checking
+   - Enables dependency inversion
+   - Location: `src/townlet/ports/world.py`
+
+2. **Concrete Implementation** (`townlet.world.runtime.WorldRuntime`)
+   - Stateful façade implementing the port
+   - Buffers console operations and policy actions
+   - Delegates to `WorldContext` for tick execution
+   - Location: `src/townlet/world/runtime.py`
+
+3. **Adapter Layer** (`townlet.adapters.world_default.DefaultWorldAdapter`)
+   - Wraps concrete implementation for registry
+   - Handles provider-specific initialization
+   - Location: `src/townlet/adapters/world_default.py`
+
+**Naming Convention**: The protocol and concrete class share the name "WorldRuntime". This is intentional and leverages structural typing (PEP 544):
+- Different namespaces prevent confusion (`ports.world` vs `world.runtime`)
+- Import paths make the distinction clear
+- Protocol documentation explicitly notes this pattern
+
+### Runtime/Context Architecture
+
+The world implementation uses **delegation** to separate concerns:
+
+```
+SimulationLoop
+    ↓ (uses port)
+WorldRuntime (Façade)
+    ↓ (delegates to)
+WorldContext (Aggregator)
+    ↓ (coordinates)
+Domain Systems (Affordances, Economy, Employment, etc.)
+    ↓ (operate on)
+WorldState (Core State)
+    ↓ (wrapped by)
+WorldRuntimeAdapter (Read-only View)
+    ↓ (used by)
+ObservationService
+```
+
+**WorldRuntime** ([src/townlet/world/runtime.py:51-233](../../../src/townlet/world/runtime.py#L51-L233)):
+- **Purpose**: Public façade implementing port protocol
+- **Responsibilities**:
+  - Buffer policy actions and console operations
+  - Implement port contract methods
+  - Delegate tick execution to WorldContext
+  - Provide legacy fallback for direct WorldState access
+- **Pattern**: Stateful façade with buffering
+
+**WorldContext** ([src/townlet/world/core/context.py:48-495](../../../src/townlet/world/core/context.py#L48-L495)):
+- **Purpose**: Internal aggregator coordinating subsystems
+- **Responsibilities**:
+  - Aggregate 13 domain services (queue, affordance, employment, lifecycle, etc.)
+  - Orchestrate tick pipeline through systems
+  - Build observation envelopes (DTOs)
+  - Export subsystem snapshots for telemetry
+  - Manage RNG streams
+- **Pattern**: Service aggregator with delegation
+
+**Delegation Flow** (WorldRuntime → WorldContext):
+
+```python
+# WorldRuntime.tick() (line 196-232)
+context = getattr(world, "context", None)
+if context is None:
+    # Legacy path: direct WorldState manipulation
+    world.apply_actions(prepared_actions)
+    world.resolve_affordances(current_tick=tick)
+    ...
+else:
+    # Modern path: delegate to WorldContext
+    result = context.tick(
+        tick=tick,
+        console_operations=queued_ops,
+        prepared_actions=prepared_actions,
+        lifecycle=lifecycle,
+        perturbations=perturbations,
+        ticks_per_day=self._ticks_per_day,
+    )
+```
+
+This design provides:
+- **Separation of concerns**: Runtime handles buffering/port contract; Context handles subsystem orchestration
+- **Testability**: Can test Context in isolation or inject mock services
+- **Evolution path**: Legacy WorldState path coexists with modern Context path
+- **Modularity**: Adding new subsystems only requires updating WorldContext
+
+**WorldRuntimeAdapter** ([src/townlet/world/core/runtime_adapter.py:44-216](../../../src/townlet/world/core/runtime_adapter.py#L44-L216)):
+- **Purpose**: Read-only view over WorldState for observations/policy
+- **Responsibilities**:
+  - Provide safe, read-only accessors to world state
+  - Wrap embedding allocator
+  - Convert internal state to public-facing formats
+- **Pattern**: Adapter with read-only enforcement
+- **Usage**: Observation service accesses world via adapter, never directly
+
+For detailed analysis, see: [WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md](../WP_NOTES/WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md)
 
 ## Related Documents
 
 - `docs/architecture_review/WP_TASKINGS/WP1.md` — implementation checklist aligned with this ADR.
 - `docs/architecture_review/ARCHITECTURE_REVIEW_2.md` — architectural context motivating the port boundary.
+- `docs/architecture_review/ADR/ADR-002 - World Modularisation.md` — world package structure and WorldContext implementation.
+- `docs/architecture_review/ADR/ADR-003 - DTO Boundary.md` — typed DTO boundaries extending the port protocols.
+- `docs/architecture_review/WP_NOTES/WP4.1/CONTEXT_RUNTIME_RECONCILIATION.md` — detailed analysis of Runtime/Context architecture.

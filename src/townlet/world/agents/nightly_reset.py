@@ -16,7 +16,7 @@ class NightlyResetService:
 
     agents: AgentRegistry
     queue_manager: QueueManager
-    active_reservations: MutableMapping[str, str]
+    active_reservations: MutableMapping[str, str | None]
     employment_service: EmploymentService
     emit_event: Callable[[str, dict[str, object]], None]
     sync_reservation: Callable[[str], None]
@@ -33,10 +33,6 @@ class NightlyResetService:
         for snapshot in list(self.agents.values()):
             previous_position = snapshot.position
             home = snapshot.home_position or snapshot.position
-            if home is None:
-                home = snapshot.position
-                snapshot.home_position = home
-
             target = home
             if target is not None and target != snapshot.position:
                 occupied = any(

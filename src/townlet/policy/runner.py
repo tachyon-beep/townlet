@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import warnings
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from townlet.config import SimulationConfig
 from townlet.policy.behavior import AgentIntent, BehaviorController, build_behavior
 from townlet.policy.behavior_bridge import BehaviorBridge
+from townlet.utils.coerce import coerce_float, coerce_int
 from townlet.policy.models import (
     ConflictAwarePolicyConfig,
     ConflictAwarePolicyNetwork,
@@ -20,8 +24,15 @@ from townlet.policy.models import (
 from townlet.policy.trajectory_service import TrajectoryService
 from townlet.world.grid import WorldState
 
+from .dto_view import DTOQueueManagerView, DTORelationshipView, DTOWorldView
+
+if TYPE_CHECKING:  # pragma: no cover
+    from townlet.dto.observations import ObservationEnvelope
+
 # NOTE: Training orchestrator is imported lazily by TrainingHarness to avoid
 # importing Torch-dependent modules during test collection in non-ML envs.
+
+logger = logging.getLogger(__name__)
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
@@ -55,6 +66,28 @@ def _pretty_action(action_repr: str) -> str:
             label = f"{label}:{aff}"
         return label
     return action_repr
+
+
+@dataclass(slots=True)
+class ObservationEnvelopeCache:
+    """Caches DTO envelopes plus derived helper views for diagnostics."""
+
+    envelope: ObservationEnvelope
+    agent_ids: tuple[str, ...]
+    anneal_context: Mapping[str, Any]
+    action_lookup: dict[str, Any]
+
+    @classmethod
+    def from_envelope(cls, envelope: ObservationEnvelope) -> ObservationEnvelopeCache:
+        agent_ids = tuple(dto.agent_id for dto in envelope.agents)
+        anneal_ctx = dict(envelope.global_context.anneal_context or {})
+        action_lookup = dict(envelope.actions or {})
+        return cls(
+            envelope=envelope,
+            agent_ids=agent_ids,
+            anneal_context=anneal_ctx,
+            action_lookup=action_lookup,
+        )
 
 
 class PolicyRuntime:
@@ -93,10 +126,15 @@ class PolicyRuntime:
         config_policy_hash = getattr(self.config, "policy_hash", None)
         if isinstance(config_policy_hash, str) and config_policy_hash:
             self._policy_hash = config_policy_hash
+        self._envelope_cache: ObservationEnvelopeCache | None = None
 
     @property
     def behavior(self) -> BehaviorController:
         return self._behavior_bridge.behavior
+
+    @behavior.setter
+    def behavior(self, controller: BehaviorController) -> None:
+        self._behavior_bridge.behavior = controller
 
     @property
     def transitions(self) -> dict[str, dict[str, object]]:
@@ -110,10 +148,10 @@ class PolicyRuntime:
 
         return self._trajectory_service.trajectory
 
+    def anneal_context(self) -> dict[str, object]:
+        """Return anneal and option commit context for diagnostics."""
 
-    @behavior.setter
-    def behavior(self, controller: BehaviorController) -> None:
-        self._behavior_bridge.behavior = controller
+        return self._behavior_bridge.snapshot()
 
     @property
     def _option_commit_until(self) -> dict[str, int]:
@@ -145,8 +183,28 @@ class PolicyRuntime:
 
         self._behavior_bridge.set_policy_action_provider(provider)
 
-    def decide(self, world: WorldState, tick: int) -> dict[str, object]:
+    def supports_observation_envelope(self) -> bool:
+        """PolicyRuntime requires DTO observation envelopes."""
+
+        return True
+
+    def decide(
+        self,
+        world: WorldState,
+        tick: int,
+        *,
+        envelope: ObservationEnvelope,
+    ) -> dict[str, object]:
         """Return an action dictionary per agent for the current tick."""
+
+        self._envelope_cache = ObservationEnvelopeCache.from_envelope(envelope)
+
+        guardrail_emitter = getattr(world, "emit_event", None)
+        dto_world = DTOWorldView(
+            envelope=envelope,
+            world=world,
+            guardrail_emitter=guardrail_emitter,
+        )
         self._tick = tick
         self._trajectory_service.begin_tick(tick)
         actions: dict[str, object] = {}
@@ -154,11 +212,20 @@ class PolicyRuntime:
             if self._behavior_bridge.is_possessed(agent_id):
                 actions[agent_id] = {"kind": "wait"}
                 continue
+            def _guard(world_ref: WorldState, agent: str, intent: AgentIntent) -> AgentIntent:
+                return self._apply_relationship_guardrails(
+                    world_ref,
+                    agent,
+                    intent,
+                    dto_world=dto_world,
+                )
+
             selected_intent, commit_enforced = self._behavior_bridge.decide_agent(
                 world=world,
                 agent_id=agent_id,
                 tick=tick,
-                guardrail_fn=self._apply_relationship_guardrails,
+                guardrail_fn=_guard,
+                dto_world=dto_world,
             )
             if selected_intent.kind == "wait":
                 wait_payload: dict[str, object] = {"kind": "wait"}
@@ -194,7 +261,8 @@ class PolicyRuntime:
             self._behavior_bridge.update_transition_entry(
                 agent_id, tick, entry, commit_enforced
             )
-            self._trajectory_service.record_action(agent_id, action_payload, action_id)
+            # action_payload is dict[str, object | None] from actions dict, coerce for TrajectoryService
+            self._trajectory_service.record_action(agent_id, cast(dict[str, Any], action_payload), action_id)
         return actions
 
     def _apply_relationship_guardrails(
@@ -202,8 +270,11 @@ class PolicyRuntime:
         world: WorldState,
         agent_id: str,
         intent: AgentIntent,
+        *,
+        dto_world: DTOWorldView | None = None,
     ) -> AgentIntent:
         avoidance = getattr(self.behavior, "should_avoid", None)
+        rivalry_source = dto_world if dto_world is not None else world
 
         def _should_avoid(target_agent: str) -> bool:
             if not target_agent:
@@ -212,36 +283,96 @@ class PolicyRuntime:
                 try:
                     return bool(avoidance(world, agent_id, target_agent))
                 except Exception:  # pragma: no cover - defensive hook
-                    return world.rivalry_should_avoid(agent_id, target_agent)
-            return world.rivalry_should_avoid(agent_id, target_agent)
+                    return rivalry_source.rivalry_should_avoid(agent_id, target_agent)
+            return rivalry_source.rivalry_should_avoid(agent_id, target_agent)
 
         if intent.kind == "chat" and intent.target_agent:
             if _should_avoid(intent.target_agent):
-                world.record_chat_failure(agent_id, intent.target_agent)
-                world.record_relationship_guard_block(
-                    agent_id=agent_id,
-                    reason="chat_rival",
-                    target_agent=intent.target_agent,
-                )
+                if dto_world is not None:
+                    dto_world.record_chat_failure(agent_id, intent.target_agent)
+                    dto_world.record_relationship_guard_block(
+                        agent_id=agent_id,
+                        reason="chat_rival",
+                        target_agent=intent.target_agent,
+                    )
+                else:
+                    self._emit_guardrail_request(
+                        world,
+                        "chat_failure",
+                        speaker=agent_id,
+                        listener=intent.target_agent,
+                    )
+                    self._emit_guardrail_request(
+                        world,
+                        "relationship_block",
+                        agent_id=agent_id,
+                        reason="chat_rival",
+                        target_agent=intent.target_agent,
+                    )
                 cancel = getattr(self.behavior, "cancel_pending", None)
                 if callable(cancel):
                     cancel(agent_id)
                 return AgentIntent(kind="wait", blocked=True)
         if intent.kind in {"request", "start"} and intent.object_id:
             guard = getattr(self.behavior, "_rivals_in_queue", None)
-            if callable(guard) and guard(world, agent_id, intent.object_id):
-                world.record_relationship_guard_block(
-                    agent_id=agent_id,
-                    reason="queue_rival",
-                    object_id=intent.object_id,
-                )
+            queue_view: DTOQueueManagerView
+            relationship_view: DTORelationshipView
+            if dto_world is not None:
+                queue_view = dto_world.queue_manager
+                relationship_view = dto_world._relationships
+            else:
+                # Fallback: wrap WorldState components in DTO views
+                queue_view = DTOQueueManagerView(queues={}, fallback=world.queue_manager)
+                relationship_view = DTORelationshipView(snapshot={}, metrics={}, fallback=world)
+            if callable(guard) and guard(
+                world,
+                agent_id,
+                intent.object_id,
+                queue_view=queue_view,
+                relationship_view=relationship_view,
+                dto_world=dto_world,
+            ):
+                if dto_world is not None:
+                    dto_world.record_relationship_guard_block(
+                        agent_id=agent_id,
+                        reason="queue_rival",
+                        object_id=intent.object_id,
+                    )
+                else:
+                    self._emit_guardrail_request(
+                        world,
+                        "relationship_block",
+                        agent_id=agent_id,
+                        reason="queue_rival",
+                        object_id=intent.object_id,
+                    )
                 cancel = getattr(self.behavior, "cancel_pending", None)
                 if callable(cancel):
                     cancel(agent_id)
                 return AgentIntent(kind="wait", blocked=True)
         return intent
 
-    def post_step(self, rewards: dict[str, float], terminated: dict[str, bool]) -> None:
+    def _emit_guardrail_request(
+        self,
+        world: WorldState,
+        variant: str,
+        **payload: Any,
+    ) -> None:
+        emitter = getattr(world, "emit_event", None)
+        request: dict[str, Any] = {"variant": variant}
+        for key, value in payload.items():
+            if value is not None:
+                request[key] = value
+        if callable(emitter):
+            emitter("policy.guardrail.request", request)
+            return
+        raise RuntimeError("WorldState.emit_event unavailable for guardrail event request")
+
+    def post_step(
+        self,
+        rewards: Mapping[str, float],
+        terminated: Mapping[str, bool],
+    ) -> None:
         """Record rewards and termination signals into internal buffers."""
         for agent_id, reward in rewards.items():
             done = bool(terminated.get(agent_id, False))
@@ -254,10 +385,21 @@ class PolicyRuntime:
                 self._behavior_bridge.clear_commit_state(agent_id)
 
     def flush_transitions(
-        self, observations: dict[str, dict[str, object]]
+        self,
+        *,
+        envelope: ObservationEnvelope | None = None,
     ) -> list[dict[str, object]]:
         """Combine stored transition data with observations and return frames."""
-        frames = self._trajectory_service.flush_transitions(observations)
+        dto_envelope = envelope
+        if dto_envelope is None and self._envelope_cache is not None:
+            dto_envelope = self._envelope_cache.envelope
+
+        if dto_envelope is None:
+            raise RuntimeError("Observation envelope unavailable when flushing transitions")
+
+        frames = self._trajectory_service.flush_transitions(
+            envelope=dto_envelope,
+        )
         for frame in frames:
             self._annotate_with_policy_outputs(frame)
         self._trajectory_service.extend_trajectory(frames)
@@ -373,13 +515,17 @@ class PolicyRuntime:
                         "probability": float(round(float(probabilities[idx]), 6)),
                     }
                 )
-            selected_idx = frame.get("action_id")
+            selected_idx_raw = frame.get("action_id")
+            selected_idx = coerce_int(selected_idx_raw, default=0)
             selected_label = action_lookup.get(selected_idx, str(selected_idx))
+            tick_val = frame.get("tick", self._tick)
+            log_prob_val = frame.get("log_prob", 0.0)
+            value_pred_val = frame.get("value_pred", 0.0)
             snapshot[agent_id] = {
-                "tick": int(frame.get("tick", self._tick)),
+                "tick": coerce_int(tick_val, default=self._tick),
                 "selected_action": selected_label,
-                "log_prob": float(round(float(frame.get("log_prob", 0.0)), 6)),
-                "value_pred": float(round(float(frame.get("value_pred", 0.0)), 6)),
+                "log_prob": float(round(coerce_float(log_prob_val, default=0.0), 6)),
+                "value_pred": float(round(coerce_float(value_pred_val, default=0.0), 6)),
                 "top_actions": top_actions,
             }
         self._latest_policy_snapshot = snapshot
@@ -459,6 +605,27 @@ class PolicyRuntime:
         )
         return ConflictAwarePolicyNetwork(config)
 
+    # ------------------------------------------------------------------
+    # DTO cache helpers
+    # ------------------------------------------------------------------
+    def update_observation_envelope(self, envelope: ObservationEnvelope) -> None:
+        """Persist the latest DTO envelope for diagnostics and downstream consumers."""
+
+        self._envelope_cache = ObservationEnvelopeCache.from_envelope(envelope)
+
+    def latest_envelope(self) -> ObservationEnvelope | None:
+        """Return the most recent observation envelope."""
+
+        cache = self._envelope_cache
+        return cache.envelope if cache is not None else None
+
+    def latest_agent_ids(self) -> tuple[str, ...]:
+        """Expose the agent id ordering from the last envelope (for tests)."""
+
+        cache = self._envelope_cache
+        return cache.agent_ids if cache is not None else ()
+
+
 class TrainingHarness:
     """Backward-compatible, lazy wrapper around PolicyTrainingOrchestrator.
 
@@ -476,5 +643,5 @@ class TrainingHarness:
 
         self._impl = PolicyTrainingOrchestrator(config=config)
 
-    def __getattr__(self, name: str):  # pragma: no cover - simple delegation
+    def __getattr__(self, name: str) -> Any:  # pragma: no cover - simple delegation
         return getattr(self._impl, name)

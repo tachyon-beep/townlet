@@ -42,7 +42,7 @@ def test_scripted_behavior_determinism() -> None:
             ]
             self._index = 0
 
-        def decide(self, world, agent_id):  # type: ignore[override]
+        def decide(self, world, agent_id, *, dto_world=None, **_: object):  # type: ignore[override]
             intent = self._schedule[self._index % len(self._schedule)]
             self._index += 1
             return intent

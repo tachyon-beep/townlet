@@ -25,7 +25,7 @@ class PersonalityProfile:
     reward_bias: Mapping[str, float] = field(default_factory=dict)
     behaviour_bias: Mapping[str, float] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:  # type: ignore[override]
+    def __post_init__(self) -> None:
         object.__setattr__(self, "need_multipliers", self._freeze(self.need_multipliers))
         object.__setattr__(self, "reward_bias", self._freeze(self.reward_bias))
         object.__setattr__(self, "behaviour_bias", self._freeze(self.behaviour_bias))

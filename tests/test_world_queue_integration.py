@@ -2,15 +2,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
-def _make_world() -> WorldState:
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    config.employment.enforce_job_loop = False
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.register_object(object_id="shower", object_type="shower")
     world.register_object(object_id="fridge_1", object_type="fridge")
     world.register_object(object_id="stove_1", object_type="stove")
@@ -47,6 +47,7 @@ def test_queue_assignment_flow() -> None:
 
     world.tick = 1
     world.apply_actions({"alice": {"kind": "release", "object": "shower"}})
+    world.resolve_affordances(current_tick=world.tick)
     assert world.queue_manager.active_agent("shower") == "bob"
     assert world.active_reservations.get("shower") == "bob"
 
@@ -146,6 +147,7 @@ def test_affordance_failure_skips_effects() -> None:
             }
         }
     )
+    world.resolve_affordances(current_tick=world.tick)
     world.apply_actions(
         {
             "alice": {
@@ -156,6 +158,7 @@ def test_affordance_failure_skips_effects() -> None:
             }
         }
     )
+    world.resolve_affordances(current_tick=world.tick)
 
     assert alice.needs["hygiene"] == pytest.approx(baseline)
     assert world.queue_manager.active_agent("shower") is None
@@ -184,16 +187,16 @@ def test_affordance_events_emitted() -> None:
             }
         }
     )
+    start_result = world.resolve_affordances(current_tick=world.tick)
+    assert any(e["event"] == "affordance_start" for e in start_result.events)
 
-    events = world.drain_events()
-    assert any(e["event"] == "affordance_start" for e in events)
-
+    finish_events: list[dict[str, object]] = []
     for t in range(1, 3):
         world.tick = t
-        world.resolve_affordances(current_tick=world.tick)
+        result = world.resolve_affordances(current_tick=world.tick)
+        finish_events.extend(result.events)
 
-    events = world.drain_events()
-    assert any(e["event"] == "affordance_finish" for e in events)
+    assert any(e["event"] == "affordance_finish" for e in finish_events)
 
 
 def test_need_decay_applied_each_tick() -> None:
@@ -239,13 +242,16 @@ def test_wage_income_applied_on_shift() -> None:
     alice = world.agents["alice"]
     alice.position = (0, 0)
     initial_wallet = alice.wallet
-    world.tick = 200
+    job_id = next(iter(world.config.jobs.keys()))
+    start_tick = world.config.jobs[job_id].start_tick
+    end_tick = world.config.jobs[job_id].end_tick or start_tick
+    world.tick = int(start_tick)
     world.resolve_affordances(current_tick=world.tick)
     assert alice.on_shift is True
     assert alice.wallet > initial_wallet
 
     # Advance beyond shift end
-    world.tick = 401
+    world.tick = int(end_tick + 1)
     world.resolve_affordances(current_tick=world.tick)
     assert alice.on_shift is False
 
@@ -255,16 +261,16 @@ def test_stove_restock_event_emitted() -> None:
     world.tick = 199
     world.resolve_affordances(current_tick=world.tick)
     world.tick = 200
-    world.resolve_affordances(current_tick=world.tick)
-    events = world.drain_events()
+    result = world.resolve_affordances(current_tick=world.tick)
+    events = result.events
     assert any(event.get("event") == "stock_replenish" for event in events)
 
 
 def test_scripted_behavior_handles_sleep() -> None:
     world = _make_world()
-    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    loop = SimulationLoop(config)
-    loop.world = world
+    loop = SimulationLoop(world.config)
+    loop.override_world_components(lambda _: world.world_components())
+    loop.reset()
     target = world.agents["alice"]
     target.needs["energy"] = 0.1
 

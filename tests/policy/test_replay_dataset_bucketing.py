@@ -1,9 +1,9 @@
+import json
 from pathlib import Path
 
-import json
 import numpy as np
 
-from townlet.policy.replay import ReplayDataset, ReplayDatasetConfig, TRAINING_ARRAY_FIELDS
+from townlet.policy.replay import TRAINING_ARRAY_FIELDS, ReplayDataset, ReplayDatasetConfig
 
 
 def _write_sample(dirpath: Path, stem: str, timesteps: int, feat_dim: int = 4) -> tuple[Path, Path]:

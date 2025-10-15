@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import logging
 import os
 import random
@@ -10,11 +11,11 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 from townlet.agents.models import Personality, PersonalityProfile, PersonalityProfiles
 from townlet.agents.relationship_modifiers import RelationshipEvent
-from townlet.config import AffordanceRuntimeConfig, EmploymentConfig, SimulationConfig
+from townlet.config import AffordanceRuntimeConfig, SimulationConfig
 from townlet.config.affordance_manifest import (
     AffordanceManifestError,
     load_affordance_manifest,
@@ -29,11 +30,10 @@ from townlet.world.affordance_runtime import AffordanceCoordinator
 from townlet.world.affordance_runtime_service import AffordanceRuntimeService
 from townlet.world.affordances import (
     AffordanceEnvironment,
-    AffordanceOutcome,
     AffordanceRuntimeContext,
     DefaultAffordanceRuntime,
+    HookPayload,
     RunningAffordanceState,
-    apply_affordance_outcome,
 )
 from townlet.world.agents.employment import EmploymentService
 from townlet.world.agents.lifecycle import LifecycleService
@@ -43,7 +43,7 @@ from townlet.world.agents.personality import (
     normalize_profile_name,
     resolve_personality_profile,
 )
-from townlet.world.agents.registry import AgentRegistry
+from townlet.world.agents.registry import AgentRecord, AgentRegistry
 from townlet.world.agents.relationships_service import RelationshipService
 from townlet.world.agents.snapshot import AgentSnapshot
 from townlet.world.console import (
@@ -54,12 +54,13 @@ from townlet.world.core.context import WorldContext
 from townlet.world.economy import EconomyService
 from townlet.world.employment_runtime import EmploymentRuntime
 from townlet.world.employment_service import EmploymentCoordinator, create_employment_coordinator
+from townlet.world.events import Event, EventDispatcher
 from townlet.world.hooks import load_modules as load_hook_modules
-from townlet.world.observation import (
+from townlet.world.observations.context import snapshot_precondition_context
+from townlet.world.observations.interfaces import ObservationServiceProtocol
+from townlet.world.observations.service import WorldObservationService
+from townlet.world.observations.views import (
     find_nearest_object_of_type as observation_find_nearest_object_of_type,
-)
-from townlet.world.observation import (
-    snapshot_precondition_context,
 )
 from townlet.world.perturbations import PerturbationService
 from townlet.world.preconditions import (
@@ -68,7 +69,17 @@ from townlet.world.preconditions import (
     compile_preconditions,
 )
 from townlet.world.queue import QueueConflictTracker, QueueManager
-from townlet.world.relationships import RelationshipTie
+from townlet.world.relationships import RelationshipLedger, RelationshipTie
+from townlet.world.rivalry import RivalryLedger
+from townlet.world.rng import RngStreamManager, seed_from_state
+from townlet.world.spatial import WorldSpatialIndex
+from townlet.world.systems import affordances as affordance_system
+from townlet.world.systems import economy as economy_system
+from townlet.world.systems import employment as employment_system
+from townlet.world.systems import perturbations as perturbation_system
+from townlet.world.systems import queues as queue_system
+from townlet.world.systems import relationships as relationship_system
+from townlet.world.systems.base import SystemContext
 
 logger = logging.getLogger(__name__)
 
@@ -80,16 +91,22 @@ class HookRegistry:
     """Registers named affordance hooks and returns handlers on demand."""
 
     def __init__(self) -> None:
-        self._handlers: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
+        self._handlers: dict[str, list[Callable[[HookPayload], object | None]]] = {}
 
-    def register(self, name: str, handler: Callable[[dict[str, Any]], None]) -> None:
+    def register(
+        self,
+        name: str,
+        handler: Callable[[HookPayload], object | None],
+    ) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError("Hook name must be a non-empty string")
         if not callable(handler):
             raise TypeError("Hook handler must be callable")
         self._handlers.setdefault(name, []).append(handler)
 
-    def handlers_for(self, name: str) -> tuple[Callable[[dict[str, Any]], None], ...]:
+    def handlers_for(
+        self, name: str
+    ) -> tuple[Callable[[HookPayload], object | None], ...]:
         return tuple(self._handlers.get(name, ()))
 
     def clear(self, name: str | None = None) -> None:
@@ -137,113 +154,6 @@ class AffordanceSpec:
     )
 
 
-class WorldSpatialIndex:
-    """Maintains spatial lookups to accelerate world queries.
-
-    World code calls into the index whenever agents move, spawn, or despawn so
-    other subsystems (observations, telemetry) can run O(radius²) queries rather
-    than scanning every agent. Reservation tiles are tracked separately because
-    they are derived from objects instead of the agent registry.
-    """
-
-    def __init__(self) -> None:
-        self._agents_by_position: dict[tuple[int, int], list[str]] = {}
-        self._positions_by_agent: dict[str, tuple[int, int]] = {}
-        self._reservation_tiles: set[tuple[int, int]] = set()
-
-    # Agent bookkeeping -------------------------------------------------
-    def rebuild(
-        self,
-        agents: Mapping[str, AgentSnapshot],
-        objects: Mapping[str, InteractiveObject],
-        active_reservations: Mapping[str, str],
-    ) -> None:
-        """Recalculate cached lookups from authoritative world state."""
-
-        self._agents_by_position.clear()
-        self._positions_by_agent.clear()
-        for agent_id, snapshot in agents.items():
-            position = tuple(snapshot.position)
-            self._positions_by_agent[agent_id] = position
-            bucket = self._agents_by_position.setdefault(position, [])
-            bucket.append(agent_id)
-        for bucket in self._agents_by_position.values():
-            bucket.sort()
-        self._reservation_tiles.clear()
-        for object_id, occupant in active_reservations.items():
-            if not occupant:
-                continue
-            obj = objects.get(object_id)
-            if obj is None or obj.position is None:
-                continue
-            self._reservation_tiles.add(obj.position)
-
-    def insert_agent(self, agent_id: str, position: tuple[int, int]) -> None:
-        """Register a new agent at ``position`` without rebuilding all indexes."""
-
-        self._positions_by_agent[agent_id] = position
-        bucket = self._agents_by_position.setdefault(position, [])
-        if agent_id not in bucket:
-            bucket.append(agent_id)
-
-    def move_agent(self, agent_id: str, position: tuple[int, int]) -> None:
-        """Update cached lookups when an agent moves to ``position``."""
-
-        previous = self._positions_by_agent.get(agent_id)
-        if previous is not None:
-            bucket = self._agents_by_position.get(previous)
-            if bucket is not None:
-                try:
-                    bucket.remove(agent_id)
-                except ValueError:
-                    pass
-                if not bucket:
-                    self._agents_by_position.pop(previous, None)
-        self.insert_agent(agent_id, position)
-
-    def remove_agent(self, agent_id: str) -> None:
-        """Remove agent entries from cached indices."""
-
-        previous = self._positions_by_agent.pop(agent_id, None)
-        if previous is None:
-            return
-        bucket = self._agents_by_position.get(previous)
-        if bucket is None:
-            return
-        try:
-            bucket.remove(agent_id)
-        except ValueError:
-            return
-        if not bucket:
-            self._agents_by_position.pop(previous, None)
-
-    def position_of(self, agent_id: str) -> tuple[int, int] | None:
-        """Return the cached grid position for ``agent_id`` if known."""
-
-        return self._positions_by_agent.get(agent_id)
-
-    def agents_at(self, position: tuple[int, int]) -> tuple[str, ...]:
-        """Return agent identifiers occupying ``position``."""
-
-        return tuple(self._agents_by_position.get(position, ()))
-
-    # Reservation bookkeeping -------------------------------------------
-    def set_reservation(self, position: tuple[int, int] | None, active: bool) -> None:
-        """Toggle reservation state for the tile at ``position``."""
-
-        if position is None:
-            return
-        if active:
-            self._reservation_tiles.add(position)
-        else:
-            self._reservation_tiles.discard(position)
-
-    def reservation_tiles(self) -> frozenset[tuple[int, int]]:
-        """Return a frozen copy of tiles reserved by active affordances."""
-
-        return frozenset(self._reservation_tiles)
-
-
 @dataclass
 class WorldState:
     """Holds mutable world state for the simulation tick."""
@@ -259,13 +169,12 @@ class WorldState:
         default_factory=dict,
         repr=False,
     )
-    _active_reservations: dict[str, str] = field(init=False, default_factory=dict)
+    _active_reservations: dict[str, str | None] = field(init=False, default_factory=dict)
     objects: dict[str, InteractiveObject] = field(init=False, default_factory=dict)
     affordances: dict[str, AffordanceSpec] = field(init=False, default_factory=dict)
     _running_affordances: dict[str, RunningAffordance] = field(init=False, default_factory=dict)
     _pending_events: dict[int, list[dict[str, Any]]] = field(init=False, default_factory=dict)
     store_stock: dict[str, dict[str, int]] = field(init=False, default_factory=dict)
-    _job_keys: list[str] = field(init=False, default_factory=list)
     employment: EmploymentCoordinator = field(init=False, repr=False)
     _employment_runtime: EmploymentRuntime = field(init=False, repr=False)
     _employment_service: EmploymentService = field(init=False, repr=False)
@@ -273,6 +182,7 @@ class WorldState:
     _nightly_reset_service: NightlyResetService = field(init=False, repr=False)
     _economy_service: EconomyService = field(init=False, repr=False)
     _perturbation_service: PerturbationService = field(init=False, repr=False)
+    _affordance_runtime: AffordanceCoordinator = field(init=False, repr=False)
 
     _relationships: RelationshipService = field(init=False, repr=False)
     _relationship_window_ticks: int = 600
@@ -287,13 +197,18 @@ class WorldState:
     affordance_runtime_config: AffordanceRuntimeConfig | None = None
     _affordance_manifest_info: dict[str, object] = field(init=False, default_factory=dict)
     _objects_by_position: dict[tuple[int, int], list[str]] = field(init=False, default_factory=dict)
-    _console: ConsoleService = field(init=False)
-    _console_controller: WorldConsoleController = field(init=False, repr=False)
+    _console: ConsoleService | None = field(init=False, default=None, repr=False)
+    _console_controller: WorldConsoleController | None = field(init=False, default=None, repr=False)
     _spatial_index: WorldSpatialIndex = field(init=False, repr=False)
     _queue_conflicts: QueueConflictTracker = field(init=False)
+    _observation_service: ObservationServiceProtocol | None = field(
+        init=False, default=None, repr=False
+    )
     _hook_registry: HookRegistry = field(init=False, repr=False)
     _ctx_reset_requests: set[str] = field(init=False, default_factory=set)
     _respawn_counters: dict[str, int] = field(init=False, default_factory=dict)
+    _event_dispatcher: EventDispatcher = field(init=False, repr=False)
+    _system_rng_manager: RngStreamManager | None = field(init=False, default=None, repr=False)
 
     @classmethod
     def from_config(
@@ -306,6 +221,10 @@ class WorldState:
             | None
         ) = None,
         affordance_runtime_config: AffordanceRuntimeConfig | None = None,
+        attach_console: bool = True,
+        console_service_factory: (
+            Callable[[WorldState], ConsoleService] | None
+        ) = None,
     ) -> WorldState:
         """Bootstrap the initial world from config."""
 
@@ -315,6 +234,10 @@ class WorldState:
             affordance_runtime_config=affordance_runtime_config,
         )
         instance.attach_rng(rng or random.Random())
+        if attach_console:
+            factory = console_service_factory or build_console_service
+            console_service = factory(instance)
+            instance.attach_console_service(console_service)
         return instance
 
     def __post_init__(self) -> None:
@@ -329,8 +252,9 @@ class WorldState:
         self.affordances = {}
         self._running_affordances = {}
         self._pending_events = {}
+        self._event_dispatcher = EventDispatcher()
+        self._event_dispatcher.register(self._handle_guardrail_request)
         self.store_stock = {}
-        self._job_keys = list(self.config.jobs.keys())
         self.employment = create_employment_coordinator(self.config, self._emit_event)
         self.employment.reset_exits_today()
         self._employment_runtime = EmploymentRuntime(self, self.employment, self._emit_event)
@@ -371,21 +295,18 @@ class WorldState:
             dict(runtime_cfg.options) if runtime_cfg is not None else {}
         )
         self._load_affordance_definitions()
-        self._rng_seed = None
         if self._rng is None:
             self._rng = random.Random()
         self._rng_state = self._rng.getstate()
-        self._console = ConsoleService(
-            world=self,
-            history_limit=_CONSOLE_HISTORY_LIMIT,
-            buffer_limit=_CONSOLE_RESULT_BUFFER_LIMIT,
-        )
-        self._console_controller = install_world_console_handlers(self, self._console)
+        if self._rng_seed is None:
+            self._rng_seed = seed_from_state(self._rng_state)
+        self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
         self._queue_conflicts = QueueConflictTracker(
             world=self,
             record_rivalry_conflict=self._apply_rivalry_conflict,
         )
         self._hook_registry = HookRegistry()
+        self._observation_service = WorldObservationService(config=self.config)
         modules = list(self.config.affordances.runtime.hook_allowlist)
         if not modules:
             modules.append("townlet.world.hooks.default")
@@ -437,6 +358,18 @@ class WorldState:
                 "affordance_hooks_loaded modules=%s",
                 ",".join(accepted),
             )
+        def _noop_dispatch_hooks(
+            stage: Literal["before", "after", "fail"],
+            hook_names: Iterable[str],
+            *,
+            agent_id: str,
+            object_id: str,
+            spec: AffordanceSpec | None,
+            extra: Mapping[str, Any] | None = None,
+            debug_enabled: bool = False,
+        ) -> bool:
+            return True
+
         affordance_env = AffordanceEnvironment(
             queue_manager=self.queue_manager,
             agents=self.agents,
@@ -448,12 +381,15 @@ class WorldState:
             emit_event=self._emit_event,
             sync_reservation=self._sync_reservation,
             apply_affordance_effects=self._apply_affordance_effects,
-            dispatch_hooks=lambda *args, **kwargs: True,
+            dispatch_hooks=_noop_dispatch_hooks,
             record_queue_conflict=self._record_queue_conflict,
             apply_need_decay=self._apply_need_decay,
             build_precondition_context=self._build_precondition_context,
             snapshot_precondition_context=snapshot_precondition_context,
             tick_supplier=lambda: self.tick,
+            store_stock=self.store_stock,
+            recent_meal_participants=self._recent_meal_participants,
+            config=self.config,
             world_ref=self,
         )
         context = AffordanceRuntimeContext(environment=affordance_env)
@@ -468,9 +404,10 @@ class WorldState:
                 options=self._runtime_options,
             )
         if isinstance(runtime_obj, AffordanceCoordinator):
-            self._affordance_runtime = runtime_obj
+            coordinator: AffordanceCoordinator = runtime_obj
         else:
-            self._affordance_runtime = AffordanceCoordinator(runtime_obj)
+            coordinator = AffordanceCoordinator(runtime_obj)
+        self._affordance_runtime = coordinator
         self._affordance_service = AffordanceRuntimeService(
             environment=affordance_env,
             context=context,
@@ -489,7 +426,6 @@ class WorldState:
             embedding_allocator=self.embedding_allocator,
             queue_conflicts=self._queue_conflicts,
             recent_meal_participants=self._recent_meal_participants,
-            job_keys=tuple(self._job_keys),
             respawn_counters=self._respawn_counters,
             emit_event=self._emit_event,
             request_ctx_reset=self.request_ctx_reset,
@@ -511,25 +447,7 @@ class WorldState:
             is_tile_blocked=lambda position: position in self._objects_by_position,
         )
         self.rebuild_spatial_index()
-        self.context = WorldContext(
-            agents=self.agents,
-            objects=self.objects,
-            affordances=self.affordances,
-            running_affordances=self._running_affordances,
-            queue_manager=self.queue_manager,
-            queue_conflicts=self._queue_conflicts,
-            affordance_service=self._affordance_service,
-            console=self._console,
-            employment=self.employment,
-            employment_runtime=self._employment_runtime,
-            employment_service=self._employment_service,
-            lifecycle_service=self._lifecycle_service,
-            nightly_reset_service=self._nightly_reset_service,
-            relationships=self._relationships,
-            config=self.config,
-            emit_event_callback=self._emit_event,
-            sync_reservation_callback=self._sync_reservation,
-        )
+        self.context: WorldContext | None = None
 
     @property
     def affordance_runtime(self) -> DefaultAffordanceRuntime:
@@ -564,11 +482,11 @@ class WorldState:
         return self._perturbation_service
 
     @property
-    def _relationship_ledgers(self):
+    def _relationship_ledgers(self) -> Mapping[str, RelationshipLedger]:
         return self._relationships._relationship_ledgers
 
     @property
-    def _rivalry_ledgers(self):
+    def _rivalry_ledgers(self) -> Mapping[str, RivalryLedger]:
         return self._relationships._rivalry_ledgers
 
     @property
@@ -580,21 +498,58 @@ class WorldState:
     def generate_agent_id(self, base_id: str) -> str:
         return self._lifecycle_service.generate_agent_id(base_id)
 
-    def apply_console(self, operations: Iterable[Any]) -> None:
+    def apply_console(self, operations: Iterable[Any]) -> list[ConsoleCommandResult]:
         """Apply console operations before the tick sequence runs."""
-        self._console.apply(operations)
+        if self._console is None:
+            raise RuntimeError("Console service not attached to world")
+        return self._console.apply(operations)
 
     def attach_rng(self, rng: random.Random) -> None:
         """Attach a deterministic RNG used for world-level randomness."""
 
         self._rng = rng
         self._rng_state = rng.getstate()
+        if self._rng_seed is None:
+            self._rng_seed = seed_from_state(self._rng_state)
+        self._system_rng_manager = RngStreamManager.from_seed(self._rng_seed)
+
+    def attach_console_service(self, console: ConsoleService) -> None:
+        """Attach a console service and rebuild the world context."""
+
+        self._console = console
+        self._console_controller = install_world_console_handlers(self, console)
+        self.context = self._build_context(console)
+
+    def _build_context(self, console: ConsoleService) -> WorldContext:
+        return WorldContext(
+            state=self,
+            queue_manager=self.queue_manager,
+            queue_conflicts=self._queue_conflicts,
+            affordance_service=self._affordance_service,
+            console=console,
+            employment=self.employment,
+            employment_runtime=self._employment_runtime,
+            employment_service=self._employment_service,
+            lifecycle_service=self._lifecycle_service,
+            nightly_reset_service=self._nightly_reset_service,
+            relationships=self._relationships,
+            economy_service=self._economy_service,
+            perturbation_service=self._perturbation_service,
+            config=self.config,
+            emit_event_callback=self._emit_event,
+            sync_reservation_callback=self._sync_reservation,
+            observation_service=self._observation_service,
+        )
 
     @property
     def rng(self) -> random.Random:
         if self._rng is None:
             self._rng = random.Random()
         return self._rng
+
+    @property
+    def rng_seed(self) -> int | None:
+        return getattr(self, "_rng_seed", None)
 
     def rebuild_spatial_index(self) -> None:
         self._spatial_index.rebuild(self.agents, self.objects, self._active_reservations)
@@ -629,6 +584,8 @@ class WorldState:
     ) -> None:
         """Register a console handler for queued commands."""
 
+        if self._console is None:
+            raise RuntimeError("Console service not attached to world")
         self._console.register_handler(
             name,
             handler,
@@ -640,6 +597,8 @@ class WorldState:
     def console_controller(self) -> WorldConsoleController:
         """Access the bound console controller (primarily for tests)."""
 
+        if self._console_controller is None:
+            raise RuntimeError("Console controller not attached to world")
         return self._console_controller
 
     @property
@@ -655,7 +614,9 @@ class WorldState:
         return self._affordance_service
 
     def register_affordance_hook(
-        self, name: str, handler: Callable[[dict[str, Any]], None]
+        self,
+        name: str,
+        handler: Callable[[HookPayload], object | None],
     ) -> None:
         """Register a callable invoked when a manifest hook fires."""
 
@@ -671,11 +632,6 @@ class WorldState:
             self._affordance_service.clear_hooks(name)
         else:
             self._hook_registry.clear(name)
-
-    def consume_console_results(self) -> list[ConsoleCommandResult]:
-        """Return and clear buffered console results."""
-
-        return self._console.consume_results()
 
     def spawn_agent(
         self,
@@ -707,11 +663,14 @@ class WorldState:
         return self._economy_service.set_price_target(key, value)
 
     def _record_console_result(self, result: ConsoleCommandResult) -> None:
+        if self._console is None:
+            raise RuntimeError("Console service not attached to world")
         self._console.record_result(result)
+
 
     def _dispatch_affordance_hooks(
         self,
-        stage: str,
+        stage: Literal["before", "after", "fail"],
         hook_names: Iterable[str],
         *,
         agent_id: str,
@@ -847,6 +806,7 @@ class WorldState:
         object_id: str,
         object_type: str,
         position: tuple[int, int] | None = None,
+        stock: Mapping[str, Any] | None = None,
     ) -> None:
         """Register or update an interactive object in the world."""
 
@@ -872,12 +832,21 @@ class WorldState:
         if object_type == "shower":
             obj.stock.setdefault("power_on", 1)
             obj.stock.setdefault("water_on", 1)
+        if stock:
+            obj.stock.update(dict(stock))
         self.objects[object_id] = obj
         self.store_stock[object_id] = obj.stock
         if obj.position is not None:
             self._index_object_position(object_id, obj.position)
             if self._active_reservations.get(object_id):
                 self._spatial_index.set_reservation(obj.position, True)
+
+    def _reset_object_registry(self) -> None:
+        self.objects.clear()
+        self.store_stock.clear()
+        self._objects_by_position.clear()
+        self._active_reservations.clear()
+        self._spatial_index.rebuild(self.agents, self.objects, self._active_reservations)
 
     def _index_object_position(self, object_id: str, position: tuple[int, int]) -> None:
         bucket = self._objects_by_position.setdefault(position, [])
@@ -926,108 +895,34 @@ class WorldState:
 
     def apply_actions(self, actions: dict[str, Any]) -> None:
         """Apply agent actions for the current tick."""
-        current_tick = self.tick
-        runtime = self._affordance_service
-        for agent_id, action in actions.items():
-            snapshot = self.agents.get(agent_id)
-            if snapshot is None:
-                continue
-            if not isinstance(action, dict):
-                continue
-
-            kind = action.get("kind")
-            object_id = action.get("object")
-            action_success = False
-            action_duration = int(action.get("duration", 1))
-            outcome_affordance_id: str | None = None
-            outcome_metadata: dict[str, object] = {}
-
-            if kind == "request" and object_id:
-                granted = self.queue_manager.request_access(object_id, agent_id, current_tick)
-                self._sync_reservation(object_id)
-                if not granted and action.get("blocked"):
-                    self._handle_blocked(object_id, current_tick)
-                action_success = bool(granted)
-            elif kind == "move" and action.get("position"):
-                target_pos = tuple(action["position"])
-                self._spatial_index.move_agent(snapshot.agent_id, target_pos)
-                snapshot.position = target_pos
-                action_success = True
-            elif kind == "chat":
-                target_id = action.get("target") or action.get("listener")
-                if not isinstance(target_id, str):
-                    continue
-                listener = self.agents.get(target_id)
-                if listener is None:
-                    continue
-                if self.rivalry_should_avoid(agent_id, target_id):
-                    self.record_chat_failure(agent_id, target_id)
-                    continue
-                if listener.position != snapshot.position:
-                    self.record_chat_failure(agent_id, target_id)
-                    continue
-                quality_value = action.get("quality", 0.5)
-                try:
-                    quality = float(quality_value)
-                except (TypeError, ValueError):
-                    quality = 0.5
-                self.record_chat_success(agent_id, target_id, quality)
-                action_success = True
-            elif kind == "start" and object_id:
-                affordance_id = action.get("affordance")
-                if affordance_id:
-                    affordance_id_str = str(affordance_id)
-                    action_success, start_metadata = runtime.start(
-                        agent_id,
-                        object_id,
-                        affordance_id_str,
-                        tick=current_tick,
-                    )
-                    outcome_affordance_id = affordance_id_str
-                    if start_metadata:
-                        outcome_metadata.update(start_metadata)
-            elif kind == "release" and object_id:
-                success = bool(action.get("success", True))
-                affordance_hint = action.get("affordance")
-                reason_value = action.get("reason")
-                outcome_affordance_id, release_metadata = runtime.release(
-                    agent_id,
-                    object_id,
-                    success=success,
-                    reason=str(reason_value) if reason_value is not None else None,
-                    requested_affordance_id=str(affordance_hint)
-                    if affordance_hint is not None
-                    else None,
-                    tick=current_tick,
-                )
-                action_success = success
-                if release_metadata:
-                    outcome_metadata.update(release_metadata)
-            elif kind == "blocked" and object_id:
-                runtime.handle_blocked(object_id, current_tick)
-                action_success = False
-
-            if kind:
-                outcome = AffordanceOutcome(
-                    agent_id=agent_id,
-                    kind=str(kind),
-                    success=action_success,
-                    duration=action_duration,
-                    object_id=str(object_id) if isinstance(object_id, str) else None,
-                    affordance_id=str(outcome_affordance_id) if outcome_affordance_id else None,
-                    tick=current_tick,
-                    metadata=dict(outcome_metadata) if outcome_metadata else {},
-                )
-                apply_affordance_outcome(snapshot, outcome)
+        affordance_system.process_actions(self, actions, tick=self.tick)
 
     def resolve_affordances(self, current_tick: int) -> None:
-        """Resolve queued affordances and hooks."""
-        self._affordance_service.resolve(tick=current_tick)
+        """Resolve queued affordances and hooks via modular systems."""
+
+        self.tick = current_tick
+        ctx = self._system_context()
+        queue_system.step(ctx)
+        affordance_system.step(ctx)
+        employment_system.step(ctx)
+        relationship_system.step(ctx)
+        economy_system.step(ctx)
+        perturbation_system.step(ctx)
 
     def running_affordances_snapshot(self) -> dict[str, RunningAffordanceState]:
         """Return a serializable view of running affordances (for tests/telemetry)."""
 
         return self._affordance_service.running_snapshot()
+
+    def _system_context(self) -> SystemContext:
+        if self._system_rng_manager is None:
+            seed = getattr(self, "_rng_seed", None)
+            self._system_rng_manager = RngStreamManager.from_seed(seed)
+        return SystemContext(
+            state=self,
+            rng=self._system_rng_manager,
+            events=self._event_dispatcher,
+        )
 
     def request_ctx_reset(self, agent_id: str) -> None:
         """Mark an agent so the next observation toggles ctx_reset_flag."""
@@ -1045,11 +940,11 @@ class WorldState:
         return {agent_id: copy.deepcopy(snapshot) for agent_id, snapshot in self.agents.items()}
 
     @property
-    def active_reservations(self) -> dict[str, str]:
+    def active_reservations(self) -> dict[str, str | None]:
         """Expose a copy of active reservations for diagnostics/tests."""
         return dict(self._active_reservations)
 
-    def active_reservations_view(self) -> Mapping[str, str]:
+    def active_reservations_view(self) -> Mapping[str, str | None]:
         """Return a read-only snapshot of active reservations."""
 
         return MappingProxyType(self._active_reservations)
@@ -1057,13 +952,22 @@ class WorldState:
     def refresh_reservations(self) -> None:
         """Synchronise reservation state from the queue manager."""
 
-        for object_id in self.objects:
-            self._sync_reservation(object_id)
+        queue_system.refresh_reservations(
+            manager=self.queue_manager,
+            objects=self.objects,
+            active_reservations=self._active_reservations,
+            spatial_index=self._spatial_index,
+        )
 
     def agent_snapshots_view(self) -> Mapping[str, AgentSnapshot]:
         """Expose current agent snapshots without allowing dict mutation."""
 
         return MappingProxyType(self.agents)
+
+    def agent_records_view(self) -> Mapping[str, AgentRecord]:
+        """Expose bookkeeping metadata for agent snapshots."""
+
+        return self.agents.records_map()
 
     def objects_by_position_view(self) -> Mapping[tuple[int, int], tuple[str, ...]]:
         """Return immutable positions mapped to tuples of object IDs."""
@@ -1076,7 +980,14 @@ class WorldState:
 
     def drain_events(self) -> list[dict[str, Any]]:
         """Return all pending events accumulated up to the current tick."""
-        events: list[dict[str, Any]] = []
+        events: list[dict[str, Any]] = [
+            {
+                "event": dispatched.type,
+                "tick": dispatched.tick if dispatched.tick is not None else self.tick,
+                **dict(dispatched.payload),
+            }
+            for dispatched in self._event_dispatcher.drain()
+        ]
         for _, batch in sorted(self._pending_events.items()):
             events.extend(batch)
         self._pending_events.clear()
@@ -1126,7 +1037,8 @@ class WorldState:
     ) -> None:
         if agent_a == agent_b:
             return
-        self._relationships.apply_rivalry_conflict(
+        relationship_system.apply_rivalry_conflict(
+            self._relationships,
             agent_a,
             agent_b,
             intensity=intensity,
@@ -1141,21 +1053,21 @@ class WorldState:
 
     def rivalry_snapshot(self) -> dict[str, dict[str, float]]:
         """Expose rivalry ledgers for telemetry/diagnostics."""
-        return self._relationships.rivalry_snapshot()
+        return relationship_system.rivalry_snapshot(self._relationships)
 
     def relationships_snapshot(self) -> dict[str, dict[str, dict[str, float]]]:
-        return self._relationships.relationships_snapshot()
+        return relationship_system.relationships_snapshot(self._relationships)
 
     def relationship_tie(self, agent_id: str, other_id: str) -> RelationshipTie | None:
         """Return the current relationship tie between two agents, if any."""
-        return self._relationships.relationship_tie(agent_id, other_id)
+        return relationship_system.relationship_tie(self._relationships, agent_id, other_id)
 
-    def get_rivalry_ledger(self, agent_id: str):
+    def get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         """Return the rivalry ledger for ``agent_id``."""
 
-        return self._relationships.get_rivalry_ledger(agent_id)
+        return relationship_system.get_rivalry_ledger(self._relationships, agent_id)
 
-    def _get_rivalry_ledger(self, agent_id: str):
+    def _get_rivalry_ledger(self, agent_id: str) -> RivalryLedger:
         return self.get_rivalry_ledger(agent_id)
 
     def consume_chat_events(self) -> list[dict[str, Any]]:
@@ -1170,13 +1082,13 @@ class WorldState:
 
     def rivalry_value(self, agent_id: str, other_id: str) -> float:
         """Return the rivalry score between two agents, if present."""
-        return self._relationships.rivalry_value(agent_id, other_id)
+        return relationship_system.rivalry_value(self._relationships, agent_id, other_id)
 
     def rivalry_should_avoid(self, agent_id: str, other_id: str) -> bool:
-        return self._relationships.rivalry_should_avoid(agent_id, other_id)
+        return relationship_system.rivalry_should_avoid(self._relationships, agent_id, other_id)
 
     def rivalry_top(self, agent_id: str, limit: int) -> list[tuple[str, float]]:
-        return self._relationships.rivalry_top(agent_id, limit)
+        return relationship_system.rivalry_top(self._relationships, agent_id, limit)
 
     def consume_rivalry_events(self) -> list[dict[str, Any]]:
         """Return rivalry events recorded since the last call."""
@@ -1231,17 +1143,20 @@ class WorldState:
         return profile
 
     def relationship_metrics_snapshot(self) -> dict[str, object]:
-        return self._relationships.relationship_metrics_snapshot()
+        return relationship_system.relationship_metrics_snapshot(self._relationships)
 
     def load_relationship_metrics(self, payload: Mapping[str, object] | None) -> None:
-        self._relationships.load_relationship_metrics(payload)
+        relationship_system.load_relationship_metrics(
+            self._relationships,
+            None if payload is None else dict(payload),
+        )
 
     def load_relationship_snapshot(
         self,
         snapshot: dict[str, dict[str, dict[str, float]]],
     ) -> None:
         """Restore relationship ledgers from persisted snapshot data."""
-        self._relationships.load_relationship_snapshot(snapshot)
+        relationship_system.load_relationship_snapshot(self._relationships, snapshot)
 
     def update_relationship(
         self,
@@ -1253,7 +1168,8 @@ class WorldState:
         rivalry: float = 0.0,
         event: RelationshipEvent = "generic",
     ) -> None:
-        self._relationships.update_relationship(
+        relationship_system.update_relationship(
+            self._relationships,
             agent_a,
             agent_b,
             trust=trust,
@@ -1271,7 +1187,8 @@ class WorldState:
         familiarity: float,
         rivalry: float,
     ) -> None:
-        self._relationships.set_relationship(
+        relationship_system.set_relationship(
+            self._relationships,
             agent_a,
             agent_b,
             trust=trust,
@@ -1281,7 +1198,8 @@ class WorldState:
 
     def record_chat_success(self, speaker: str, listener: str, quality: float) -> None:
         clipped_quality = max(0.0, min(1.0, quality))
-        self.update_relationship(
+        relationship_system.update_relationship(
+            self._relationships,
             speaker,
             listener,
             trust=0.05 * clipped_quality,
@@ -1307,29 +1225,7 @@ class WorldState:
         )
 
     def record_chat_failure(self, speaker: str, listener: str) -> None:
-        self.update_relationship(
-            speaker,
-            listener,
-            trust=0.0,
-            familiarity=-0.05,
-            rivalry=0.05,
-            event="chat_failure",
-        )
-        self._queue_conflicts.record_chat_event(
-            {
-                "event": "chat_failure",
-                "speaker": speaker,
-                "listener": listener,
-                "tick": self.tick,
-            }
-        )
-        self._emit_event(
-            "chat_failure",
-            {
-                "speaker": speaker,
-                "listener": listener,
-            },
-        )
+        self._process_chat_failure(speaker, listener, emit=True)
 
     def record_relationship_guard_block(
         self,
@@ -1339,34 +1235,120 @@ class WorldState:
         target_agent: str | None = None,
         object_id: str | None = None,
     ) -> None:
-        payload = {
+        self._process_relationship_guard_block(
+            agent_id,
+            reason,
+            target_agent=target_agent,
+            object_id=object_id,
+            emit=True,
+        )
+
+    def _process_chat_failure(
+        self,
+        speaker: str,
+        listener: str,
+        *,
+        emit: bool,
+    ) -> None:
+        if not speaker or not listener:
+            return
+        relationship_system.update_relationship(
+            self._relationships,
+            speaker,
+            listener,
+            trust=0.0,
+            familiarity=-0.05,
+            rivalry=0.05,
+            event="chat_failure",
+        )
+        chat_payload: dict[str, object] = {
+            "event": "chat_failure",
+            "speaker": speaker,
+            "listener": listener,
+            "tick": int(self.tick),
+        }
+        self._queue_conflicts.record_chat_event(chat_payload)
+        if emit:
+            self._emit_event(
+                "chat_failure",
+                {
+                    "speaker": speaker,
+                    "listener": listener,
+                },
+            )
+
+    def _process_relationship_guard_block(
+        self,
+        agent_id: str,
+        reason: str,
+        *,
+        target_agent: str | None,
+        object_id: str | None,
+        emit: bool,
+    ) -> None:
+        queue_payload: dict[str, object] = {
             "agent": agent_id,
             "reason": reason,
             "target": target_agent,
             "object_id": object_id,
             "tick": int(self.tick),
         }
-        self._queue_conflicts.record_avoidance_event(payload)
+        self._queue_conflicts.record_avoidance_event(queue_payload)
+        if emit:
+            event_payload = {
+                "agent_id": agent_id,
+                "reason": reason,
+                "target_agent": target_agent,
+                "object_id": object_id,
+                "tick": int(self.tick),
+            }
+            self._emit_event("policy.guardrail.block", event_payload)
+
+    def _handle_guardrail_request(self, event: Event) -> None:
+        if event.type != "policy.guardrail.request":
+            return
+        payload = dict(event.payload)
+        variant = str(payload.get("variant") or "")
+        if variant == "chat_failure":
+            speaker = str(payload.get("speaker") or payload.get("agent") or "")
+            listener_value = (
+                payload.get("listener")
+                or payload.get("target_agent")
+                or payload.get("target")
+                or ""
+            )
+            listener = str(listener_value)
+            if speaker and listener:
+                self._process_chat_failure(speaker, listener, emit=True)
+        elif variant == "relationship_block":
+            agent = str(payload.get("agent_id") or payload.get("agent") or "")
+            reason = str(payload.get("reason") or "")
+            if not agent or not reason:
+                return
+            target_agent = payload.get("target_agent") or payload.get("target")
+            object_id = payload.get("object_id")
+            self._process_relationship_guard_block(
+                agent,
+                reason,
+                target_agent=target_agent,
+                object_id=object_id,
+                emit=True,
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
     def _sync_reservation(self, object_id: str) -> None:
-        active = self.queue_manager.active_agent(object_id)
-        obj = self.objects.get(object_id)
-        if active is None:
-            self._active_reservations.pop(object_id, None)
-            if obj is not None:
-                obj.occupied_by = None
-                self._spatial_index.set_reservation(obj.position, False)
-        else:
-            self._active_reservations[object_id] = active
-            if obj is not None:
-                obj.occupied_by = active
-                self._spatial_index.set_reservation(obj.position, True)
+        queue_system.sync_reservation(
+            manager=self.queue_manager,
+            objects=self.objects,
+            active_reservations=self._active_reservations,
+            spatial_index=self._spatial_index,
+            object_id=object_id,
+        )
 
     def _handle_blocked(self, object_id: str, tick: int) -> None:
-        self._affordance_service.handle_blocked(object_id, tick)
+        affordance_system.handle_blocked(self._affordance_service, object_id, tick)
 
     def _start_affordance(self, agent_id: str, object_id: str, affordance_id: str) -> bool:
         success, _ = self._affordance_service.start(
@@ -1388,9 +1370,21 @@ class WorldState:
             elif key == "money":
                 snapshot.wallet += delta
 
-    def _emit_event(self, event: str, payload: dict[str, Any]) -> None:
+    def emit_event(self, event: str, payload: Mapping[str, Any]) -> Event:
+        """Emit an event into both legacy and modular pipelines."""
+
+        event_obj = self._event_dispatcher.emit(event_type=event, payload=payload, tick=self.tick)
         events = self._pending_events.setdefault(self.tick, [])
-        events.append({"event": event, "tick": self.tick, **payload})
+        events.append({"event": event, "tick": self.tick, **dict(payload)})
+        return event_obj
+
+    def _emit_event(self, event: str, payload: dict[str, Any]) -> None:
+        self.emit_event(event, payload)
+
+    def event_dispatcher(self) -> EventDispatcher:
+        """Return the dispatcher used by modular world systems."""
+
+        return self._event_dispatcher
 
     def _load_affordance_definitions(self) -> None:
         manifest_path = Path(self.config.affordances.affordances_file).expanduser()
@@ -1403,30 +1397,25 @@ class WorldState:
                 f"Failed to load affordance manifest {manifest_path}: {error}"
             ) from error
 
-        self.objects.clear()
+        self._reset_object_registry()
         self.affordances.clear()
-        self.store_stock.clear()
 
-        for entry in manifest.objects:
+        for object_entry in manifest.objects:
             self.register_object(
-                object_id=entry.object_id,
-                object_type=entry.object_type,
-                position=getattr(entry, "position", None),
+                object_id=object_entry.object_id,
+                object_type=object_entry.object_type,
+                position=getattr(object_entry, "position", None),
+                stock=getattr(object_entry, "stock", None),
             )
-            if entry.stock:
-                obj = self.objects.get(entry.object_id)
-                if obj is not None:
-                    obj.stock.update(entry.stock)
-                    self.store_stock[entry.object_id] = obj.stock
 
-        for entry in manifest.affordances:
+        for affordance_entry in manifest.affordances:
             self.register_affordance(
-                affordance_id=entry.affordance_id,
-                object_type=entry.object_type,
-                duration=entry.duration,
-                effects=entry.effects,
-                preconditions=entry.preconditions,
-                hooks=entry.hooks,
+                affordance_id=affordance_entry.affordance_id,
+                object_type=affordance_entry.object_type,
+                duration=affordance_entry.duration,
+                effects=affordance_entry.effects,
+                preconditions=affordance_entry.preconditions,
+                hooks=affordance_entry.hooks,
             )
 
         self._affordance_manifest_info = {
@@ -1464,133 +1453,51 @@ class WorldState:
                             multiplier = 1.0
                     adjusted_decay = decay * multiplier
                     snapshot.needs[need] = max(0.0, snapshot.needs[need] - adjusted_decay)
-        self._relationships.decay()
-        self._apply_job_state()
-        self._update_basket_metrics()
+        relationships = getattr(self, "_relationships", None)
+        if relationships is None:
+            raise RuntimeError("Relationship service missing; modular decay requires RelationshipService")
+        employment_service = getattr(self, "_employment_service", None)
+        if employment_service is None:
+            coordinator = getattr(self, "employment", None)
+            if isinstance(coordinator, EmploymentCoordinator):
+                coordinator.apply_job_state(self)
+        if getattr(self, "_economy_service", None) is None:
+            self._update_basket_metrics()
 
     def apply_nightly_reset(self) -> list[str]:
-        return self._nightly_reset_service.apply(self.tick)
+        return employment_system.nightly_reset(self._nightly_reset_service, self.tick)
 
     def assign_jobs_to_agents(self) -> None:
         """Assign jobs to agents lacking a valid role."""
 
-        self._employment_service.assign_jobs_to_agents()
-
-    def _apply_job_state(self) -> None:
-        self._employment_service.apply_job_state()
-
-    def _apply_job_state_legacy(self) -> None:
-        self.employment._apply_job_state_legacy(self)
-
-    def _apply_job_state_enforced(self) -> None:
-        self.employment._apply_job_state_enforced(self)
-
-    # ------------------------------------------------------------------
-    # Employment helpers
-    # ------------------------------------------------------------------
-    def _employment_context_defaults(self) -> dict[str, Any]:
-        return self._employment_service.context_defaults()
-
-    def _get_employment_context(self, agent_id: str) -> dict[str, Any]:
-        return self._employment_service.get_context(agent_id)
-
-    def _employment_context_wages(self, agent_id: str) -> float:
-        return self._employment_service.context_wages(agent_id)
-
-    def _employment_context_punctuality(self, agent_id: str) -> float:
-        return self._employment_service.context_punctuality(agent_id)
-
-    def _employment_idle_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_service.idle_state(snapshot, ctx)
-
-    def _employment_prepare_state(self, snapshot: AgentSnapshot, ctx: dict[str, Any]) -> None:
-        self._employment_service.prepare_state(snapshot, ctx)
-
-    def _employment_begin_shift(self, ctx: dict[str, Any], start: int, end: int) -> None:
-        self._employment_service.begin_shift(ctx, start, end)
-
-    def _employment_determine_state(
-        self,
-        *,
-        ctx: dict[str, Any],
-        tick: int,
-        start: int,
-        at_required_location: bool,
-        employment_cfg: EmploymentConfig,
-    ) -> str:
-        return self._employment_service.determine_state(
-            ctx=ctx,
-            tick=tick,
-            start=start,
-            at_required_location=at_required_location,
-            employment_cfg=employment_cfg,
-        )
-
-    def _employment_apply_state_effects(
-        self,
-        *,
-        snapshot: AgentSnapshot,
-        ctx: dict[str, Any],
-        state: str,
-        at_required_location: bool,
-        wage_rate: float,
-        lateness_penalty: float,
-        employment_cfg: EmploymentConfig,
-    ) -> None:
-        self._employment_service.apply_state_effects(
-            snapshot=snapshot,
-            ctx=ctx,
-            state=state,
-            at_required_location=at_required_location,
-            wage_rate=wage_rate,
-            lateness_penalty=lateness_penalty,
-            employment_cfg=employment_cfg,
-        )
-
-    def _employment_finalize_shift(
-        self,
-        *,
-        snapshot: AgentSnapshot,
-        ctx: dict[str, Any],
-        employment_cfg: EmploymentConfig,
-        job_id: str | None,
-    ) -> None:
-        self._employment_service.finalize_shift(
-            snapshot=snapshot,
-            ctx=ctx,
-            employment_cfg=employment_cfg,
-            job_id=job_id,
-        )
-
-    def _employment_coworkers_on_shift(self, snapshot: AgentSnapshot) -> list[str]:
-        return self._employment_service.coworkers_on_shift(snapshot)
+        employment_system.assign_jobs(self._employment_service)
 
     def employment_queue_snapshot(self) -> dict[str, Any]:
-        return self._employment_service.queue_snapshot()
+        return dict(employment_system.queue_snapshot(self._employment_service))
 
     def employment_request_manual_exit(self, agent_id: str, tick: int) -> bool:
-        return self._employment_service.request_manual_exit(agent_id, tick)
+        return employment_system.request_manual_exit(self._employment_service, agent_id, tick)
 
     def employment_defer_exit(self, agent_id: str) -> bool:
-        return self._employment_service.defer_exit(agent_id)
+        return employment_system.defer_exit(self._employment_service, agent_id)
 
     def employment_exits_today(self) -> int:
-        return self._employment_service.exits_today()
+        return employment_system.exits_today(self._employment_service)
 
     def set_employment_exits_today(self, value: int) -> None:
-        self._employment_service.set_exits_today(value)
+        employment_system.set_exits_today(self._employment_service, value)
 
     def reset_employment_exits_today(self) -> None:
-        self._employment_service.reset_exits_today()
+        employment_system.reset_exits_today(self._employment_service)
 
     def increment_employment_exits_today(self) -> None:
-        self._employment_service.increment_exits_today()
+        employment_system.increment_exits_today(self._employment_service)
 
     def _update_basket_metrics(self) -> None:
-        self._economy_service.update_basket_metrics()
+        economy_system.update_basket_metrics(self._economy_service)
 
     def _restock_economy(self) -> None:
-        self._economy_service.restock_economy()
+        economy_system.restock(self._economy_service)
 
     # ------------------------------------------------------------------
     # Perturbation helpers: price spikes, utilities, arranged meets
@@ -1602,20 +1509,21 @@ class WorldState:
         magnitude: float,
         targets: Iterable[str] | None = None,
     ) -> None:
-        self._perturbation_service.apply_price_spike(
+        perturbation_system.apply_price_spike(
+            self._perturbation_service,
             event_id,
             magnitude=magnitude,
             targets=targets,
         )
 
     def clear_price_spike(self, event_id: str) -> None:
-        self._perturbation_service.clear_price_spike(event_id)
+        perturbation_system.clear_price_spike(self._perturbation_service, event_id)
 
     def apply_utility_outage(self, event_id: str, utility: str) -> None:
-        self._perturbation_service.apply_utility_outage(event_id, utility)
+        perturbation_system.apply_utility_outage(self._perturbation_service, event_id, utility)
 
     def clear_utility_outage(self, event_id: str, utility: str) -> None:
-        self._perturbation_service.clear_utility_outage(event_id, utility)
+        perturbation_system.clear_utility_outage(self._perturbation_service, event_id, utility)
 
     def apply_arranged_meet(
         self,
@@ -1623,25 +1531,41 @@ class WorldState:
         location: str | None,
         targets: Iterable[str] | None = None,
     ) -> None:
-        self._perturbation_service.apply_arranged_meet(
+        perturbation_system.apply_arranged_meet(
+            self._perturbation_service,
             location=location,
             targets=targets,
         )
 
     def utility_online(self, utility: str) -> bool:
-        return self._economy_service.utility_online(utility)
+        return economy_system.utility_online(self._economy_service, utility)
 
     def economy_settings(self) -> dict[str, float]:
         """Return the current economy configuration values."""
 
-        return self._economy_service.economy_settings()
+        return economy_system.economy_settings(self._economy_service)
 
     def active_price_spikes(self) -> dict[str, dict[str, object]]:
         """Return a summary of currently active price spike events."""
 
-        return self._economy_service.active_price_spikes()
+        return economy_system.active_price_spikes(self._economy_service)
 
     def utility_snapshot(self) -> dict[str, bool]:
         """Return on/off status for tracked utilities."""
 
-        return self._economy_service.utility_snapshot()
+        return economy_system.utility_snapshot(self._economy_service)
+
+
+def build_console_service(
+    world: WorldState,
+    *,
+    history_limit: int = _CONSOLE_HISTORY_LIMIT,
+    buffer_limit: int = _CONSOLE_RESULT_BUFFER_LIMIT,
+) -> ConsoleService:
+    """Construct a console service bound to the given world."""
+
+    return ConsoleService(
+        world=world,
+        history_limit=history_limit,
+        buffer_limit=buffer_limit,
+    )

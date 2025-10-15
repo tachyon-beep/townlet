@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -83,13 +84,13 @@ class LifecycleManager:
     def set_mortality_enabled(self, enabled: bool) -> None:
         self.mortality_enabled = bool(enabled)
 
-    def export_state(self) -> dict[str, int]:
+    def export_state(self) -> dict[str, object]:
         return {
             "exits_today": int(self.exits_today),
             "employment_day": int(self._employment_day),
         }
 
-    def import_state(self, payload: dict[str, object]) -> None:
+    def import_state(self, payload: Mapping[str, Any]) -> None:
         self.exits_today = int(payload.get("exits_today", 0))
         self._employment_day = int(payload.get("employment_day", -1))
 
@@ -129,13 +130,14 @@ class LifecycleManager:
         while (
             world.employment.exit_queue_length() > 0
             and (
-            cfg.daily_exit_cap == 0
-            or world.employment_exits_today() < cfg.daily_exit_cap
+                cfg.daily_exit_cap == 0
+                or world.employment_exits_today() < cfg.daily_exit_cap
             )
         ):
-            agent_id = world.employment.exit_queue_head()
-            if agent_id is None:
+            queue_head = world.employment.exit_queue_head()
+            if queue_head is None:
                 break
+            agent_id = queue_head
             if self._employment_execute_exit(world, agent_id, tick, reason="daily_cap"):
                 results[agent_id] = True
             else:

@@ -4,13 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
 
 
-def _make_world() -> WorldState:
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents.clear()
     return world
 

@@ -11,9 +11,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.telemetry.interfaces import TelemetryEvent, TelemetryTransformProtocol
 
 __all__ = [
-    "TransformPipelineConfig",
-    "TelemetryTransformPipeline",
     "SnapshotEventNormalizer",
+    "TelemetryTransformPipeline",
+    "TransformPipelineConfig",
 ]
 
 
@@ -21,9 +21,9 @@ __all__ = [
 class TransformPipelineConfig:
     """Configuration describing the ordered telemetry transforms to apply."""
 
-    transforms: Sequence["TelemetryTransformProtocol"] = ()
+    transforms: Sequence[TelemetryTransformProtocol] = ()
 
-    def build_pipeline(self) -> "TelemetryTransformPipeline":
+    def build_pipeline(self) -> TelemetryTransformPipeline:
         """Construct a pipeline instance from the configured transforms."""
 
         return TelemetryTransformPipeline(self.transforms)
@@ -32,15 +32,15 @@ class TransformPipelineConfig:
 class TelemetryTransformPipeline:
     """Applies telemetry transforms in sequence to an event stream."""
 
-    def __init__(self, transforms: Sequence["TelemetryTransformProtocol"]) -> None:
-        self._transforms: list["TelemetryTransformProtocol"] = list(transforms)
+    def __init__(self, transforms: Sequence[TelemetryTransformProtocol]) -> None:
+        self._transforms: list[TelemetryTransformProtocol] = list(transforms)
 
-    def process(self, events: Iterable["TelemetryEvent"]) -> list["TelemetryEvent"]:
+    def process(self, events: Iterable[TelemetryEvent]) -> list[TelemetryEvent]:
         """Run the configured transforms over the provided events."""
 
-        processed: list["TelemetryEvent"] = []
+        processed: list[TelemetryEvent] = []
         for event in events:
-            current: "TelemetryEvent" | None = event
+            current: TelemetryEvent | None = event
             for transform in self._transforms:
                 if current is None:
                     break
@@ -56,7 +56,7 @@ class TelemetryTransformPipeline:
 class SnapshotEventNormalizer:
     """Ensures snapshot payloads are detached copies for downstream consumers."""
 
-    def process(self, event: "TelemetryEvent") -> "TelemetryEvent" | None:
+    def process(self, event: TelemetryEvent) -> TelemetryEvent | None:
         if event.kind != "snapshot":
             return event
         payload_copy = copy.deepcopy(event.payload)
@@ -70,5 +70,5 @@ class SnapshotEventNormalizer:
             metadata=metadata_copy,
         )
 
-    def flush(self) -> Iterable["TelemetryEvent"]:  # pragma: no cover - no buffering
+    def flush(self) -> Iterable[TelemetryEvent]:  # pragma: no cover - no buffering
         return ()

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Callable, Iterable as TypingIterable, Optional
+from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable as TypingIterable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - typing aid
-    from townlet.telemetry.interfaces import TelemetryAggregationProtocol, TelemetryEvent
+    from townlet.telemetry.interfaces import TelemetryEvent
 
 from .collector import StreamPayloadBuilder
 
@@ -20,8 +21,8 @@ class TelemetryAggregator:
         self,
         builder: StreamPayloadBuilder,
         *,
-        console_sink: Optional[Callable[[TypingIterable[object]], None]] = None,
-        failure_sink: Optional[Callable[[Mapping[str, Any]], None]] = None,
+        console_sink: Callable[[TypingIterable[object]], None] | None = None,
+        failure_sink: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> None:
         self._builder = builder
         self._console_sink = console_sink
@@ -31,9 +32,8 @@ class TelemetryAggregator:
         self,
         *,
         tick: int,
-        world,
-        observations,
-        rewards,
+        world: Any,
+        rewards: Any,
         events: Iterable[Mapping[str, Any]] | None = None,
         policy_snapshot: Mapping[str, Mapping[str, Any]] | None = None,
         kpi_history: bool = False,
@@ -44,8 +44,10 @@ class TelemetryAggregator:
         possessed_agents: Iterable[str] | None = None,
         social_events: Iterable[Mapping[str, Any]] | None = None,
         runtime_variant: str | None = None,
+        global_context: Mapping[str, Any] | None = None,
         **extra: Any,
-    ) -> Iterable["TelemetryEvent"]:
+    ) -> Iterable[TelemetryEvent]:
+        context_payload = global_context if isinstance(global_context, Mapping) else None
         payload: Mapping[str, Any] | None = extra.get("snapshot_payload")
         if payload is None:
             stability_alerts = extra.get("stability_alerts", ())
@@ -53,11 +55,11 @@ class TelemetryAggregator:
             payload = self._builder.build(
                 tick=tick,
                 runtime_variant=runtime_variant,
-                queue_metrics=extra.get("queue_metrics", {}),
-                embedding_metrics=extra.get("embedding_metrics", {}),
-                employment_metrics=extra.get("employment_metrics", {}),
+                queue_metrics=extra.get("queue_metrics"),
+                embedding_metrics=extra.get("embedding_metrics"),
+                employment_metrics=extra.get("employment_metrics"),
                 conflict_snapshot=extra.get("conflict_snapshot", {}),
-                relationship_metrics=extra.get("relationship_metrics", {}),
+                relationship_metrics=extra.get("relationship_metrics"),
                 relationship_snapshot=extra.get("relationship_snapshot", {}),
                 relationship_updates=extra.get("relationship_updates", ()),
                 relationship_overlay=extra.get("relationship_overlay", {}),
@@ -79,6 +81,7 @@ class TelemetryAggregator:
                 policy_snapshot=policy_snapshot or {},
                 anneal_status=extra.get("anneal_status"),
                 kpi_history=kpi_history_payload if kpi_history else {},
+                global_context=context_payload,
             )
         kind = payload.get("payload_type", "snapshot")
         metadata = {
@@ -94,11 +97,12 @@ class TelemetryAggregator:
             return
         self._console_sink(results)
 
-    def record_loop_failure(self, payload: Mapping[str, object]) -> Iterable["TelemetryEvent"]:
+    def record_loop_failure(self, payload: Mapping[str, object]) -> Iterable[TelemetryEvent]:
         if self._failure_sink is not None:
             self._failure_sink(payload)
         metadata = {"kind": "loop_failure"}
-        tick = int(payload.get("tick", 0))
+        tick_raw = payload.get("tick", 0)
+        tick = int(tick_raw) if isinstance(tick_raw, (int, float, str)) else 0
         from townlet.telemetry.interfaces import TelemetryEvent
 
         yield TelemetryEvent(tick=tick, kind="health", payload=dict(payload), metadata=metadata)

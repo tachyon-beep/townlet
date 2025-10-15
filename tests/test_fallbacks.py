@@ -6,16 +6,12 @@ from typing import Any
 import pytest
 
 from townlet.config import RuntimeProviderConfig, RuntimeProviders, load_config
-from townlet.core import (
-    SimulationLoop,
-    is_stub_policy,
-    is_stub_telemetry,
-    policy_provider_name,
-    telemetry_provider_name,
-)
+from townlet.core import SimulationLoop
 from townlet.core import factory_registry as registry
-from townlet.policy.fallback import StubPolicyBackend
-from townlet.telemetry.fallback import StubTelemetrySink
+from townlet.core.utils import policy_provider_name, telemetry_provider_name
+from townlet.factories import policy_factory
+from townlet.policy.fallback import StubPolicyBackend, is_stub_policy
+from townlet.telemetry.fallback import StubTelemetrySink, is_stub_telemetry
 
 
 @pytest.fixture(scope="module")
@@ -24,7 +20,8 @@ def sample_config() -> Any:
 
 
 def test_policy_stub_resolution(sample_config: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(registry, "torch_available", lambda: False)
+    # Monkeypatch torch_available in the policy_factory module where it's actually used
+    monkeypatch.setattr(policy_factory, "torch_available", lambda: False)
     runtime_overrides = RuntimeProviders(
         policy=RuntimeProviderConfig(provider="pytorch"),
     )
@@ -32,12 +29,15 @@ def test_policy_stub_resolution(sample_config: Any, monkeypatch: pytest.MonkeyPa
 
     loop = SimulationLoop(config)
     try:
-        assert isinstance(loop.policy, StubPolicyBackend)
+        # Note: loop.policy is PolicyRuntime, not StubPolicyBackend directly
+        # The stub fallback is wrapped by the policy port adapter (ScriptedPolicyAdapter)
+        # which wraps a StubPolicyBackend when torch is unavailable
         provider = policy_provider_name(loop)
         assert provider == "pytorch"
-        assert is_stub_policy(loop.policy, provider)
+        # Verify the stub flag is set correctly by checking the port adapter
+        assert is_stub_policy(loop._policy_port, provider)
     finally:
-        if hasattr(loop.telemetry, "close"):
+        if hasattr(loop, "close"):
             loop.close()
 
 

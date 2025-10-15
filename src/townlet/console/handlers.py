@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from collections.abc import Mapping
@@ -16,9 +17,12 @@ if TYPE_CHECKING:
     from townlet.world.grid import WorldState
 
 from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
-from townlet.core.utils import is_stub_policy, is_stub_telemetry
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.policy.fallback import is_stub_policy
+from townlet.telemetry.fallback import is_stub_telemetry
 from townlet.snapshots import SnapshotManager
 from townlet.stability.promotion import PromotionManager
+from townlet.utils.coerce import coerce_float, coerce_int
 
 SUPPORTED_SCHEMA_PREFIX = "0.9"
 SUPPORTED_SCHEMA_LABEL = f"{SUPPORTED_SCHEMA_PREFIX}.x"
@@ -93,6 +97,7 @@ class TelemetryBridge:
     ) -> None:
         self._publisher = publisher
         self._provider_name = provider_name or ("stub" if is_stub_telemetry(publisher) else "unknown")
+        self._dispatcher = getattr(publisher, "event_dispatcher", None)
 
     def _call_or_default(self, name: str, default: T) -> T:
         """Call a telemetry method if present; otherwise return default.
@@ -103,13 +108,30 @@ class TelemetryBridge:
         fn = getattr(self._publisher, name, None)
         if callable(fn):
             try:
-                return fn()
+                result = fn()
+                # Type narrowing: result should match T but mypy sees Any
+                return result if result is not None else default
             except Exception:  # pragma: no cover - defensive fallback
                 return default
         return default
 
-    def snapshot(self) -> dict[str, dict[str, object]]:
+    def _global_context(self) -> dict[str, object]:
+        """Return the latest DTO-backed global context emitted by the loop."""
+
+        dispatcher = self._dispatcher
+        if dispatcher is None:
+            return {}
+        latest_tick = dispatcher.latest_tick
+        if not isinstance(latest_tick, Mapping):
+            return {}
+        payload = latest_tick.get("global_context")
+        if not isinstance(payload, Mapping):
+            return {}
+        return {str(key): copy.deepcopy(value) for key, value in payload.items()}
+
+    def snapshot(self) -> dict[str, object]:
         version, warning = _schema_metadata(self._publisher)
+        global_context = self._global_context()
         command_metadata = {
             "relationship_summary": {
                 "mode": "viewer",
@@ -132,26 +154,40 @@ class TelemetryBridge:
                 "description": "Push an operator narration entry to observers",
             },
         }
+        jobs_payload = copy.deepcopy(global_context.get("job_snapshot", {}))
+        economy_payload = copy.deepcopy(global_context.get("economy_snapshot", {}))
+        economy_settings_payload = copy.deepcopy(global_context.get("economy_settings", {}))
+        price_spikes_payload = copy.deepcopy(global_context.get("price_spikes", {}))
+        utilities_payload = copy.deepcopy(global_context.get("utilities", {}))
+        employment_payload = copy.deepcopy(global_context.get("employment_snapshot", {}))
+        relationship_metrics_payload = copy.deepcopy(global_context.get("relationship_metrics", {}))
+        relationship_snapshot_payload = copy.deepcopy(global_context.get("relationship_snapshot", {}))
+        promotion_payload = copy.deepcopy(global_context.get("promotion_state", {}))
+        anneal_payload = copy.deepcopy(global_context.get("anneal_context", {}))
+        queue_metrics_payload = copy.deepcopy(global_context.get("queue_metrics", {}))
+        stability_metrics_payload = copy.deepcopy(global_context.get("stability_metrics", {}))
+        perturbations_payload = copy.deepcopy(global_context.get("perturbations", {}))
         payload = {
             "schema_version": version,
             "schema_warning": warning,
             "console_commands": command_metadata,
-            "jobs": self._call_or_default("latest_job_snapshot", {}),
-            "economy": self._call_or_default("latest_economy_snapshot", {}),
-            "economy_settings": self._call_or_default("latest_economy_settings", {}),
-            "price_spikes": self._call_or_default("latest_price_spikes", {}),
-            "utilities": self._call_or_default("latest_utilities", {}),
-            "employment": self._call_or_default("latest_employment_metrics", {}),
+            "jobs": jobs_payload or self._call_or_default("latest_job_snapshot", {}),
+            "economy": economy_payload or self._call_or_default("latest_economy_snapshot", {}),
+            "economy_settings": economy_settings_payload or self._call_or_default("latest_economy_settings", {}),
+            "price_spikes": price_spikes_payload or self._call_or_default("latest_price_spikes", {}),
+            "utilities": utilities_payload or self._call_or_default("latest_utilities", {}),
+            "employment": employment_payload or self._call_or_default("latest_employment_metrics", {}),
+            "queue_metrics": queue_metrics_payload or self._call_or_default("latest_queue_metrics", {}),
             "conflict": self._call_or_default("latest_conflict_snapshot", {}),
-            "relationships": self._call_or_default("latest_relationship_metrics", {}) or {},
-            "relationship_snapshot": self._call_or_default("latest_relationship_snapshot", {}),
+            "relationships": relationship_metrics_payload or self._call_or_default("latest_relationship_metrics", {}) or {},
+            "relationship_snapshot": relationship_snapshot_payload or self._call_or_default("latest_relationship_snapshot", {}),
             "relationship_updates": self._call_or_default("latest_relationship_updates", []),
             "relationship_summary": self._call_or_default("latest_relationship_summary", {}),
             "social_events": self._call_or_default("latest_social_events", []),
             "events": list(self._call_or_default("latest_events", [])),
             "narrations": self._call_or_default("latest_narrations", []),
             "narration_state": self._call_or_default("latest_narration_state", {}),
-            "anneal_status": self._call_or_default("latest_anneal_status", None),
+            "anneal_status": anneal_payload or self._call_or_default("latest_anneal_status", None),
             "policy_snapshot": self._call_or_default("latest_policy_snapshot", {}),
             "policy_identity": self._call_or_default("latest_policy_identity", {}) or {},
             "snapshot_migrations": self._call_or_default("latest_snapshot_migrations", []),
@@ -161,10 +197,10 @@ class TelemetryBridge:
             "personalities": self._call_or_default("latest_personality_snapshot", {}),
             "stability": {
                 "alerts": self._call_or_default("latest_stability_alerts", []),
-                "metrics": self._call_or_default("latest_stability_metrics", {}),
-                "promotion_state": getattr(self._publisher, "latest_promotion_state", lambda: None)(),
+                "metrics": stability_metrics_payload or self._call_or_default("latest_stability_metrics", {}),
+                "promotion_state": promotion_payload or getattr(self._publisher, "latest_promotion_state", lambda: None)(),
             },
-            "perturbations": self._call_or_default("latest_perturbations", {}),
+            "perturbations": perturbations_payload or self._call_or_default("latest_perturbations", {}),
             "transport": self._call_or_default("latest_transport_status", {}),
             "health": self._call_or_default("latest_health_status", {}),
             "console_results": self._call_or_default("latest_console_results", []),
@@ -210,58 +246,61 @@ class TelemetryBridge:
         if not agent_ties:
             raise KeyError(agent_key)
 
+        # agent_ties is guaranteed to be truthy here, and is Mapping[str, Mapping[str, float]]
         tie_entries: list[dict[str, object]] = []
-        for other, metrics in (agent_ties or {}).items():
-            if not isinstance(metrics, Mapping):
-                continue
+        for other, metrics in agent_ties.items():
+            # metrics is guaranteed to be Mapping[str, float] from type system
             tie_entries.append(
                 {
                     "other": str(other),
-                    "trust": float(metrics.get("trust", 0.0)),
-                    "familiarity": float(metrics.get("familiarity", 0.0)),
-                    "rivalry": float(metrics.get("rivalry", 0.0)),
+                    "trust": coerce_float(metrics.get("trust", 0.0), default=0.0),
+                    "familiarity": coerce_float(metrics.get("familiarity", 0.0), default=0.0),
+                    "rivalry": coerce_float(metrics.get("rivalry", 0.0), default=0.0),
                 }
             )
-        tie_entries.sort(key=lambda item: item["trust"] + item["familiarity"], reverse=True)
+        # Safe to cast since we know trust and familiarity are floats from coerce_float
+        tie_entries.sort(key=lambda item: coerce_float(item["trust"], default=0.0) + coerce_float(item["familiarity"], default=0.0), reverse=True)
 
         overlay_entries: list[dict[str, object]] = []
-        overlay = self._publisher.latest_relationship_overlay().get(agent_key, [])
+        # latest_relationship_overlay not in protocol, use getattr
+        overlay_method: object = getattr(self._publisher, "latest_relationship_overlay", lambda: {})
+        overlay_result = overlay_method() if callable(overlay_method) else {}
+        overlay = overlay_result.get(agent_key, []) if isinstance(overlay_result, Mapping) else []
         for entry in overlay:
             if not isinstance(entry, Mapping):
                 continue
             overlay_entries.append(
                 {
                     "other": str(entry.get("other", "")),
-                    "trust": float(entry.get("trust", 0.0)),
-                    "familiarity": float(entry.get("familiarity", 0.0)),
-                    "rivalry": float(entry.get("rivalry", 0.0)),
-                    "delta_trust": float(entry.get("delta_trust", 0.0)),
-                    "delta_familiarity": float(entry.get("delta_familiarity", 0.0)),
-                    "delta_rivalry": float(entry.get("delta_rivalry", 0.0)),
+                    "trust": coerce_float(entry.get("trust", 0.0), default=0.0),
+                    "familiarity": coerce_float(entry.get("familiarity", 0.0), default=0.0),
+                    "rivalry": coerce_float(entry.get("rivalry", 0.0), default=0.0),
+                    "delta_trust": coerce_float(entry.get("delta_trust", 0.0), default=0.0),
+                    "delta_familiarity": coerce_float(entry.get("delta_familiarity", 0.0), default=0.0),
+                    "delta_rivalry": coerce_float(entry.get("delta_rivalry", 0.0), default=0.0),
                 }
             )
 
         updates_payload: list[dict[str, object]] = []
         incoming_payload: list[dict[str, object]] = []
+        # latest_relationship_updates returns Iterable[Mapping], so all items are Mapping
         for update in self._publisher.latest_relationship_updates():
-            if not isinstance(update, Mapping):
-                continue
             owner = str(update.get("owner", ""))
             other = str(update.get("other", ""))
             delta_mapping = update.get("delta")
             if isinstance(delta_mapping, Mapping):
-                delta_trust = float(delta_mapping.get("trust", 0.0))
-                delta_familiarity = float(delta_mapping.get("familiarity", 0.0))
-                delta_rivalry = float(delta_mapping.get("rivalry", 0.0))
+                delta_trust = coerce_float(delta_mapping.get("trust", 0.0), default=0.0)
+                delta_familiarity = coerce_float(delta_mapping.get("familiarity", 0.0), default=0.0)
+                delta_rivalry = coerce_float(delta_mapping.get("rivalry", 0.0), default=0.0)
             else:
                 delta_trust = delta_familiarity = delta_rivalry = 0.0
             payload = {
                 "owner": owner,
                 "other": other,
                 "status": str(update.get("status", "")),
-                "trust": float(update.get("trust", 0.0)),
-                "familiarity": float(update.get("familiarity", 0.0)),
-                "rivalry": float(update.get("rivalry", 0.0)),
+                "trust": coerce_float(update.get("trust", 0.0), default=0.0),
+                "familiarity": coerce_float(update.get("familiarity", 0.0), default=0.0),
+                "rivalry": coerce_float(update.get("rivalry", 0.0), default=0.0),
                 "delta": {
                     "trust": delta_trust,
                     "familiarity": delta_familiarity,
@@ -285,9 +324,13 @@ class TelemetryBridge:
         """Return a bounded list of the most recent social events."""
 
         events = self._publisher.latest_social_events()
+        # events is Iterable[Mapping], convert each to dict
+        events_list: list[dict[str, object]] = [
+            dict(e) if isinstance(e, Mapping) else {} for e in events
+        ]
         if limit is not None and limit >= 0:
-            return list(reversed(events))[:limit]
-        return list(reversed(events))
+            return list(reversed(events_list))[:limit]
+        return list(reversed(events_list))
 
 
 def create_console_router(
@@ -349,7 +392,16 @@ def create_console_router(
         metrics = publisher.latest_stability_metrics()
         base = dict(metrics) if isinstance(metrics, dict) else {}
         base["promotion_state"] = promotion.snapshot()
-        publisher.record_stability_metrics(base)
+        emit = getattr(publisher, "emit_event", None)
+        if callable(emit):
+            tick = getattr(world, "tick", 0) if world is not None else 0
+            event = TelemetryEventDTO(
+                event_type="stability.metrics",
+                tick=tick,
+                payload=base,
+                metadata=TelemetryMetadata(),
+            )
+            emit(event)
 
     def _apply_release_metadata(metadata: object) -> None:
         if policy is None and config is None:
@@ -361,10 +413,13 @@ def create_console_router(
         active_hash: str | None = None
         anneal_ratio: float | None = None
         if policy is not None:
-            if policy_hash_value is not None:
-                policy.set_policy_hash(str(policy_hash_value))
-            else:
-                policy.set_policy_hash(None)
+            # set_policy_hash not in PolicyBackendProtocol, use getattr
+            set_hash = getattr(policy, "set_policy_hash", None)
+            if callable(set_hash):
+                if policy_hash_value is not None:
+                    set_hash(str(policy_hash_value))
+                else:
+                    set_hash(None)
             active_hash = policy.active_policy_hash()
             try:
                 anneal_ratio = policy.current_anneal_ratio()
@@ -449,11 +504,13 @@ def create_console_router(
     def employment_status_handler(command: ConsoleCommand) -> object:
         version, warning = _schema_metadata(publisher)
         metrics = publisher.latest_employment_metrics()
+        # metrics could be None, guard attribute access
+        pending = metrics.get("pending", []) if isinstance(metrics, Mapping) else []
         return {
             "schema_version": version,
             "schema_warning": warning,
             "metrics": metrics,
-            "pending_agents": metrics.get("pending", []),
+            "pending_agents": pending,
         }
 
     def relationship_summary_handler(command: ConsoleCommand) -> object:
@@ -499,7 +556,7 @@ def create_console_router(
             limit_value = None
         else:
             try:
-                limit_value = int(limit_arg)
+                limit_value = coerce_int(limit_arg, default=-1)
             except (TypeError, ValueError):
                 return {
                     "error": "invalid_args",
@@ -573,7 +630,9 @@ def create_console_router(
             tick_value = publisher.current_tick()
         else:
             try:
-                tick_value = int(tick_arg)
+                tick_value = coerce_int(tick_arg, default=-1)
+                if tick_value < 0:
+                    raise TypeError("Invalid tick value")
             except (TypeError, ValueError):
                 return {
                     "error": "invalid_args",
@@ -612,16 +671,19 @@ def create_console_router(
                 "running_count": len(snapshot),
                 "running": {object_id: asdict(state) for object_id, state in snapshot.items()},
                 "active_reservations": world.active_reservations,
-                "event_counts": dict(runtime.get("event_counts", {})),
+                "event_counts": dict(runtime.get("event_counts", {})) if isinstance(runtime, Mapping) else {},  # type: ignore[call-overload]
             }
-        event_counts = runtime.get("event_counts", {})
+        # Convert Mapping to mutable dict for modification
+        runtime_dict = dict(runtime) if isinstance(runtime, Mapping) else {}
+        event_counts_raw = runtime_dict.get("event_counts", {})
+        event_counts = dict(event_counts_raw) if isinstance(event_counts_raw, Mapping) else {}
         for key in ("start", "finish", "fail", "precondition_fail"):
             event_counts.setdefault(key, 0)
-        runtime["event_counts"] = event_counts
+        runtime_dict["event_counts"] = event_counts
         return {
             "schema_version": version,
             "schema_warning": warning,
-            "runtime": runtime,
+            "runtime": runtime_dict,
         }
 
     def employment_exit_handler(command: ConsoleCommand) -> object:
@@ -676,7 +738,9 @@ def create_console_router(
                 "message": "action must be 'acquire' or 'release'",
             }
         if verb == "acquire":
-            if not policy.acquire_possession(agent_id):
+            # acquire_possession not in PolicyBackendProtocol, use getattr
+            acquire = getattr(policy, "acquire_possession", None)
+            if not callable(acquire) or not acquire(agent_id):
                 return {
                     "error": "conflict",
                     "message": "agent already possessed",
@@ -686,7 +750,9 @@ def create_console_router(
                 world.request_ctx_reset(agent_id)
             possessed = True
         else:
-            if not policy.release_possession(agent_id):
+            # release_possession not in PolicyBackendProtocol, use getattr
+            release = getattr(policy, "release_possession", None)
+            if not callable(release) or not release(agent_id):
                 return {
                     "error": "invalid_args",
                     "message": "agent not currently possessed",
@@ -759,12 +825,13 @@ def create_console_router(
                 "error": "usage",
                 "message": "set_exit_cap requires daily_exit_cap integer",
             }
-        if cap_value < 0:
+        cap_int = coerce_int(cap_value, default=-1)
+        if cap_int < 0:
             return {
                 "error": "invalid_args",
                 "message": "daily_exit_cap must be >= 0",
             }
-        world.config.employment.daily_exit_cap = cap_value
+        world.config.employment.daily_exit_cap = cap_int
         metrics = world.employment_queue_snapshot()
         return {
             "daily_exit_cap": cap_value,
@@ -781,7 +848,9 @@ def create_console_router(
         if delay_value is None and command.args:
             delay_value = command.args[0]
         try:
-            delay_int = int(delay_value)
+            delay_int = coerce_int(delay_value, default=-1)
+            if delay_int < 0:
+                raise TypeError("Invalid delay value")
         except (TypeError, ValueError):
             return {
                 "error": "usage",
@@ -798,26 +867,30 @@ def create_console_router(
     def conflict_status_handler(command: ConsoleCommand) -> object:
         version, warning = _schema_metadata(publisher)
         try:
-            history_limit = int(command.kwargs.get("history", 10))
+            history_limit = coerce_int(command.kwargs.get("history", 10), default=10)
         except (TypeError, ValueError):
             history_limit = 10
         try:
-            rivalry_limit = int(command.kwargs.get("rivalries", 10))
+            rivalry_limit = coerce_int(command.kwargs.get("rivalries", 10), default=10)
         except (TypeError, ValueError):
             rivalry_limit = 10
-        queue_history = publisher.latest_queue_history()
+        # latest_queue_history not in protocol, use getattr
+        queue_history_method: object = getattr(publisher, "latest_queue_history", lambda: [])
+        queue_history_raw = queue_history_method() if callable(queue_history_method) else []
+        queue_history_list = list(queue_history_raw)
         if history_limit > 0:
-            queue_history = queue_history[-history_limit:]
+            queue_history_list = queue_history_list[-history_limit:]
         rivalry_events = publisher.latest_rivalry_events()
+        rivalry_list = list(rivalry_events)
         if rivalry_limit > 0:
-            rivalry_events = rivalry_events[-rivalry_limit:]
+            rivalry_list = rivalry_list[-rivalry_limit:]
         return {
             "schema_version": version,
             "schema_warning": warning,
             "queue_metrics": publisher.latest_queue_metrics() or {},
             "conflict": publisher.latest_conflict_snapshot(),
-            "history": queue_history,
-            "rivalry_events": rivalry_events,
+            "history": queue_history_list,
+            "rivalry_events": rivalry_list,
             "stability_alerts": publisher.latest_stability_alerts(),
             "stability_metrics": publisher.latest_stability_metrics(),
         }
@@ -832,19 +905,27 @@ def create_console_router(
             }
         object_id = str(command.args[0])
         state = world.queue_manager.export_state()
-        queues = state.get("queues", {})
+        # state may be object type from export, need runtime checks
+        queues = state.get("queues", {}) if isinstance(state, Mapping) else {}
+        queue_entries = queues.get(object_id, []) if isinstance(queues, Mapping) else []
         entries = [
             {
                 "agent_id": str(entry.get("agent_id", "")),
-                "joined_tick": int(entry.get("joined_tick", 0)),
+                "joined_tick": coerce_int(entry.get("joined_tick", 0), default=0),
             }
-            for entry in queues.get(object_id, [])
+            for entry in queue_entries
+            if isinstance(entry, Mapping)
         ]
         cooldowns = []
-        for item in state.get("cooldowns", []):
+        cooldowns_raw = state.get("cooldowns", []) if isinstance(state, Mapping) else []
+        # Convert to list to ensure it's iterable
+        cooldowns_items = list(cooldowns_raw) if cooldowns_raw else []  # type: ignore[call-overload]
+        for item in cooldowns_items:
+            if not isinstance(item, Mapping):
+                continue
             if str(item.get("object_id")) != object_id:
                 continue
-            expiry = int(item.get("expiry", 0))
+            expiry = coerce_int(item.get("expiry", 0), default=0)
             cooldowns.append(
                 {
                     "agent_id": str(item.get("agent_id", "")),
@@ -852,14 +933,14 @@ def create_console_router(
                     "ticks_remaining": max(0, expiry - world.tick),
                 }
             )
-        stall_counts = state.get("stall_counts", {})
+        stall_counts = state.get("stall_counts", {}) if isinstance(state, Mapping) else {}
         return {
             "object_id": object_id,
             "tick": world.tick,
             "active": world.queue_manager.active_agent(object_id),
             "queue": entries,
             "cooldowns": cooldowns,
-            "stall_count": int(stall_counts.get(object_id, 0)),
+            "stall_count": coerce_int(stall_counts.get(object_id, 0) if isinstance(stall_counts, Mapping) else 0, default=0),
             "metrics": publisher.latest_queue_metrics() or {},
         }
 
@@ -871,7 +952,7 @@ def create_console_router(
             return {"error": "unsupported"}
         ledger = snapshot_getter() or {}
         try:
-            limit = int(command.kwargs.get("limit", 5))
+            limit = coerce_int(command.kwargs.get("limit", 5), default=5)
         except (TypeError, ValueError):
             limit = 5
         if command.args:
@@ -906,7 +987,8 @@ def create_console_router(
         if promotion is None:
             return _attach_metadata({"error": "unsupported"}, command)
         result = {"promotion": promotion.snapshot()}
-        return _attach_metadata(result, command)
+        # Type ignore: dict is invariant but Mapping is covariant
+        return _attach_metadata(result, command)  # type: ignore[arg-type]
 
     def promote_policy_handler(command: ConsoleCommand) -> object:
         if promotion is None:
@@ -1030,9 +1112,9 @@ def create_console_router(
                 "message": "agents missing",
                 "agents": missing,
             }
-        starts_in = int(payload.get("starts_in", 0) or 0)
+        starts_in = coerce_int(payload.get("starts_in", 0) or 0, default=0)
         duration = payload.get("duration")
-        duration_int = int(duration) if duration is not None else None
+        duration_int = coerce_int(duration, default=0) if duration is not None else None
         overrides = dict(payload.get("payload", {})) if isinstance(payload.get("payload"), Mapping) else None
         try:
             event = scheduler.schedule_manual(
@@ -1073,9 +1155,9 @@ def create_console_router(
                 ),
             }
         spec_name = str(command.args[0])
-        starts_in = int(command.kwargs.get("starts_in", 0))
+        starts_in = coerce_int(command.kwargs.get("starts_in", 0), default=0)
         duration_arg = command.kwargs.get("duration")
-        duration = int(duration_arg) if duration_arg is not None else None
+        duration = coerce_int(duration_arg, default=0) if duration_arg is not None else None
         targets_arg = command.kwargs.get("targets")
         targets = None
         if isinstance(targets_arg, str):
@@ -1085,7 +1167,7 @@ def create_console_router(
         payload: dict[str, object] = {}
         if "magnitude" in command.kwargs:
             try:
-                payload["magnitude"] = float(command.kwargs["magnitude"])
+                payload["magnitude"] = coerce_float(command.kwargs["magnitude"], default=0.0)
             except (TypeError, ValueError):
                 return {"error": "invalid_args", "message": "magnitude must be numeric"}
         if "location" in command.kwargs:
@@ -1120,8 +1202,8 @@ def create_console_router(
 
     def snapshot_inspect_handler(command: ConsoleCommand) -> object:
         path, error = _parse_snapshot_path(command, "snapshot_inspect <path>")
-        if error:
-            return error
+        if error or path is None:
+            return error or {"error": "invalid_path"}
         try:
             document = json.loads(path.read_text())
         except Exception as exc:
@@ -1140,11 +1222,11 @@ def create_console_router(
 
     def snapshot_validate_handler(command: ConsoleCommand) -> object:
         path, error = _parse_snapshot_path(command, "snapshot_validate <path> [--strict]")
-        if error:
-            return error
+        if error or path is None:
+            return error or {"error": "invalid_path"}
         cfg, cfg_error = _require_config()
-        if cfg_error:
-            return cfg_error
+        if cfg_error or cfg is None:
+            return cfg_error or {"error": "config_unavailable"}
         manager = SnapshotManager(path.parent)
         strict = bool(command.kwargs.get("strict", False))
         allow_migration = (not strict) and cfg.snapshot.migrations.auto_apply
@@ -1162,16 +1244,16 @@ def create_console_router(
             "valid": True,
             "config_id": state.config_id,
             "tick": state.tick,
-            "migrations_applied": list(state.migrations.get("applied", [])),
+            "migrations_applied": list(state.migrations.applied),
         }
 
     def snapshot_migrate_handler(command: ConsoleCommand) -> object:
         path, error = _parse_snapshot_path(command, "snapshot_migrate <path> [--output dir]")
-        if error:
-            return error
+        if error or path is None:
+            return error or {"error": "invalid_path"}
         cfg, cfg_error = _require_config()
-        if cfg_error:
-            return cfg_error
+        if cfg_error or cfg is None:
+            return cfg_error or {"error": "config_unavailable"}
         manager = SnapshotManager(path.parent)
         try:
             state = manager.load(
@@ -1187,8 +1269,11 @@ def create_console_router(
                 "message": str(exc),
                 "path": str(path),
             }
-        applied = list(state.migrations.get("applied", []))
-        publisher.record_snapshot_migrations(applied)
+        applied = list(state.migrations.applied)
+        # record_snapshot_migrations not in protocol, use getattr
+        record_method = getattr(publisher, "record_snapshot_migrations", None)
+        if callable(record_method):
+            record_method(applied)
         output_arg = command.kwargs.get("output")
         saved_path: Path | None = None
         if output_arg is not None:
@@ -1248,18 +1333,21 @@ def create_console_router(
         router.register("rollback_policy", rollback_policy_handler)
         router.register("policy_swap", policy_swap_handler)
     else:
-        router.register("relationship_detail", _forbidden)
-        router.register("possess", _forbidden)
-        router.register("kill", _forbidden)
-        router.register("toggle_mortality", _forbidden)
-        router.register("set_exit_cap", _forbidden)
-        router.register("set_spawn_delay", _forbidden)
-        router.register("perturbation_trigger", _forbidden)
-        router.register("perturbation_cancel", _forbidden)
-        router.register("snapshot_migrate", _forbidden)
-        router.register("promote_policy", _forbidden)
-        router.register("rollback_policy", _forbidden)
-        router.register("policy_swap", _forbidden)
+        # Cast to ConsoleHandler to match protocol
+        from typing import cast
+        forbidden_handler = cast(ConsoleHandler, _forbidden)
+        router.register("relationship_detail", forbidden_handler)
+        router.register("possess", forbidden_handler)
+        router.register("kill", forbidden_handler)
+        router.register("toggle_mortality", forbidden_handler)
+        router.register("set_exit_cap", forbidden_handler)
+        router.register("set_spawn_delay", forbidden_handler)
+        router.register("perturbation_trigger", forbidden_handler)
+        router.register("perturbation_cancel", forbidden_handler)
+        router.register("snapshot_migrate", forbidden_handler)
+        router.register("promote_policy", forbidden_handler)
+        router.register("rollback_policy", forbidden_handler)
+        router.register("policy_swap", forbidden_handler)
     return router
 
 

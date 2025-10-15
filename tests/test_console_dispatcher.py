@@ -50,7 +50,9 @@ def _queue_command(loop: SimulationLoop, payload: dict[str, object]) -> None:
         if payload.get("mode") == "admin":
             token = ADMIN_TOKEN
         payload = {**payload, "auth": {"token": token}}
-    loop.telemetry.queue_console_command(payload)
+    # Directly append to avoid clearing the buffer on each call
+    # (import_console_buffer clears before importing)
+    loop.telemetry._latest_console_events.append(payload)
 
 
 def test_dispatcher_processes_employment_review(employment_loop: SimulationLoop) -> None:
@@ -311,7 +313,7 @@ def test_price_updates_economy_and_basket(employment_loop: SimulationLoop) -> No
     result = loop.telemetry.latest_console_results()[-1]
     assert result["status"] == "ok"
     assert loop.config.economy["meal_cost"] == pytest.approx(0.8)
-    basket = loop.world.agents["alice"].inventory.get("basket_cost")
+    basket = loop.world.economy_service.basket_cost_for_agent("alice")
     assert basket == pytest.approx(
         loop.config.economy["meal_cost"]
         + loop.config.economy["cook_energy_cost"]

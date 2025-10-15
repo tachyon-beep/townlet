@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, cast
 
 from townlet.core.sim_loop import SimulationLoop
-from townlet.policy.behavior import AgentIntent
-from townlet.world.grid import AgentSnapshot
+from townlet.policy.behavior import AgentIntent, BehaviorController
+from townlet.policy.dto_view import DTOWorldView
+from townlet.world.agents.snapshot import AgentSnapshot
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from townlet.policy.runner import PolicyRuntime
+    from townlet.world.grid import WorldState
 
 
 def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
@@ -34,7 +40,10 @@ def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
     missing_affordances: dict[str, tuple[str, int]] = {}
     for agent in scenario.get("agents", []):
         agent_id = agent["id"]
-        position = tuple(agent.get("position", (0, 0)))  # type: ignore[arg-type]
+        position_raw = agent.get("position", (0, 0))
+        if not isinstance(position_raw, (list, tuple)) or len(position_raw) != 2:
+            raise ValueError(f"Invalid agent position for {agent_id}: {position_raw}")
+        position = (int(position_raw[0]), int(position_raw[1]))
         needs = dict(agent.get("needs", {}))
         profile_field = agent.get("personality_profile")
         profile_name, resolved_personality = loop.world.select_personality_profile(
@@ -109,7 +118,13 @@ def apply_scenario(loop: SimulationLoop, scenario: dict[str, Any]) -> None:
             hooks={},
         )
     if schedules:
-        loop.policy.behavior = ScenarioBehavior(loop.policy.behavior, schedules)
+        from townlet.policy.runner import PolicyRuntime as _PolicyRuntime
+
+        policy_obj = loop.policy
+        if not isinstance(policy_obj, _PolicyRuntime):  # pragma: no cover - defensive
+            raise TypeError("Scenario behavior injection requires PolicyRuntime")
+        bridge = policy_obj._behavior_bridge
+        bridge.behavior = ScenarioBehavior(bridge.behavior, schedules)
 
 
 def seed_default_agents(loop: SimulationLoop) -> None:
@@ -136,15 +151,26 @@ def has_agents(loop: SimulationLoop) -> bool:
 class ScenarioBehavior:
     """Wraps an existing behavior controller with scripted schedules."""
 
-    def __init__(self, base_behavior, schedules: dict[str, list[AgentIntent]]) -> None:
+    def __init__(
+        self,
+        base_behavior: BehaviorController,
+        schedules: Mapping[str, list[AgentIntent]],
+    ) -> None:
         self.base = base_behavior
         self._schedules = schedules
         self._indices: dict[str, int] = dict.fromkeys(schedules, 0)
 
-    def decide(self, world, agent_id):  # type: ignore[override]
+    def decide(
+        self,
+        world: object,
+        agent_id: str,
+        *,
+        dto_world: DTOWorldView | None = None,
+    ) -> AgentIntent:
         seq = self._schedules.get(agent_id)
         if not seq:
-            return self.base.decide(world, agent_id)
+            base_world = cast("WorldState", world)
+            return self.base.decide(base_world, agent_id, dto_world=dto_world)
         idx = self._indices.setdefault(agent_id, 0)
         intent = seq[idx % len(seq)]
         self._indices[agent_id] = idx + 1

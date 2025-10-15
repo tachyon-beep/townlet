@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from townlet.core.interfaces import TelemetrySinkProtocol
 from townlet.core.sim_loop import SimulationLoop
-from townlet.core.utils import is_stub_telemetry
 from townlet.demo.storylines import available_storylines, build_storyline, default_timeline
+from townlet.telemetry.fallback import is_stub_telemetry
 from townlet.demo.timeline import DemoTimeline, ScheduledCommand, load_timeline
-from townlet.world.grid import AgentSnapshot, WorldState
-from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.world.agents.snapshot import AgentSnapshot
+
+if TYPE_CHECKING:
+    from townlet.world.grid import WorldState
+from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.dashboard import PaletteState, run_dashboard
 
 __all__ = [
@@ -56,7 +61,7 @@ class DemoScheduler:
                     message = f"Dispatched {item.name} at tick {tick}"
                     logger.info(message)
                     self._set_palette(executor, message, "green")
-                except CommandQueueFull as exc:
+                except CommandQueueFullError as exc:
                     warning = f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
                     logger.warning(warning)
                     self._set_palette(executor, warning, "yellow")
@@ -176,7 +181,7 @@ class DemoScheduler:
         payload = {"name": "announce_story", "kwargs": payload_kwargs}
         try:
             executor.submit_payload(payload)
-        except CommandQueueFull as exc:
+        except CommandQueueFullError as exc:
             warning = f"Console queue saturated ({exc.pending}/{exc.max_pending or exc.pending})"
             logger.warning(warning)
             return (warning, "yellow")
@@ -266,21 +271,26 @@ def seed_demo_state(
                         extra={"tick": world.tick, "mode": mode},
                     )
 
-            if history_window and history_window > 0 and seeded and hasattr(telemetry_source, "publish_tick"):
-                telemetry_source.publish_tick(
+            if history_window and history_window > 0 and seeded and hasattr(telemetry_source, "emit_event"):
+                event = TelemetryEventDTO(
+                    event_type="loop.tick",
                     tick=world.tick,
-                    world=world,
-                    observations={},
-                    rewards={},
-                    events=[],
-                    policy_snapshot={},
-                    kpi_history=False,
-                    reward_breakdown={},
-                    stability_inputs={},
-                    perturbations={},
-                    policy_identity={},
-                    possessed_agents=[],
+                    payload={
+                        "tick": world.tick,
+                        "world": world,
+                        "rewards": {},
+                        "events": [],
+                        "policy_snapshot": {},
+                        "kpi_history": False,
+                        "reward_breakdown": {},
+                        "stability_inputs": {},
+                        "perturbations": {},
+                        "policy_identity": {},
+                        "possessed_agents": [],
+                    },
+                    metadata=TelemetryMetadata(),
                 )
+                telemetry_source.emit_event(event)
 
 
 def run_demo_dashboard(

@@ -28,18 +28,18 @@ if torch_available():  # pragma: no cover - exercised in ML-enabled envs
 else:  # pragma: no cover
     # Minimal types and helpers to keep imports working without Torch
     @dataclass
-    class BCTrainingConfig:
+    class BCTrainingConfig:  # type: ignore[no-redef]
         learning_rate: float = 1e-3
         batch_size: int = 64
         epochs: int = 5
         weight_decay: float = 0.0
         device: str = "cpu"
 
-    class BCTrajectoryDataset:  # type: ignore[misc]
+    class BCTrajectoryDataset:  # type: ignore[no-redef]
         def __init__(self, *_: Any, **__: Any) -> None:
             raise TorchNotAvailableError("PyTorch required for BC dataset")
 
-    class BCTrainer:  # type: ignore[misc]
+    class BCTrainer:  # type: ignore[no-redef]
         def __init__(self, *_: Any, **__: Any) -> None:
             raise TorchNotAvailableError("PyTorch required for BC training")
 
@@ -49,11 +49,13 @@ else:  # pragma: no cover
         def evaluate(self, *_args: Any, **_kwargs: Any) -> Mapping[str, float]:
             raise TorchNotAvailableError("PyTorch required for BC training")
 
-    def evaluate_bc_policy(*_args: Any, **_kwargs: Any) -> Mapping[str, float]:  # type: ignore[misc]
+    def evaluate_bc_policy(  # type: ignore[misc]
+        model: Any, dataset: Any, device: str = "cpu"
+    ) -> Mapping[str, float]:
         raise TorchNotAvailableError("PyTorch required for BC evaluation")
 
     # load_bc_samples does not require Torch; keep a lightweight version here
-    def load_bc_samples(manifest_path: Path):  # type: ignore[misc]
+    def load_bc_samples(manifest_path: Path) -> list[Any]:  # type: ignore[misc]
         from townlet.policy.replay import load_replay_sample
 
         manifest_data = json.loads(manifest_path.read_text())

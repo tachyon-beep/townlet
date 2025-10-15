@@ -7,11 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
-from townlet.core.interfaces import (
-    PolicyBackendProtocol,
-    TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
-)
+from townlet.core.interfaces import PolicyBackendProtocol, TelemetrySinkProtocol
+from townlet.ports.world import WorldRuntime
 
 ProviderFactory = Callable[..., object]
 T_concrete = TypeVar("T_concrete", bound=object)
@@ -44,13 +41,8 @@ class FactoryRegistry:
         return factory(**kwargs)
 
 
-_world_registry = FactoryRegistry("world")
 _policy_registry = FactoryRegistry("policy")
 _telemetry_registry = FactoryRegistry("telemetry")
-
-
-def world_registry() -> FactoryRegistry:
-    return _world_registry
 
 
 def policy_registry() -> FactoryRegistry:
@@ -67,19 +59,21 @@ def _ensure_protocol(instance: object, protocol: type[T_concrete], name: str) ->
     return instance
 
 
-def resolve_world(name: str, **kwargs: Any) -> WorldRuntimeProtocol:
-    instance = _world_registry.resolve(name, **kwargs)
-    return _ensure_protocol(instance, WorldRuntimeProtocol, name)
+def resolve_world(name: str, **kwargs: Any) -> WorldRuntime:
+    from townlet.factories.world_factory import create_world as _create_world  # local import to avoid cycles
+
+    instance = _create_world(provider=name, **kwargs)
+    return _ensure_protocol(instance, WorldRuntime, name)  # type: ignore[type-abstract]
 
 
 def resolve_policy(name: str, **kwargs: Any) -> PolicyBackendProtocol:
     instance = _policy_registry.resolve(name, **kwargs)
-    return _ensure_protocol(instance, PolicyBackendProtocol, name)
+    return _ensure_protocol(instance, PolicyBackendProtocol, name)  # type: ignore[type-abstract]
 
 
 def resolve_telemetry(name: str, **kwargs: Any) -> TelemetrySinkProtocol:
     instance = _telemetry_registry.resolve(name, **kwargs)
-    return _ensure_protocol(instance, TelemetrySinkProtocol, name)
+    return _ensure_protocol(instance, TelemetrySinkProtocol, name)  # type: ignore[type-abstract]
 
 
 # Register built-in providers
@@ -88,17 +82,14 @@ from townlet.policy.models import torch_available  # noqa: E402  pylint: disable
 from townlet.policy.runner import PolicyRuntime  # noqa: E402  pylint: disable=wrong-import-position
 from townlet.telemetry.fallback import StubTelemetrySink  # noqa: E402  pylint: disable=wrong-import-position
 from townlet.telemetry.publisher import TelemetryPublisher  # noqa: E402  pylint: disable=wrong-import-position
-from townlet.world.runtime import WorldRuntime  # noqa: E402  pylint: disable=wrong-import-position
 
-_world_registry.register("default", lambda **kwargs: WorldRuntime(**kwargs))
-_world_registry.register("facade", lambda **kwargs: WorldRuntime(**kwargs))
 _policy_registry.register("scripted", lambda **kwargs: PolicyRuntime(**kwargs))
 _policy_registry.register("default", lambda **kwargs: PolicyRuntime(**kwargs))
 _policy_registry.register("stub", lambda **kwargs: StubPolicyBackend(**kwargs))
 _policy_registry.register("pytorch", lambda **kwargs: _resolve_pytorch_policy(**kwargs))
 _telemetry_registry.register("stdout", lambda **kwargs: TelemetryPublisher(**kwargs))
 _telemetry_registry.register("default", lambda **kwargs: TelemetryPublisher(**kwargs))
-_telemetry_registry.register("stub", lambda **kwargs: StubTelemetrySink(**kwargs))
+_telemetry_registry.register("stub", lambda **kwargs: StubTelemetrySink(**kwargs))  # type: ignore[abstract]
 _telemetry_registry.register("http", lambda **kwargs: _resolve_http_telemetry(**kwargs))
 
 
@@ -112,7 +103,7 @@ def _resolve_pytorch_policy(**kwargs: Any) -> PolicyBackendProtocol:
 def _resolve_http_telemetry(**kwargs: Any) -> TelemetrySinkProtocol:
     if not _httpx_available():
         logger.warning("telemetry_provider_fallback provider=http message='httpx not installed; using stub telemetry.'")
-        return StubTelemetrySink(**kwargs)
+        return StubTelemetrySink(**kwargs)  # type: ignore[abstract]
     return TelemetryPublisher(**kwargs)
 
 

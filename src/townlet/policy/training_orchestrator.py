@@ -13,8 +13,9 @@ from pathlib import Path
 import numpy as np
 
 from townlet.config import PPOConfig, SimulationConfig
-from townlet.core.utils import is_stub_policy, policy_provider_name
+from townlet.core.utils import policy_provider_name
 from townlet.policy.bc import BCTrainer, BCTrajectoryDataset, load_bc_samples
+from townlet.policy.fallback import is_stub_policy
 from townlet.policy.bc import BCTrainingConfig as BCTrainingParams
 from townlet.policy.models import (
     ConflictAwarePolicyConfig,
@@ -69,7 +70,7 @@ class PolicyTrainingOrchestrator:
         self._last_anneal_status: str | None = None
 
     @staticmethod
-    def _ppo_ops():
+    def _ppo_ops() -> object:
         """Import PPO ops lazily to avoid Torch dependency at import time.
 
         Returns a module-like object with the expected functions when PyTorch
@@ -79,7 +80,7 @@ class PolicyTrainingOrchestrator:
             raise TorchNotAvailableError(
                 "PyTorch is required for PPO operations. Install the 'ml' extra."
             )
-        from townlet.policy.backends.pytorch import ppo_utils as _ops  # type: ignore
+        from townlet.policy.backends.pytorch import ppo_utils as _ops
 
         return _ops
 
@@ -166,11 +167,7 @@ class PolicyTrainingOrchestrator:
             seed_default_agents,
         )
 
-        if self._capture_loop is None:
-            self._capture_loop = SimulationLoop(self.config)
-        else:
-            self._capture_loop.reset()
-        loop = self._capture_loop
+        loop = SimulationLoop(self.config)
         scenario_config = getattr(self.config, "scenario", None)
         if scenario_config:
             apply_scenario(loop, scenario_config)
@@ -189,10 +186,19 @@ class PolicyTrainingOrchestrator:
             return buffer
         for _ in range(ticks):
             loop.step()
-            frames = loop.policy.collect_trajectory(clear=True)
-            buffer.extend(frames)
+            # collect_trajectory is not part of PolicyBackendProtocol
+            collect_method = getattr(loop.policy, "collect_trajectory", None)
+            if callable(collect_method):
+                frames = collect_method(clear=True)
+                if frames:
+                    buffer.extend(frames)
             buffer.record_events(loop.telemetry.latest_events())
-        buffer.extend(loop.policy.collect_trajectory(clear=True))
+        # Collect any leftover frames
+        collect_method = getattr(loop.policy, "collect_trajectory", None)
+        if callable(collect_method):
+            leftover_frames = collect_method(clear=True)
+            if leftover_frames:
+                buffer.extend(leftover_frames)
         buffer.set_tick_count(ticks)
 
         if output_dir is not None:
@@ -264,14 +270,15 @@ class PolicyTrainingOrchestrator:
             action_dim=dataset.action_dim,
         )
         trainer = BCTrainer(params, policy_cfg)
-        metrics = trainer.fit(dataset)
-        metrics.update(
-            {
-                "mode": "bc",
-                "manifest": str(manifest_path),
-            }
-        )
-        return metrics
+        metrics_result = trainer.fit(dataset)
+        # trainer.fit returns Mapping, convert to mutable dict
+        metrics: dict[str, float] = dict(metrics_result)
+        # Note: Adding non-float metadata to return type dict[str, float]
+        # Type annotation allows this but caller should be aware
+        result: dict[str, float | str] = dict(metrics)
+        result["mode"] = "bc"
+        result["manifest"] = str(manifest_path)
+        return result  # type: ignore[return-value]
 
     def run_anneal(
         self,
@@ -394,9 +401,12 @@ class PolicyTrainingOrchestrator:
             raise ValueError("Replay dataset yielded no batches")
 
         example = batches[0]
-        timesteps = int(example.metadata.get("timesteps", 1) or 1)
         feature_dim = int(example.features.shape[2])
-        map_shape = tuple(int(dim) for dim in example.maps.shape[2:])
+        map_shape_raw = tuple(int(dim) for dim in example.maps.shape[2:])
+        if len(map_shape_raw) != 3:
+            raise ValueError(f"Expected 3D map shape, got {len(map_shape_raw)}D")
+        # Validate shape length above, then assign with narrowed type
+        map_shape: tuple[int, int, int] = map_shape_raw
         if map_shape is None:
             raise ValueError("Replay batch missing map shape metadata")
         action_dim_meta = example.metadata.get("action_dim")
@@ -411,7 +421,7 @@ class PolicyTrainingOrchestrator:
         from torch.nn.utils import clip_grad_norm_
 
         if self.config.ppo is None:
-            self.config.ppo = PPOConfig()
+            self.config.ppo = PPOConfig()  # type: ignore[call-arg]
         ppo_cfg = self.config.ppo
 
         # Prefer CUDA if available for faster training; fallback to CPU. Allow
@@ -426,7 +436,7 @@ class PolicyTrainingOrchestrator:
                     best_idx = 0
                     best_free = -1
                     for i in range(torch.cuda.device_count()):
-                        free_bytes, _total = torch.cuda.mem_get_info(i)  # type: ignore[attr-defined]
+                        free_bytes, _total = torch.cuda.mem_get_info(i)
                         if free_bytes > best_free:
                             best_free = int(free_bytes)
                             best_idx = i
@@ -438,8 +448,8 @@ class PolicyTrainingOrchestrator:
         dev_name = None
         try:  # best-effort device logging
             if device.type == "cuda":
-                idx = device.index if device.index is not None else torch.cuda.current_device()
-                dev_name = torch.cuda.get_device_name(idx)
+                device_idx = device.index if device.index is not None else torch.cuda.current_device()
+                dev_name = torch.cuda.get_device_name(device_idx)
         except Exception:  # pragma: no cover - logging only
             pass
         logger.info("PPO device selected: %s%s", device, f" ({dev_name})" if dev_name else "")
@@ -561,7 +571,7 @@ class PolicyTrainingOrchestrator:
                 value_preds_old = torch.from_numpy(batch.value_preds).float().to(device, non_blocking=True)
 
                 ops = self._ppo_ops()
-                gae = ops.compute_gae(
+                gae = ops.compute_gae(  # type: ignore[attr-defined]
                     rewards=rewards,
                     value_preds=value_preds_old,
                     dones=dones,
@@ -571,7 +581,7 @@ class PolicyTrainingOrchestrator:
                 advantages = gae.advantages
                 returns = gae.returns
                 if ppo_cfg.advantage_normalization:
-                    advantages = ops.normalize_advantages(advantages.view(-1)).view_as(advantages)
+                    advantages = ops.normalize_advantages(advantages.view(-1)).view_as(advantages)  # type: ignore[attr-defined]
                 # Derive baseline per-batch using that batch's timestep length.
                 # In rollout/mixed modes, batches may differ in timesteps when
                 # batch_size == 1, so using a fixed value from the first batch
@@ -586,7 +596,7 @@ class PolicyTrainingOrchestrator:
                 advantage_buffer.extend(advantages.cpu().numpy().astype(float).reshape(-1).tolist())
 
                 batch_size, timestep_length = rewards.shape
-                baseline = ops.value_baseline_from_old_preds(value_preds_old, timestep_length)
+                baseline = ops.value_baseline_from_old_preds(value_preds_old, timestep_length)  # type: ignore[attr-defined]
                 flat_maps = maps.reshape(batch_size * timestep_length, *maps.shape[2:])
                 flat_features = features.reshape(batch_size * timestep_length, features.shape[2])
                 flat_actions = actions.reshape(-1)
@@ -609,27 +619,27 @@ class PolicyTrainingOrchestrator:
                 )
 
                 for start in range(0, total_transitions, mini_batch_size):
-                    idx = perm[start : start + mini_batch_size]
-                    mb_maps = flat_maps[idx]
-                    mb_features = flat_features[idx]
-                    mb_actions = flat_actions[idx]
-                    mb_old_log_probs = flat_old_log_probs[idx]
-                    mb_advantages = flat_advantages[idx]
-                    mb_returns = flat_returns[idx]
-                    mb_old_values = flat_old_values[idx]
+                    mb_idx = perm[start : start + mini_batch_size]
+                    mb_maps = flat_maps[mb_idx]
+                    mb_features = flat_features[mb_idx]
+                    mb_actions = flat_actions[mb_idx]
+                    mb_old_log_probs = flat_old_log_probs[mb_idx]
+                    mb_advantages = flat_advantages[mb_idx]
+                    mb_returns = flat_returns[mb_idx]
+                    mb_old_values = flat_old_values[mb_idx]
 
                     logits, values = policy(mb_maps, mb_features)
-                    dist = Categorical(logits=logits)
-                    new_log_probs = dist.log_prob(mb_actions)
-                    entropy = dist.entropy().mean()
+                    dist = Categorical(logits=logits)  # type: ignore[no-untyped-call]
+                    new_log_probs = dist.log_prob(mb_actions)  # type: ignore[no-untyped-call]
+                    entropy = dist.entropy().mean()  # type: ignore[no-untyped-call]
 
-                    policy_loss, clip_frac = ops.policy_surrogate(
+                    policy_loss, clip_frac = ops.policy_surrogate(  # type: ignore[attr-defined]
                         new_log_probs=new_log_probs,
                         old_log_probs=mb_old_log_probs,
                         advantages=mb_advantages,
                         clip_param=ppo_cfg.clip_param,
                     )
-                    value_loss = ops.clipped_value_loss(
+                    value_loss = ops.clipped_value_loss(  # type: ignore[attr-defined]
                         new_values=values,
                         returns=mb_returns,
                         old_values=mb_old_values,
@@ -677,7 +687,7 @@ class PolicyTrainingOrchestrator:
                         health_tracking["clip_triggered_minibatches"] += 1.0
                     health_tracking["max_clip_fraction"] = max(health_tracking["max_clip_fraction"], clip_value)
                     mini_batch_updates += 1
-                    transitions_processed += int(idx.shape[0])
+                    transitions_processed += int(mb_idx.shape[0])
 
             if mini_batch_updates == 0:
                 raise ValueError("No PPO mini-batch updates were performed")
@@ -739,10 +749,11 @@ class PolicyTrainingOrchestrator:
                 print(f"[WARN] Advantage std near zero in {batch_count} batch(es) (dataset={dataset_label_str}, epoch={epoch + 1})")
 
             if PPO_TELEMETRY_VERSION >= 1.1:
+                # Suppress dict-item errors: telemetry includes mixed types (str, float, None)
                 epoch_summary.update(
                     {
                         "epoch_duration_sec": float(time.perf_counter() - epoch_start),
-                        "data_mode": data_mode,
+                        "data_mode": data_mode,  # type: ignore[dict-item]
                         "cycle_id": float(cycle_id),
                         "batch_entropy_mean": float(epoch_entropy_mean),
                         "batch_entropy_std": float(epoch_entropy_std),
@@ -788,21 +799,22 @@ class PolicyTrainingOrchestrator:
                 if isinstance(intensity_baseline, (int, float)) and intensity_baseline:
                     intensity_flag = queue_intensity_value < ((1.0 - queue_tolerance) * float(intensity_baseline))
 
+                # Suppress dict-item errors: anneal telemetry includes mixed types (str, float, None)
                 epoch_summary.update(
                     {
                         "anneal_cycle": float(anneal_context.get("cycle", -1.0)),
-                        "anneal_stage": str(anneal_context.get("stage", "")),
-                        "anneal_dataset": str(anneal_context.get("dataset_label", "")),
-                        "anneal_bc_accuracy": (float(bc_accuracy_value) if isinstance(bc_accuracy_value, (int, float)) else None),
+                        "anneal_stage": str(anneal_context.get("stage", "")),  # type: ignore[dict-item]
+                        "anneal_dataset": str(anneal_context.get("dataset_label", "")),  # type: ignore[dict-item]
+                        "anneal_bc_accuracy": (float(bc_accuracy_value) if isinstance(bc_accuracy_value, (int, float)) else None),  # type: ignore[dict-item]
                         "anneal_bc_threshold": (
                             float(bc_threshold_value)
                             if isinstance(bc_threshold_value, (int, float))
                             else float(self.config.training.anneal_accuracy_threshold)
                         ),
                         "anneal_bc_passed": bool(anneal_context.get("bc_passed", True)),
-                        "anneal_loss_baseline": (float(loss_baseline) if isinstance(loss_baseline, (int, float)) else None),
-                        "anneal_queue_baseline": (float(queue_baseline) if isinstance(queue_baseline, (int, float)) else None),
-                        "anneal_intensity_baseline": (float(intensity_baseline) if isinstance(intensity_baseline, (int, float)) else None),
+                        "anneal_loss_baseline": (float(loss_baseline) if isinstance(loss_baseline, (int, float)) else None),  # type: ignore[dict-item]
+                        "anneal_queue_baseline": (float(queue_baseline) if isinstance(queue_baseline, (int, float)) else None),  # type: ignore[dict-item]
+                        "anneal_intensity_baseline": (float(intensity_baseline) if isinstance(intensity_baseline, (int, float)) else None),  # type: ignore[dict-item]
                         "anneal_loss_flag": bool(loss_flag),
                         "anneal_queue_flag": bool(queue_flag),
                         "anneal_intensity_flag": bool(intensity_flag),
@@ -921,7 +933,7 @@ class PolicyTrainingOrchestrator:
             return
         current = getattr(self.config.features.stages, "social_rewards", None)
         if stage != current:
-            self.config.features.stages.social_rewards = stage
+            self.config.features.stages.social_rewards = stage  # type: ignore[assignment]
 
     def _summarise_batch(self, batch: ReplayBatch, batch_index: int) -> dict[str, float]:
         summary = {

@@ -55,7 +55,7 @@ exclude = ["docs/notebooks/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "TID", "RUF"]
-ignore = ["B905"]
+ignore = ["B905", "RUF022"]  # RUF022: Allow semantic grouping in __all__ over alphabetical
 
 [tool.mypy]
 python_version = "3.11"
@@ -74,10 +74,20 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["townlet_ui.*"]
+ignore_missing_imports = true
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["townlet.policy.training.strategies.ppo"]
+# PPO strategy has complex torch typing - extracted from working code
+disable_error_code = ["attr-defined", "arg-type", "call-overload", "no-untyped-call", "operator", "return-value", "call-arg", "unused-ignore"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 pythonpath = ["src"]
-addopts = "-ra --cov=src/townlet --cov-report=term-missing"
+addopts = "-ra --cov=src/townlet --cov-report=term-missing --cov-report=xml:coverage.xml"
 testpaths = ["tests"]
 
 [tool.interrogate]

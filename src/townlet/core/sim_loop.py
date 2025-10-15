@@ -7,45 +7,87 @@ implementation, allowing tests to substitute stubs while the real code evolves.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import logging
 import random
 import time
 import traceback
 from collections.abc import Callable, Iterable, Mapping
+from types import TracebackType
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from townlet.config import AffordanceRuntimeConfig, SimulationConfig
-from townlet.core.factory_registry import (
-    resolve_policy,
-    resolve_telemetry,
-    resolve_world,
+from townlet.console.command import (
+    ConsoleCommandEnvelope,
+    ConsoleCommandError,
 )
+from townlet.console.service import ConsoleService
 from townlet.core.interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
 )
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.factories import create_policy, create_telemetry, create_world
 from townlet.lifecycle.manager import LifecycleManager
-from townlet.observations.builder import ObservationBuilder
+from townlet.orchestration import ConsoleRouter, HealthMonitor, PolicyController
+from townlet.ports.policy import PolicyBackend
+from townlet.ports.telemetry import TelemetrySink
+from townlet.policy.runner import PolicyRuntime
+from townlet.ports.world import WorldRuntime
 from townlet.rewards.engine import RewardEngine
 from townlet.scheduler.perturbations import PerturbationScheduler
 from townlet.snapshots import (
     SnapshotManager,
     apply_snapshot_to_telemetry,
     apply_snapshot_to_world,
-    snapshot_from_world,
 )
 from townlet.stability.monitor import StabilityMonitor
 from townlet.stability.promotion import PromotionManager
+from townlet.telemetry.fallback import StubTelemetrySink
+from townlet.telemetry.publisher import TelemetryPublisher
 from townlet.utils import decode_rng_state
+from townlet.utils.coerce import coerce_float, coerce_int
+from townlet.dto.observations import ObservationEnvelope
 from townlet.world.affordances import AffordanceRuntimeContext, DefaultAffordanceRuntime
-from townlet.world.core import WorldContext, WorldRuntimeAdapter
 from townlet.world.grid import WorldState
+from townlet.world.observations.interfaces import ObservationServiceProtocol
+
+if TYPE_CHECKING:
+    from townlet.world.core.context import WorldContext
+    from townlet.world.core.runtime_adapter import WorldRuntimeAdapter
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class WorldComponents:
+    world: WorldState
+    lifecycle: LifecycleManager
+    perturbations: PerturbationScheduler
+    observation_service: ObservationServiceProtocol
+    world_port: WorldRuntime
+    ticks_per_day: int
+    provider: str
+    console_service: ConsoleService
+
+
+@dataclass(slots=True)
+class PolicyComponents:
+    port: PolicyBackend
+    controller: PolicyController | None
+    decision_backend: PolicyBackendProtocol
+    provider: str
+
+
+@dataclass(slots=True)
+class TelemetryComponents:
+    port: TelemetrySink
+    publisher: TelemetryPublisher
+    provider: str
 
 
 @dataclass
@@ -75,7 +117,7 @@ class SimulationLoopError(RuntimeError):
 class TickArtifacts:
     """Collects per-tick data for logging and testing."""
 
-    observations: dict[str, object]
+    envelope: ObservationEnvelope
     rewards: dict[str, float]
 
 
@@ -101,11 +143,16 @@ class SimulationLoop:
         self.config = config
         self.config.register_snapshot_migrations()
         self._runtime_config: AffordanceRuntimeConfig = self.config.affordances.runtime
-        if affordance_runtime_factory is not None:
-            self._affordance_runtime_factory = affordance_runtime_factory
+        if affordance_runtime_factory is None:
+            factory = self._load_affordance_runtime_factory(self._runtime_config)
         else:
-            self._affordance_runtime_factory = self._load_affordance_runtime_factory(self._runtime_config)
-        self.runtime: WorldRuntimeProtocol | None = None
+            factory = affordance_runtime_factory
+        self._affordance_runtime_factory: Callable[
+            [WorldState, AffordanceRuntimeContext],
+            DefaultAffordanceRuntime,
+        ] | None
+        self._affordance_runtime_factory = factory
+        self.runtime: WorldRuntime | None = None
         self._world_provider = (world_provider or "default").strip()
         self._world_provider_locked = world_provider is not None
         self._world_options = dict(world_options or {})
@@ -118,11 +165,43 @@ class SimulationLoop:
         self._telemetry_provider_locked = telemetry_provider is not None
         self._telemetry_options = dict(telemetry_options or {})
         self._telemetry_options_locked = telemetry_options is not None
+        self._world_components_override: Callable[[SimulationLoop], WorldComponents] | None = None
+        self._policy_components_override: Callable[[SimulationLoop], PolicyComponents] | None = None
+        self._telemetry_components_override: Callable[[SimulationLoop], TelemetryComponents] | None = None
+        self._observation_service: ObservationServiceProtocol | None = None
         self._runtime_variant: str = "facade"
         self._resolved_providers: dict[str, str] = {}
         self._failure_handlers: list[Callable[[SimulationLoop, int, BaseException], None]] = []
         self._health = SimulationLoopHealth()
         self._world_adapter: WorldRuntimeAdapter | None = None
+        self._world_context: WorldContext | None = None
+        self._world_port: WorldRuntime | None = None
+        self._console_service: ConsoleService | None = None
+        self._policy_port: PolicyBackend | None = None
+        self._telemetry_port: TelemetrySink | None = None
+        self.telemetry_publisher: TelemetryPublisher | None = None
+        self._policy_controller: PolicyController | None = None
+        self._console_router: ConsoleRouter | None = None
+        self._health_monitor: HealthMonitor | None = None
+        self._rivalry_history: list[dict[str, object]] = []
+        self._policy_observation_envelope: ObservationEnvelope | None = None
+        self._last_policy_metadata_event: dict[str, object] | None = None
+        self._last_policy_possession_agents: tuple[str, ...] | None = None
+        self._last_policy_anneal_event: dict[str, object] | None = None
+        self._last_health_payload: dict[str, object] | None = None
+        self._last_global_context: dict[str, object] | None = None
+        self._last_transport_status: dict[str, object] = {
+            "provider": "port",
+            "queue_length": 0,
+            "dropped_messages": 0,
+            "last_flush_duration_ms": None,
+            "worker_alive": True,
+            "worker_error": None,
+            "worker_restart_count": 0,
+            "payloads_flushed_total": 0,
+            "bytes_flushed_total": 0,
+            "auth_enabled": False,
+        }
         self._apply_runtime_overrides_from_config()
         self._build_components()
 
@@ -131,8 +210,9 @@ class SimulationLoop:
         if name == "world":
             runtime = getattr(self, "runtime", None)
             if isinstance(value, WorldState):
-                super().__setattr__("_world_adapter", WorldRuntimeAdapter(value))
-                if isinstance(runtime, WorldRuntimeProtocol):
+                from townlet.world.core.runtime_adapter import WorldRuntimeAdapter as _WorldRuntimeAdapter
+                super().__setattr__("_world_adapter", _WorldRuntimeAdapter(value))
+                if isinstance(runtime, WorldRuntime):
                     runtime.bind_world(value)
                     bind_adapter = getattr(runtime, "bind_world_adapter", None)
                     if callable(bind_adapter):  # pragma: no cover - delegation glue
@@ -152,52 +232,214 @@ class SimulationLoop:
         self._rng_world = random.Random(self._derive_seed("world"))
         self._rng_events = random.Random(self._derive_seed("events"))
         self._rng_policy = random.Random(self._derive_seed("policy"))
-        self.world = WorldState.from_config(
-            self.config,
-            rng=self._rng_world,
-            affordance_runtime_factory=self._affordance_runtime_factory,
-            affordance_runtime_config=self._runtime_config,
-        )
-        self.lifecycle = LifecycleManager(config=self.config)
-        self.perturbations = PerturbationScheduler(
-            config=self.config,
-            rng=self._rng_events,
-        )
-        self.observations = ObservationBuilder(config=self.config)
-        policy_kwargs = {"config": self.config, **self._policy_options}
-        policy_instance: PolicyBackendProtocol = resolve_policy(self._policy_provider, **policy_kwargs)
-        self.policy = policy_instance
-        self._resolved_providers["policy"] = self._policy_provider
-        self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
-        if self.config.training.anneal_enable_policy_blend:
-            self.policy.enable_anneal_blend(True)
+        self._rivalry_history = []
+        self._last_policy_metadata_event = None
+        self._last_policy_possession_agents = None
+        self._last_policy_anneal_event = None
+        world_components = self._resolve_world_components()
+        self.world = world_components.world
+        self.lifecycle = world_components.lifecycle
+        self.perturbations = world_components.perturbations
+        self._observation_service = world_components.observation_service
+        self._ticks_per_day = world_components.ticks_per_day
+        self._console_service = world_components.console_service
+        self._world_port = world_components.world_port
+        context = getattr(self._world_port, "context", None)
+        if context is not None:
+            self._world_context = context
+        self.runtime = self._world_port
+        self._resolved_providers["world"] = world_components.provider
+
+        policy_components = self._resolve_policy_components()
+        self._policy_port = policy_components.port
+        self.policy: PolicyBackendProtocol = policy_components.decision_backend
+        self._policy_controller = policy_components.controller
+        self._resolved_providers["policy"] = policy_components.provider
+
+        telemetry_components = self._resolve_telemetry_components()
+        self._telemetry_port = telemetry_components.port
+        self.telemetry_publisher = telemetry_components.publisher
+        sink_for_clients: TelemetrySinkProtocol
+        if isinstance(self._telemetry_port, StubTelemetrySink):
+            sink_for_clients = self._telemetry_port
+        else:
+            sink_for_clients = telemetry_components.publisher
+        self.telemetry = cast(TelemetrySinkProtocol, sink_for_clients)
+        self._resolved_providers["telemetry"] = telemetry_components.provider
+
+        controller = self._policy_controller
+        if controller is not None:
+            controller.bind_world_supplier(lambda: self.world)
         self.rewards = RewardEngine(config=self.config)
-        telemetry_kwargs = {"config": self.config, **self._telemetry_options}
-        telemetry_instance: TelemetrySinkProtocol = resolve_telemetry(self._telemetry_provider, **telemetry_kwargs)
-        self.telemetry = telemetry_instance
-        self._resolved_providers["telemetry"] = self._telemetry_provider
         self.stability = StabilityMonitor(config=self.config)
         log_path = Path("logs/promotion_history.jsonl")
         self.promotion = PromotionManager(config=self.config, log_path=log_path)
         self.tick = 0
-        self._ticks_per_day = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
-        world_kwargs = {
-            "world": self.world,
-            "lifecycle": self.lifecycle,
-            "perturbations": self.perturbations,
-            "ticks_per_day": self._ticks_per_day,
-            **self._world_options,
-        }
-        runtime_instance: WorldRuntimeProtocol = resolve_world(self._world_provider, **world_kwargs)
-        self.runtime = runtime_instance
-        self._resolved_providers["world"] = self._world_provider
+        controller = self._policy_controller
+        if controller is not None:
+            controller.register_ctx_reset_callback(self.world.request_ctx_reset)
+            if self.config.training.anneal_enable_policy_blend:
+                controller.enable_anneal_blend(True)
+        else:  # pragma: no cover - defensive
+            self.policy.register_ctx_reset_callback(self.world.request_ctx_reset)
+            if self.config.training.anneal_enable_policy_blend:
+                self.policy.enable_anneal_blend(True)
+        self._console_router = ConsoleRouter(
+            world=self._world_port,
+            telemetry=self._telemetry_port,
+        )
+        monitor_config = getattr(self.config, "monitor", None)
+        monitor_window = getattr(monitor_config, "window", 100) if monitor_config is not None else 100
+        self._health_monitor = HealthMonitor(window=monitor_window)
         if self._world_adapter is not None:
-            bind_adapter = getattr(runtime_instance, "bind_world_adapter", None)
+            bind_adapter = getattr(self.runtime, "bind_world_adapter", None)
             if callable(bind_adapter):
                 bind_adapter(self._world_adapter)
         self._runtime_variant = "facade"
         self.telemetry.set_runtime_variant(self._runtime_variant)
         self._health = SimulationLoopHealth(last_tick=self.tick)
+        # Seed an initial DTO envelope so policy backends can operate before the
+        # first tick produces a DTO envelope.
+        bootstrap_envelope = self._build_bootstrap_policy_envelope()
+        self._set_policy_observation_envelope(bootstrap_envelope)
+
+    def override_world_components(
+        self,
+        builder: Callable[[SimulationLoop], WorldComponents] | None,
+    ) -> None:
+        """Override the world component builder (testing seam)."""
+
+        self._world_components_override = builder
+
+    def override_policy_components(
+        self,
+        builder: Callable[[SimulationLoop], PolicyComponents] | None,
+    ) -> None:
+        """Override the policy component builder (testing seam)."""
+
+        self._policy_components_override = builder
+
+    def override_telemetry_components(
+        self,
+        builder: Callable[[SimulationLoop], TelemetryComponents] | None,
+    ) -> None:
+        """Override the telemetry component builder (testing seam)."""
+
+        self._telemetry_components_override = builder
+
+    def _resolve_world_components(self) -> WorldComponents:
+        if self._world_components_override is not None:
+            return self._world_components_override(self)
+        return self._build_default_world_components()
+
+    def _resolve_policy_components(self) -> PolicyComponents:
+        if self._policy_components_override is not None:
+            return self._policy_components_override(self)
+        return self._build_default_policy_components()
+
+    def _resolve_telemetry_components(self) -> TelemetryComponents:
+        if self._telemetry_components_override is not None:
+            return self._telemetry_components_override(self)
+        return self._build_default_telemetry_components()
+
+    def _coerce_console_command(self, payload: object) -> ConsoleCommandEnvelope:
+        """Normalise console payloads into envelopes expected by the runtime."""
+
+        if isinstance(payload, ConsoleCommandEnvelope):
+            return payload
+        if isinstance(payload, str):
+            command = payload.strip()
+            if not command:
+                raise ValueError("console command must not be empty")
+            return ConsoleCommandEnvelope(name=command)
+        try:
+            return ConsoleCommandEnvelope.from_payload(payload)
+        except ConsoleCommandError as exc:
+            raise ValueError(str(exc)) from exc
+
+    def _build_default_world_components(self) -> WorldComponents:
+        cfg = getattr(self.config, "observations_config", None)
+        ticks_per_day = 1440
+        if cfg is not None and getattr(cfg, "hybrid", None) is not None:
+            ticks_per_day = getattr(cfg.hybrid, "time_ticks_per_day", 1440)
+        ticks_per_day = max(1, int(ticks_per_day))
+        world_port = create_world(
+            provider=self._world_provider,
+            config=self.config,
+            ticks_per_day=ticks_per_day,
+            world_kwargs=self._world_options,
+            affordance_runtime_factory=self._affordance_runtime_factory,
+            affordance_runtime_config=self._runtime_config,
+        )
+        # Try new component accessor pattern first, fall back to legacy properties
+        components_method = getattr(world_port, "components", None)
+        if callable(components_method):
+            comp_dict = components_method()
+            context = comp_dict.get("context")
+            lifecycle = comp_dict.get("lifecycle")
+            perturbations = comp_dict.get("perturbations")
+        else:
+            # Fallback to legacy property access for compatibility
+            context = getattr(world_port, "context", None)
+            lifecycle = getattr(world_port, "lifecycle_manager", None)
+            perturbations = getattr(world_port, "perturbation_scheduler", None)
+
+        if context is None:
+            raise RuntimeError("World provider did not supply a context-backed adapter")
+        observation_service = getattr(context, "observation_service", None)
+        if observation_service is None:
+            raise RuntimeError("World context missing observation service")
+        console_service = getattr(context, "console", None)
+        if console_service is None:
+            raise RuntimeError("World context missing console service")
+        world = context.state
+        if lifecycle is None:
+            raise RuntimeError("World provider did not expose lifecycle manager")
+        if perturbations is None:
+            raise RuntimeError("World provider did not expose perturbation scheduler")
+        self._world_context = context
+        return WorldComponents(
+            world=world,
+            lifecycle=lifecycle,
+            perturbations=perturbations,
+            observation_service=observation_service,
+            world_port=world_port,
+            ticks_per_day=ticks_per_day,
+            provider=self._world_provider,
+            console_service=console_service,
+        )
+
+    def _build_default_policy_components(self) -> PolicyComponents:
+        policy_backend = PolicyRuntime(config=self.config)
+        policy_port = create_policy(
+            provider=self._policy_provider,
+            backend=policy_backend,
+            **self._policy_options,
+        )
+        controller: PolicyController | None = None
+        # Use the policy_backend we already have instead of extracting via .backend property
+        # The adapter wraps it, but we can use the original reference directly
+        decision_backend = policy_backend
+        controller = PolicyController(backend=decision_backend, port=policy_port)
+        return PolicyComponents(
+            port=policy_port,
+            controller=controller,
+            decision_backend=decision_backend,
+            provider=self._policy_provider,
+        )
+
+    def _build_default_telemetry_components(self) -> TelemetryComponents:
+        publisher = TelemetryPublisher(config=self.config)
+        telemetry_port = create_telemetry(
+            provider=self._telemetry_provider,
+            publisher=publisher,
+            **self._telemetry_options,
+        )
+        return TelemetryComponents(
+            port=cast(TelemetrySink, telemetry_port),
+            publisher=publisher,
+            provider=self._telemetry_provider,
+        )
 
     @property
     def health(self) -> SimulationLoopHealth:
@@ -215,7 +457,7 @@ class SimulationLoop:
     def world_context(self) -> WorldContext:
         """Return a façade over the active world services."""
 
-        return self.world.context
+        return self._require_world_context()
 
     @property
     def world_adapter(self) -> WorldRuntimeAdapter:
@@ -223,9 +465,27 @@ class SimulationLoop:
 
         adapter = self._world_adapter
         if adapter is None:
-            adapter = WorldRuntimeAdapter(self.world)
+            from townlet.world.core.runtime_adapter import WorldRuntimeAdapter as _WorldRuntimeAdapter
+            adapter = _WorldRuntimeAdapter(self.world)
             super().__setattr__("_world_adapter", adapter)
         return adapter
+
+    @property
+    def policy_controller(self) -> PolicyController | None:
+        """Expose the policy controller facade (transitional)."""
+
+        return self._policy_controller
+
+    def _require_world_context(self) -> WorldContext:
+        """Return the active world context or raise if unavailable."""
+
+        context = self._world_context
+        if context is None and self._world_port is not None:
+            context = getattr(self._world_port, "context", None)
+        if context is None:
+            raise RuntimeError("World context is not initialised")
+        self._world_context = context
+        return context
 
     def register_failure_handler(self, handler: Callable[[SimulationLoop, int, BaseException], None]) -> None:
         """Register a callback that runs whenever the loop records a failure."""
@@ -237,7 +497,11 @@ class SimulationLoop:
         self._build_components()
 
     def set_anneal_ratio(self, ratio: float | None) -> None:
-        self.policy.set_anneal_ratio(ratio)
+        controller = self._policy_controller
+        if controller is not None:
+            controller.set_anneal_ratio(ratio)
+        else:  # pragma: no cover - defensive
+            self.policy.set_anneal_ratio(ratio)
 
     # ------------------------------------------------------------------
     # Snapshot helpers
@@ -247,18 +511,25 @@ class SimulationLoop:
 
         target_root = Path(root).expanduser() if root is not None else self.config.snapshot_root()
         manager = SnapshotManager(root=target_root)
+        controller = self._policy_controller
+        policy_hash = controller.active_policy_hash() if controller is not None else self.policy.active_policy_hash()
+        anneal_ratio = (
+            controller.current_anneal_ratio()
+            if controller is not None
+            else self.policy.current_anneal_ratio()
+        )
         identity_payload = self.config.build_snapshot_identity(
-            policy_hash=self.policy.active_policy_hash(),
+            policy_hash=policy_hash,
             runtime_observation_variant=self.config.observation_variant,
-            runtime_anneal_ratio=self.policy.current_anneal_ratio(),
+            runtime_anneal_ratio=anneal_ratio,
         )
         self.telemetry.update_policy_identity(identity_payload)
-        state = snapshot_from_world(
-            self.config,
-            self.world,
-            lifecycle=self.lifecycle,
+        runtime = self.runtime
+        if runtime is None:
+            raise RuntimeError("WorldRuntime is not initialised")
+        state = runtime.snapshot(
+            config=self.config,
             telemetry=self.telemetry,
-            perturbations=self.perturbations,
             stability=self.stability,
             promotion=self.promotion,
             rng_streams={
@@ -281,7 +552,11 @@ class SimulationLoop:
             allow_downgrade=self.config.snapshot.guardrails.allow_downgrade,
             require_exact_config=self.config.snapshot.guardrails.require_exact_config,
         )
-        self.policy.reset_state()
+        controller = self._policy_controller
+        if controller is not None:
+            controller.reset_state()
+        else:  # pragma: no cover - defensive
+            self.policy.reset_state()
         self.perturbations.reset_state()
         apply_snapshot_to_world(
             self.world,
@@ -289,28 +564,45 @@ class SimulationLoop:
             lifecycle=self.lifecycle,
         )
         apply_snapshot_to_telemetry(self.telemetry, state)
-        self.perturbations.import_state(state.perturbations)
+        # Convert perturbations DTO to dict for import_state
+        perturbations_dict: Mapping[str, Any] = state.perturbations.model_dump() if hasattr(state.perturbations, 'model_dump') else cast(dict[str, Any], state.perturbations)
+        self.perturbations.import_state(perturbations_dict)
         if state.stability:
-            self.stability.import_state(state.stability)
+            # Convert stability DTO to dict for import_state
+            stability_dict: Mapping[str, object] = state.stability.model_dump() if hasattr(state.stability, 'model_dump') else cast(dict[str, object], state.stability)
+            self.stability.import_state(stability_dict)
         else:
             self.stability.reset_state()
         if state.promotion:
-            self.promotion.import_state(state.promotion)
+            # Convert promotion DTO to dict for import_state
+            promotion_dict: Mapping[str, object] = state.promotion.model_dump() if hasattr(state.promotion, 'model_dump') else cast(dict[str, object], state.promotion)
+            self.promotion.import_state(promotion_dict)
         else:
             self.promotion.reset()
         stability_metrics = self.stability.latest_metrics()
         stability_metrics["promotion_state"] = self.promotion.snapshot()
-        self.telemetry.record_stability_metrics(stability_metrics)
+        event = TelemetryEventDTO(
+            event_type="stability.metrics",
+            tick=self.tick,
+            payload=stability_metrics,
+            metadata=TelemetryMetadata(),
+        )
+        if self._telemetry_port is not None:
+            self._telemetry_port.emit_event(event)
+        else:  # pragma: no cover - defensive
+            self.telemetry.emit_event(event)
         self.tick = state.tick
         rng_streams = dict(state.rng_streams)
+        rng_streams.pop("context_seed", None)
         if state.rng_state and "world" not in rng_streams:
             rng_streams["world"] = state.rng_state
         if world_rng_str := rng_streams.get("world"):
             world_state = decode_rng_state(world_rng_str)
             self.world.set_rng_state(world_state)
+            self._rng_world.setstate(world_state)
         if events_rng_str := rng_streams.get("events"):
             events_state = decode_rng_state(events_rng_str)
-            self.perturbations.set_rng_state(events_state)
+            self._rng_events.setstate(events_state)
         if policy_rng_str := rng_streams.get("policy"):
             policy_state = decode_rng_state(policy_rng_str)
             self._rng_policy.setstate(policy_state)
@@ -338,110 +630,308 @@ class SimulationLoop:
         self.run_for_ticks(max_ticks, collect=False)
 
     def step(self) -> TickArtifacts:
-        """Advance the simulation loop by one tick and return observations/rewards."""
+        """Advance the simulation loop by one tick and return the DTO envelope and rewards."""
         tick_start = time.perf_counter()
         next_tick = self.tick + 1
-        console_ops = self.telemetry.drain_console_buffer()
+        raw_console_commands = list(self.telemetry.drain_console_buffer())
+        console_envelopes: list[ConsoleCommandEnvelope] = []
+        for command in raw_console_commands:
+            try:
+                envelope = self._coerce_console_command(command)
+            except ValueError:
+                logger.warning("Ignoring invalid console command payload: %r", command)
+                continue
+            console_envelopes.append(envelope)
         runtime = self.runtime
         if runtime is None:  # pragma: no cover - defensive guard
             raise RuntimeError("WorldRuntime is not initialised")
+        if self._console_router is not None:
+            for envelope in console_envelopes:
+                self._console_router.enqueue(envelope)
+        elif console_envelopes:
+            logger.warning(
+                "ConsoleRouter unavailable; dropping %d buffered commands",
+                len(console_envelopes),
+            )
 
+        controller = self._policy_controller
         try:
             self.tick = next_tick
-            runtime.queue_console(console_ops)
+
+            if self._policy_observation_envelope is None:
+                bootstrap_envelope = self._build_bootstrap_policy_envelope()
+                self._set_policy_observation_envelope(bootstrap_envelope)
 
             def _action_provider(world: WorldState, current_tick: int) -> Mapping[str, object]:
-                return self.policy.decide(world, current_tick)
+                envelope = self._ensure_policy_envelope()
+                if controller is not None:
+                    return controller.decide(
+                        world,
+                        current_tick,
+                        envelope=envelope,
+                    )
+                return self.policy.decide(
+                    world,
+                    current_tick,
+                    envelope=envelope,
+                )
 
             runtime_result = runtime.tick(
                 tick=self.tick,
+                console_operations=console_envelopes,
                 action_provider=_action_provider,
             )
             console_results = runtime_result.console_results
             events = runtime_result.events
             terminated = runtime_result.terminated
             termination_reasons = runtime_result.termination_reasons
+            if self._console_router is not None:
+                self._console_router.run_pending(console_results, tick=self.tick)
 
-            self.telemetry.record_console_results(console_results)
-            episode_span = max(1, self.observations.hybrid_cfg.time_ticks_per_day)
-            for snapshot in self.world.agents.values():
-                snapshot.episode_tick = (snapshot.episode_tick + 1) % episode_span
-            rewards = self.rewards.compute(self.world, terminated, termination_reasons)
-            reward_breakdown = self.rewards.latest_reward_breakdown()
-            self.policy.post_step(rewards, terminated)
-            observations = self.observations.build_batch(self.world_adapter, terminated)
-            self.policy.flush_transitions(observations)
-            policy_snapshot = self.policy.latest_policy_snapshot()
-            possessed_agents = self.policy.possessed_agents()
-            option_switch_counts = self.policy.consume_option_switch_counts()
-            hunger_levels = {agent_id: float(snapshot.needs.get("hunger", 1.0)) for agent_id, snapshot in self.world.agents.items()}
+            if console_results and self._console_router is None:
+                port = (
+                    self._telemetry_port
+                    if self._telemetry_port is not None
+                    else self.telemetry  # pragma: no cover - defensive
+                )
+                for result in console_results:
+                    event = TelemetryEventDTO(
+                        event_type="console.result",
+                        tick=self.tick,
+                        payload={"result": result.to_dict()},
+                        metadata=TelemetryMetadata(),
+                    )
+                    port.emit_event(event)
+            reward_dtos = self.rewards.compute(self.world, terminated, termination_reasons)
+            # Extract totals for policy backend (backward compatible)
+            rewards = {agent_id: dto.total for agent_id, dto in reward_dtos.items()}
+            # Serialize only numeric component fields for telemetry (backward compatible)
+            reward_breakdown = {
+                agent_id: {
+                    "total": dto.total,
+                    "homeostasis": dto.homeostasis,
+                    "shaping": dto.shaping,
+                    "work": dto.work,
+                    "social": dto.social,
+                    "survival": dto.survival,
+                    "needs_penalty": dto.needs_penalty,
+                    "wage": dto.wage,
+                    "punctuality": dto.punctuality,
+                    "social_bonus": dto.social_bonus,
+                    "social_penalty": dto.social_penalty,
+                    "social_avoidance": dto.social_avoidance,
+                    "terminal_penalty": dto.terminal_penalty,
+                    "clip_adjustment": dto.clip_adjustment,
+                }
+                for agent_id, dto in reward_dtos.items()
+            }
+            if controller is not None:
+                controller.post_step(rewards, terminated)
+            else:  # pragma: no cover - defensive
+                self.policy.post_step(rewards, terminated)
+            if controller is not None:
+                policy_snapshot = controller.latest_policy_snapshot()
+                possessed_agents = controller.possessed_agents()
+                option_switch_counts_raw = controller.consume_option_switch_counts()
+            else:  # pragma: no cover - defensive fallback
+                policy_snapshot = self.policy.latest_policy_snapshot()
+                possessed_agents = self.policy.possessed_agents()
+                option_switch_counts_raw = self.policy.consume_option_switch_counts()
+            hunger_levels = {
+                agent_id: float(snapshot.needs.get("hunger", 1.0))
+                for agent_id, snapshot in self.world.agents.items()
+            }
+            context = self._require_world_context()
+            queue_metrics = dict(context.export_queue_metrics())
+            job_snapshot = copy.deepcopy(context.export_job_snapshot())
+            employment_metrics = copy.deepcopy(context.export_employment_snapshot())
+            queue_state_export = context.export_queue_state()
+            queues_snapshot: dict[str, object] = {}
+            queue_length = 0.0
+            if isinstance(queue_state_export, Mapping):
+                queues_snapshot = copy.deepcopy(dict(queue_state_export))
+                queues_payload = queues_snapshot.get("queues", {})
+                if isinstance(queues_payload, Mapping):
+                    queue_length = float(
+                        sum(len(entries or []) for entries in queues_payload.values())
+                    )
+            perturbation_state = self.perturbations.latest_state()
+            policy_hash = controller.active_policy_hash() if controller is not None else self.policy.active_policy_hash()
+            anneal_ratio = controller.current_anneal_ratio() if controller is not None else self.policy.current_anneal_ratio()
+            policy_identity = self.config.build_snapshot_identity(
+                policy_hash=policy_hash,
+                runtime_observation_variant=self.config.observation_variant,
+                runtime_anneal_ratio=anneal_ratio,
+            )
+            possessed_agents_list = sorted(str(agent) for agent in possessed_agents)
+            option_switch_counts = {
+                str(agent): int(count)
+                for agent, count in sorted(option_switch_counts_raw.items())
+            }
+            policy_metadata = {
+                "identity": policy_identity,
+                "possessed_agents": possessed_agents_list,
+                "option_switch_counts": dict(option_switch_counts),
+                "anneal_ratio": anneal_ratio,
+            }
             stability_inputs = {
                 "hunger_levels": hunger_levels,
-                "option_switch_counts": option_switch_counts,
+                "option_switch_counts": dict(option_switch_counts),
                 "reward_samples": dict(rewards),
+                "queue_metrics": queue_metrics,
+                "employment_snapshot": employment_metrics,
             }
-            perturbation_state = self.perturbations.latest_state()
-            policy_identity = self.config.build_snapshot_identity(
-                policy_hash=self.policy.active_policy_hash(),
-                runtime_observation_variant=self.config.observation_variant,
-                runtime_anneal_ratio=self.policy.current_anneal_ratio(),
-            )
-            self.telemetry.publish_tick(
-                tick=self.tick,
-                world=self.world,
-                observations=observations,
-                rewards=rewards,
-                events=events,
-                policy_snapshot=policy_snapshot,
-                kpi_history=True,
-                reward_breakdown=reward_breakdown,
-                stability_inputs=stability_inputs,
-                perturbations=perturbation_state,
-                policy_identity=policy_identity,
-                possessed_agents=possessed_agents,
-                social_events=self.rewards.latest_social_events(),
-                runtime_variant=self._runtime_variant,
-            )
+            adapter = self.world_adapter
+            embedding_metrics = self._collect_embedding_metrics(adapter)
+            rivalry_events = self._collect_rivalry_events(adapter)
+            snapshot_for_health: dict[str, Any] = {
+                "tick": self.tick,
+                "events": list(events),
+            }
+            snapshot_for_health["metrics"] = {"queue_length": queue_length}
+            if self._health_monitor is not None and self._telemetry_port is not None:
+                self._health_monitor.on_tick(snapshot_for_health, self._telemetry_port)
             self.stability.track(
                 tick=self.tick,
                 rewards=rewards,
                 terminated=terminated,
-                queue_metrics=self.telemetry.latest_queue_metrics(),
-                embedding_metrics=self.telemetry.latest_embedding_metrics(),
-                job_snapshot=self.telemetry.latest_job_snapshot(),
-                events=self.telemetry.latest_events(),
-                employment_metrics=self.telemetry.latest_employment_metrics(),
+                queue_metrics=queue_metrics,
+                embedding_metrics=embedding_metrics,
+                job_snapshot={k: dict(v) for k, v in job_snapshot.items()} if job_snapshot else None,
+                events=events,
+                employment_metrics=dict(employment_metrics) if employment_metrics else None,
                 hunger_levels=hunger_levels,
                 option_switch_counts=option_switch_counts,
-                rivalry_events=self.telemetry.latest_rivalry_events(),
+                rivalry_events=rivalry_events,
             )
             stability_metrics = self.stability.latest_metrics()
             self.promotion.update_from_metrics(stability_metrics, tick=self.tick)
-            stability_metrics["promotion_state"] = self.promotion.snapshot()
-            self.telemetry.record_stability_metrics(stability_metrics)
+            promotion_state = self.promotion.snapshot()
+            stability_metrics["promotion_state"] = promotion_state
+            anneal_context: dict[str, object] = {}
+            try:
+                anneal_ctx_method = getattr(self.policy, "anneal_context", None)
+                if callable(anneal_ctx_method):
+                    anneal_context = anneal_ctx_method()
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("anneal_context_unavailable", exc_info=True)
+
+            if self._telemetry_port is not None:
+                self._emit_policy_events(
+                    policy_metadata=policy_metadata,
+                    possessed_agents=possessed_agents_list,
+                    anneal_ratio=anneal_ratio,
+                    anneal_context=anneal_context,
+                )
+
+            dto_envelope = self._try_context_observe(
+                actions=runtime_result.actions,
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+                queue_metrics=queue_metrics,
+                rewards=rewards,
+                reward_breakdown=reward_breakdown,
+                policy_snapshot=policy_snapshot,
+                policy_metadata=policy_metadata,
+                rivalry_events=rivalry_events,
+                stability_metrics=stability_metrics,
+                promotion_state=promotion_state,
+                anneal_context=anneal_context,
+            )
+
+            if dto_envelope is None:
+                raise SimulationLoopError(self.tick, "World context failed to produce an observation envelope")
+            if controller is not None:
+                raw_frames = controller.flush_transitions(envelope=dto_envelope)
+            else:  # pragma: no cover - defensive fallback
+                raw_frames = self.policy.flush_transitions(envelope=dto_envelope)
+            frame_list: list[dict[str, object]] = []
+            if raw_frames is not None:
+                for frame in raw_frames:
+                    if isinstance(frame, Mapping):
+                        frame_list.append(dict(frame))
+            if frame_list:
+                anneal_ctx = dto_envelope.global_context.anneal_context or {}
+                metadata_copy = dict(policy_metadata)
+                for frame in frame_list:
+                    frame.setdefault("anneal_context", anneal_ctx)
+                    meta = frame.setdefault("metadata", {})
+                    if isinstance(meta, dict):
+                        meta.update(metadata_copy)
+            self._set_policy_observation_envelope(dto_envelope)
+            global_context = self._build_tick_global_context(
+                queue_metrics=queue_metrics,
+                queue_state=queues_snapshot,
+                employment_snapshot=employment_metrics,
+                job_snapshot=job_snapshot,
+                dto_envelope=dto_envelope,
+                stability_metrics=stability_metrics,
+                perturbations=perturbation_state,
+                promotion_state=promotion_state,
+                anneal_context=anneal_context,
+                rivalry_events=rivalry_events,
+            )
+            if self._telemetry_port is not None:
+                tick_event_payload = {
+                    "tick": self.tick,
+                    "world": self.world,
+                    "rewards": rewards,
+                    "events": events,
+                    "policy_snapshot": policy_snapshot,
+                    "kpi_history": True,
+                    "reward_breakdown": reward_breakdown,
+                    "stability_inputs": stability_inputs,
+                    "perturbations": perturbation_state,
+                    "policy_identity": policy_identity,
+                    "policy_metadata": policy_metadata,
+                    "possessed_agents": possessed_agents_list,
+                    "social_events": self.rewards.latest_social_events(),
+                    "runtime_variant": self._runtime_variant,
+                    "observations_dto": dto_envelope.model_dump(by_alias=True),
+                    "global_context": global_context,
+                }
+                tick_event = TelemetryEventDTO(
+                    event_type="loop.tick",
+                    tick=self.tick,
+                    payload=tick_event_payload,
+                    metadata=TelemetryMetadata(),
+                )
+                self._telemetry_port.emit_event(tick_event)
+            stability_event = TelemetryEventDTO(
+                event_type="stability.metrics",
+                tick=self.tick,
+                payload=stability_metrics,
+                metadata=TelemetryMetadata(),
+            )
+            if self._telemetry_port is not None:
+                self._telemetry_port.emit_event(stability_event)
+            else:  # pragma: no cover - defensive
+                self.telemetry.emit_event(stability_event)
             self.lifecycle.finalize(self.world, tick=self.tick, terminated=terminated)
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
-            transport_status = self.telemetry.latest_transport_status()
-            health_payload = {
-                "tick": self.tick,
-                "status": "ok",
-                "tick_duration_ms": duration_ms,
-                "failure_count": self._health.failure_count,
-                "telemetry_queue": transport_status.get("queue_length", 0),
-                "telemetry_dropped": transport_status.get("dropped_messages", 0),
-                "telemetry_flush_ms": transport_status.get("last_flush_duration_ms"),
-                "telemetry_worker_alive": bool(transport_status.get("worker_alive", False)),
-                "telemetry_worker_error": transport_status.get("worker_error"),
-                "telemetry_worker_restart_count": transport_status.get("worker_restart_count", 0),
-                "telemetry_console_auth_enabled": bool(transport_status.get("auth_enabled", False)),
-                "telemetry_payloads_total": transport_status.get("payloads_flushed_total", 0),
-                "telemetry_bytes_total": transport_status.get("bytes_flushed_total", 0),
-                "perturbations_pending": self.perturbations.pending_count(),
-                "perturbations_active": self.perturbations.active_count(),
-                "employment_exit_queue": self.world.employment.exit_queue_length(),
-            }
-            self.telemetry.record_health_metrics(health_payload)
+            transport_status = self._build_transport_status(queue_length=len(console_results))
+            health_payload = self._build_health_payload(
+                duration_ms=duration_ms,
+                transport_status=transport_status,
+                global_context=global_context,
+            )
+            health_event = TelemetryEventDTO(
+                event_type="loop.health",
+                tick=self.tick,
+                payload=health_payload,
+                metadata=TelemetryMetadata(),
+            )
+            if self._telemetry_port is not None:
+                self._telemetry_port.emit_event(health_event)
+            else:  # pragma: no cover - defensive
+                self.telemetry.emit_event(health_event)
             if logger.isEnabledFor(logging.INFO):
+                summary_mapping = health_payload.get("summary")
+                summary: Mapping[str, object]
+                if isinstance(summary_mapping, Mapping):
+                    summary = summary_mapping
+                else:
+                    summary = {}
                 logger.info(
                     (
                         "tick_health tick=%s duration_ms=%.2f queue=%s dropped=%s "
@@ -450,17 +940,17 @@ class SimulationLoop:
                     ),
                     self.tick,
                     duration_ms,
-                    health_payload["telemetry_queue"],
-                    health_payload["telemetry_dropped"],
-                    health_payload["telemetry_flush_ms"],
-                    health_payload["telemetry_payloads_total"],
-                    health_payload["telemetry_bytes_total"],
-                    health_payload["perturbations_pending"],
-                    health_payload["perturbations_active"],
-                    health_payload["employment_exit_queue"],
+                    summary.get("queue_length"),
+                    summary.get("dropped_messages"),
+                    summary.get("last_flush_duration_ms"),
+                    summary.get("payloads_flushed_total"),
+                    summary.get("bytes_flushed_total"),
+                    summary.get("perturbations_pending"),
+                    summary.get("perturbations_active"),
+                    summary.get("employment_exit_queue"),
                 )
             self._record_step_success(duration_ms)
-            return TickArtifacts(observations=observations, rewards=rewards)
+            return TickArtifacts(envelope=dto_envelope, rewards=rewards)
         except Exception as exc:
             duration_ms = (time.perf_counter() - tick_start) * 1000.0
             self.tick = max(0, self.tick - 1)
@@ -494,24 +984,557 @@ class SimulationLoop:
                 logger.exception("Failed to capture failure snapshot")
                 snapshot_path = None
         self._health.last_snapshot_path = snapshot_path
-        transport_status = self.telemetry.latest_transport_status()
-        payload = {
-            "tick": tick,
-            "status": "error",
-            "tick_duration_ms": duration_ms,
-            "failure_count": self._health.failure_count,
-            "error": error_message,
-            "telemetry_queue": transport_status.get("queue_length", 0),
-            "telemetry_dropped": transport_status.get("dropped_messages", 0),
-        }
-        if snapshot_path:
-            payload["snapshot_path"] = snapshot_path
-        self.telemetry.record_loop_failure(payload)
+        transport_status = self._last_transport_status
+        failure_payload = self._build_failure_payload(
+            tick=tick,
+            duration_ms=duration_ms,
+            error=error_message,
+            transport_status=transport_status,
+            snapshot_path=snapshot_path,
+            global_context=self._last_global_context,
+        )
+        failure_event = TelemetryEventDTO(
+            event_type="loop.failure",
+            tick=tick,
+            payload=failure_payload,
+            metadata=TelemetryMetadata(),
+        )
+        if self._telemetry_port is not None:
+            self._telemetry_port.emit_event(failure_event)
+        else:  # pragma: no cover - defensive
+            self.telemetry.emit_event(failure_event)
         for handler in list(self._failure_handlers):
             try:
                 handler(self, tick, exc)
             except Exception:  # pragma: no cover - handlers should not break the loop
                 logger.exception("Simulation loop failure handler raised")
+
+    def _ensure_policy_envelope(self) -> ObservationEnvelope:
+        """Ensure a DTO envelope is available for policy decisions."""
+
+        envelope = self._policy_observation_envelope
+        if envelope is not None:
+            return envelope
+        bootstrap = self._build_bootstrap_policy_envelope()
+        self._set_policy_observation_envelope(bootstrap)
+        logger.debug("policy_envelope_bootstrap", extra={"tick": self.tick})
+        return bootstrap
+
+    def _build_tick_global_context(
+        self,
+        *,
+        queue_metrics: Mapping[str, int],
+        queue_state: Mapping[str, object],
+        employment_snapshot: Mapping[str, object],
+        job_snapshot: Mapping[str, Mapping[str, object]],
+        dto_envelope: ObservationEnvelope,
+        stability_metrics: Mapping[str, object],
+        perturbations: Mapping[str, object],
+        promotion_state: Mapping[str, object],
+        anneal_context: Mapping[str, object],
+        rivalry_events: Iterable[Mapping[str, object]],
+    ) -> dict[str, object]:
+        """Assemble the DTO-first global context payload for telemetry."""
+
+        try:
+            base_context = dto_envelope.global_context.model_dump(by_alias=True)
+        except Exception:  # pragma: no cover - defensive safeguard
+            base_context = {}
+
+        global_context: dict[str, object] = copy.deepcopy(base_context)
+
+        if "queue_metrics" not in global_context:
+            global_context["queue_metrics"] = dict(queue_metrics)
+        if queue_state:
+            global_context["queues"] = copy.deepcopy(queue_state)
+        if "employment_snapshot" not in global_context:
+            global_context["employment_snapshot"] = copy.deepcopy(employment_snapshot)
+        if "job_snapshot" not in global_context:
+            global_context["job_snapshot"] = copy.deepcopy(job_snapshot)
+
+        if "stability_metrics" not in global_context:
+            global_context["stability_metrics"] = copy.deepcopy(dict(stability_metrics))
+        if perturbations:
+            global_context.setdefault("perturbations", copy.deepcopy(dict(perturbations)))
+        if promotion_state:
+            global_context.setdefault("promotion_state", copy.deepcopy(dict(promotion_state)))
+        if anneal_context:
+            global_context.setdefault("anneal_context", copy.deepcopy(dict(anneal_context)))
+
+        rivalry_list = [dict(event) for event in rivalry_events]
+        global_context["rivalry_events"] = rivalry_list
+
+        context = self._world_context
+        if context is not None:
+            queue_affinity = context.export_queue_affinity_metrics()
+            if queue_affinity:
+                global_context.setdefault("queue_affinity_metrics", dict(queue_affinity))
+            running_affordances = context.export_running_affordances()
+            if running_affordances:
+                global_context.setdefault("running_affordances", copy.deepcopy(dict(running_affordances)))
+            economy_snapshot = context.export_economy_snapshot()
+            if economy_snapshot:
+                global_context.setdefault("economy_snapshot", copy.deepcopy(dict(economy_snapshot)))
+            relationship_snapshot = context.export_relationship_snapshot()
+            if relationship_snapshot:
+                global_context.setdefault("relationship_snapshot", copy.deepcopy(dict(relationship_snapshot)))
+            relationship_metrics = context.export_relationship_metrics()
+            if relationship_metrics:
+                global_context.setdefault("relationship_metrics", copy.deepcopy(dict(relationship_metrics)))
+
+        self._last_global_context = copy.deepcopy(global_context)
+        return global_context
+
+    def _build_health_payload(
+        self,
+        *,
+        duration_ms: float,
+        transport_status: Mapping[str, object],
+        global_context: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        """Compose the loop.health payload using DTO context data."""
+
+        context_payload: dict[str, object] = {}
+        if isinstance(global_context, Mapping):
+            context_payload = copy.deepcopy(dict(global_context))
+
+        queue_length = coerce_int(transport_status.get("queue_length"), default=0)
+        dropped_messages = coerce_int(transport_status.get("dropped_messages"), default=0)
+        last_flush_raw = transport_status.get("last_flush_duration_ms")
+        last_flush_duration: float | None = None
+        if last_flush_raw is not None:
+            try:
+                last_flush_duration = coerce_float(last_flush_raw)
+            except (TypeError, ValueError):
+                last_flush_duration = None
+
+        worker_alive = bool(transport_status.get("worker_alive", False))
+        worker_error = transport_status.get("worker_error")
+        worker_restart_count = coerce_int(
+            transport_status.get("worker_restart_count"), default=0
+        )
+        worker_status: dict[str, object] = {
+            "alive": worker_alive,
+            "error": worker_error,
+            "restart_count": worker_restart_count,
+        }
+
+        transport_payload: dict[str, object] = {
+            "provider": transport_status.get("provider"),
+            "queue_length": queue_length,
+            "dropped_messages": dropped_messages,
+            "last_flush_duration_ms": last_flush_duration,
+            "payloads_flushed_total": coerce_int(
+                transport_status.get("payloads_flushed_total"), default=0
+            ),
+            "bytes_flushed_total": coerce_int(
+                transport_status.get("bytes_flushed_total"), default=0
+            ),
+            "auth_enabled": bool(transport_status.get("auth_enabled", False)),
+            "worker": worker_status,
+        }
+
+        perturbations_pending = 0
+        perturbations_active = 0
+        perturbations_payload = context_payload.get("perturbations")
+        if isinstance(perturbations_payload, Mapping):
+            pending_section = perturbations_payload.get("pending")
+            active_section = perturbations_payload.get("active")
+
+            def _coerce_count(value: object) -> int:
+                if value is None:
+                    return 0
+                if isinstance(value, Mapping):
+                    return len(value)
+                if isinstance(value, (list, tuple, set)):
+                    return len(value)
+                return coerce_int(value, default=0)
+
+            perturbations_pending = _coerce_count(pending_section)
+            perturbations_active = _coerce_count(active_section)
+        else:  # Fallback to scheduler counts when context data is absent.
+            try:
+                perturbations_pending = int(self.perturbations.pending_count())
+                perturbations_active = int(self.perturbations.active_count())
+            except Exception:  # pragma: no cover - defensive
+                perturbations_pending = 0
+                perturbations_active = 0
+
+        employment_exit_queue = 0
+        employment_snapshot = context_payload.get("employment_snapshot")
+        if isinstance(employment_snapshot, Mapping):
+            pending_count = employment_snapshot.get("pending_count")
+            if isinstance(pending_count, (int, float)):
+                employment_exit_queue = int(pending_count)
+            else:
+                pending_section = employment_snapshot.get("pending")
+                if isinstance(pending_section, (list, tuple, set)):
+                    employment_exit_queue = len(pending_section)
+        else:  # Leverage context export if available.
+            context = self._world_context
+            snapshot_getter = getattr(context, "export_employment_snapshot", None)
+            if callable(snapshot_getter):
+                try:
+                    snapshot = snapshot_getter()
+                    if isinstance(snapshot, Mapping):
+                        pending_count = snapshot.get("pending_count")
+                        if isinstance(pending_count, (int, float)):
+                            employment_exit_queue = int(pending_count)
+                except Exception:  # pragma: no cover - defensive
+                    employment_exit_queue = 0
+
+        payload: dict[str, object] = {
+            "tick": self.tick,
+            "status": "ok",
+            "duration_ms": duration_ms,
+            "failure_count": self._health.failure_count,
+            "transport": transport_payload,
+            "global_context": context_payload,
+        }
+        payload["summary"] = {
+            "duration_ms": duration_ms,
+            "queue_length": queue_length,
+            "dropped_messages": dropped_messages,
+            "last_flush_duration_ms": transport_payload["last_flush_duration_ms"],
+            "payloads_flushed_total": transport_payload["payloads_flushed_total"],
+            "bytes_flushed_total": transport_payload["bytes_flushed_total"],
+            "auth_enabled": transport_payload["auth_enabled"],
+            "worker_alive": worker_alive,
+            "worker_error": worker_error,
+            "worker_restart_count": worker_restart_count,
+            "perturbations_pending": perturbations_pending,
+            "perturbations_active": perturbations_active,
+            "employment_exit_queue": employment_exit_queue,
+        }
+        self._last_health_payload = copy.deepcopy(payload)
+        return payload
+
+    def _build_failure_payload(
+        self,
+        *,
+        tick: int,
+        duration_ms: float,
+        error: str,
+        transport_status: Mapping[str, object],
+        snapshot_path: str | None,
+        global_context: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        """Compose the loop.failure payload with structured transport/context data."""
+
+        context_payload: dict[str, object] = {}
+        if isinstance(global_context, Mapping):
+            context_payload = copy.deepcopy(dict(global_context))
+        elif isinstance(self._last_global_context, Mapping):
+            context_payload = copy.deepcopy(dict(self._last_global_context))
+
+        last_flush_raw = transport_status.get("last_flush_duration_ms")
+        last_flush_duration: float | None = None
+        if last_flush_raw is not None:
+            try:
+                last_flush_duration = coerce_float(last_flush_raw)
+            except (TypeError, ValueError):
+                last_flush_duration = None
+
+        transport_payload: dict[str, object] = {
+            "provider": transport_status.get("provider"),
+            "queue_length": coerce_int(transport_status.get("queue_length"), default=0),
+            "dropped_messages": coerce_int(transport_status.get("dropped_messages"), default=0),
+            "last_flush_duration_ms": last_flush_duration,
+            "payloads_flushed_total": coerce_int(
+                transport_status.get("payloads_flushed_total"), default=0
+            ),
+            "bytes_flushed_total": coerce_int(
+                transport_status.get("bytes_flushed_total"), default=0
+            ),
+            "auth_enabled": bool(transport_status.get("auth_enabled", False)),
+            "worker": {
+                "alive": bool(transport_status.get("worker_alive", False)),
+                "error": transport_status.get("worker_error"),
+                "restart_count": coerce_int(
+                    transport_status.get("worker_restart_count"), default=0
+                ),
+            },
+        }
+
+        payload: dict[str, object] = {
+            "tick": int(tick),
+            "status": "error",
+            "duration_ms": duration_ms,
+            "failure_count": self._health.failure_count,
+            "error": error,
+            "snapshot_path": snapshot_path,
+            "transport": transport_payload,
+            "global_context": context_payload,
+        }
+
+        last_health = self._last_health_payload
+        if isinstance(last_health, Mapping):
+            payload["health"] = copy.deepcopy(dict(last_health))
+        payload["summary"] = {
+            "duration_ms": duration_ms,
+            "queue_length": transport_payload["queue_length"],
+            "dropped_messages": transport_payload["dropped_messages"],
+        }
+        return payload
+
+    def _set_policy_observation_envelope(self, envelope: ObservationEnvelope) -> None:
+        """Persist the current observation envelope and notify the backend."""
+
+        self._policy_observation_envelope = envelope
+        backend_consumer = getattr(self.policy, "update_observation_envelope", None)
+        if callable(backend_consumer):
+            backend_consumer(envelope)
+
+    def _emit_policy_events(
+        self,
+        *,
+        policy_metadata: Mapping[str, object],
+        possessed_agents: Iterable[str],
+        anneal_ratio: float | None,
+        anneal_context: Mapping[str, object] | None,
+    ) -> None:
+        telemetry = self._telemetry_port
+        if telemetry is None:
+            return
+
+        metadata_copy = copy.deepcopy(dict(policy_metadata))
+        option_counts = metadata_copy.get("option_switch_counts")
+        if isinstance(option_counts, Mapping):
+            metadata_copy["option_switch_counts"] = {
+                str(agent): int(count)
+                for agent, count in sorted(option_counts.items())
+            }
+        sorted_agents = tuple(sorted(str(agent) for agent in possessed_agents))
+        metadata_copy["possessed_agents"] = list(sorted_agents)
+        metadata_payload: dict[str, object] = {
+            "tick": self.tick,
+            "provider": str(self._policy_provider),
+            "metadata": metadata_copy,
+        }
+        if metadata_payload != self._last_policy_metadata_event:
+            metadata_event = TelemetryEventDTO(
+                event_type="policy.metadata",
+                tick=self.tick,
+                payload=metadata_payload,
+                metadata=TelemetryMetadata(),
+            )
+            telemetry.emit_event(metadata_event)
+            self._last_policy_metadata_event = copy.deepcopy(metadata_payload)
+
+        if (
+            self._last_policy_possession_agents is None
+            or sorted_agents != self._last_policy_possession_agents
+        ):
+            possession_payload: dict[str, object] = {
+                "tick": self.tick,
+                "provider": str(self._policy_provider),
+                "agents": list(sorted_agents),
+                "possessed_agents": list(sorted_agents),
+            }
+            possession_event = TelemetryEventDTO(
+                event_type="policy.possession",
+                tick=self.tick,
+                payload=possession_payload,
+                metadata=TelemetryMetadata(),
+            )
+            telemetry.emit_event(possession_event)
+            self._last_policy_possession_agents = sorted_agents
+
+        context_payload: dict[str, object] = {}
+        if isinstance(anneal_context, Mapping):
+            context_payload = copy.deepcopy(dict(anneal_context))
+        anneal_payload: dict[str, object] = {
+            "tick": self.tick,
+            "provider": str(self._policy_provider),
+            "ratio": float(anneal_ratio) if anneal_ratio is not None else None,
+            "context": context_payload,
+        }
+        if anneal_payload != self._last_policy_anneal_event:
+            anneal_event = TelemetryEventDTO(
+                event_type="policy.anneal.update",
+                tick=self.tick,
+                payload=anneal_payload,
+                metadata=TelemetryMetadata(),
+            )
+            telemetry.emit_event(anneal_event)
+            self._last_policy_anneal_event = copy.deepcopy(anneal_payload)
+
+    def _build_bootstrap_policy_envelope(self) -> ObservationEnvelope:
+        """Build a DTO envelope from the current world when none has been recorded."""
+
+        context = self._require_world_context()
+        if getattr(context, "observation_service", None) is None:
+            raise RuntimeError("World context is not configured for observation DTOs")
+        terminated: dict[str, bool] = {}
+        rewards: dict[str, float] = {}
+        reward_breakdown: dict[str, Mapping[str, float]] = {}
+        try:
+            policy_snapshot = self.policy.latest_policy_snapshot()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("policy_snapshot_unavailable_bootstrap", exc_info=True)
+            policy_snapshot = {}
+        try:
+            anneal_ratio = self.policy.current_anneal_ratio()
+        except Exception:  # pragma: no cover - defensive
+            anneal_ratio = None
+        try:
+            possessed_agents = list(self.policy.possessed_agents())
+        except Exception:  # pragma: no cover - defensive
+            possessed_agents = []
+        try:
+            policy_hash = self.policy.active_policy_hash()
+        except Exception:  # pragma: no cover - defensive
+            policy_hash = None
+        identity_payload = self.config.build_snapshot_identity(
+            policy_hash=policy_hash,
+            runtime_observation_variant=self.config.observation_variant,
+            runtime_anneal_ratio=anneal_ratio,
+        )
+        policy_metadata = {
+            "identity": identity_payload,
+            "possessed_agents": possessed_agents,
+            "option_switch_counts": {},
+            "anneal_ratio": anneal_ratio,
+        }
+        promotion_state = self.promotion.snapshot()
+        anneal_context: dict[str, object] = {}
+        try:
+            anneal_ctx_method = getattr(self.policy, "anneal_context", None)
+            if callable(anneal_ctx_method):
+                anneal_context = anneal_ctx_method()
+        except Exception:  # pragma: no cover - defensive
+            anneal_context = {}
+
+        bootstrap_envelope: ObservationEnvelope = context.observe(
+            actions={},
+            terminated=terminated,
+            termination_reasons={},
+            rewards=rewards,
+            reward_breakdown=reward_breakdown,
+            policy_snapshot=policy_snapshot,
+            policy_metadata=policy_metadata,
+            rivalry_events=[],
+            stability_metrics=self.stability.latest_metrics(),
+            promotion_state=promotion_state,
+            anneal_context=anneal_context,
+        )
+        return bootstrap_envelope
+
+    def _try_context_observe(
+        self,
+        *,
+        actions: Mapping[str, Any],
+        terminated: Mapping[str, bool],
+        termination_reasons: Mapping[str, str],
+        queue_metrics: Mapping[str, int],
+        rewards: Mapping[str, float],
+        reward_breakdown: Mapping[str, Mapping[str, float]],
+        policy_snapshot: Mapping[str, Any],
+        policy_metadata: Mapping[str, Any],
+        rivalry_events: Iterable[Mapping[str, Any]],
+        stability_metrics: Mapping[str, Any],
+        promotion_state: Mapping[str, Any] | None,
+        anneal_context: Mapping[str, Any],
+    ) -> ObservationEnvelope | None:
+        context = self._world_context or getattr(self._world_port, "context", None)
+        if context is None:
+            return None
+        self._world_context = context
+        if getattr(context, "observation_service", None) is None:
+            return None
+        try:
+            observation: ObservationEnvelope = context.observe(
+                actions=actions,
+                policy_snapshot=policy_snapshot,
+                policy_metadata=policy_metadata,
+                rivalry_events=rivalry_events,
+                stability_metrics=stability_metrics,
+                promotion_state=promotion_state,
+                anneal_context=anneal_context,
+                terminated=terminated,
+                termination_reasons=termination_reasons,
+                rewards=rewards,
+                reward_breakdown=reward_breakdown,
+            )
+            return observation
+        except Exception:  # pragma: no cover - defensive fallback
+            logger.debug("context_observe_failed", exc_info=True)
+            return None
+
+    def _collect_embedding_metrics(self, adapter: WorldRuntimeAdapter) -> dict[str, float]:
+        try:
+            metrics = adapter.embedding_allocator.metrics()
+            return {str(key): float(value) for key, value in metrics.items()}
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("embedding_metrics_unavailable", exc_info=True)
+            return {}
+
+    def _collect_rivalry_events(self, adapter: WorldRuntimeAdapter) -> list[dict[str, object]]:
+        try:
+            raw_events = adapter.consume_rivalry_events()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("rivalry_events_unavailable", exc_info=True)
+            raw_events = []
+        clean_events: list[dict[str, object]] = []
+        for event in raw_events:
+            # Type contract guarantees event is Mapping, but runtime safety for dynamic data
+            if isinstance(event, Mapping):
+                tick_val = event.get("tick", self.tick)
+                agent_a_val = event.get("agent_a", "")
+                agent_b_val = event.get("agent_b", "")
+                intensity_val = event.get("intensity", 0.0)
+                reason_val = event.get("reason", "")
+                clean_events.append(
+                    {
+                        "tick": coerce_int(tick_val, default=self.tick),
+                        "agent_a": str(agent_a_val) if agent_a_val is not None else "",
+                        "agent_b": str(agent_b_val) if agent_b_val is not None else "",
+                        "intensity": coerce_float(intensity_val, default=0.0),
+                        "reason": str(reason_val) if reason_val is not None else "",
+                    }
+                )
+        if clean_events:
+            self._rivalry_history.extend(clean_events)
+            if len(self._rivalry_history) > 120:
+                self._rivalry_history = self._rivalry_history[-120:]
+        return list(self._rivalry_history)
+
+    def _build_transport_status(self, *, queue_length: int) -> dict[str, object]:
+        status = dict(self._last_transport_status)
+        telemetry_status: Mapping[str, object] | None = None
+        port = self._telemetry_port
+        getter = getattr(port, "transport_status", None)
+        if callable(getter):
+            try:
+                telemetry_status = dict(getter())
+            except Exception:  # pragma: no cover - telemetry may be stubbed
+                telemetry_status = None
+        elif port is None:
+            publisher = getattr(self, "telemetry", None)
+            legacy_getter = getattr(publisher, "latest_transport_status", None)
+            if callable(legacy_getter):
+                try:
+                    telemetry_status = dict(legacy_getter())
+                except Exception:  # pragma: no cover - telemetry may be stubbed
+                    telemetry_status = None
+        if telemetry_status:
+            status.update(telemetry_status)
+        status.update(
+            {
+                "provider": status.get("provider", "port"),
+                "queue_length": queue_length,
+                "dropped_messages": status.get("dropped_messages", 0),
+                "last_flush_duration_ms": status.get("last_flush_duration_ms"),
+                "worker_alive": status.get("worker_alive", True),
+                "worker_error": status.get("worker_error"),
+                "worker_restart_count": status.get("worker_restart_count", 0),
+                "payloads_flushed_total": status.get("payloads_flushed_total", 0),
+                "bytes_flushed_total": status.get("bytes_flushed_total", 0),
+                "auth_enabled": status.get("auth_enabled", False),
+            }
+        )
+        self._last_transport_status = status
+        return status
 
     def _load_affordance_runtime_factory(
         self, runtime_config: AffordanceRuntimeConfig
@@ -520,8 +1543,9 @@ class SimulationLoop:
             return None
         factory_callable = self._import_symbol(runtime_config.factory)
 
-        def _factory(world: WorldState, context: AffordanceRuntimeContext):
-            return factory_callable(world=world, context=context, config=runtime_config)
+        def _factory(world: WorldState, context: AffordanceRuntimeContext) -> DefaultAffordanceRuntime:
+            instance = factory_callable(world=world, context=context, config=runtime_config)
+            return cast(DefaultAffordanceRuntime, instance)
 
         return _factory
 
@@ -579,15 +1603,20 @@ class SimulationLoop:
         )
 
     @staticmethod
-    def _import_symbol(path: str):
+    def _import_symbol(path: str) -> Callable[..., Any]:
         module_name, separator, attribute = path.partition(":")
         if separator != ":" or not module_name or not attribute:
             raise ValueError(f"Invalid runtime factory path '{path}'. Use 'module:callable' format.")
         module = import_module(module_name)
         try:
-            return getattr(module, attribute)
+            symbol = getattr(module, attribute)
         except AttributeError as exc:  # pragma: no cover - defensive
             raise AttributeError(f"Runtime factory '{attribute}' not found in module '{module_name}'") from exc
+        if not callable(symbol):
+            raise TypeError(
+                f"Runtime factory '{attribute}' in module '{module_name}' is not callable"
+            )
+        return cast(Callable[..., Any], symbol)
 
     def close(self) -> None:
         """Release resources held by the loop (telemetry, runtime, policy)."""
@@ -601,10 +1630,15 @@ class SimulationLoop:
                 except Exception:  # pragma: no cover - defensive cleanup
                     logger.debug("Telemetry close raised during loop shutdown", exc_info=True)
 
-    def __enter__(self) -> "SimulationLoop":
+    def __enter__(self) -> SimulationLoop:
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:
         self.close()
         return False
 

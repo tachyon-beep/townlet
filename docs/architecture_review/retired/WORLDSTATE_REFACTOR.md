@@ -66,8 +66,8 @@
   - **Compact**: empty spatial tensor (`(0, 0, 0)`), relies solely on the feature vector.
 - Social snippet aggregates, landmark slices, and personality overlays are carried via `metadata.social_context`, `metadata.landmark_slices`, and `metadata.feature_names`; tests assert these keys survive refactors.
 - Fixture regeneration (`tests/data/observations/baseline_*.npz`) uses `scripts/run_simulation.py configs/examples/poc_hybrid.yaml --ticks 200 --telemetry-path tmp/telemetry_baseline.json` to seed deterministic inputs prior to encoding.
-- Observation helper logic now lives in `townlet.world.observation`; `WorldState.local_view()/agent_context()` are thin shims delegating to that module so downstream systems can consume the same APIs without coupling to private fields.
-- Legacy `WorldState.local_view`/`agent_context` shim methods were removed in favour of direct imports from `townlet.world.observation`; downstream callers should migrate to the helper module before Milestone M4.
+- Observation helper logic now lives in `townlet.world.observations`; `WorldState.local_view()/agent_context()` are thin shims delegating to those modules so downstream systems can consume the same APIs without coupling to private fields.
+- Legacy `WorldState.local_view`/`agent_context` shim methods were removed in favour of direct imports from `townlet.world.observations`; downstream callers should migrate to the helper module before Milestone M4.
 
 ## RNG & Snapshot Semantics (2025-10-03)
 - `WorldState.attach_rng` installs a shared `random.Random` used for nightly resets, hook scheduling, and queue conflict perturbations; `get_rng_state`/`set_rng_state` wrap the underlying `random` state.

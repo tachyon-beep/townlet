@@ -203,8 +203,6 @@
     "health": {
       "tick": 1,
       "tick_duration_ms": 0.2281769411638379,
-      "telemetry_queue": 1,
-      "telemetry_dropped": 0,
       "perturbations_pending": 0,
       "perturbations_active": 0,
       "employment_exit_queue": 0

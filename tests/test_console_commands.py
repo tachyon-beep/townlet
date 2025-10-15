@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.telemetry import build_global_context
 from townlet.config import (
     ArrangedMeetEventConfig,
     FloatRange,
@@ -15,12 +16,18 @@ from townlet.config import (
 )
 from townlet.console.handlers import ConsoleCommand, create_console_router
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet.dto.world import (
+    EmploymentSnapshot,
+    IdentitySnapshot,
+    QueueSnapshot,
+    SimulationSnapshot,
+)
 from townlet.snapshots import SnapshotManager
 from townlet.snapshots.migrations import clear_registry, register_migration
-from townlet.snapshots.state import SnapshotState
 from townlet.world.grid import AgentSnapshot
 from townlet_ui.commands import (
-    CommandQueueFull,
+    CommandQueueFullError,
     ConsoleCommandExecutor,
     PaletteCommandRequest,
 )
@@ -132,7 +139,7 @@ def test_console_executor_queue_limit_guard() -> None:
     executor.submit_payload(payload)
     assert executor.pending_count() == 1
 
-    with pytest.raises(CommandQueueFull):
+    with pytest.raises(CommandQueueFullError):
         executor.submit_payload(payload)
 
     executor.shutdown()
@@ -192,12 +199,27 @@ def test_announce_story_command_enqueues_narration() -> None:
     assert any(entry.get("message") == "Welcome!" for entry in narrations)
 
     loop.world.tick = 1
-    loop.telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=1,
-        world=loop.world,
-        observations={},
-        rewards={},
+        payload={
+            "tick": 1,
+            "world": loop.world,
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+            "global_context": build_global_context(),
+        },
+        metadata=TelemetryMetadata(),
     )
+    loop.telemetry.emit_event(event)
     narrations_next = loop.telemetry.latest_narrations()
     assert any(entry.get("message") == "Welcome!" for entry in narrations_next)
 
@@ -790,7 +812,17 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
     )
     assert validate["valid"] is True
 
-    legacy_state = SnapshotState(config_id="legacy", tick=5)
+    legacy_state = SimulationSnapshot(
+        config_id="legacy",
+        tick=5,
+        agents={},
+        objects={},
+        queues=QueueSnapshot(),
+        employment=EmploymentSnapshot(),
+        relationships={},
+        identity=IdentitySnapshot(config_id="legacy"),
+        rng_streams={"world": json.dumps({"state": "legacy", "version": 1})},  # Required by validator
+    )
     legacy_manager = SnapshotManager(tmp_path)
     legacy_path = legacy_manager.save(legacy_state)
 
@@ -803,10 +835,18 @@ def test_console_snapshot_commands(tmp_path: Path) -> None:
     )
     assert strict_failure["valid"] is False
 
+    def migrate_legacy(state: dict, cfg) -> dict:
+        migrated = dict(state)
+        migrated["config_id"] = cfg.config_id
+        identity = dict(migrated.get("identity", {}))
+        identity["config_id"] = cfg.config_id
+        migrated["identity"] = identity
+        return migrated
+
     register_migration(
         "legacy",
         config.config_id,
-        lambda state, cfg: replace(state, config_id=cfg.config_id),
+        migrate_legacy,
     )
 
     router_admin = create_console_router(

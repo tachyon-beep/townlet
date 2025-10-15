@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
@@ -97,8 +97,8 @@ def run_benchmark(
 
 def write_benchmark_result(result: BenchmarkResult, out_path: Path | None = None) -> Path:
     payload = result.to_dict()
-    target = out_path
-    if target is None:
+    target: Path
+    if out_path is None:
         root = Path("tmp/wp-d/benchmarks").resolve()
         root.mkdir(parents=True, exist_ok=True)
         name = f"benchmark_{result.config_id}_{int(time.time())}.json"
@@ -112,7 +112,10 @@ def write_benchmark_result(result: BenchmarkResult, out_path: Path | None = None
 
 def load_benchmark(path: Path) -> dict[str, Any]:
     resolved = Path(path).expanduser().resolve()
-    return json.loads(resolved.read_text())
+    data = json.loads(resolved.read_text())
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected dict from benchmark file, got {type(data)}")
+    return data
 
 
 def compare_benchmarks(

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from townlet.config import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
 from townlet.world.grid import AgentSnapshot
 
 
@@ -12,6 +13,48 @@ def make_loop() -> SimulationLoop:
     loop = SimulationLoop(config)
     loop.world.agents.clear()
     return loop
+
+
+def emit_loop_tick(
+    telemetry,
+    *,
+    tick: int,
+    world,
+    **overrides,
+) -> None:
+    global_context = overrides.pop("global_context", None)
+    if global_context is None:
+        rivalry_events: list[dict[str, object]] = []
+        consumer = getattr(world, "consume_rivalry_events", None)
+        if callable(consumer):
+            rivalry_events = [dict(event) for event in consumer() if isinstance(event, dict)]
+        global_context = {
+            "rivalry_events": rivalry_events,
+        }
+
+    payload = {
+        "tick": tick,
+        "world": world,
+        "rewards": overrides.pop("rewards", {}),
+        "events": overrides.pop("events", []),
+        "policy_snapshot": overrides.pop("policy_snapshot", {}),
+        "kpi_history": overrides.pop("kpi_history", False),
+        "reward_breakdown": overrides.pop("reward_breakdown", {}),
+        "stability_inputs": overrides.pop("stability_inputs", {}),
+        "perturbations": overrides.pop("perturbations", {}),
+        "policy_identity": overrides.pop("policy_identity", {}),
+        "possessed_agents": overrides.pop("possessed_agents", []),
+        "social_events": overrides.pop("social_events", []),
+        "global_context": global_context,
+    }
+    payload.update(overrides)
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
+        tick=tick,
+        payload=payload,
+        metadata=TelemetryMetadata(),
+    )
+    telemetry.emit_event(event)
 
 
 def test_shower_events_in_telemetry() -> None:
@@ -31,22 +74,8 @@ def test_shower_events_in_telemetry() -> None:
     )
 
     loop.tick = 0
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
-    world.apply_console([])
-    world.consume_console_results()
+    emit_loop_tick(telemetry, tick=loop.tick, world=world)
+    _ = world.apply_console([])
 
     granted = world.queue_manager.request_access("shower_1", "alice", world.tick)
     assert granted is True
@@ -54,21 +83,7 @@ def test_shower_events_in_telemetry() -> None:
     assert world._start_affordance("alice", "shower_1", "use_shower") is False
 
     events = world.drain_events()
-    telemetry.record_console_results([])
-    telemetry.publish_tick(
-        tick=loop.tick + 1,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
+    emit_loop_tick(telemetry, tick=loop.tick + 1, world=world, events=events)
     published = telemetry.export_state()
     recorded_events = published["events"]
     assert any(e.get("event") == "shower_power_outage" for e in recorded_events)
@@ -93,22 +108,8 @@ def test_shower_complete_narration() -> None:
         wallet=5.0,
     )
 
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
-    world.apply_console([])
-    world.consume_console_results()
+    emit_loop_tick(telemetry, tick=loop.tick, world=world)
+    _ = world.apply_console([])
 
     request = world.queue_manager.request_access("shower_1", "alice", world.tick)
     assert request is True
@@ -119,20 +120,7 @@ def test_shower_complete_narration() -> None:
     world.resolve_affordances(world.tick)
     events = world.drain_events()
 
-    telemetry.publish_tick(
-        tick=loop.tick + 1,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
+    emit_loop_tick(telemetry, tick=loop.tick + 1, world=world, events=events)
     published = telemetry.export_state()
     recorded_events = published["events"]
     assert any(e.get("event") == "shower_complete" for e in recorded_events)
@@ -155,22 +143,8 @@ def test_sleep_events_in_telemetry() -> None:
     )
 
     loop.tick = 0
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
-    world.apply_console([])
-    world.consume_console_results()
+    emit_loop_tick(telemetry, tick=loop.tick, world=world)
+    _ = world.apply_console([])
 
     granted = world.queue_manager.request_access("bed_1", "alice", world.tick)
     assert granted is True
@@ -182,21 +156,7 @@ def test_sleep_events_in_telemetry() -> None:
     world.resolve_affordances(world.tick)
     events.extend(world.drain_events())
 
-    telemetry.record_console_results([])
-    telemetry.publish_tick(
-        tick=loop.tick + 1,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
+    emit_loop_tick(telemetry, tick=loop.tick + 1, world=world, events=events)
     published = telemetry.export_state()
     recorded_events = published["events"]
     assert any(e.get("event") == "sleep_complete" for e in recorded_events)
@@ -229,19 +189,10 @@ def test_relationship_summary_and_social_events() -> None:
         agent_id="alice", reason="queue_rival", object_id="stove_1"
     )
 
-    telemetry.publish_tick(
+    emit_loop_tick(
+        telemetry,
         tick=loop.tick,
         world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
         social_events=[
             {"type": "chat_success", "speaker": "alice", "listener": "bob", "quality": 0.9},
             {
@@ -275,22 +226,8 @@ def test_affordance_runtime_running_snapshot() -> None:
         wallet=1.0,
     )
 
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
-    world.apply_console([])
-    world.consume_console_results()
+    emit_loop_tick(telemetry, tick=loop.tick, world=world)
+    _ = world.apply_console([])
 
     granted = world.queue_manager.request_access("bed_1", "alice", world.tick)
     assert granted is True
@@ -299,20 +236,7 @@ def test_affordance_runtime_running_snapshot() -> None:
     assert started is True
     events = world.drain_events()
 
-    telemetry.publish_tick(
-        tick=loop.tick + 1,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
+    emit_loop_tick(telemetry, tick=loop.tick + 1, world=world, events=events)
     runtime = telemetry.export_state()["affordance_runtime"]
     assert runtime["running_count"] == 1
     assert "bed_1" in runtime["running"]
@@ -333,20 +257,7 @@ def test_rivalry_events_surface_in_telemetry() -> None:
 
     world.register_rivalry_conflict("alice", "bob", intensity=1.5, reason="queue_conflict")
     events = world.drain_events()
-    telemetry.publish_tick(
-        tick=loop.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=events,
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
-    )
+    emit_loop_tick(telemetry, tick=loop.tick, world=world, events=events)
     snapshot = telemetry.export_state()
     conflict = snapshot.get("conflict_snapshot", {})
     rivalry_events = conflict.get("rivalry_events", [])

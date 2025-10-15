@@ -4,23 +4,23 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.lifecycle.manager import LifecycleManager
 from townlet.world.agents.lifecycle import LifecycleService
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
 
 
-def _make_world(respawn_delay: int = 0) -> tuple[LifecycleManager, WorldState]:
+def _make_world(respawn_delay: int = 0) -> tuple[LifecycleManager, ModularTestWorld]:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.lifecycle.respawn_delay_ticks = respawn_delay
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents.clear()
     world.tick = 0
-    manager = LifecycleManager(config)
-    return manager, world
+    return world.lifecycle, world
 
 
-def _spawn_agent(world: WorldState, agent_id: str = "alice") -> AgentSnapshot:
+def _spawn_agent(world: ModularTestWorld, agent_id: str = "alice") -> AgentSnapshot:
     snapshot = world.lifecycle_service.spawn_agent(
         agent_id,
         (0, 0),

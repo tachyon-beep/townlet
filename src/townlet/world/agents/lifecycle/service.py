@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,7 +32,6 @@ class LifecycleService:
     embedding_allocator: Any
     queue_conflicts: QueueConflictTracker
     recent_meal_participants: MutableMapping[str, dict[str, Any]]
-    job_keys: Iterable[str]
     respawn_counters: MutableMapping[str, int]
     emit_event: Callable[[str, dict[str, object]], None]
     request_ctx_reset: Callable[[str], None]
@@ -67,7 +66,7 @@ class LifecycleService:
 
         wallet_value = float(wallet) if wallet is not None else 0.0
         resolved_needs = dict(needs or {})
-        profile_name = personality_profile or ""
+        profile_name = personality_profile or "balanced"  # Default to "balanced" (required by DTO validation)
 
         snapshot = AgentSnapshot(
             agent_id=agent_id,
@@ -243,11 +242,11 @@ class LifecycleService:
     # ------------------------------------------------------------------
 
     def _assign_job_if_missing(self, snapshot: AgentSnapshot) -> None:
-        keys = tuple(self.job_keys)
-        if not keys or snapshot.job_id is not None:
-            return
-        index = len(self.agents) % len(keys)
-        snapshot.job_id = keys[index]
+        job_index = max(0, len(self.agents) - 1)
+        self.employment_service.assign_job_if_missing(
+            snapshot,
+            job_index=job_index,
+        )
 
     def _sync_agent_spawn(self, snapshot: AgentSnapshot) -> None:
         if snapshot.home_position is None:

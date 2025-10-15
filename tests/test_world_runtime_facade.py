@@ -15,15 +15,11 @@ class _StubWorld:
     def __init__(self) -> None:
         self.tick = 0
         self.calls: list[tuple[str, Any]] = []
-        self._console_results: list[ConsoleCommandResult] = []
         self._events: list[dict[str, object]] = []
 
-    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> None:
+    def apply_console(self, operations: Iterable[ConsoleCommandEnvelope]) -> list[ConsoleCommandResult]:
         self.calls.append(("apply_console", list(operations)))
-
-    def consume_console_results(self) -> list[ConsoleCommandResult]:
-        self.calls.append(("consume_console_results", None))
-        return list(self._console_results)
+        return []
 
     def apply_actions(self, actions: Mapping[str, object]) -> None:
         self.calls.append(("apply_actions", dict(actions)))
@@ -99,7 +95,6 @@ def test_runtime_tick_invokes_dependencies_in_order() -> None:
     call_sequence = [name for name, _ in world.calls]
     assert call_sequence == [
         "apply_console",
-        "consume_console_results",
         "apply_actions",
         "resolve_affordances",
         "drain_events",
@@ -115,10 +110,9 @@ def test_runtime_handles_buffered_inputs_and_nightly_reset(tick: int) -> None:
     runtime, world, _lifecycle, _perturbations = _make_runtime(ticks_per_day=4)
 
     buffered_ops = [ConsoleCommandEnvelope(name="noop", metadata={"source": "buffer"})]
-    runtime.queue_console(buffered_ops)
     runtime.apply_actions({"bob": {"action": "move"}})
 
-    runtime.tick(tick=tick, action_provider=None)
+    runtime.tick(tick=tick, action_provider=None, console_operations=buffered_ops)
 
     console_call = next((args for name, args in world.calls if name == "apply_console"), None)
     assert console_call is not None
@@ -133,5 +127,5 @@ def test_runtime_handles_buffered_inputs_and_nightly_reset(tick: int) -> None:
     else:
         assert nightly_calls == []
 
-    # Buffers should be cleared after tick execution.
-    assert runtime.tick(tick=tick + 1, action_provider=lambda w, t: {})  # No exception
+    # Subsequent tick with empty console operations still succeeds.
+    assert runtime.tick(tick=tick + 1, action_provider=lambda w, t: {}, console_operations=())

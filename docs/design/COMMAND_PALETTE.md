@@ -51,7 +51,7 @@ Fixtures for these backlog items live under `tests/data/palette_commands.json` (
 
 ### 2.4 Executor & validation observations
 - `ConsoleCommandExecutor` already exposes `submit_payload`, which instantiates `PaletteCommandRequest` and returns the normalised `ConsoleCommand`. The palette can call this in “dry-run” mode to show the exact payload that will be dispatched before enqueueing it.
-- The executor now supports optional pending limits (`max_pending`) and a non-enqueue inspection path (`submit_payload(..., enqueue=False)`). Palette should surface queue saturation errors (`CommandQueueFull`) as a red banner and encourage operators to wait.
+- The executor now supports optional pending limits (`max_pending`) and a non-enqueue inspection path (`submit_payload(..., enqueue=False)`). Palette should surface queue saturation errors (`CommandQueueFullError`) as a red banner and encourage operators to wait.
 - Handlers expect positional arguments first (`command.args`) and then keyword overrides; palette forms should pre-normalise both so handlers keep receiving the shapes tested in `tests/test_console_commands.py`.
 - Error responses typically include `{ "error": <code>, "message": <reason> }`; palette UI should surface both fields and preserve any attached metadata (`cmd_id`, `issuer`) so automation can correlate outcomes.
 

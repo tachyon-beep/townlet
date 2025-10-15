@@ -1,17 +1,18 @@
 from pathlib import Path
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
 from townlet.policy.behavior import AgentIntent, BehaviorController
 from townlet.policy.runner import PolicyRuntime
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
 
 
-def _make_world(option_commit_ticks: int | None = None) -> tuple[PolicyRuntime, WorldState]:
+def _make_world(option_commit_ticks: int | None = None) -> tuple[PolicyRuntime, ModularTestWorld]:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     if option_commit_ticks is not None:
         config.policy_runtime.option_commit_ticks = option_commit_ticks
     runtime = PolicyRuntime(config)
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.agents["alice"] = AgentSnapshot(
         agent_id="alice",
         position=(0, 0),
@@ -32,12 +33,13 @@ def test_relationship_guardrail_blocks_rival_chat() -> None:
     world.register_rivalry_conflict("alice", "bob", intensity=5.0)
 
     class ChatBehaviour(BehaviorController):
-        def decide(self, _world, _agent_id):  # type: ignore[override]
+        def decide(self, _world, _agent_id, *, dto_world=None):  # type: ignore[override]
+            _ = dto_world
             return AgentIntent(kind="chat", target_agent="bob", quality=0.9)
 
     runtime.behavior = ChatBehaviour()
-
-    actions = runtime.decide(world, tick=0)
+    envelope = world.context.observe()
+    actions = runtime.decide(world, tick=0, envelope=envelope)
     assert actions["alice"]["kind"] == "wait"
     assert actions["alice"].get("blocked") is True
 
@@ -54,7 +56,8 @@ def test_anneal_ratio_uses_provider_when_enabled() -> None:
     runtime.set_policy_action_provider(provider)
     runtime.seed_anneal_rng(123)
 
-    actions = runtime.decide(world, tick=0)
+    envelope = world.context.observe()
+    actions = runtime.decide(world, tick=0, envelope=envelope)
     assert actions["alice"]["kind"] == "move"
     assert actions["alice"].get("position") == (1, 1)
 
@@ -73,7 +76,8 @@ def test_anneal_ratio_mix_respects_probability() -> None:
     move_count = 0
     wait_count = 0
     for tick in range(20):
-        actions = runtime.decide(world, tick=tick)
+        envelope = world.context.observe()
+        actions = runtime.decide(world, tick=tick, envelope=envelope)
         if actions["alice"]["kind"] == "move":
             move_count += 1
         else:
@@ -91,7 +95,8 @@ def test_blend_disabled_returns_scripted() -> None:
     runtime.set_policy_action_provider(provider)
     runtime.set_anneal_ratio(1.0)
     runtime.enable_anneal_blend(False)
-    actions = runtime.decide(world, tick=0)
+    envelope = world.context.observe()
+    actions = runtime.decide(world, tick=0, envelope=envelope)
     assert actions["alice"]["kind"] == "wait"
 
 
@@ -117,7 +122,8 @@ def test_option_commit_blocks_switch_until_expiry() -> None:
 
     def run_tick(tick: int) -> tuple[dict[str, object], dict[str, object]]:
         world.tick = tick
-        actions = runtime.decide(world, tick=tick)
+        envelope = world.context.observe()
+        actions = runtime.decide(world, tick=tick, envelope=envelope)
         entry = dict(runtime.transitions.get("alice", {}))
         runtime.post_step({"alice": 0.0}, {"alice": False})
         return actions, entry
@@ -155,7 +161,8 @@ def test_option_commit_clears_on_termination() -> None:
         lambda _world, _agent_id, _scripted: AgentIntent(kind="move", position=(2, 2))
     )
     world.tick = 0
-    runtime.decide(world, tick=0)
+    envelope = world.context.observe()
+    runtime.decide(world, tick=0, envelope=envelope)
     runtime.post_step({"alice": 0.0}, {"alice": True})
     assert "alice" not in runtime._option_commit_until
     assert "alice" not in runtime._option_committed_intent
@@ -169,7 +176,8 @@ def test_option_commit_respects_disabled_setting() -> None:
         lambda _world, _agent_id, _scripted: AgentIntent(kind="move", position=(3, 3))
     )
     world.tick = 0
-    actions = runtime.decide(world, tick=0)
+    envelope = world.context.observe()
+    actions = runtime.decide(world, tick=0, envelope=envelope)
     assert actions["alice"]["kind"] == "move"
     entry = runtime.transitions.get("alice", {})
     assert "option_commit_remaining" not in entry

@@ -1,0 +1,31 @@
+# WP2 Pre-Compact Brief (2025-10-11)
+
+Snapshot of WP2 so the next session can resume without re-auditing prior work.
+
+## Completed to date
+- **Steps 0–3**: planning, skeleton package creation, and stateless helper extraction (spatial index, observation helpers, event primitives) remain in place with unit coverage.
+- **Steps 4–6**: `AgentRegistry`, `WorldState`, action validation pipeline, and modular system orchestration (`queues`, `affordances`, `employment`, `relationships`, `economy`, `perturbations`) are all wired through `WorldContext.tick`, returning `RuntimeStepResult` with deterministic RNG streams. Tests across `tests/world/**` continue to pass.
+- **Step 7 factory integration**: default/dummy world providers now construct `WorldContext`, registry metadata stays accurate, and `WorldRuntimeAdapter` bridges modular results for callers still expecting the legacy runtime. Docs and tasks are updated accordingly.
+- Console plumbing follows the orchestration path: factories attach the console service, `WorldComponents` surfaces it to the loop, and telemetry consumes dispatcher events instead of legacy buffers.
+- DTO export plumbing from WP3C is compatible: trajectory frames include DTO metadata and `RolloutBuffer.save` emits `*_dto.json` artefacts referenced in manifests, so world consumers can migrate without relying on the legacy observation dict.
+
+## Outstanding
+1. Coordinate with WP3 Stage 6 to complete the remaining close-out work (ruff, mypy, documentation, release notes) now that the full suite is green.
+2. After WP3 closes, remove legacy handles from world adapters/factories (Step 7 cleanup) and proceed with Step 8 composition-root refactor alongside WP1.
+3. Update ADR-002/README once the adapter cleanup lands and ensure the simulation loop no longer references `WorldState` internals.
+4. Prepare regression coverage for the default provider swap (factory tests, loop smokes) when WP1 Step 8 resumes.
+
+## Key notes
+- Observation building now lives inside the world context (via
+  `WorldObservationService`); adapters no longer own the builder directly, but
+  final DTO-only observers will replace the wrapper once WP3 Stage 6 closes.
+- Console/telemetry orchestration is owned by WP1; WP2’s responsibility is to expose port-friendly world services and drop legacy shims when DTO parity is confirmed.
+- Track dependencies in `WP3C_plan.md` and WP1 status so we remove the legacy world handles immediately after DTO-only consumers ship.
+
+### Stage 6 Hygiene (2025-10-12)
+- World-facing port modules now type-check clean (spatial index,
+  relationship service, runtime adapter, queue manager). The DTO
+  factory is locked down, keeping the port surface deterministic for
+  the integration refactor.
+- Remaining mypy debt sits in legacy employment/affordance/economy
+  modules scheduled for Batch C cleanup once WP3 Stage 6 finishes.

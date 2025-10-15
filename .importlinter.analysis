@@ -1,0 +1,95 @@
+[importlinter]
+root_package = townlet
+
+# ============================================================================
+# Contract 1: DTO Independence
+# ============================================================================
+[importlinter:contract:dto-independence]
+name = DTOs must not import concrete packages
+type = independence
+modules =
+    townlet.dto.observations
+    townlet.dto.policy
+    townlet.dto.rewards
+    townlet.dto.telemetry
+    townlet.dto.world
+
+# ============================================================================
+# Contract 2: Layered Architecture
+# ============================================================================
+[importlinter:contract:layered-architecture]
+name = Layered architecture (dto → ports → core → adapters → domain)
+type = layers
+layers =
+    townlet.world | townlet.policy | townlet.telemetry | townlet.rewards | townlet.observations | townlet.snapshots | townlet.stability | townlet.lifecycle | townlet.benchmark
+    townlet.core
+    townlet.ports
+    townlet.dto
+
+# ============================================================================
+# Contract 3: World/Policy Separation
+# ============================================================================
+[importlinter:contract:no-world-to-policy]
+name = World must not import policy
+type = forbidden
+source_modules =
+    townlet.world
+forbidden_modules =
+    townlet.policy
+
+# ============================================================================
+# Contract 4: Policy/Telemetry Separation
+# ============================================================================
+[importlinter:contract:no-policy-to-telemetry]
+name = Policy must not import telemetry
+type = forbidden
+source_modules =
+    townlet.policy
+forbidden_modules =
+    townlet.telemetry
+
+# ============================================================================
+# Contract 5: Config DTO-Only
+# ============================================================================
+[importlinter:contract:config-dto-only]
+name = Config must only import DTO and typing
+type = forbidden
+source_modules =
+    townlet.config
+forbidden_modules =
+    townlet.world
+    townlet.policy
+    townlet.telemetry
+    townlet.rewards
+    townlet.observations
+
+# ============================================================================
+# Contract 6: Port Independence
+# ============================================================================
+[importlinter:contract:port-independence]
+name = Port protocols must not import adapters
+type = forbidden
+source_modules =
+    townlet.ports
+forbidden_modules =
+    townlet.world
+    townlet.policy
+    townlet.telemetry
+    townlet.rewards
+    townlet.snapshots
+    townlet.stability
+    townlet.lifecycle
+
+# ============================================================================
+# Contract 7: Snapshot Boundaries
+# ============================================================================
+[importlinter:contract:snapshot-boundaries]
+name = Snapshots must not import implementations (only DTOs)
+type = forbidden
+source_modules =
+    townlet.snapshots
+forbidden_modules =
+    townlet.world.grid
+    townlet.world.runtime
+    townlet.policy.runner
+    townlet.telemetry.publisher

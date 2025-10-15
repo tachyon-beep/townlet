@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+
+from townlet.dto.observations import ObservationEnvelope
 
 
 @dataclass
@@ -39,24 +42,15 @@ class TrajectoryService:
         entry.setdefault("rewards", []).append(reward)
         entry.setdefault("dones", []).append(bool(done))
 
-    def flush_transitions(self, observations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    def flush_transitions(
+        self,
+        *,
+        envelope: ObservationEnvelope,
+    ) -> list[dict[str, Any]]:
         """Combine transitions with observations and clear the per-agent cache."""
 
-        frames: list[dict[str, Any]] = []
-        for agent_id, payload in observations.items():
-            entry = self._transitions.get(agent_id, {})
-            frame = {
-                "tick": self._current_tick,
-                "agent_id": agent_id,
-                "map": payload.get("map"),
-                "features": payload.get("features"),
-                "metadata": payload.get("metadata"),
-                "action": entry.get("action"),
-                "action_id": entry.get("action_id"),
-                "rewards": entry.get("rewards", []),
-                "dones": entry.get("dones", []),
-            }
-            frames.append(frame)
+        frames = self._frames_from_envelope(envelope)
+
         self._transitions.clear()
         return frames
 
@@ -91,3 +85,81 @@ class TrajectoryService:
 
         return self._trajectory
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _frames_from_envelope(
+        self,
+        envelope: ObservationEnvelope,
+    ) -> list[dict[str, Any]]:
+        frames: list[dict[str, Any]] = []
+        agent_lookup = {agent.agent_id: agent for agent in envelope.agents}
+        anneal_context = dict(envelope.global_context.anneal_context or {})
+
+        for agent_id, agent in sorted(agent_lookup.items(), key=lambda item: item[0]):
+            entry = self._transitions.get(agent_id, {})
+            metadata = dict(getattr(agent, "metadata", {}) or {})
+            dto_meta = metadata.get("dto")
+            if not isinstance(dto_meta, dict):
+                dto_meta = {}
+            metadata["dto"] = dto_meta
+            dto_meta["schema_version"] = envelope.schema_version
+            if agent.position:
+                dto_meta["position"] = _coerce_sequence(agent.position)
+            if agent.needs:
+                dto_meta["needs"] = _coerce_mapping(agent.needs)
+            if agent.wallet is not None:
+                try:
+                    dto_meta["wallet"] = float(agent.wallet)
+                except (TypeError, ValueError):
+                    dto_meta["wallet"] = agent.wallet
+            if agent.inventory:
+                dto_meta["inventory"] = _coerce_mapping(agent.inventory)
+            if agent.job:
+                dto_meta["job"] = _coerce_mapping(agent.job)
+            if agent.personality:
+                dto_meta["personality"] = _coerce_mapping(agent.personality)
+            if agent.queue_state:
+                dto_meta["queue_state"] = _coerce_mapping(agent.queue_state)
+            if agent.pending_intent:
+                dto_meta["pending_intent"] = _coerce_mapping(agent.pending_intent)
+
+            frame = {
+                "tick": self._current_tick,
+                "agent_id": agent_id,
+                "map": agent.map,
+                "features": agent.features,
+                "metadata": metadata,
+                "anneal_context": anneal_context,
+                "action": entry.get("action"),
+                "action_id": entry.get("action_id"),
+                "rewards": entry.get("rewards", []),
+                "dones": entry.get("dones", []),
+            }
+            frames.append(frame)
+        return frames
+
+
+def _coerce_mapping(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    if payload is None:
+        return {}
+    return {str(key): _coerce_value(value) for key, value in payload.items()}
+
+
+def _coerce_sequence(payload: Sequence[Any] | None) -> list[Any]:
+    if payload is None:
+        return []
+    return [_coerce_value(value) for value in payload]
+
+
+def _coerce_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _coerce_mapping(value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return _coerce_sequence(value)
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+    except Exception:
+        pass
+    return value

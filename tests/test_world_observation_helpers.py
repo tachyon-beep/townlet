@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.modular_world import ModularTestWorld
 from townlet.config import load_config
-from townlet.world.grid import AgentSnapshot, WorldState
+from townlet.world.grid import AgentSnapshot
 from townlet.world.observations.cache import build_local_cache
 from townlet.world.observations.context import agent_context
 from townlet.world.observations.views import (
@@ -14,10 +15,10 @@ from townlet.world.observations.views import (
 )
 
 
-def _make_world() -> WorldState:
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.employment.enforce_job_loop = False
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.register_object(object_id="shower", object_type="shower", position=(0, 1))
     world.register_object(object_id="fridge_1", object_type="fridge", position=(2, 0))
     world.register_object(object_id="stove_1", object_type="stove", position=(5, 0))
@@ -40,7 +41,7 @@ def _make_world() -> WorldState:
 
 def test_local_view_includes_neighbouring_agents_and_objects() -> None:
     world = _make_world()
-    snapshot = local_view(world, "alice", radius=1)
+    snapshot = local_view(world.context, "alice", radius=1)
 
     assert snapshot["center"] == (0, 0)
     assert snapshot["radius"] == 1
@@ -53,7 +54,7 @@ def test_local_view_includes_neighbouring_agents_and_objects() -> None:
 def test_agent_context_exposes_core_metrics() -> None:
     world = _make_world()
     world.employment.enqueue_exit(world, "alice", tick=world.tick)
-    context = agent_context(world, "alice")
+    context = agent_context(world.context, "alice")
 
     expected_keys = {
         "needs",
@@ -73,7 +74,7 @@ def test_agent_context_exposes_core_metrics() -> None:
 
 def test_find_nearest_object_of_type_returns_closest_position() -> None:
     world = _make_world()
-    pos = find_nearest_object_of_type(world, "stove", (0, 0))
+    pos = find_nearest_object_of_type(world.context, "stove", (0, 0))
     assert pos == (5, 0)
 
 
@@ -82,7 +83,7 @@ def test_build_local_cache_matches_world_state() -> None:
     world.queue_manager.request_access("bed_1", "alice", world.tick)
     world.refresh_reservations()
     snapshots = world.snapshot()
-    agent_lookup, object_lookup, reservation_tiles = build_local_cache(world, snapshots)
+    agent_lookup, object_lookup, reservation_tiles = build_local_cache(world.context, snapshots)
 
     assert snapshots["alice"].position in agent_lookup
     assert (0, 1) in object_lookup

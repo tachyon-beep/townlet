@@ -17,15 +17,15 @@ def test_basket_cost_in_telemetry_snapshot() -> None:
         needs={"hunger": 0.5, "hygiene": 0.5, "energy": 0.5},
         wallet=1.0,
     )
-    world.assign_jobs_to_agents()  
+    world.assign_jobs_to_agents()
 
     for _ in range(5):
         loop.step()
 
     snapshot = publisher.latest_job_snapshot()
-    assert (
-        snapshot["alice"]["basket_cost"]
-        == config.economy["meal_cost"]
+    basket = snapshot["alice"]["basket_cost"]
+    assert basket == (
+        config.economy["meal_cost"]
         + config.economy["cook_energy_cost"]
         + config.economy["cook_hygiene_cost"]
         + config.economy["ingredients_cost"]

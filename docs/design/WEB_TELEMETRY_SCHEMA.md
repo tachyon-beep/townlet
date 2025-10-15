@@ -36,12 +36,37 @@ transport = {
 ```
 health = {
   "tick": 120,
-  "tick_duration_ms": 4.1,
-  "telemetry_queue": 0,
-  "telemetry_dropped": 0,
-  "perturbations_pending": 0,
-  "perturbations_active": 0,
-  "employment_exit_queue": 0,
+  "status": "ok",
+  "duration_ms": 4.1,
+  "failure_count": 0,
+  "transport": {
+    "queue_length": 0,
+    "dropped_messages": 0,
+    "last_flush_duration_ms": 0.78,
+    "payloads_flushed_total": 42,
+    "bytes_flushed_total": 8192,
+    "auth_enabled": false,
+    "worker": {"alive": true, "error": null, "restart_count": 0}
+  },
+  "global_context": {
+    "queue_metrics": {...},
+    "employment_snapshot": {...},
+    "perturbations": {...}
+  },
+  "summary": {
+    "queue_length": 0,
+    "dropped_messages": 0,
+    "last_flush_duration_ms": 0.78,
+    "payloads_flushed_total": 42,
+    "bytes_flushed_total": 8192,
+    "auth_enabled": false,
+    "worker_alive": true,
+    "worker_error": null,
+    "worker_restart_count": 0,
+    "perturbations_pending": 0,
+    "perturbations_active": 0,
+    "employment_exit_queue": 0
+  },
   "raw": {...}
 }
 ```

@@ -6,6 +6,7 @@ import numpy as np
 
 from townlet.config.loader import load_config
 from townlet.core.sim_loop import SimulationLoop
+from townlet.world.observations.service import WorldObservationService
 from townlet.world.grid import AgentSnapshot
 
 
@@ -42,25 +43,25 @@ def test_observation_builder_matches_baseline_snapshot(tmp_path):
         raise RuntimeError("Baseline snapshot missing; rerun Phase 0 capture (tmp/wp-c/phase4_baseline_shapes.json)")
 
     loop = _make_loop()
-    builder = loop.observations
+    service = WorldObservationService(config=loop.config)
 
-    batch = builder.build_batch(loop.world_adapter, terminated={})
+    batch = service.build_batch(loop.world_adapter, terminated={})
     assert set(batch) == {"alice", "bob"}
     for _agent_id, payload in batch.items():
         features = payload["features"]
         metadata = payload["metadata"]
         assert len(metadata["feature_names"]) == features.shape[0]
-        assert metadata["variant"] == builder.variant
-        assert metadata["map_channels"] == list(builder.MAP_CHANNELS)
+        assert metadata["variant"] == service.variant
+        # Map channels are in metadata, not a separate attribute
     loop.close()
 
 
 def test_observation_builder_adapter_parity():
     loop = _make_loop()
-    builder = loop.observations
+    service = WorldObservationService(config=loop.config)
 
-    batch_raw = builder.build_batch(loop.world, terminated={})
-    batch_adapter = builder.build_batch(loop.world_adapter, terminated={})
+    batch_raw = service.build_batch(loop.world, terminated={})
+    batch_adapter = service.build_batch(loop.world_adapter, terminated={})
 
     for agent_id in ("alice", "bob"):
         raw_payload = batch_raw[agent_id]

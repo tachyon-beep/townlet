@@ -892,9 +892,11 @@ class TelemetryClient:
         transport_payload = payload.get("transport")
         if not isinstance(transport_payload, Mapping):
             transport_payload = {}
+        transport_queue = int(_maybe_int(transport_payload.get("queue_length")) or 0)
+        transport_dropped = int(_maybe_int(transport_payload.get("dropped_messages")) or 0)
         transport = TransportStatus(
             connected=bool(transport_payload.get("connected", False)),
-            dropped_messages=int(_maybe_int(transport_payload.get("dropped_messages")) or 0),
+            dropped_messages=transport_dropped,
             last_error=(
                 str(transport_payload.get("last_error")).strip()
                 if transport_payload.get("last_error") not in (None, "")
@@ -902,27 +904,83 @@ class TelemetryClient:
             ),
             last_success_tick=_maybe_int(transport_payload.get("last_success_tick")),
             last_failure_tick=_maybe_int(transport_payload.get("last_failure_tick")),
-            queue_length=int(_maybe_int(transport_payload.get("queue_length")) or 0),
+            queue_length=transport_queue,
             last_flush_duration_ms=_maybe_float(transport_payload.get("last_flush_duration_ms")),
         )
 
         health_payload = payload.get("health")
         health_snapshot: HealthStatus | None = None
         if isinstance(health_payload, Mapping) and health_payload:
+            context_payload = health_payload.get("global_context")
+            if not isinstance(context_payload, Mapping):
+                context_payload = {}
+            summary_payload = health_payload.get("summary")
+            if not isinstance(summary_payload, Mapping):
+                summary_payload = {}
+            perturbations_alias = int(
+                _maybe_int(summary_payload.get("perturbations_pending"))
+                or _maybe_int(health_payload.get("perturbations_pending"))
+                or 0
+            )
+            perturbations_active_alias = int(
+                _maybe_int(summary_payload.get("perturbations_active"))
+                or _maybe_int(health_payload.get("perturbations_active"))
+                or 0
+            )
+            perturbations_payload = context_payload.get("perturbations")
+            if isinstance(perturbations_payload, Mapping):
+                pending_section = perturbations_payload.get("pending")
+                active_section = perturbations_payload.get("active")
+
+                def _len_or_default(value: object, fallback: int) -> int:
+                    if isinstance(value, Mapping):
+                        return len(value)
+                    if isinstance(value, (list, tuple, set)):
+                        return len(value)
+                    return fallback
+
+                perturbations_alias = _len_or_default(pending_section, perturbations_alias)
+                perturbations_active_alias = _len_or_default(
+                    active_section, perturbations_active_alias
+                )
+            employment_exit_alias = int(
+                _maybe_int(summary_payload.get("employment_exit_queue"))
+                or _maybe_int(health_payload.get("employment_exit_queue"))
+                or 0
+            )
+            employment_payload = context_payload.get("employment_snapshot")
+            if isinstance(employment_payload, Mapping):
+                pending_count = employment_payload.get("pending_count")
+                if isinstance(pending_count, (int, float)):
+                    employment_exit_alias = int(pending_count)
+                else:
+                    pending_section = employment_payload.get("pending")
+                    if isinstance(pending_section, (list, tuple, set)):
+                        employment_exit_alias = len(pending_section)
+            summary_queue = int(
+                _maybe_int(summary_payload.get("queue_length"))
+                or _maybe_int(health_payload.get("telemetry_queue"))
+                or 0
+            )
+            summary_dropped = int(
+                _maybe_int(summary_payload.get("dropped_messages"))
+                or _maybe_int(health_payload.get("telemetry_dropped"))
+                or 0
+            )
             health_snapshot = HealthStatus(
                 tick=_coerce_int(health_payload.get("tick")),
-                tick_duration_ms=_coerce_float(health_payload.get("tick_duration_ms")),
-                telemetry_queue=int(_maybe_int(health_payload.get("telemetry_queue")) or 0),
-                telemetry_dropped=int(_maybe_int(health_payload.get("telemetry_dropped")) or 0),
-                perturbations_pending=int(
-                    _maybe_int(health_payload.get("perturbations_pending")) or 0
-                ),
-                perturbations_active=int(
-                    _maybe_int(health_payload.get("perturbations_active")) or 0
-                ),
-                employment_exit_queue=int(
-                    _maybe_int(health_payload.get("employment_exit_queue")) or 0
-                ),
+                tick_duration_ms=_coerce_float(health_payload.get("duration_ms"))
+                or _coerce_float(summary_payload.get("duration_ms"))
+                or _coerce_float(health_payload.get("tick_duration_ms")),
+                telemetry_queue=transport_queue
+                if transport_queue
+                else summary_queue,
+                telemetry_dropped=transport_dropped
+                if transport_dropped
+                else summary_dropped,
+                perturbations_pending=perturbations_alias,
+                perturbations_active=perturbations_active_alias,
+                employment_exit_queue=employment_exit_alias,
                 raw=dict(health_payload),
             )
 

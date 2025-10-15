@@ -11,6 +11,7 @@ from townlet.console.command import (
     ConsoleCommandError,
     ConsoleCommandResult,
 )
+from townlet.utils.coerce import coerce_float
 
 if TYPE_CHECKING:  # pragma: no cover
     from townlet.console.service import ConsoleService
@@ -186,7 +187,7 @@ class WorldConsoleController:
         if isinstance(needs_payload, Mapping):
             for key, value in needs_payload.items():
                 try:
-                    needs[str(key)] = float(value)
+                    needs[str(key)] = coerce_float(value)
                 except (TypeError, ValueError) as err:
                     raise ConsoleCommandError(
                         "invalid_args",
@@ -195,7 +196,7 @@ class WorldConsoleController:
                     ) from err
         wallet = payload.get("wallet")
         try:
-            wallet_value = float(wallet) if wallet is not None else None
+            wallet_value = coerce_float(wallet) if wallet is not None else None
         except (TypeError, ValueError) as error:
             raise ConsoleCommandError("invalid_args", "wallet must be numeric") from error
         try:
@@ -293,7 +294,7 @@ class WorldConsoleController:
                     details={"need": key},
                 )
             try:
-                numeric = float(raw_value)
+                numeric = coerce_float(raw_value)
             except (TypeError, ValueError) as error:
                 raise ConsoleCommandError(
                     "invalid_args",
@@ -326,7 +327,7 @@ class WorldConsoleController:
             raise ConsoleCommandError("usage", "price <item> <value>")
         key = str(key)
         try:
-            numeric = float(value)
+            numeric = coerce_float(value)
         except (TypeError, ValueError) as error:
             raise ConsoleCommandError("invalid_args", "value must be numeric") from error
         try:
@@ -375,7 +376,7 @@ class WorldConsoleController:
             quality = 1.0
         else:
             try:
-                quality = float(quality_obj)
+                quality = coerce_float(quality_obj)
             except (TypeError, ValueError) as error:
                 raise ConsoleCommandError(
                     "invalid_args", "quality must be numeric"
@@ -428,19 +429,19 @@ class WorldConsoleController:
                 "not_found", "agent not found", details={"agent_id": missing}
             )
         try:
-            trust = float(trust_obj)
+            trust = coerce_float(trust_obj)
         except (TypeError, ValueError) as error:
             raise ConsoleCommandError("invalid_args", "trust must be numeric") from error
         familiarity = 0.0
         rivalry = 0.0
         if familiarity_obj is not None:
             try:
-                familiarity = float(familiarity_obj)
+                familiarity = coerce_float(familiarity_obj)
             except (TypeError, ValueError) as error:
                 raise ConsoleCommandError("invalid_args", "familiarity must be numeric") from error
         if rivalry_obj is not None:
             try:
-                rivalry = float(rivalry_obj)
+                rivalry = coerce_float(rivalry_obj)
             except (TypeError, ValueError) as error:
                 raise ConsoleCommandError("invalid_args", "rivalry must be numeric") from error
         world.set_relationship(

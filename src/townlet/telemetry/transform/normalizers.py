@@ -6,9 +6,9 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 __all__ = [
-    "normalize_snapshot_payload",
     "copy_relationship_snapshot",
     "normalize_perturbations_payload",
+    "normalize_snapshot_payload",
 ]
 
 
@@ -23,8 +23,6 @@ def copy_relationship_snapshot(
         owner_snapshot: dict[str, dict[str, float]] = {}
         if isinstance(ties, Mapping):
             for other, values in ties.items():
-                if not isinstance(values, Mapping):
-                    continue
                 owner_snapshot[str(other)] = {
                     "trust": float(values.get("trust", 0.0)),
                     "familiarity": float(values.get("familiarity", 0.0)),

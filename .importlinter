@@ -1,0 +1,204 @@
+[importlinter]
+root_package = townlet
+
+# ============================================================================
+# Contract 1: DTO Independence
+# ============================================================================
+[importlinter:contract:dto-independence]
+name = DTOs must not import concrete packages
+type = independence
+modules =
+    townlet.dto.observations
+    townlet.dto.policy
+    townlet.dto.rewards
+    townlet.dto.telemetry
+    townlet.dto.world
+
+# ============================================================================
+# Contract 2: Layered Architecture
+# ============================================================================
+[importlinter:contract:layered-architecture]
+name = Layered architecture (domain → core → ports → dto)
+type = layers
+layers =
+    townlet.world | townlet.policy | townlet.telemetry | townlet.rewards | townlet.observations | townlet.snapshots | townlet.stability | townlet.lifecycle | townlet.benchmark | townlet.scheduler
+    townlet.core
+    townlet.ports
+    townlet.dto
+
+# Documented exceptions (see docs/architecture_review/IMPORT_EXCEPTIONS.md)
+ignore_imports =
+    # Exception 2.1-2.4: Dependency Inversion (ADR-001)
+    # SimulationLoop coordinates adapters through port protocols
+    townlet.core.sim_loop -> townlet.ports.policy
+    townlet.core.sim_loop -> townlet.ports.world
+    townlet.core.sim_loop -> townlet.ports.telemetry
+    townlet.core.factory_registry -> townlet.ports.world
+
+    # Core orchestration owns domain objects for coordination
+    townlet.core.sim_loop -> townlet.telemetry.publisher
+    townlet.core.sim_loop -> townlet.snapshots
+    townlet.core.sim_loop -> townlet.stability.monitor
+    townlet.core.sim_loop -> townlet.stability.promotion
+    townlet.core.sim_loop -> townlet.lifecycle.manager
+    townlet.core.sim_loop -> townlet.factories
+    townlet.core.sim_loop -> townlet.rewards.engine
+    townlet.core.sim_loop -> townlet.telemetry.fallback
+
+    # Core factory coordination
+    townlet.core.factory_registry -> townlet.telemetry.fallback
+    townlet.core.factory_registry -> townlet.telemetry.publisher
+
+    # Factory pattern: Factories import what they instantiate (ADR-001)
+    townlet.factories.world_factory -> townlet.world.core.context
+    townlet.factories.world_factory -> townlet.world.grid
+    townlet.factories.world_factory -> townlet.world.rng
+    townlet.factories.world_factory -> townlet.lifecycle.manager
+    townlet.factories.world_factory -> townlet.scheduler.perturbations
+    townlet.factories.world_factory -> townlet.adapters.world_default
+    townlet.factories.world_factory -> townlet.testing
+    townlet.adapters.world_default -> townlet.snapshots
+    townlet.adapters.world_default -> townlet.stability.monitor
+    townlet.adapters.world_default -> townlet.stability.promotion
+    townlet.testing.dummy_world -> townlet.world.grid
+    townlet.testing.dummy_world -> townlet.world.runtime
+
+    # Core interfaces reference concrete types for protocols
+    townlet.core.interfaces -> townlet.world.grid
+
+    # Ports reference implementations for protocol type hints (ADR-001)
+    townlet.ports.world -> townlet.world.grid
+    townlet.ports.world -> townlet.world.runtime
+    townlet.ports.world -> townlet.core.interfaces
+
+    # Exception 3.1-3.4: Composition relationships
+    # Parent objects own child objects through composition
+    townlet.world.runtime -> townlet.lifecycle.manager
+    townlet.world.runtime -> townlet.stability.monitor
+    townlet.world.runtime -> townlet.stability.promotion
+    townlet.world.core.context -> townlet.lifecycle.manager
+    townlet.world.runtime -> townlet.scheduler.perturbations
+    townlet.world.core.context -> townlet.scheduler.perturbations
+    townlet.world.runtime -> townlet.snapshots
+    townlet.lifecycle.manager -> townlet.world.grid
+
+    # Policy training coordination
+    townlet.policy.training_orchestrator -> townlet.stability.promotion
+    townlet.policy.training.services.promotion -> townlet.stability.promotion
+
+    # Core orchestration imports (sim_loop coordinates all domain modules)
+    townlet.core.sim_loop -> townlet.policy.runner
+    townlet.core.sim_loop -> townlet.world.grid
+    townlet.core.sim_loop -> townlet.world.core.runtime_adapter
+    townlet.core.sim_loop -> townlet.world.core.context
+    townlet.core.sim_loop -> townlet.world.observations.interfaces
+    townlet.core.sim_loop -> townlet.world.affordances
+    townlet.core.sim_loop -> townlet.scheduler.perturbations
+    townlet.core.sim_loop -> townlet.console.service
+    townlet.core.factory_registry -> townlet.policy.fallback
+    townlet.core.factory_registry -> townlet.policy.models
+    townlet.core.factory_registry -> townlet.policy.runner
+
+    # Domain-level imports (same layer, architecturally sound)
+    townlet.scheduler.perturbations -> townlet.world.grid
+    townlet.policy.behavior -> townlet.world.grid
+    townlet.policy.behavior_bridge -> townlet.world.grid
+    townlet.policy.runner -> townlet.world.grid
+    townlet.policy.scenario_utils -> townlet.world.grid
+    townlet.policy.scenario_utils -> townlet.world.agents.snapshot
+    townlet.policy.scripted -> townlet.world.grid
+    townlet.rewards.engine -> townlet.world.grid
+    townlet.rewards.engine -> townlet.world.observations.context
+    townlet.world.agents.relationships_service -> townlet.telemetry.relationship_metrics
+    townlet.world.grid -> townlet.observations.embedding
+    townlet.world.core.runtime_adapter -> townlet.observations.embedding
+    townlet.telemetry.publisher -> townlet.world.grid
+    townlet.telemetry.publisher -> townlet.world.core.runtime_adapter
+    townlet.telemetry.publisher -> townlet.world.observations.interfaces
+    townlet.telemetry.interfaces -> townlet.world.grid
+
+    # Exception 4.1-4.8: Snapshot serialization (cross-cutting concern)
+    # Snapshots serialize state from all subsystems
+    townlet.snapshots.state -> townlet.world.grid
+    townlet.snapshots.state -> townlet.world.core.runtime_adapter
+    townlet.snapshots.state -> townlet.world.agents.snapshot
+    townlet.snapshots.state -> townlet.world.rng
+    townlet.snapshots.state -> townlet.lifecycle.manager
+    townlet.snapshots.state -> townlet.stability.monitor
+    townlet.snapshots.state -> townlet.stability.promotion
+    townlet.snapshots.state -> townlet.scheduler.perturbations
+    townlet.snapshots.state -> townlet.telemetry.fallback
+
+    # Exception 5.1: Indirect dependency through config
+    # policy → config → config.loader → snapshots.migrations (acceptable)
+    townlet.config.loader -> townlet.snapshots.migrations
+
+# ============================================================================
+# Contract 3: World/Policy Separation
+# ============================================================================
+[importlinter:contract:no-world-to-policy]
+name = World must not import policy
+type = forbidden
+source_modules =
+    townlet.world
+forbidden_modules =
+    townlet.policy
+
+# ============================================================================
+# Contract 4: Policy/Telemetry Separation
+# ============================================================================
+[importlinter:contract:no-policy-to-telemetry]
+name = Policy must not import telemetry
+type = forbidden
+source_modules =
+    townlet.policy
+forbidden_modules =
+    townlet.telemetry
+
+# Documented exceptions (see docs/architecture_review/IMPORT_EXCEPTIONS.md)
+ignore_imports =
+    # Exception 5.1: Indirect dependency through config
+    # policy → config → config.loader → snapshots.migrations → telemetry (TYPE_CHECKING only)
+    # This is acceptable as it's indirect and only for type hints
+
+    # Indirect dependencies through core orchestration (acceptable architectural paths)
+    # policy → core → telemetry is allowed (core owns telemetry for coordination)
+    townlet.policy.api -> townlet.core.factory_registry
+    townlet.policy.api -> townlet.core.interfaces
+    townlet.policy.fallback -> townlet.core.interfaces
+    townlet.policy.scenario_utils -> townlet.core.sim_loop
+    townlet.policy.training.services.rollout -> townlet.core.sim_loop
+    townlet.policy.training_orchestrator -> townlet.core.sim_loop
+
+    # Indirect dependencies through world (acceptable architectural paths)
+    # policy → world → telemetry chains (world uses telemetry for metrics)
+    townlet.policy.behavior -> townlet.world.grid
+    townlet.policy.behavior_bridge -> townlet.world.grid
+    townlet.policy.runner -> townlet.world.grid
+    townlet.policy.scenario_utils -> townlet.world.grid
+    townlet.policy.scripted -> townlet.world.grid
+
+# ============================================================================
+# Contract 5: Config DTO-Only
+# ============================================================================
+[importlinter:contract:config-dto-only]
+name = Config must only import DTO and typing
+type = forbidden
+source_modules =
+    townlet.config
+forbidden_modules =
+    townlet.world
+    townlet.policy
+    townlet.telemetry
+    townlet.rewards
+    townlet.observations
+
+# Documented exceptions (see docs/architecture_review/IMPORT_EXCEPTIONS.md)
+ignore_imports =
+    # Exception 5.1: Snapshot migration registration
+    # config.loader imports snapshots.migrations for migration handler registration
+    townlet.config.loader -> townlet.snapshots.migrations
+
+# Note: Port Independence and Snapshot Boundaries contracts removed as they
+# conflict with the layered architecture. The layered architecture contract
+# already enforces the key boundaries (dto → ports → core → domain).

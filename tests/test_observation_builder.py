@@ -6,7 +6,7 @@ from townlet.agents.models import PersonalityProfiles
 from townlet.config import load_config
 from townlet.console.command import ConsoleCommandEnvelope
 from townlet.core.sim_loop import SimulationLoop
-from townlet.observations.builder import ObservationBuilder
+from townlet.world.observations.service import WorldObservationService
 from townlet.world.grid import AgentSnapshot
 
 
@@ -40,8 +40,8 @@ def make_world(enforce_job_loop: bool = False) -> SimulationLoop:
 
 def test_observation_builder_hybrid_map_and_features() -> None:
     loop = make_world(enforce_job_loop=True)
-    builder: ObservationBuilder = loop.observations
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    service = WorldObservationService(config=loop.config)
+    observations = service.build_batch(loop.world_adapter, terminated={})
 
     obs = observations["alice"]
     map_tensor = obs["map"]
@@ -50,16 +50,16 @@ def test_observation_builder_hybrid_map_and_features() -> None:
 
     assert map_tensor.shape == (
         4,
-        builder.hybrid_cfg.local_window,
-        builder.hybrid_cfg.local_window,
+        service.hybrid_cfg.local_window,
+        service.hybrid_cfg.local_window,
     )
     assert metadata["map_shape"] == (
         4,
-        builder.hybrid_cfg.local_window,
-        builder.hybrid_cfg.local_window,
+        service.hybrid_cfg.local_window,
+        service.hybrid_cfg.local_window,
     )
     assert metadata["variant"] == "hybrid"
-    center = builder.hybrid_cfg.local_window // 2
+    center = service.hybrid_cfg.local_window // 2
     assert map_tensor[0, center, center] == 1.0
     # Bob is at (1,0) relative to Alice
     assert map_tensor[1, center, center + 1] == 1.0
@@ -99,9 +99,9 @@ def test_observation_builder_hybrid_map_and_features() -> None:
 
 def test_observation_ctx_reset_releases_slot() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    service = WorldObservationService(config=loop.config)
     world = loop.world
-    observations = builder.build_batch(loop.world_adapter, terminated={"alice": True})
+    observations = service.build_batch(loop.world_adapter, terminated={"alice": True})
     obs = observations["alice"]
     feature_names = obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
@@ -112,8 +112,8 @@ def test_observation_ctx_reset_releases_slot() -> None:
 def test_observation_rivalry_features_reflect_conflict() -> None:
     loop = make_world()
     loop.world.register_rivalry_conflict("alice", "bob")
-    builder: ObservationBuilder = loop.observations
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    service = WorldObservationService(config=loop.config)
+    observations = service.build_batch(loop.world_adapter, terminated={})
     obs = observations["alice"]
     feature_names = obs["metadata"]["feature_names"]
     assert obs["features"][feature_names.index("rivalry_max")] > 0.0
@@ -122,13 +122,13 @@ def test_observation_rivalry_features_reflect_conflict() -> None:
 
 def test_observation_queue_and_reservation_flags() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    service = WorldObservationService(config=loop.config)
     world = loop.world
     world.queue_manager.request_access("stove_test", "alice", world.tick)
     world.refresh_reservations()
     world.queue_manager.requeue_to_tail("stove_test", "bob", tick=world.tick)
 
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    observations = service.build_batch(loop.world_adapter, terminated={})
 
     alice_obs = observations["alice"]
     feature_names = alice_obs["metadata"]["feature_names"]
@@ -143,7 +143,7 @@ def test_observation_queue_and_reservation_flags() -> None:
 
 def test_observation_respawn_resets_features() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    service = WorldObservationService(config=loop.config)
     world = loop.world
 
     world.tick = 10
@@ -157,7 +157,7 @@ def test_observation_respawn_resets_features() -> None:
     respawn_id = next(agent_id for agent_id in world.agents if agent_id.startswith("alice"))
     assert respawn_id != "alice"
 
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    observations = service.build_batch(loop.world_adapter, terminated={})
     obs = observations[respawn_id]
     feature_names = obs["metadata"]["feature_names"]
     hunger_idx = feature_names.index("need_hunger")
@@ -168,7 +168,7 @@ def test_observation_respawn_resets_features() -> None:
 
 def test_ctx_reset_flag_on_teleport_and_possession() -> None:
     loop = make_world()
-    builder: ObservationBuilder = loop.observations
+    service = WorldObservationService(config=loop.config)
     world = loop.world
 
     envelope = ConsoleCommandEnvelope(
@@ -180,21 +180,21 @@ def test_ctx_reset_flag_on_teleport_and_possession() -> None:
     )
     world.console_controller.teleport_agent(envelope)
 
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    observations = service.build_batch(loop.world_adapter, terminated={})
     alice_obs = observations["alice"]
     feature_names = alice_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
     assert alice_obs["features"][idx] == 1.0
 
     loop.policy.acquire_possession("bob")
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    observations = service.build_batch(loop.world_adapter, terminated={})
     bob_obs = observations["bob"]
     feature_names = bob_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
     assert bob_obs["features"][idx] == 1.0
 
     loop.policy.release_possession("bob")
-    observations = builder.build_batch(loop.world_adapter, terminated={})
+    observations = service.build_batch(loop.world_adapter, terminated={})
     bob_obs = observations["bob"]
     feature_names = bob_obs["metadata"]["feature_names"]
     idx = feature_names.index("ctx_reset_flag")
@@ -218,8 +218,8 @@ def test_personality_channels_append_when_enabled() -> None:
         personality_profile="socialite",
     )
 
-    builder = ObservationBuilder(config)
-    observations = builder.build_batch(world, terminated={})
+    service = WorldObservationService(config=config)
+    observations = service.build_batch(world, terminated={})
     obs = observations["avery"]
     feature_names = obs["metadata"]["feature_names"]
 

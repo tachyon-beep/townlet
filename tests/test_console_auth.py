@@ -1,134 +1,154 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig, load_config
-from townlet.telemetry.publisher import TelemetryPublisher
+import pytest
+
+from townlet.config import ConsoleAuthConfig, ConsoleAuthTokenConfig
+from townlet.console.auth import ConsoleAuthenticationError, ConsoleAuthenticator
 
 
-def _config_with_auth() -> TelemetryPublisher:
-    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    console_auth = ConsoleAuthConfig(
+def test_console_authenticator_rejects_command_without_token_when_enabled() -> None:
+    config = ConsoleAuthConfig(
         enabled=True,
         tokens=[
             ConsoleAuthTokenConfig(token="viewer-token", role="viewer", label="viewer"),
             ConsoleAuthTokenConfig(token="admin-token", role="admin", label="admin"),
         ],
     )
-    config = config.model_copy(update={"console_auth": console_auth})
-    return TelemetryPublisher(config)
+    authenticator = ConsoleAuthenticator(config)
+
+    with pytest.raises(ConsoleAuthenticationError) as exc_info:
+        authenticator.authorise({"name": "telemetry_snapshot"})
+
+    assert exc_info.value.identity["name"] == "telemetry_snapshot"
+    assert "authentication token" in exc_info.value.message.lower()
 
 
-def test_console_command_requires_token_when_enabled() -> None:
-    publisher = _config_with_auth()
-    try:
-        publisher.queue_console_command({"name": "telemetry_snapshot"})
-        results = publisher.latest_console_results()
-        assert results, "Expected an unauthorized console result"
-        error = results[0]["error"]
-        assert error["code"] == "unauthorized"
-        assert publisher.export_console_buffer() == []
-    finally:
-        publisher.close()
+def test_console_authenticator_accepts_valid_viewer_token() -> None:
+    config = ConsoleAuthConfig(
+        enabled=True,
+        tokens=[
+            ConsoleAuthTokenConfig(token="viewer-token", role="viewer", label="viewer"),
+            ConsoleAuthTokenConfig(token="admin-token", role="admin", label="admin"),
+        ],
+    )
+    authenticator = ConsoleAuthenticator(config)
+
+    payload, principal = authenticator.authorise(
+        {"name": "telemetry_snapshot", "auth": {"token": "viewer-token"}}
+    )
+
+    assert principal is not None
+    assert principal.role == "viewer"
+    assert principal.label == "viewer"
+    assert payload["mode"] == "viewer"
+    assert "auth" not in payload
+    assert payload["issuer"] == "viewer"
 
 
-def test_console_command_accepts_valid_viewer_token() -> None:
-    publisher = _config_with_auth()
-    try:
-        publisher.queue_console_command(
-            {"name": "telemetry_snapshot", "auth": {"token": "viewer-token"}}
-        )
-        queued = list(publisher.drain_console_buffer())
-        assert len(queued) == 1
-        payload = queued[0]
-        assert payload["mode"] == "viewer"
-        assert "auth" not in payload
-        assert payload["issuer"] == "viewer"
-    finally:
-        publisher.close()
+def test_console_authenticator_assigns_admin_role() -> None:
+    config = ConsoleAuthConfig(
+        enabled=True,
+        tokens=[
+            ConsoleAuthTokenConfig(token="viewer-token", role="viewer", label="viewer"),
+            ConsoleAuthTokenConfig(token="admin-token", role="admin", label="admin"),
+        ],
+    )
+    authenticator = ConsoleAuthenticator(config)
+
+    payload, principal = authenticator.authorise(
+        {
+            "name": "telemetry_snapshot",
+            "mode": "viewer",  # Should be overridden by token role
+            "auth": {"token": "admin-token"},
+        }
+    )
+
+    assert principal is not None
+    assert principal.role == "admin"
+    assert principal.label == "admin"
+    assert payload["mode"] == "admin"
+    assert payload["issuer"] == "admin"
 
 
-def test_console_command_assigns_admin_role() -> None:
-    publisher = _config_with_auth()
-    try:
-        publisher.queue_console_command(
-            {
-                "name": "telemetry_snapshot",
-                "mode": "viewer",
-                "auth": {"token": "admin-token"},
-            }
-        )
-        queued = list(publisher.drain_console_buffer())
-        assert len(queued) == 1
-        payload = queued[0]
-        assert payload["mode"] == "admin"
-        assert payload["issuer"] == "admin"
-    finally:
-        publisher.close()
-
-
-def test_console_command_rejects_admin_when_auth_disabled(caplog) -> None:
+def test_console_authenticator_rejects_admin_when_auth_disabled(caplog) -> None:
     caplog.set_level(logging.WARNING, "townlet.console.auth")
-    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    publisher = TelemetryPublisher(config)
-    try:
-        publisher.queue_console_command({"name": "telemetry_snapshot", "mode": "admin"})
-        results = publisher.latest_console_results()
-        assert results and results[0]["error"]["code"] == "unauthorized"
-        assert publisher.export_console_buffer() == []
-        assert any(
-            "console_admin_request_rejected" in record.getMessage()
-            for record in caplog.records
-            if record.name == "townlet.console.auth"
-        )
-    finally:
-        publisher.close()
+    config = ConsoleAuthConfig(enabled=False, tokens=[])
+    authenticator = ConsoleAuthenticator(config)
+
+    with pytest.raises(ConsoleAuthenticationError) as exc_info:
+        authenticator.authorise({"name": "telemetry_snapshot", "mode": "admin"})
+
+    assert "admin" in exc_info.value.message.lower()
+    assert any(
+        "console_admin_request_rejected" in record.getMessage()
+        for record in caplog.records
+        if record.name == "townlet.console.auth"
+    )
 
 
-def test_console_command_rejects_invalid_token() -> None:
-    publisher = _config_with_auth()
-    try:
-        publisher.queue_console_command(
+def test_console_authenticator_rejects_invalid_token() -> None:
+    config = ConsoleAuthConfig(
+        enabled=True,
+        tokens=[
+            ConsoleAuthTokenConfig(token="viewer-token", role="viewer", label="viewer"),
+            ConsoleAuthTokenConfig(token="admin-token", role="admin", label="admin"),
+        ],
+    )
+    authenticator = ConsoleAuthenticator(config)
+
+    with pytest.raises(ConsoleAuthenticationError) as exc_info:
+        authenticator.authorise(
             {
                 "name": "telemetry_snapshot",
                 "auth": {"token": "not-the-right-token"},
             }
         )
-        results = publisher.latest_console_results()
-        assert results and results[0]["error"]["code"] == "unauthorized"
-        assert publisher.export_console_buffer() == []
-    finally:
-        publisher.close()
+
+    assert "invalid" in exc_info.value.message.lower()
 
 
-def test_console_command_warns_when_admin_requested_with_auth_disabled(caplog) -> None:
+def test_console_authenticator_warns_when_admin_requested_with_auth_disabled(caplog) -> None:
     caplog.set_level(logging.WARNING, "townlet.console.auth")
-    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    publisher = TelemetryPublisher(config)
-    try:
-        publisher.queue_console_command({"name": "telemetry_snapshot", "mode": "admin"})
-        results = publisher.latest_console_results()
-        assert results and results[0]["error"]["code"] == "unauthorized"
-        assert publisher.export_console_buffer() == []
-        assert any(
-            "console_admin_request_rejected" in record.getMessage()
-            for record in caplog.records
-            if record.name == "townlet.console.auth"
-        )
-    finally:
-        publisher.close()
+    config = ConsoleAuthConfig(enabled=False, tokens=[])
+    authenticator = ConsoleAuthenticator(config)
 
-def test_transport_status_includes_auth_flag() -> None:
-    config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    console_auth = ConsoleAuthConfig(
-        enabled=True, tokens=[ConsoleAuthTokenConfig(token="secret", role="admin")]
+    with pytest.raises(ConsoleAuthenticationError):
+        authenticator.authorise({"name": "telemetry_snapshot", "mode": "admin"})
+
+    assert any(
+        "console_admin_request_rejected" in record.getMessage()
+        for record in caplog.records
+        if record.name == "townlet.console.auth"
     )
-    config = config.model_copy(update={"console_auth": console_auth})
-    publisher = TelemetryPublisher(config)
-    try:
-        status = publisher.latest_transport_status()
-        assert status.get("auth_enabled") is True
-    finally:
-        publisher.close()
 
+
+def test_console_authenticator_allows_viewer_when_disabled() -> None:
+    """When auth is disabled, viewer commands should be allowed."""
+    config = ConsoleAuthConfig(enabled=False, tokens=[])
+    authenticator = ConsoleAuthenticator(config)
+
+    payload, principal = authenticator.authorise(
+        {"name": "telemetry_snapshot", "mode": "viewer"}
+    )
+
+    assert principal is not None
+    assert principal.role == "viewer"
+    assert payload["mode"] == "viewer"
+
+
+def test_console_authenticator_sanitizes_auth_section() -> None:
+    """Auth section should be removed from sanitized payload."""
+    config = ConsoleAuthConfig(
+        enabled=True,
+        tokens=[ConsoleAuthTokenConfig(token="secret", role="admin", label="test")],
+    )
+    authenticator = ConsoleAuthenticator(config)
+
+    payload, _ = authenticator.authorise(
+        {"name": "snapshot", "auth": {"token": "secret", "extra": "data"}}
+    )
+
+    assert "auth" not in payload
+    assert "extra" not in payload

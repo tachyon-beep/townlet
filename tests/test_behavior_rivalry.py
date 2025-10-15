@@ -1,15 +1,16 @@
 from pathlib import Path
 
-from townlet.config import SimulationConfig, load_config
+from tests.helpers.modular_world import ModularTestWorld
+from townlet.config import load_config
 from townlet.policy.behavior import ScriptedBehavior
 from townlet.rewards.engine import RewardEngine
 from townlet.world.grid import AgentSnapshot, WorldState
 
 
-def _make_world() -> WorldState:
+def _make_world() -> ModularTestWorld:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
     config.conflict.rivalry.avoid_threshold = 0.1
-    world = WorldState.from_config(config)
+    world = ModularTestWorld.from_config(config)
     world.register_object(object_id="shower_1", object_type="shower")
     world.register_object(object_id="fridge_1", object_type="fridge")
     world.register_object(object_id="stove_1", object_type="stove")
@@ -92,16 +93,14 @@ def test_scripted_behavior_initiates_chat_when_conditions_met() -> None:
 
     world.record_chat_success("alice", "bob", quality=intent.quality or 1.0)
     engine = RewardEngine(config)
-    rewards = engine.compute(world, dict.fromkeys(world.agents, False))
-    assert rewards["alice"] > config.rewards.survival_tick
+    breakdowns = engine.compute(world, dict.fromkeys(world.agents, False))
+    assert breakdowns["alice"].total > config.rewards.survival_tick
 
 
 def test_scripted_behavior_avoids_chat_when_relationships_disabled() -> None:
     config = load_config(Path("configs/examples/poc_hybrid.yaml"))
-    data = config.model_dump()
-    data["features"]["stages"]["relationships"] = "OFF"
-    config = SimulationConfig.model_validate(data)
     world = WorldState.from_config(config)
+    world.config.features.stages.relationships = "OFF"
     for agent_id in ("alice", "bob"):
         world.agents[agent_id] = AgentSnapshot(
             agent_id=agent_id,

@@ -7,7 +7,8 @@ from rich.console import Console
 from townlet.config import load_config
 from townlet.console.handlers import create_console_router
 from townlet.core.sim_loop import SimulationLoop
-from townlet_ui.commands import CommandQueueFull, ConsoleCommandExecutor
+from townlet.dto.telemetry import TelemetryEventDTO, TelemetryMetadata
+from townlet_ui.commands import CommandQueueFullError, ConsoleCommandExecutor
 from townlet_ui.dashboard import (
     AgentCardState,
     PaletteState,
@@ -50,24 +51,29 @@ def _make_loop() -> SimulationLoop:
         needs={"hunger": 0.4, "hygiene": 0.8, "energy": 0.9},
         wallet=1.0,
     )
-    world.assign_jobs_to_agents()  
+    world.assign_jobs_to_agents()
     world.update_relationship("alice", "bob", trust=0.3, familiarity=0.2)
-    loop.telemetry.publish_tick(
+    event = TelemetryEventDTO(
+        event_type="loop.tick",
         tick=world.tick,
-        world=world,
-        observations={},
-        rewards={},
-        events=[],
-        policy_snapshot={},
-        kpi_history=False,
-        reward_breakdown={},
-        stability_inputs={},
-        perturbations={},
-        policy_identity={},
-        possessed_agents=[],
+        payload={
+            "tick": world.tick,
+            "world": world,
+            "rewards": {},
+            "events": [],
+            "policy_snapshot": {},
+            "kpi_history": False,
+            "reward_breakdown": {},
+            "stability_inputs": {},
+            "perturbations": {},
+            "policy_identity": {},
+            "possessed_agents": [],
+            "social_events": [],
+        },
+        metadata=TelemetryMetadata(),
     )
-    world.apply_console([])
-    world.consume_console_results()
+    loop.telemetry.emit_event(event)
+    _ = world.apply_console([])
     return loop
 
 
@@ -490,8 +496,8 @@ def test_dispatch_palette_selection_handles_queue_full() -> None:
     palette.status_message = None
     try:
         dispatch_palette_selection(snapshot, palette, executor)
-        raise AssertionError("Expected CommandQueueFull")
-    except CommandQueueFull:
+        raise AssertionError("Expected CommandQueueFullError")
+    except CommandQueueFullError:
         assert palette.status_message is not None
         assert "Queue saturated" in palette.status_message
         assert palette.status_style == "yellow"

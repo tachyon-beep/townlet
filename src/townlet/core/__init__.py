@@ -8,16 +8,12 @@ from .factory_registry import (
     resolve_telemetry,
     resolve_world,
     telemetry_registry,
-    world_registry,
 )
 from .interfaces import (
     PolicyBackendProtocol,
     TelemetrySinkProtocol,
-    WorldRuntimeProtocol,
 )
 from .utils import (
-    is_stub_policy,
-    is_stub_telemetry,
     policy_provider_name,
     telemetry_provider_name,
 )
@@ -26,9 +22,6 @@ __all__ = [
     "PolicyBackendProtocol",
     "SimulationLoop",
     "TelemetrySinkProtocol",
-    "WorldRuntimeProtocol",
-    "is_stub_policy",
-    "is_stub_telemetry",
     "policy_provider_name",
     "policy_registry",
     "resolve_policy",
@@ -36,11 +29,10 @@ __all__ = [
     "resolve_world",
     "telemetry_provider_name",
     "telemetry_registry",
-    "world_registry",
 ]
 
 
-def __getattr__(name: str):  # pragma: no cover - lazy import glue
+def __getattr__(name: str) -> object:  # pragma: no cover - lazy import glue
     if name == "SimulationLoop":
         from .sim_loop import SimulationLoop as _SimulationLoop
 

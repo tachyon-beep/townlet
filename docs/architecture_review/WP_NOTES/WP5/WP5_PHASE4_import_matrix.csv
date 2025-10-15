@@ -1,0 +1,17 @@
+From/To,dto,ports,core,config,world,policy,telemetry,rewards,observations,snapshots,stability,lifecycle,benchmark,agents,utils,factories
+dto,,,,,,,,,,,,,,,,
+ports,3,,1,,1,,,,,,,,,,,
+core,2,2,,1,2,3,3,1,,1,1,1,,,1,2
+config,,,,,,,,,,1,,,,1,,
+world,5,,1,14,,,1,,2,1,1,2,,8,1,
+policy,11,,5,10,5,,,,,,2,,,1,1,
+telemetry,2,,3,3,2,,,,,,,,,1,1,
+rewards,1,,,1,1,,,,,,,,,1,1,
+observations,,,,1,,,,,,,,,,,,
+snapshots,2,,1,2,1,,,,,,1,1,,1,1,
+stability,,,,2,,,,,,,,,,,6,
+lifecycle,,,,1,1,,,,,,,,,,,
+benchmark,,,1,1,,,,,,,,,,,,
+agents,,,,,,,,,,,,,,,,
+utils,,,,,,,,,,,,,,,,
+factories,,2,2,,1,1,1,,,,,1,,,,

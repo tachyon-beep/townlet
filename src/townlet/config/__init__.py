@@ -43,6 +43,8 @@ from .loader import (
     TrainingSource,
     load_config,
 )
+from .observations import ObservationsConfig
+from .personalities import PersonalityAssignmentConfig
 
 # Re-exports from decomposed modules
 from .policy import PPOConfig
@@ -96,8 +98,6 @@ from .world_config import (
     EmploymentConfig,
     LifecycleConfig,
 )
-from .observations import ObservationsConfig
-from .personalities import PersonalityAssignmentConfig
 
 __all__ = [
     "AffordanceConfig",
